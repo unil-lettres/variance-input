@@ -1,4 +1,10 @@
+# -------------------------------------------
+# Variance project core services - dev server
+# -------------------------------------------
 services:
+
+  # Laravel
+  # ----------------------------------------
   laravel:
     build:
       context: ./laravel
@@ -11,8 +17,10 @@ services:
     ports:
       - "8000:8000"
 
+  # MariaDB
+  # ----------------------------------------
   mariadb:
-    image: mariadb:latest
+    image: mariadb:11.5.2
     container_name: mariadb
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
@@ -22,14 +30,18 @@ services:
     volumes:
       - dbdata:/var/lib/mysql
 
+  # phpMyAdmin
+  # ----------------------------------------
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: phpmyadmin
     environment:
-      PMA_HOST: db
+      PMA_HOST: mariadb
       MYSQL_ROOT_PASSWORD: rootpassword
     ports:
       - "8080:80"
 
+# Named volumes
+# -----------------------------------------
 volumes:
   dbdata:
