@@ -1,10 +1,8 @@
 # -------------------------------------------
-# Variance project core services - dev server
+# Projet Variance - Serveur de développement
 # -------------------------------------------
 services:
 
-  # Laravel
-  # ----------------------------------------
   laravel:
     build:
       context: ./laravel
@@ -16,9 +14,9 @@ services:
       - PHP_MEMORY_LIMIT=512M
     ports:
       - "8000:8000"
+    networks:
+      - variance
 
-  # MariaDB
-  # ----------------------------------------
   mariadb:
     image: mariadb:11.5.2
     container_name: mariadb
@@ -29,9 +27,9 @@ services:
       MYSQL_PASSWORD: variance_password
     volumes:
       - dbdata:/var/lib/mysql
+    networks:
+      - variance
 
-  # phpMyAdmin
-  # ----------------------------------------
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: phpmyadmin
@@ -40,8 +38,12 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
     ports:
       - "8080:80"
+    networks:
+      - variance
 
-# Named volumes
-# -----------------------------------------
 volumes:
   dbdata:
+
+networks:
+  variance:
+    name: variance
