@@ -5,6 +5,10 @@ This project sets up a Laravel application for the Variance project using Docker
 ### Copy .env.example file and configure Environment Variables
 cp app/.env.example app/.env
 
+### Edit Laravel Dockerfile so that container keeps running while running install commands
+#CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+CMD ["tail", "-f", "/dev/null"]
+
 ### Start containers
 docker-compose -d --build up
 
@@ -19,3 +23,9 @@ php artisan key:generate
 
 ### Run migrations
 php artisan migrate
+
+### Revert Laravel Dockerfile to serving app on port 8000 and restart container
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+#CMD ["tail", "-f", "/dev/null"]
+
+docker-compose up -d laravel
