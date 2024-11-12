@@ -73,20 +73,58 @@ class User extends Authenticatable
     /**
      * Relationship: Editable Works
      *
-     * Defines a relationship to retrieve all works the user has permission
-     * to edit, through the `Permission` model. This uses a `hasManyThrough`
-     * relationship to connect `User` to `Work` through `Permission`.
+     * Retrieves all works that the user has permission to edit, either through
+     * direct work-level permissions or through author-level permissions that
+     * apply to all works by that author. Combines `hasManyThrough` and additional
+     * conditions to include both permission levels.
      *
      * Example usage:
      * `$user->editableWorks` will return a collection of `Work` instances
-     * the user can edit.
+     * the user can edit, based on both work and author-level permissions.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasManyThrough
+     * @return \Illuminate\Database\Eloquent\Collection
      */
     public function editableWorks()
     {
-        return $this->hasManyThrough(Work::class, Permission::class, 'user_id', 'id', 'id', 'work_id')
-                    ->where('permission_type', 'edit');
+        // Step 1: Works the user has direct permissions to edit
+        $workPermissions = $this->hasManyThrough(Work::class, Permission::class, 'user_id', 'id', 'id', 'work_id')
+                                ->where('permission_type', 'edit');
+
+        // Step 2: Works from authors the user has edit permissions on
+        $authorPermissions = Work::whereHas('author.permissions', function ($query) {
+            $query->where('user_id', $this->id)
+                ->where('permission_type', 'edit');
+        });
+
+        // Combine the results from both queries
+        return $workPermissions->union($authorPermissions)->get();
+    }
+
+    /**
+     * List of Works User Can Edit for a Given Author
+     *
+     * Retrieves all works that the user has permission to edit for a specific
+     * author, either through direct work permissions or author-level permissions.
+     *
+     * @param int $authorId - The ID of the author whose works we want to check.
+     * @return \Illuminate\Database\Eloquent\Collection - Collection of editable works.
+     */
+    public function editableWorksForAuthor($authorId)
+    {
+        // Step 1: Directly allowed works for the given author
+        $directWorkPermissions = $this->hasManyThrough(Work::class, Permission::class, 'user_id', 'id', 'id', 'work_id')
+                                    ->where('permission_type', 'edit')
+                                    ->where('author_id', $authorId);
+
+        // Step 2: Works by the author where the user has author-level permission
+        $authorLevelPermissions = Work::where('author_id', $authorId)
+                                    ->whereHas('author.permissions', function ($query) {
+                                        $query->where('user_id', $this->id)
+                                                ->where('permission_type', 'edit');
+                                    });
+
+        // Combine both sets of permissions
+        return $directWorkPermissions->union($authorLevelPermissions)->get();
     }
 
     /**
@@ -111,3 +149,5 @@ class User extends Authenticatable
         });
     }
 }
+
+
