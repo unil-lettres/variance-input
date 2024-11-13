@@ -11,9 +11,8 @@ return new class extends Migration
         Schema::create('authors', function (Blueprint $table) {
             $table->id();
             $table->string('name', 45)->unique();
-            $table->string('folder', 45)->unique();
-            $table->tinyInteger('order');
-            $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
+            $table->string('folder', 45)->unique()->nullable();
+            $table->tinyInteger('order')->nullable();
             $table->timestamps();
         });
     }
@@ -23,3 +22,4 @@ return new class extends Migration
         Schema::dropIfExists('authors');
     }    
 };
+

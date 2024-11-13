@@ -9,20 +9,7 @@ class Author extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'folder', 'order', 'created_by'];
-
-    /**
-     * Relationship: Creator of the Author
-     *
-     * Defines a `belongsTo` relationship to the `User` model, indicating
-     * that an author was created by a specific user.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     */
-    public function creator()
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
+    protected $fillable = ['name', 'folder', 'order'];
 
     /**
      * Relationship: Works of the Author

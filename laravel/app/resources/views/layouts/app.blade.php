@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'Variance')</title>
+
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom Font -->
     <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -19,7 +23,7 @@
                     <span class="me-3">{{ Auth::user()->name }}</span>
                     
                     @if(Auth::user()->is_admin)
-                        <span class="badge bg-danger me-3">Admin</span>
+                        <span class="badge bg-success me-3">Admin</span>
                     @endif
 
                     <form action="{{ route('logout') }}" method="POST" style="display: inline;">
@@ -35,5 +39,10 @@
         @yield('content')
     </main>
 
+    <!-- Bootstrap JavaScript Bundle with Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Optional: Stack for Page-Specific Scripts -->
+    @stack('scripts')
 </body>
 </html>

@@ -12,9 +12,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('author_id')->nullable()->constrained('authors')->onDelete('set null');
             $table->string('title', 80);
-            $table->string('folder', 45);
-            $table->text('desc');
-            $table->text('image_url');
+            $table->string('folder', 45)->nullable();
+            $table->text('desc')->nullable();
+            $table->text('image_url')->nullable();
             $table->timestamps();
         });
     }
