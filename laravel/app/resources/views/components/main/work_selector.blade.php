@@ -118,6 +118,7 @@ document.addEventListener("DOMContentLoaded", () => {
     })
     .then(response => response.json())
     .then(works => {
+        // Populate the works dropdown
         workSelector.innerHTML = '<option value="">Sélectionner une oeuvre</option>';
         works.forEach(work => {
             const option = document.createElement("option");
@@ -125,19 +126,43 @@ document.addEventListener("DOMContentLoaded", () => {
             option.textContent = work.title;
             workSelector.appendChild(option);
         });
-        
+
+        // Enable the works dropdown and the add button
         workSelector.disabled = false;
         addWorkBtn.disabled = false;
 
+        // If there's only one work, select it and check permissions
         if (works.length === 1) {
             workSelector.value = works[0].id;
+            handleWorkSelection(works[0].id);  // Trigger permission check if auto-selected
         }
 
         if (selectedWorkId) {
             workSelector.value = selectedWorkId;
+            handleWorkSelection(selectedWorkId);
         }
+
+        workSelector.onchange = function () {
+            handleWorkSelection(workSelector.value);
+        };
     })
     .catch(error => console.error("Error loading works:", error));
+    }
+
+    // Quand une oeuvre est sélectionnée, check permissions et
+    // émettre événement "workSelected" avec JSON: workId, canEdit
+    function handleWorkSelection(workId) {
+    if (!workId) return;
+
+    fetch(`/works/${workId}/can-edit`)
+        .then(response => response.json())
+        .then(data => {
+            const event = new CustomEvent('workSelected', {
+                detail: { workId: workId, canEdit: data.canEdit }
+            });
+            document.dispatchEvent(event);
+        })
+        .catch(error => console.error('Error checking edit permissions:', error));
     }
 
     loadAuthors();
