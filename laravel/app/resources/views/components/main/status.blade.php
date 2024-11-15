@@ -65,7 +65,24 @@
             messageElement.style.display = "inline";
             enableToggles(false);
         }
+
+        setToggles(workId, canEdit);
+
     });
+
+    function setToggles(workId, canEdit) {
+        fetch(`/works/${workId}/status`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('description-toggle').checked = !!data.desc_status;
+                document.getElementById('notice-toggle').checked = !!data.notice_status;
+                document.getElementById('vignette-toggle').checked = !!data.image_status;
+                document.getElementById('comparisons-toggle').checked = !!data.comparison_status;
+
+                enableToggles(canEdit);
+            })
+            .catch(error => console.error('Error fetching work status:', error));
+    }
 
     function enableToggles(canEdit) {
         document.querySelectorAll('.form-check-input').forEach(toggle => {

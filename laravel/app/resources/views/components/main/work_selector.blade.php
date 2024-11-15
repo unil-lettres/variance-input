@@ -198,9 +198,22 @@ document.addEventListener("DOMContentLoaded", () => {
         workPopup.style.display = "none";
     });
 
-    // Save new author
-    saveAuthorBtn.addEventListener("click", () => {
+    // Handle form submission (for both Enter and button click)
+    document.getElementById("add-author-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        saveAuthor();
+    });
+
+    // Handle button click explicitly (to ensure it also triggers saving)
+    document.getElementById("save-author-btn").addEventListener("click", (event) => {
+        event.preventDefault();
+        saveAuthor();
+    });
+
+    // Function to save the author
+    function saveAuthor() {
         const authorName = document.getElementById("author-name").value;
+
         fetch('/api/authors', {
             method: 'POST',
             headers: {
@@ -216,12 +229,25 @@ document.addEventListener("DOMContentLoaded", () => {
             loadAuthors(author.id);
         })
         .catch(error => console.error("Error saving author:", error));
+    }
+
+    // Handle form submission (for both Enter and button click)
+    document.getElementById("add-work-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        saveWork();
     });
 
-    // Save new work
-    saveWorkBtn.addEventListener("click", () => {
+    // Handle button click explicitly (to ensure it also triggers saving)
+    document.getElementById("save-work-btn").addEventListener("click", (event) => {
+        event.preventDefault();
+        saveWork();
+    });
+
+    // Function to save the work
+    function saveWork() {
         const workTitle = document.getElementById("work-title").value;
-        const authorId = authorSelector.value;
+        const authorId = document.getElementById("author-selector").value;
+
         fetch('/api/works', {
             method: 'POST',
             headers: {
@@ -237,7 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
             loadWorks(authorId, work.id);
         })
         .catch(error => console.error("Error saving work:", error));
-    });
+    }
 
     // Close popup when clicking outside
     window.addEventListener("click", (e) => {

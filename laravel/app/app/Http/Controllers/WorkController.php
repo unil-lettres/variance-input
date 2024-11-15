@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Work;
+use App\Models\WorkStatus;
 use App\Models\Permission;
+
+use Illuminate\Support\Facades\Log;
 
 class WorkController extends Controller
 {
@@ -31,7 +34,13 @@ class WorkController extends Controller
             'title' => $request->title,
             'author_id' => $request->author_id,
         ]);
-
+        
+        /*
+        WorkStatus::create([
+            'work_id' => $work->id,
+        ]);
+        */
+        
         Permission::create([
             'user_id' => auth()->id(),
             'work_id' => $work->id,

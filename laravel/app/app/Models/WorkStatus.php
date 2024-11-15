@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Work;
 
 class WorkStatus extends Model
 {
@@ -29,6 +31,6 @@ class WorkStatus extends Model
      */
     public function work()
     {
-        return $this->belongsTo(Work::class);
+        return $this->belongsTo(Work::class, 'work_id', 'id');
     }
 }

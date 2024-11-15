@@ -13,9 +13,16 @@ class WorkPolicy
             return true;
         }
 
-        return $user->permissions()
+        $hasWorkPermission = $user->permissions()
             ->where('work_id', $work->id)
             ->where('permission_type', 'edit')
             ->exists();
+
+        $hasAuthorPermission = $user->permissions()
+            ->where('author_id', $work->author_id)
+            ->where('permission_type', 'edit')
+            ->exists();
+
+        return $hasWorkPermission || $hasAuthorPermission;
     }
 }
