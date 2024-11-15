@@ -40,7 +40,7 @@ class WorkController extends Controller
             'work_id' => $work->id,
         ]);
         */
-        
+
         Permission::create([
             'user_id' => auth()->id(),
             'work_id' => $work->id,

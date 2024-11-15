@@ -21,8 +21,8 @@ class Work extends Model
      *
      * @return \Illuminate\Database\Eloquent\Relations\HasOne
      */
-    public function status()
+    public function workstatus() : HasOne
     {
-        return $this->hasOne(WorkStatus::class, 'work_id', 'id');
+        return $this->hasOne(WorkStatus::class);
     }
 }

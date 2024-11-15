@@ -29,7 +29,7 @@ class WorkStatus extends Model
      *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
-    public function work()
+    public function work() : BelongsTo
     {
         return $this->belongsTo(Work::class, 'work_id', 'id');
     }
