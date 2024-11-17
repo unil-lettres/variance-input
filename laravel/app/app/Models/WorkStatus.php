@@ -2,35 +2,27 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\Work;
 
 class WorkStatus extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'work_id', 
-        'global_status', 
-        'desc_status', 
-        'notice_status', 
-        'image_status', 
-        'comparison_status'
+        'global_status',
+        'desc_status',
+        'notice_status',
+        'image_status',
+        'comparison_status',
     ];
 
     /**
-     * Relationship: Work Associated with the Status
-     *
-     * Defines a `belongsTo` relationship to the `Work` model, linking
-     * this status to a specific work. This allows you to access the
-     * associated work from the status record.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * Get the work that owns the status.
      */
-    public function work() : BelongsTo
+    public function work(): BelongsTo
     {
-        return $this->belongsTo(Work::class, 'work_id', 'id');
+        return $this->belongsTo(Work::class);
     }
 }

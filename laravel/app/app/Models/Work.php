@@ -2,27 +2,27 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use App\Models\WorkStatus;
 
 class Work extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['title', 'folder', 'desc', 'image_url', 'author_id'];
+    protected $fillable = [
+        'title',
+        'author_id',
+        'folder',
+        'desc',
+        'image_url',
+    ];
 
     /**
-     * Relationship: Status of the Work
-     *
-     * Defines a `hasOne` relationship to the `WorkStatus` model. This
-     * allows access to the status record specific to this work.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     * Get the associated work status.
      */
-    public function workstatus() : HasOne
+    public function workStatus(): HasOne
     {
-        return $this->hasOne(WorkStatus::class);
+        return $this->hasOne(WorkStatus::class, 'work_id');
     }
 }

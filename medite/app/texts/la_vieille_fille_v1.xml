@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="lvf_v1">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>unknown V1</title>
+        <author/>
+        <editor/>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>Variance - UNIL</publisher>
+        <date>unknown</date>
+      </publicationStmt>
+      <sourceDesc>
+        <bibl>
+          <date>n/a</date>
+        </bibl>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div>
+        <p>La vieille fille marchait lentement à travers les champs. Son foulard rouge flottait dans le vent léger.
+Elle regardait les oiseaux s'envoler, et un sourire mélancolique illuminait son visage fatigué.
+</p>
+      </div>
+    </body>
+  </text>
+</TEI>

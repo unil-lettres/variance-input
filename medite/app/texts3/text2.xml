@@ -1,0 +1,40 @@
+<?xml-model href="http://www.tei-c.org/release/xml/tei/custom/schema/relaxng/tei_all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0" ?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="lvf_v2">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>La vieille fille V2</title>
+        <author>Honoré de Balzac</author>
+        <editor/>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>Variance - UNIL</publisher>
+        <date>23.05.2024</date>
+      </publicationStmt>
+      <sourceDesc>
+        <bibl>
+          <date>24 octobre 1836</date>
+        </bibl>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <pb facs="nom_image2.png" pagination="no_page"/>
+      <div type="title">
+        <p>LA VIEILLE FILLE</p>
+      </div>
+      <div type="subtitle">
+        <p>SCÈNE DE LA VIE DE PROVINCE</p>
+        <p>[24 octobre 1836]</p>
+      </div>
+      <div type="chapter" n="1">
+        <p type="chapter">I. LA CHASTE SUZANNE ET SES DEUX VIEILLARDS.</p>
+        <pb facs="nom_image2.png" pagination="no_page"/>
+        <p>De nombreuses personnes ont peut-être rencontré dans certaines provinces françaises <emph>plus ou moins de chevaliers de Valois</emph>: il en existait un en Normandie...</p>
+        <p>Lorsque durant la donne il s’établissait de ces discussions interminables, le chevalier tirait sa tabatière avec un geste digne de Molé...</p>
+        <p>Cette horrible calomnie chagrina profondément ses vieux jours...</p>
+      </div>
+    </body>
+  </text>
+</TEI>

@@ -1,0 +1,44 @@
+<?xml-model href="http://www.tei-c.org/release/xml/tei/custom/schema/relaxng/tei_all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0" ?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="lvf_v1" corresp="lvf_v1">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>unknown V1</title>
+        <author/>
+        <editor/>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>Variance - UNIL</publisher>
+        <date>unknown</date>
+      </publicationStmt>
+      <sourceDesc>
+        <bibl>
+          <date>n/a</date>
+        </bibl>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <mediteData>
+    <informations car_mot="1" caseSensitive="1" diacriSensitive="1" lg_pivot="7" ratio="15" sepSensitive="1" seuil="50" fsource="lvf_v1.txt" fcible="lvf_v1.txt" vsource="lvf_v1" vcible="lvf_v1"/>
+    <listDeletion/>
+    <listAddition/>
+    <listTranspose/>
+    <listSubstitution>
+      <substitution target="v1_11_16" corresp="v2_11_15">dame</substitution>
+      <substitution target="v1_26_35" corresp="v2_25_34">doucement</substitution>
+      <substitution target="v1_77_104" corresp="v2_76_104">dansait dans la brise légère</substitution>
+      <substitution target="v1_112_121" corresp="v2_112_121">observait</substitution>
+      <substitution target="v1_134_143" corresp="v2_134_158">qui prenaient leur envol</substitution>
+      <substitution target="v1_159_182" corresp="v2_174_191">discret éclairait</substitution>
+      <substitution target="v1_194_207" corresp="v2_203_228">marqué par le temps.
+</substitution>
+    </listSubstitution>
+  </mediteData>
+  <body>
+    <div>
+      <p><anchor corresp="v2_0_11" function="bc" xml:id="v1_0_11"/>La vieille <metamark corresp="v2_11_15" function="subst" target="v1_11_16"/>fille<anchor corresp="v2_15_25" function="bc" xml:id="v1_16_26"/> marchait <metamark corresp="v2_25_34" function="subst" target="v1_26_35"/>lentement<anchor corresp="v2_34_76" function="bc" xml:id="v1_35_77"/> à travers les champs. Son foulard rouge <metamark corresp="v2_76_104" function="subst" target="v1_77_104"/>flottait dans le vent léger<anchor corresp="v2_104_112" function="bc" xml:id="v1_104_112"/>.
+Elle <metamark corresp="v2_112_121" function="subst" target="v1_112_121"/>regardait<anchor corresp="v2_121_134" function="bc" xml:id="v1_121_134"/> les oiseaux <metamark corresp="v2_134_158" function="subst" target="v1_134_143"/>s'envoler<anchor corresp="v2_158_174" function="bc" xml:id="v1_143_159"/>, et un sourire <metamark corresp="v2_174_191" function="subst" target="v1_159_182"/>mélancolique illuminait<anchor corresp="v2_191_203" function="bc" xml:id="v1_182_194"/> son visage <metamark corresp="v2_203_228" function="subst" target="v1_194_207"/>fatigué.
+</p>
+    </div>
+  </body>
+</TEI>

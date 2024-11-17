@@ -41,9 +41,37 @@ services:
     networks:
       - variance
 
-volumes:
-  dbdata:
+  medite:
+    build:
+      context: ./medite
+    container_name: medite
+    volumes:
+      - ./medite/app:/app
+      - ./medite/app/scripts:/app/scripts
+    working_dir: /app
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=flask_app.py
+      - NLTK_DATA=/app/assets/nltk_data
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+    networks:
+      - variance
+
+  redis:
+    image: redis:7.0
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - variance
 
 networks:
   variance:
     name: variance
+
+volumes:
+  dbdata:
+

@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: suffix_tree
+Version: 2.2
+Summary: A python suffix tree (for easy algorithmic prototyping) with Unicode support.
+Home-page: http://researchonsearch.blogspot.com/2010/05/suffix-tree-implementation-with-unicode.html
+Author: Dell Zhang
+Author-email: dell.z@ieee.org
+Maintainer: Dell Zhang
+Maintainer-email: dell.z@ieee.org

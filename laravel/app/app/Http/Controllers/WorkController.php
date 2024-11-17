@@ -6,7 +6,6 @@ use Illuminate\Http\Request;
 use App\Models\Work;
 use App\Models\WorkStatus;
 use App\Models\Permission;
-
 use Illuminate\Support\Facades\Log;
 
 class WorkController extends Controller
@@ -22,33 +21,37 @@ class WorkController extends Controller
         return response()->json(['canEdit' => $canEdit]);
     }
     
-    // Add new work
-    public function store(Request $request)
-    {
-        $request->validate([
-            'title' => 'required|string|max:80',
-            'author_id' => 'required|exists:authors,id',
-        ]);
+// Add new work
+public function store(Request $request)
+{
+    $request->validate([
+        'title' => 'required|string|max:80',
+        'author_id' => 'required|exists:authors,id',
+    ]);
 
-        $work = Work::create([
-            'title' => $request->title,
-            'author_id' => $request->author_id,
-        ]);
-        
-        /*
-        WorkStatus::create([
-            'work_id' => $work->id,
-        ]);
-        */
+    $work = Work::create([
+        'title' => $request->title,
+        'author_id' => $request->author_id,
+    ]);
 
-        Permission::create([
-            'user_id' => auth()->id(),
-            'work_id' => $work->id,
-            'permission_type' => 'edit',
-        ]);
+    // Create the associated work status using the relationship
+    $work->workStatus()->create([
+        'global_status' => 0, // Default value for global status
+        'desc_status' => 0, // Default value for description status
+        'notice_status' => 0, // Default value for notice status
+        'image_status' => 0, // Default value for image status
+        'comparison_status' => 0, // Default value for comparison status
+    ]);
 
-        return response()->json($work, 201);
-    }
+    Permission::create([
+        'user_id' => auth()->id(),
+        'work_id' => $work->id,
+        'permission_type' => 'edit',
+    ]);
+
+    return response()->json($work, 201);
+}
+
 
     // DESCRIPTION.BLADE
     // Get description field
@@ -58,25 +61,25 @@ class WorkController extends Controller
         return response()->json(['description' => $description]);
     }
 
-    // get checkboxes statuses
+    // Get checkboxes statuses
     public function getStatus($workId)
     {
-    $status = \App\Models\WorkStatus::where('work_id', $workId)->firstOrFail();
-    return response()->json($status);
+        $status = WorkStatus::where('work_id', $workId)->firstOrFail();
+        return response()->json($status);
     }
 
     // Set checkbox statuses
     public function updateStatus(Request $request, $workId)
     {
-    $status = \App\Models\WorkStatus::where('work_id', $workId)->firstOrFail();
+        $status = WorkStatus::where('work_id', $workId)->firstOrFail();
 
-    // Update the status fields based on the incoming request data
-    $status->desc_status = $request->input('desc_status', $status->desc_status);
-    $status->notice_status = $request->input('notice_status', $status->notice_status);
-    $status->image_status = $request->input('image_status', $status->image_status);
-    $status->comparison_status = $request->input('comparison_status', $status->comparison_status);
-    $status->save();
+        // Update the status fields based on the incoming request data
+        $status->desc_status = $request->input('desc_status', $status->desc_status);
+        $status->notice_status = $request->input('notice_status', $status->notice_status);
+        $status->image_status = $request->input('image_status', $status->image_status);
+        $status->comparison_status = $request->input('comparison_status', $status->comparison_status);
+        $status->save();
 
-    return response()->json(['success' => true]);
+        return response()->json(['success' => true]);
     }
 }
