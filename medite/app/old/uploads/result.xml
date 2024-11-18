@@ -1,0 +1,54 @@
+<?xml-model href="http://www.tei-c.org/release/xml/tei/custom/schema/relaxng/tei_all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0" ?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="lvf_v1" corresp="lvf_v2">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>La vieille fille V1</title>
+        <author>Honoré de Balzac</author>
+        <editor/>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>Variance - UNIL</publisher>
+        <date>22.05.2024</date>
+      </publicationStmt>
+      <sourceDesc>
+        <bibl>
+          <date>23 octobre 1836</date>
+        </bibl>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <mediteData>
+    <informations car_mot="1" caseSensitive="1" diacriSensitive="1" lg_pivot="7" ratio="15" sepSensitive="1" seuil="50" fsource="lvf_v1.txt" fcible="lvf_v2.txt" vsource="lvf_v1" vcible="lvf_v2"/>
+    <listDeletion/>
+    <listAddition/>
+    <listTranspose/>
+    <listSubstitution>
+      <substitution target="v1_49_52" corresp="v2_49_52">[24</substitution>
+      <substitution target="v1_118_129" corresp="v2_118_131">De nombreuses</substitution>
+      <substitution target="v1_144_157" corresp="v2_146_165">peut-être rencontré</substitution>
+      <substitution target="v1_183_192" corresp="v2_191_201">françaises</substitution>
+      <substitution target="v1_281_288" corresp="v2_290_296">durant</substitution>
+      <substitution target="v1_322_348" corresp="v2_330_355">discussions interminables</substitution>
+      <substitution target="v1_383_386" corresp="v2_390_394">avec</substitution>
+      <substitution target="v1_451_464" corresp="v2_459_471">profondément</substitution>
+    </listSubstitution>
+  </mediteData>
+  <body>
+    <pb facs="nom_image.png" pagination="no_page"/>
+    <div type="title">
+      <p><anchor corresp="v2_0_49" function="bc" xml:id="v1_0_49"/>LA VIEILLE FILLE</p>
+    </div>
+    <div type="subtitle">
+      <p>SCÈNE DE LA VIE DE PROVINCE</p>
+      <p><metamark corresp="v2_49_52" function="subst" target="v1_49_52"/>[23<anchor corresp="v2_52_118" function="bc" xml:id="v1_52_118"/> octobre 1836]</p>
+    </div>
+    <div n="1" type="chapter">
+      <p type="chapter">I. LA CHASTE SUZANNE ET SES DEUX VIEILLARDS.</p>
+      <pb facs="nom_image.png" pagination="no_page"/>
+      <p><metamark corresp="v2_118_131" function="subst" target="v1_118_129"/>Beaucoup de<anchor corresp="v2_131_146" function="bc" xml:id="v1_129_144"/> personnes ont <metamark corresp="v2_146_165" function="subst" target="v1_144_157"/>dû rencontrer<anchor corresp="v2_165_191" function="bc" xml:id="v1_157_183"/> dans certaines provinces <metamark corresp="v2_191_201" function="subst" target="v1_183_192"/>de France<anchor corresp="v2_201_290" function="bc" xml:id="v1_192_281"/> <emph>plus ou moins de chevaliers de Valois</emph>: il en existait un en Normandie...</p>
+      <p>Lorsque <metamark corresp="v2_290_296" function="subst" target="v1_281_288"/>pendant<anchor corresp="v2_296_330" function="bc" xml:id="v1_288_322"/> la donne il s’établissait de ces <metamark corresp="v2_330_355" function="subst" target="v1_322_348"/>nauséabondes dissertations<anchor corresp="v2_355_390" function="bc" xml:id="v1_348_383"/>, le chevalier tirait sa tabatière <metamark corresp="v2_390_394" function="subst" target="v1_383_386"/>par<anchor corresp="v2_394_459" function="bc" xml:id="v1_386_451"/> un geste digne de Molé...</p>
+      <p>Cette horrible calomnie chagrina <metamark corresp="v2_459_471" function="subst" target="v1_451_464"/>d’autant plus<anchor corresp="v2_471_496" function="bc" xml:id="v1_464_489"/> ses vieux jours...</p>
+    </div>
+  </body>
+</TEI>

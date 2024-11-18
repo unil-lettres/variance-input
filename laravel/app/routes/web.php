@@ -34,3 +34,5 @@ Route::post('/works/{workId}/status', [WorkController::class, 'updateStatus'])->
 
 // Description
 Route::get('/works/{id}/description', [WorkController::class, 'getDescription'])->name('works.description');
+Route::post('/works/{workId}/description', [WorkController::class, 'updateDescription']);
+

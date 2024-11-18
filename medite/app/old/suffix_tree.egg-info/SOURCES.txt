@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+setup.py
+suffix-tree/python_bindings.c
+suffix-tree/suffix_tree.c
+suffix_tree.egg-info/PKG-INFO
+suffix_tree.egg-info/SOURCES.txt
+suffix_tree.egg-info/dependency_links.txt
+suffix_tree.egg-info/top_level.txt
+tests/test_legacy.py
+tests/test_processing.py
+tests/test_suffix_tree.py

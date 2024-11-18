@@ -47,7 +47,6 @@ services:
     container_name: medite
     volumes:
       - ./medite/app:/app
-      - ./medite/app/scripts:/app/scripts
     working_dir: /app
     environment:
       - FLASK_ENV=development
@@ -68,10 +67,19 @@ services:
     networks:
       - variance
 
+  saxon:
+    build:
+      context: ./saxon
+    container_name: saxon
+    volumes:
+      - ./saxon/app:/app
+    working_dir: /app
+    networks:
+      - variance
+
 networks:
   variance:
     name: variance
 
 volumes:
   dbdata:
-

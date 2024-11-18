@@ -34,14 +34,7 @@ public function store(Request $request)
         'author_id' => $request->author_id,
     ]);
 
-    // Create the associated work status using the relationship
-    $work->workStatus()->create([
-        'global_status' => 0, // Default value for global status
-        'desc_status' => 0, // Default value for description status
-        'notice_status' => 0, // Default value for notice status
-        'image_status' => 0, // Default value for image status
-        'comparison_status' => 0, // Default value for comparison status
-    ]);
+    $work->workStatus()->create([]);
 
     Permission::create([
         'user_id' => auth()->id(),
@@ -52,7 +45,6 @@ public function store(Request $request)
     return response()->json($work, 201);
 }
 
-
     // DESCRIPTION.BLADE
     // Get description field
     public function getDescription($id)
@@ -60,7 +52,22 @@ public function store(Request $request)
         $description = Work::findOrFail($id)->desc;
         return response()->json(['description' => $description]);
     }
+    
+    // Update description field
+    public function updateDescription(Request $request, $workId)
+    {
+        $request->validate([
+            'desc' => 'required|string',
+        ]);
 
+        $work = Work::findOrFail($workId);
+        $work->desc = $request->desc;
+        $work->save();
+
+        return response()->json(['success' => true, 'message' => 'Description updated successfully']);
+    }
+
+    // STATUS.BLADE
     // Get checkboxes statuses
     public function getStatus($workId)
     {
@@ -73,7 +80,6 @@ public function store(Request $request)
     {
         $status = WorkStatus::where('work_id', $workId)->firstOrFail();
 
-        // Update the status fields based on the incoming request data
         $status->desc_status = $request->input('desc_status', $status->desc_status);
         $status->notice_status = $request->input('notice_status', $status->notice_status);
         $status->image_status = $request->input('image_status', $status->image_status);

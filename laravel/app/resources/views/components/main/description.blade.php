@@ -31,9 +31,38 @@
     }
 
     function saveChanges() {
-        document.getElementById("xml-editor").value = editor.getValue();
+
+        const updatedDescription = editor.getValue();
+
+        document.getElementById("xml-editor").value = updatedDescription;
+
+        if (workId) {
+            saveDescriptionToDB(workId, updatedDescription);
+        }
+
         editor.setOption("readOnly", true);
         toggleButtons(false);
+    }
+
+    function saveDescriptionToDB(workId, description) {
+        fetch(`/works/${workId}/description`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({ desc: description })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save description');
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Description saved successfully:', data);
+        })
+        .catch(error => console.error('Error saving description:', error));
     }
 
     function cancelChanges() {
@@ -47,6 +76,15 @@
         document.getElementById("save-button").style.display = isEditing ? "inline" : "none";
         document.getElementById("cancel-button").style.display = isEditing ? "inline" : "none";
     }
+    
+    // Fetch description when work is selected
+    document.addEventListener('workSelected', function(event) {
+        workId = event.detail.workId;
+        if (workId) {
+            fetchDescription(workId);
+        }
+    });
+
     function fetchDescription(workId) {
         if (!workId) return;
 
@@ -57,6 +95,7 @@
             })
             .catch(error => console.error('Error fetching description:', error));
     }
+
 </script>
 <style>
     .CodeMirror.CodeMirror-readonly .CodeMirror-cursor {

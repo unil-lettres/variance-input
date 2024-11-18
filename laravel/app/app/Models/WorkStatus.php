@@ -10,7 +10,10 @@ class WorkStatus extends Model
 {
     use HasFactory;
 
+    protected $table = 'works_status';
+
     protected $fillable = [
+        'work_id',
         'global_status',
         'desc_status',
         'notice_status',
