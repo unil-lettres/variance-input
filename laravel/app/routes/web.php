@@ -6,6 +6,8 @@ use App\Http\Controllers\Auth\RegisterController;
 
 use App\Http\Controllers\AuthorController;
 use App\Http\Controllers\WorkController;
+use App\Http\Controllers\VersionController;
+use App\Http\Controllers\MediteController;
 
 Route::get('/', function () {
     return auth()->check() ? view('pages.main') : redirect('/login');
@@ -35,4 +37,12 @@ Route::post('/works/{workId}/status', [WorkController::class, 'updateStatus'])->
 // Description
 Route::get('/works/{id}/description', [WorkController::class, 'getDescription'])->name('works.description');
 Route::post('/works/{workId}/description', [WorkController::class, 'updateDescription']);
+
+// Routes CRUD pour composant versions.blade.php
+Route::resource('versions', VersionController::class);
+
+// Routes pour composant medite
+Route::post('/api/run_medite', [MediteController::class, 'runMedite']);
+Route::get('/api/task_status/{taskId}', [MediteController::class, 'taskStatus']);
+Route::post('/api/create_comparison', [MediteController::class, 'createComparison']);
 
