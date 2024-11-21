@@ -38,7 +38,10 @@ def run_diff_script(source_file, target_file, lg_pivot, ratio, seuil, case_sensi
         ]
         result = subprocess.run(command, capture_output=True, text=True, check=True)
 
-        return {"status": "success", "output": result.stdout}
+        return {
+            "status": "success",
+            "output": result.stdout
+        }
     except subprocess.CalledProcessError as e:
         return {"status": "error", "error": e.stderr}
 
@@ -78,6 +81,37 @@ def run_diff():
     })
 
     return redirect(url_for('task_status_page', task_id=task.id))
+
+    // Route pour app Laravel
+    @app.route('/run_diff2', methods=['POST'])
+    def run_diff2():
+        """Endpoint to launch the diff script."""
+        author_id = request.form.get('author_id')
+        work_id = request.form.get('work_id')
+        source_file = request.form.get('source_file')
+        target_file = request.form.get('target_file')
+        lg_pivot = request.form.get('lg_pivot', 7)
+        ratio = request.form.get('ratio', 15)
+        seuil = request.form.get('seuil', 50)
+        case_sensitive = request.form.get('case_sensitive', 'on') == 'on'
+        diacri_sensitive = request.form.get('diacri_sensitive', 'on') == 'on'
+        output_xml = os.path.join(app.config['UPLOAD_FOLDER'], 'result.xml')
+
+        # Submit the task to Celery
+        task = run_diff_script.apply_async(kwargs={
+            "source_file": source_file,
+            "target_file": target_file,
+            "lg_pivot": int(lg_pivot),
+            "ratio": int(ratio),
+            "seuil": int(seuil),
+            "case_sensitive": case_sensitive,
+            "diacri_sensitive": diacri_sensitive,
+            "output_xml": output_xml
+        })
+
+        # Return JSON response
+        return jsonify({"task_id": task.id}), 200
+
 
 @app.route('/task_status_page/<task_id>')
 def task_status_page(task_id):

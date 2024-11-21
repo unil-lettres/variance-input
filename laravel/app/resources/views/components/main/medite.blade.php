@@ -5,6 +5,9 @@
     <div class="card-body">
         <form id="medite-form">
             @csrf
+            <input type="hidden" id="work_id" name="work_id" value="">
+            <input type="hidden" id="author_id" name="author_id" value="">
+
             <div class="mb-3">
                 <label for="source_version" class="form-label">Source Version</label>
                 <select id="source_version" name="source_version" class="form-control" required>
@@ -67,6 +70,10 @@
         // Listen for workSelected event
         document.addEventListener('workSelected', async (event) => {
             const { workId } = event.detail;
+
+            // Populate the hidden work_id input field
+            document.getElementById('work_id').value = workId;
+
             sourceVersionDropdown.innerHTML = '<option value="">Select Source Version</option>';
             targetVersionDropdown.innerHTML = '<option value="">Select Target Version</option>';
 

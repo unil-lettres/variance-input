@@ -9,6 +9,7 @@ services:
     container_name: laravel
     volumes:
       - ./laravel/app:/var/www/html
+      - ./variance_data:/var/www/html/storage/app/private/variance_data
     working_dir: /var/www/html
     environment:
       - PHP_MEMORY_LIMIT=512M
@@ -47,6 +48,7 @@ services:
     container_name: medite
     volumes:
       - ./medite/app:/app
+      - ./variance_data:/app/variance_data
     working_dir: /app
     environment:
       - FLASK_ENV=development

@@ -91,7 +91,8 @@
         fetch(`/works/${workId}/description`)
             .then(response => response.json())
             .then(data => {
-                editor.setValue(data.description);
+                const description = data.description || "";
+                editor.setValue(description);
             })
             .catch(error => console.error('Error fetching description:', error));
     }

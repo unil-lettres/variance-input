@@ -56,9 +56,9 @@ public function store(Request $request)
     // Update description field
     public function updateDescription(Request $request, $workId)
     {
-        $request->validate([
-            'desc' => 'required|string',
-        ]);
+        //$request->validate([
+        //    'desc' => 'required|string',
+        //]);
 
         $work = Work::findOrFail($workId);
         $work->desc = $request->desc;

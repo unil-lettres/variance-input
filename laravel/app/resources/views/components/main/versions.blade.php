@@ -32,6 +32,7 @@
     // Listen for workSelected event
     document.addEventListener('workSelected', (event) => {
         selectedWorkId = event.detail.workId;
+        authorId = event.detail.authorId;
         fetchVersions(selectedWorkId);
     });
 
@@ -91,6 +92,7 @@
         const versionName = document.getElementById('versionName').value;
 
         formData.append('work_id', selectedWorkId);
+        formData.append('author_id', authorId);
         formData.append('xmlFile', xmlFile);
         formData.append('name', versionName);
 

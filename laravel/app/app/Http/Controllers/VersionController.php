@@ -35,6 +35,7 @@ class VersionController extends Controller
     {
         $request->validate([
             'work_id' => 'required|exists:works,id',
+            'author_id' => 'required|exists:authors,id',
             'name' => 'required|string|max:45',
             'xmlFile' => 'required|file|mimes:xml|max:1024',
         ]);
@@ -42,13 +43,13 @@ class VersionController extends Controller
         // Save the file to Laravel's storage/app directory
         $file = $request->file('xmlFile');
         $fileName = $file->getClientOriginalName();
-        $folderPath = "xml/{$request->work_id}";
+        $folderPath = "variance_data/{$request->author_id}/{$request->work_id}/versions";
         $filePath = $file->storeAs($folderPath, $fileName);
     
         \App\Models\Version::create([
             'work_id' => $request->work_id,
             'name' => $request->name,
-            'folder' => $folderPath,
+            'folder' => $filePath,
         ]);
     
         return response()->json(['message' => 'Version uploaded successfully!', 'path' => $filePath]);

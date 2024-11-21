@@ -134,16 +134,16 @@ document.addEventListener("DOMContentLoaded", () => {
         // If there's only one work, select it and check permissions
         if (works.length === 1) {
             workSelector.value = works[0].id;
-            handleWorkSelection(works[0].id);  // Trigger permission check if auto-selected
+            handleWorkSelection(works[0].id, authorId);  // Trigger permission check if auto-selected
         }
 
         if (selectedWorkId) {
             workSelector.value = selectedWorkId;
-            handleWorkSelection(selectedWorkId);
+            handleWorkSelection(selectedWorkId, authorId);
         }
 
         workSelector.onchange = function () {
-            handleWorkSelection(workSelector.value);
+            handleWorkSelection(workSelector.value, authorId);
         };
     })
     .catch(error => console.error("Error loading works:", error));
@@ -151,14 +151,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Quand une oeuvre est sélectionnée, check permissions et
     // émettre événement "workSelected" avec JSON: workId, canEdit
-    function handleWorkSelection(workId) {
+    function handleWorkSelection(workId, authorId) {
     if (!workId) return;
 
     fetch(`/works/${workId}/can-edit`)
         .then(response => response.json())
         .then(data => {
             const event = new CustomEvent('workSelected', {
-                detail: { workId: workId, canEdit: data.canEdit }
+                detail: { workId: workId, canEdit: data.canEdit, authorId: authorId }
             });
             document.dispatchEvent(event);
         })
