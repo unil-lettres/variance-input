@@ -82,7 +82,7 @@ def run_diff():
 
     return redirect(url_for('task_status_page', task_id=task.id))
 
-    // Route pour app Laravel
+    # Route pour app Laravel
     @app.route('/run_diff2', methods=['POST'])
     def run_diff2():
         """Endpoint to launch the diff script."""
