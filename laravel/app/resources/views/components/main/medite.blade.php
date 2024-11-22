@@ -159,8 +159,9 @@
                         resultHtml.textContent = "View HTML Result";
                         resultXml.href = `/uploads/result.xml`;
                         resultXml.textContent = "Download XML Result";
-
-                        await fetch('/api/create_comparison', {
+                        
+                        // Pas nécessaire, le backend (VersionController) créé la comparaison dans la db
+                        /*await fetch('/api/create_comparison', {
                             method: 'POST',
                             body: JSON.stringify({
                                 source_id: formData.get('source_version'),
@@ -173,7 +174,7 @@
                                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                                 'Content-Type': 'application/json',
                             },
-                        });
+                        });*/
                     } else if (taskData.status === 'failed') {
                         progressIndicator.textContent = 'Task failed. Please try again.';
                     }

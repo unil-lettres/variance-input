@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, send_from_directory
 from celery import Celery
+from scripts.diff import run
 import subprocess
 import redis
 import os
+import time
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -20,58 +22,106 @@ def uploaded_file(filename):
     """Serve uploaded files."""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-import time
-
 @celery.task
-def run_diff_script(source_file, target_file, lg_pivot, ratio, seuil, case_sensitive, diacri_sensitive, output_xml):
+def run_diff_script(source_filename, target_filename, lg_pivot, ratio, seuil, case_sensitive, diacri_sensitive, output_xml):
     """Run the diff script asynchronously."""
     try:
         command = [
             "poetry", "run", "python", "/app/scripts/diff.py",
-            source_file, target_file,
-            "--lg_pivot", str(lg_pivot),
+            source_filename,
+            target_filename,
             "--ratio", str(ratio),
             "--seuil", str(seuil),
             "--case-sensitive" if case_sensitive else "--no-case-sensitive",
             "--diacri-sensitive" if diacri_sensitive else "--no-diacri-sensitive",
             "--output-xml", output_xml
         ]
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
 
-        return {
-            "status": "success",
-            "output": result.stdout
-        }
+        # Log the command for debugging
+        print(f"Running command: {' '.join(command)}")
+
+        # Run the command using subprocess
+        subprocess.run(command, check=True)
+
+        # If successful, return the output XML path
+        return {"status": "success", "output": f"Generated {output_xml}"}
     except subprocess.CalledProcessError as e:
-        return {"status": "error", "error": e.stderr}
+        # Capture and log errors from subprocess
+        print(f"Error occurred: {e}")
+        return {"status": "error", "error": str(e)}
 
 @app.route('/')
 def home():
     return render_template('index.html')
 
-
 @app.route('/run_diff', methods=['POST'])
 def run_diff():
     """Endpoint to launch the diff script."""
+    # Handle uploaded files
     source_file = request.files['source_file']
     target_file = request.files['target_file']
-    lg_pivot = request.form.get('lg_pivot', 7)
-    ratio = request.form.get('ratio', 15)
-    seuil = request.form.get('seuil', 50)
-    case_sensitive = request.form.get('case_sensitive', 'on') == 'on'
-    diacri_sensitive = request.form.get('diacri_sensitive', 'on') == 'on'
+
+    if not source_file or not target_file:
+        return jsonify({"error": "Source or target file is missing"}), 400
+
+    # Extract parameters
+    lg_pivot = int(request.form.get('lg_pivot', 7))
+    ratio = int(request.form.get('ratio', 15))
+    seuil = int(request.form.get('seuil', 50))
+    case_sensitive = request.form.get('case_sensitive', 'off') == 'on'
+    diacri_sensitive = request.form.get('diacri_sensitive', 'off') == 'on'
     output_xml = os.path.join(app.config['UPLOAD_FOLDER'], 'result.xml')
 
     # Save uploaded files
     source_path = os.path.join(app.config['UPLOAD_FOLDER'], source_file.filename)
     target_path = os.path.join(app.config['UPLOAD_FOLDER'], target_file.filename)
-    source_file.save(source_path)
-    target_file.save(target_path)
+    try:
+        # Save files to the uploads/ directory
+        source_file.save(source_path)
+        target_file.save(target_path)
+    except Exception as e:
+        return jsonify({"error": f"File upload failed: {e}"}), 500
+
+    # Debugging: Print full paths being sent to Celery
+    print(
+        f"Parameters: source_path={source_path}, target_path={target_path}, "
+        f"lg_pivot={lg_pivot}, ratio={ratio}, seuil={seuil}, case_sensitive={case_sensitive}, "
+        f"diacri_sensitive={diacri_sensitive}, output_xml={output_xml}"
+    )
 
     # Submit the task to Celery
     task = run_diff_script.apply_async(kwargs={
-        "source_file": source_path,
-        "target_file": target_path,
+        "source_filename": source_path,
+        "target_filename": target_path,
+        "lg_pivot": lg_pivot,
+        "ratio": ratio,
+        "seuil": seuil,
+        "case_sensitive": case_sensitive,
+        "diacri_sensitive": diacri_sensitive,
+        "output_xml": output_xml
+    })
+
+    return redirect(url_for('task_status_page', task_id=task.id))
+
+# Route pour app Laravel
+@app.route('/run_diff2', methods=['POST'])
+def run_diff2():
+    """Endpoint to launch the diff script."""
+    author_id = request.form.get('author_id')
+    work_id = request.form.get('work_id')
+    source_file = request.form.get('source_file')
+    target_file = request.form.get('target_file')
+    lg_pivot = request.form.get('lg_pivot', 7)
+    ratio = request.form.get('ratio', 15)
+    seuil = request.form.get('seuil', 50)
+    case_sensitive = request.form.get('case_sensitive', 'on') == 'on'
+    diacri_sensitive = request.form.get('diacri_sensitive', 'on') == 'on'
+    output_xml = request.form.get('output_xml')
+
+    # Submit the task to Celery
+    task = run_diff_script.apply_async(kwargs={
+        "source_file": source_file,
+        "target_file": target_file,
         "lg_pivot": int(lg_pivot),
         "ratio": int(ratio),
         "seuil": int(seuil),
@@ -80,38 +130,8 @@ def run_diff():
         "output_xml": output_xml
     })
 
-    return redirect(url_for('task_status_page', task_id=task.id))
-
-    # Route pour app Laravel
-    @app.route('/run_diff2', methods=['POST'])
-    def run_diff2():
-        """Endpoint to launch the diff script."""
-        author_id = request.form.get('author_id')
-        work_id = request.form.get('work_id')
-        source_file = request.form.get('source_file')
-        target_file = request.form.get('target_file')
-        lg_pivot = request.form.get('lg_pivot', 7)
-        ratio = request.form.get('ratio', 15)
-        seuil = request.form.get('seuil', 50)
-        case_sensitive = request.form.get('case_sensitive', 'on') == 'on'
-        diacri_sensitive = request.form.get('diacri_sensitive', 'on') == 'on'
-        output_xml = os.path.join(app.config['UPLOAD_FOLDER'], 'result.xml')
-
-        # Submit the task to Celery
-        task = run_diff_script.apply_async(kwargs={
-            "source_file": source_file,
-            "target_file": target_file,
-            "lg_pivot": int(lg_pivot),
-            "ratio": int(ratio),
-            "seuil": int(seuil),
-            "case_sensitive": case_sensitive,
-            "diacri_sensitive": diacri_sensitive,
-            "output_xml": output_xml
-        })
-
-        # Return JSON response
-        return jsonify({"task_id": task.id}), 200
-
+    # Return JSON response
+    return jsonify({"task_id": task.id}), 200
 
 @app.route('/task_status_page/<task_id>')
 def task_status_page(task_id):

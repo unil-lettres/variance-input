@@ -5,18 +5,13 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Comparison;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class MediteController extends Controller
 {
-    use Illuminate\Http\Request;
-    use Illuminate\Support\Facades\Http;
-    
-    use Illuminate\Support\Facades\DB;
-    use Illuminate\Support\Facades\Http;
-    
     public function runMedite(Request $request)
     {
-        // Validate the incoming request
         $request->validate([
             'source_version' => 'required|exists:versions,id',
             'target_version' => 'required|exists:versions,id',
@@ -33,18 +28,26 @@ class MediteController extends Controller
             return response()->json(['error' => 'Source or target version not found'], 404);
         }
     
+        // Determine the full path for the html and xml result files to be created by Medite
+        $resultsFolder = 'variance_data/';
+
         // Prepare the data for the Flask API call
         $payload = [
-            'source_version' => $sourceVersion,
-            'target_version' => $targetVersion,
+            'source_file' => $sourceVersion,
+            'target_file' => $targetVersion,
             'lg_pivot' => $request->input('lg_pivot'),
             'ratio' => $request->input('ratio'),
             'seuil' => $request->input('seuil'),
+            'case_sensitive' => $request->input('case_sensitive'),
+            'diacri_sensitive' => $request->input('diacri_sensitive'),
+            'output_xml' => $resultsFolder
         ];
+
+        Log::info('Payload for Medite API', $payload);
     
         try {
             // Make the API call to the Flask app
-            $response = Http::post('http://medite:5000/api/run_diff2', $payload);
+            $response = Http::asForm()->post('http://medite:5000/run_diff2', $payload);
     
             // Check if the API call was successful
             if ($response->successful()) {
