@@ -1,2 +1,6 @@
+# OS
 .DS_Store
-variance_data
+Thumbs.db
+
+# Project-specific
+variance_data/

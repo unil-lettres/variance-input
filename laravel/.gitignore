@@ -1,0 +1,40 @@
+# Laravel & PHP
+/vendor
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/app/storage/*.key
+/storage/pail
+/storage/*
+!storage/.gitignore
+!storage/framework/.gitignore
+!storage/logs/.gitignore
+/bootstrap/cache/*
+!bootstrap/cache/.gitignore
+.phpunit.cache
+.phpunit.result.cache
+.env
+.env.*
+.phpactor.json
+auth.json
+Homestead.json
+Homestead.yaml
+
+# Laravel IDE/Editor
+/.idea
+/.vscode
+/.fleet
+/.zed
+
+# Logs
+npm-debug.log
+yarn-error.log
+
+# Custom files (adjust if needed)
+text1.xml
+text2.xml
+*.egg
+*.egg-info
+__pycache__/
