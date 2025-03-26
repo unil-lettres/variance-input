@@ -16,32 +16,28 @@
         @include('components.main.description')
     </div>
 
-    <div id="zone-3" class="mb-4" style="display: none;">
-        @include('components.main.notice')
+    <div id="zone-3" class="mb-4">
+        @include('components.main.media')
     </div>
 
-    <div id="zone-4" class="mb-4" style="display: none;">
-        @include('components.main.vignette')
-    </div>
-
-    <div id="zone-5" class="mb-4">
+    <div id="zone-4" class="mb-4">
         @include('components.main.versions')
     </div>
 
-    <div id="zone-6" class="mb-4">
+    <div id="zone-5" class="mb-4">
         @include('components.main.comparisons')
     </div>
 
-    <div id="zone-7" class="mb-4">
+    <div id="zone-6" class="mb-4">
         @include('components.main.medite')
     </div>
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const statusZone = document.getElementById('zone-1');
-        const noticeZone = document.getElementById('zone-3');
-        const vignetteZone = document.getElementById('zone-4');
+        const statusZone   = document.getElementById('zone-1');
+        const mediaZone    = document.getElementById('zone-3');
+        const versionsZone = document.getElementById('zone-4');
     });
 </script>
 @endsection

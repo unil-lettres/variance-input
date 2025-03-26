@@ -18,29 +18,35 @@ document.addEventListener("DOMContentLoaded", () => {
     const saveWorkBtn     = document.getElementById("save-work-btn");
     const updateWorkBtn   = document.getElementById("update-work-btn");
   
-    // ==============
-    //  LOAD + TOGGLE
-    // ==============
-    loadAuthors(); // load on page load
-  
-    authorSelector.addEventListener("change", () => {
-      toggleAuthorButtons();
+  // ==============
+  //  LOAD + TOGGLE
+  // ==============
+  loadAuthors(); // load on page load
+
+  authorSelector.addEventListener("change", () => {
+    toggleAuthorButtons();
+    const authorId = authorSelector.value;
+    if (authorId) loadWorks(authorId);
+  });
+
+  workSelector.addEventListener("change", () => {
+    toggleWorkButtons();
+    const workId = workSelector.value;
+
+    if (workId) {
       const authorId = authorSelector.value;
-      if (authorId) loadWorks(authorId);
-    });
+      const selectedOption = workSelector.options[workSelector.selectedIndex];
+      const shortTitle = selectedOption?.getAttribute('data-short-title') || null;
+
+      const evt = new CustomEvent('workSelected', {
+        detail: { workId, authorId, short_title: shortTitle }
+      });
+      document.dispatchEvent(evt);
+    }
+  });
+
   
-    workSelector.addEventListener("change", () => {
-      toggleWorkButtons();
-      const workId = workSelector.value;
-      if (workId) {
-        const authorId = authorSelector.value;
-        // Fire an optional event if needed
-        const evt = new CustomEvent('workSelected', { detail: { workId, authorId }});
-        document.dispatchEvent(evt);
-      }
-    });
-  
-    // ==============
+// ==============
 //  ADD AUTHOR
 // ==============
 addAuthorBtn.addEventListener("click", () => {
@@ -347,29 +353,35 @@ addWorkBtn.addEventListener("click", () => {
   
     function loadWorks(authorId, selectedWorkId = null) {
       if (!authorId) return;
+    
       fetch(`/api/author/${authorId}/works`)
         .then(r => r.json())
         .then(works => {
-          workSelector.innerHTML = '<option value=\"\">Sélectionner une oeuvre</option>';
+          workSelector.innerHTML = '<option value="">Sélectionner une oeuvre</option>';
+    
           works.forEach(work => {
             const opt = document.createElement('option');
             opt.value = work.id;
             opt.textContent = work.short_title
               ? `${work.title} [${work.short_title}]`
               : work.title;
+            opt.setAttribute('data-short-title', work.short_title || '');
             workSelector.appendChild(opt);
           });
+    
           workSelector.disabled = false;
           addWorkBtn.disabled = false;
-  
+    
           if (selectedWorkId) {
             workSelector.value = selectedWorkId;
           }
+    
           // Ensure toggles reflect newly loaded works
           toggleWorkButtons();
         })
         .catch(console.error);
     }
+    
   
     function toggleAuthorButtons() {
       const hasValue = !!authorSelector.value;

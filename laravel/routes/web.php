@@ -43,6 +43,11 @@ Route::post('/works/{workId}/status', [WorkController::class, 'updateStatus'])->
 Route::get('/works/{id}/description', [WorkController::class, 'getDescription'])->name('works.description');
 Route::post('/works/{workId}/description', [WorkController::class, 'updateDescription']);
 
+// Media
+Route::post('/api/works/{id}/media', [WorkController::class, 'storeMedia']);
+Route::get('/works/{id}/media', [WorkController::class, 'getMedia']);
+Route::delete('/api/works/{workId}/media/{mediaId}', [WorkController::class, 'destroyMedia']);
+
 // Routes CRUD pour composant versions.blade.php
 Route::resource('versions', VersionController::class);
 

@@ -7,6 +7,8 @@ use App\Models\Work;
 use App\Models\WorkStatus;
 use App\Models\Permission;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class WorkController extends Controller
 {
@@ -141,4 +143,105 @@ class WorkController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+
+
+    public function storeMedia(Request $request, $id)
+    {
+        $work = Work::findOrFail($id);
+        $shortTitle = $request->query('short_title');
+    
+        if (!$shortTitle) {
+            return response()->json(['error' => 'Short title is required'], 400);
+        }
+    
+        // Validate file types and sizes (MB = kilobytes)
+        $request->validate([
+            'vignette' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',  // max 2MB
+            'pdf' => 'nullable|file|mimes:pdf|max:10240',                   // max 10MB
+        ]);
+    
+        if ($request->hasFile('vignette')) {
+            // 🧹 Remove old file
+            if ($work->image_url) {
+                $oldPath = str_replace('storage/', '', $work->image_url);
+                Storage::disk('public')->delete($oldPath);
+            }
+    
+            $file = $request->file('vignette');
+            $originalName = $file->getClientOriginalName();
+            $storePath = "uploads/{$shortTitle}/vignette";
+            $relativePath = "storage/{$storePath}/{$originalName}";
+    
+            // Store file (keep original name)
+            $file->storeAs($storePath, $originalName, 'public');
+            $work->image_url = $relativePath;
+        }
+    
+        if ($request->hasFile('pdf')) {
+            if ($work->pdf_url) {
+                $oldPath = str_replace('storage/', '', $work->pdf_url);
+                Storage::disk('public')->delete($oldPath);
+            }
+    
+            $file = $request->file('pdf');
+            $originalName = $file->getClientOriginalName();
+            $storePath = "uploads/{$shortTitle}/pdf";
+            $relativePath = "storage/{$storePath}/{$originalName}";
+    
+            $file->storeAs($storePath, $originalName, 'public');
+            $work->pdf_url = $relativePath;
+        }
+    
+        $work->save();
+    
+        return response()->json(['success' => true]);
+    }
+    
+
+    public function getMedia($id)
+    {
+        $work = Work::findOrFail($id);
+
+        return response()->json([
+            'image_url' => $work->image_url,
+            'pdf_url' => $work->pdf_url,
+        ]);
+    }
+
+    public function destroyMedia($workId, $type)
+    {
+        \Log::debug("Called destroyMedia", [
+            'workId' => $workId,
+            'type' => $type
+        ]);
+        
+        $work = Work::findOrFail($workId);
+    
+        if ($type === 'vignette' && $work->image_url) {
+            $relativePath = str_replace('storage/', '', $work->image_url);
+            
+            \Log::debug("Trying to delete image:", ['path' => $relativePath]);
+        
+            $deleted = Storage::disk('public')->delete($relativePath);
+            \Log::debug("Image deleted?", ['result' => $deleted]);
+        
+            if ($deleted) {
+                $work->image_url = null;
+            }
+        }
+        
+        
+    
+        if ($type === 'pdf' && $work->pdf_url) {
+            Storage::disk('public')->delete(str_replace('storage/', '', $work->pdf_url));
+            $work->pdf_url = null;
+        }
+    
+        $work->save();
+    
+        return response()->json(['success' => true]);
+    }
+    
+
 }
