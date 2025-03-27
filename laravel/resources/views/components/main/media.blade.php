@@ -300,36 +300,6 @@ function showPreview(previewId, file) {
         });
     }
 
-    // // ======================
-    // //  SHOW PREVIEW
-    // // ======================
-    // function showPreview(dropzoneId, file) {
-    //     // Convert dropzoneId -> previewId:
-    //     // e.g.  'vignette-dropzone' -> 'vignette-preview'
-    //     const previewId = dropzoneId.replace('-dropzone', '-preview');
-    //     const previewElem = document.getElementById(previewId);
-    //     if (!previewElem) {
-    //         console.warn("[MediaBlade] Preview element not found:", previewId);
-    //         return;
-    //     }
-
-    //     previewElem.innerHTML = '';
-    //     if (file.type.startsWith('image/')) {
-    //         const reader = new FileReader();
-    //         reader.onload = () => {
-    //             const img = document.createElement('img');
-    //             img.src = reader.result;
-    //             img.style.maxWidth = '150px';
-    //             previewElem.appendChild(img);
-    //         };
-    //         reader.readAsDataURL(file);
-    //     } else if (file.type === 'application/pdf') {
-    //         const label = document.createElement('div');
-    //         label.textContent = `Fichier PDF: ${file.name}`;
-    //         previewElem.appendChild(label);
-    //     }
-    // }
-
     // ======================
     //  UPLOAD IMMEDIATELY
     // ======================

@@ -48,8 +48,11 @@ Route::post('/api/works/{id}/media', [WorkController::class, 'storeMedia']);
 Route::get('/works/{id}/media', [WorkController::class, 'getMedia']);
 Route::delete('/api/works/{workId}/media/{mediaId}', [WorkController::class, 'destroyMedia']);
 
-// Routes CRUD pour composant versions.blade.php
-Route::resource('versions', VersionController::class);
+// Versions
+Route::post('/api/versions', [VersionController::class, 'store']);
+Route::get('/api/versions', [VersionController::class, 'index']);
+Route::put('/api/versions/{id}', [VersionController::class, 'update']);
+Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
 
 // Routes pour composant medite
 Route::post('/api/run_medite', [MediteController::class, 'runMedite']);

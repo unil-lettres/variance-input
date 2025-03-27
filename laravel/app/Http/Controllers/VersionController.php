@@ -8,84 +8,87 @@ use Illuminate\Support\Facades\Storage;
 
 class VersionController extends Controller
 {
+    /**
+     * List versions for a given work_id
+     */
     public function index(Request $request)
     {
         $workId = $request->query('work_id');
-    
         if (!$workId) {
             return response()->json(['error' => 'work_id is required'], 400);
         }
-    
-        $versions = \App\Models\Version::where('work_id', $workId)->get();
-    
+
+        $versions = Version::where('work_id', $workId)->get();
         return response()->json($versions, 200);
     }
-    
-    
 
     /**
-     * Show the form for creating a new resource.
+     * Store a newly uploaded version text file as {versionId}{shortTitle}.txt
+     * in storage/app/public/uploads/{shortTitle}/versions
      */
-    public function create()
-    {
-        //
-    }
-
     public function store(Request $request)
     {
-        $request->validate([
-            'work_id' => 'required|exists:works,id',
-            'author_id' => 'required|exists:authors,id',
+        $validated = $request->validate([
+            'work_id'      => 'required|exists:works,id',
+            'version_id'   => 'required|string|max:10',         // ✅ Add this
+            'versionFile'  => 'required|file|mimes:txt,text|max:2048',
+            'short_title'  => 'required|string|max:10',
+            'name'         => 'required|string|max:45',         // Edition name
+        ]);
+    
+        $file         = $request->file('versionFile');
+        $versionId    = $validated['version_id'];              // ✅ now safe
+        $editionName  = $validated['name'];                    // ✅ consistent
+        $shortTitle   = $validated['short_title'];
+    
+        $finalName  = $versionId . $shortTitle . '.txt';
+        $folderPath = "uploads/{$shortTitle}/versions";
+        $storedPath = $file->storeAs($folderPath, $finalName, 'public');
+        $dbPath     = "storage/{$storedPath}";
+    
+        $version = Version::create([
+            'work_id' => $validated['work_id'],
+            'name'    => $editionName,
+            'folder'  => $dbPath,
+        ]);
+    
+        return response()->json([
+            'message' => 'Version uploaded successfully!',
+            'version' => $version,
+        ], 201);
+    }
+    
+
+    /**
+     * Update the version's user-friendly name
+     */
+    public function update(Request $request, $id)
+    {
+        $version = Version::findOrFail($id);
+
+        $validated = $request->validate([
             'name' => 'required|string|max:45',
-            'xmlFile' => 'required|file|mimes:xml|max:1024',
         ]);
-    
-        // Save the file to Laravel's storage/app directory
-        $file = $request->file('xmlFile');
-        $fileName = $file->getClientOriginalName();
-        $folderPath = "variance_data/{$request->author_id}/{$request->work_id}/versions";
-        $filePath = $file->storeAs($folderPath, $fileName);
-    
-        \App\Models\Version::create([
-            'work_id' => $request->work_id,
-            'name' => $request->name,
-            'folder' => $filePath,
-        ]);
-    
-        return response()->json(['message' => 'Version uploaded successfully!', 'path' => $filePath]);
-    }
-    
-    
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
+        $version->update(['name' => $validated['name']]);
+
+        return response()->json($version, 200);
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Delete the version from DB and remove file from disk
      */
-    public function edit(string $id)
+    public function destroy($id)
     {
-        //
-    }
+        $version = Version::findOrFail($id);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
+        if ($version->folder) {
+            $relativePath = str_replace('storage/', '', $version->folder);
+            Storage::disk('public')->delete($relativePath);
+        }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        $version->delete();
+
+        return response()->json(['message' => 'Version deleted successfully!']);
     }
 }

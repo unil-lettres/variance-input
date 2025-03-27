@@ -78,7 +78,7 @@
             targetVersionDropdown.innerHTML = '<option value="">Select Target Version</option>';
 
             try {
-                const response = await fetch(`/versions?work_id=${workId}`);
+                const response = await fetch(`/api/versions?work_id=${workId}`);
                 if (!response.ok) throw new Error(`Failed to fetch versions: ${response.statusText}`);
 
                 const versions = await response.json();
