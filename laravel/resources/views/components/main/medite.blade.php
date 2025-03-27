@@ -59,133 +59,147 @@
 
 @push('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const sourceVersionDropdown = document.getElementById('source_version');
-        const targetVersionDropdown = document.getElementById('target_version');
-        const progressIndicator = document.getElementById('progress-indicator');
-        const resultsDiv = document.getElementById('results');
-        const resultHtml = document.getElementById('result-html');
-        const resultXml = document.getElementById('result-xml');
+document.addEventListener('DOMContentLoaded', function () {
+    const sourceVersionDropdown = document.getElementById('source_version');
+    const targetVersionDropdown = document.getElementById('target_version');
+    const progressIndicator = document.getElementById('progress-indicator');
+    const resultsDiv = document.getElementById('results');
+    const resultHtml = document.getElementById('result-html');
+    const resultXml = document.getElementById('result-xml');
+    const mediteForm = document.getElementById('medite-form');
 
-        // Listen for workSelected event
-        document.addEventListener('workSelected', async (event) => {
-            const { workId } = event.detail;
+    // =========================
+    // 1) Helper to fill Source/Target dropdowns
+    // =========================
+    async function updateVersionDropdowns(workId) {
+        // Clear current items
+        sourceVersionDropdown.innerHTML = '<option value="">Select Source Version</option>';
+        targetVersionDropdown.innerHTML = '<option value="">Select Target Version</option>';
 
-            // Populate the hidden work_id input field
-            document.getElementById('work_id').value = workId;
-
-            sourceVersionDropdown.innerHTML = '<option value="">Select Source Version</option>';
-            targetVersionDropdown.innerHTML = '<option value="">Select Target Version</option>';
-
-            try {
-                const response = await fetch(`/api/versions?work_id=${workId}`);
-                if (!response.ok) throw new Error(`Failed to fetch versions: ${response.statusText}`);
-
-                const versions = await response.json();
-
-                if (versions.length === 0) {
-                    const noVersionOption = document.createElement('option');
-                    noVersionOption.textContent = 'No versions available';
-                    noVersionOption.disabled = true;
-                    sourceVersionDropdown.appendChild(noVersionOption.cloneNode(true));
-                    targetVersionDropdown.appendChild(noVersionOption.cloneNode(true));
-                    return;
-                }
-
-                versions.forEach(version => {
-                    const option = document.createElement('option');
-                    option.value = version.id;
-                    option.textContent = version.name;
-                    sourceVersionDropdown.appendChild(option);
-
-                    const targetOption = option.cloneNode(true);
-                    targetVersionDropdown.appendChild(targetOption);
-                });
-            } catch (error) {
-                console.error('Error fetching versions:', error);
+        try {
+            const response = await fetch(`/api/versions?work_id=${workId}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch versions: ${response.statusText}`);
             }
-        });
 
-        // Handle form submission
-        document.getElementById('medite-form').addEventListener('submit', async function (event) {
-            event.preventDefault();
+            const versions = await response.json();
+            if (versions.length === 0) {
+                const noVersionOption = document.createElement('option');
+                noVersionOption.textContent = 'No versions available';
+                noVersionOption.disabled = true;
 
-            if (!sourceVersionDropdown.value || !targetVersionDropdown.value) {
-                alert('Please select both source and target versions.');
+                sourceVersionDropdown.appendChild(noVersionOption.cloneNode(true));
+                targetVersionDropdown.appendChild(noVersionOption.cloneNode(true));
                 return;
             }
 
-            const formData = new FormData(this);
+            versions.forEach(version => {
+                const opt1 = document.createElement('option');
+                opt1.value = version.id;
+                opt1.textContent = version.name;
+                sourceVersionDropdown.appendChild(opt1);
 
-            // Show progress indicator and hide results
-            progressIndicator.style.display = 'block';
-            resultsDiv.style.display = 'none';
+                // clone the same for target
+                const opt2 = opt1.cloneNode(true);
+                targetVersionDropdown.appendChild(opt2);
+            });
+        } catch (error) {
+            console.error('Error updating version dropdowns:', error);
+        }
+    }
 
-            try {
-                const response = await fetch('/api/run_medite', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    },
-                });
-
-                if (!response.ok) throw new Error('Failed to submit Medite task');
-
-                const data = await response.json();
-                const taskId = data.task_id;
-
-                // Poll for task status
-                let retryCount = 0;
-                const maxRetries = 10;
-
-                const poll = async () => {
-                    if (retryCount >= maxRetries) {
-                        progressIndicator.textContent = 'Task timed out. Please try again.';
-                        return;
-                    }
-
-                    retryCount++;
-
-                    const taskResponse = await fetch(`/api/task_status/${taskId}`);
-                    const taskData = await taskResponse.json();
-
-                    if (taskData.status === 'pending') {
-                        setTimeout(poll, 2000); // Poll every 2 seconds
-                    } else if (taskData.status === 'completed') {
-                        progressIndicator.style.display = 'none';
-                        resultsDiv.style.display = 'block';
-                        resultHtml.href = `/uploads/result.html`;
-                        resultHtml.textContent = "View HTML Result";
-                        resultXml.href = `/uploads/result.xml`;
-                        resultXml.textContent = "Download XML Result";
-                        
-                        // Pas nécessaire, le backend (VersionController) créé la comparaison dans la db
-                        /*await fetch('/api/create_comparison', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                source_id: formData.get('source_version'),
-                                target_id: formData.get('target_version'),
-                                folder: 'uploads',
-                                number: Math.random(),
-                                prefix_label: 'Comparison between versions',
-                            }),
-                            headers: {
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                                'Content-Type': 'application/json',
-                            },
-                        });*/
-                    } else if (taskData.status === 'failed') {
-                        progressIndicator.textContent = 'Task failed. Please try again.';
-                    }
-                };
-
-                poll();
-            } catch (error) {
-                console.error(error);
-                progressIndicator.textContent = 'An error occurred. Please try again.';
-            }
-        });
+    // =========================
+    // 2) Listen for "workSelected" event
+    //    -> user picks a work => refresh dropdowns
+    // =========================
+    document.addEventListener('workSelected', async (event) => {
+        const { workId } = event.detail;
+        document.getElementById('work_id').value = workId;
+        updateVersionDropdowns(workId);
     });
+
+    // =========================
+    // 3) NEW: Listen for "versionsUpdated" event
+    //    -> a version was uploaded/deleted in another blade
+    // =========================
+    document.addEventListener('versionsUpdated', async (event) => {
+        const { workId } = event.detail;
+        // Optionally update the hidden field:
+        document.getElementById('work_id').value = workId;
+        // Refresh the dropdowns to reflect the new version set
+        updateVersionDropdowns(workId);
+    });
+
+    // =========================
+    // 4) Handle the Medite form submission
+    // =========================
+    mediteForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        if (!sourceVersionDropdown.value || !targetVersionDropdown.value) {
+            alert('Please select both source and target versions.');
+            return;
+        }
+
+        // Show progress indicator and hide results
+        progressIndicator.style.display = 'block';
+        resultsDiv.style.display = 'none';
+
+        const formData = new FormData(mediteForm);
+
+        try {
+            const response = await fetch('/api/run_medite', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+            });
+
+            if (!response.ok) throw new Error('Failed to submit Medite task');
+
+            const data = await response.json();
+            const taskId = data.task_id;
+
+            // Poll for task status
+            let retryCount = 0;
+            const maxRetries = 10;
+
+            async function poll() {
+                if (retryCount >= maxRetries) {
+                    progressIndicator.textContent = 'Task timed out. Please try again.';
+                    return;
+                }
+
+                retryCount++;
+
+                const taskResponse = await fetch(`/api/task_status/${taskId}`);
+                const taskData = await taskResponse.json();
+
+                if (taskData.status === 'pending') {
+                    setTimeout(poll, 2000); // poll every 2 seconds
+                } else if (taskData.status === 'completed') {
+                    progressIndicator.style.display = 'none';
+                    resultsDiv.style.display = 'block';
+
+                    // Adjust these if your script outputs differently:
+                    resultHtml.href = `/uploads/result.html`;
+                    resultHtml.textContent = 'View HTML Result';
+                    resultXml.href = `/uploads/result.xml`;
+                    resultXml.textContent = 'Download XML Result';
+                } else if (taskData.status === 'failed') {
+                    progressIndicator.textContent = 'Task failed. Please try again.';
+                }
+            }
+
+            poll();
+        } catch (error) {
+            console.error(error);
+            progressIndicator.textContent = 'An error occurred. Please try again.';
+        }
+    });
+});
 </script>
 @endpush
+
+

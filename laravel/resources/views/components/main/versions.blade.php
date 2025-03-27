@@ -125,6 +125,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Frontend validation for versionId format
+        const versionIdRegex = /^[a-zA-Z0-9_-]{1,5}$/;
+        if (!versionIdRegex.test(versionIdValue)) {
+            alert('Version ID must be 1–5 characters long and contain only letters, numbers, underscores (_) or dashes (-).');
+            return;
+        }
+
         // Prepare form data
         const formData = new FormData();
         formData.append('work_id', selectedWorkId);
@@ -134,28 +141,45 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shortTitle) formData.append('short_title', shortTitle);
 
         try {
-            const response = await fetch('/api/versions', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').content,
-                    'Accept': 'application/json'
-                },
-                body: formData
-            });
-            if (!response.ok) {
+        const response = await fetch('/api/versions', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
             const errorDetails = await response.json();
-            console.error("Validation errors:", errorDetails);
-            throw new Error(`Upload failed: ${response.status}`);
+            console.error("Upload error:", errorDetails);
+
+            if (response.status === 409) {
+                alert(errorDetails.message || 'A version with this ID already exists.');
+            } else if (response.status === 422) {
+                alert('Validation error: ' + (errorDetails.message || 'Please check the input.'));
+            } else {
+                alert('Failed to upload version. Please try again.');
+            }
+
+            return; // Stop further processing
         }
 
-            const data = await response.json();
-            alert('Version uploaded successfully!');
-            document.getElementById('upload-version-form').reset();
-            fetchVersions(selectedWorkId);
+        const data = await response.json();
+        alert('Version uploaded successfully!');
+        document.getElementById('upload-version-form').reset();
+        fetchVersions(selectedWorkId);
+
+        // Dispatch event to update the versions dropdown
+        document.dispatchEvent(new CustomEvent('versionsUpdated', {
+        detail: { workId: selectedWorkId }
+        }));
+
         } catch (error) {
-            console.error('Error uploading version:', error);
-            alert('Failed to upload version. Please try again.');
+            console.error('Unexpected error uploading version:', error);
+            alert('Unexpected error occurred. Please try again.');
         }
+
     });
 
     // 3) Edit
@@ -288,12 +312,6 @@ async function updateVersionName() {
 }
 
 // ======================= DELETE
-function confirmDeleteVersion(version) {
-    versionToDelete = version.id;
-    const delModal = new bootstrap.Modal(document.getElementById('deleteVersionConfirm'));
-    delModal.show();
-}
-
 async function doDeleteVersion() {
     if (!versionToDelete) return;
 
@@ -301,7 +319,7 @@ async function doDeleteVersion() {
         const response = await fetch(`/api/versions/${versionToDelete}`, {
             method: 'DELETE',
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').content
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             }
         });
         if (!response.ok) throw new Error(`Delete failed: ${response.status}`);
@@ -309,13 +327,28 @@ async function doDeleteVersion() {
         const data = await response.json();
         console.log('Version deleted =>', data);
 
-        // close the modal
+        // Close the modal
         bootstrap.Modal.getInstance(document.getElementById('deleteVersionConfirm')).hide();
+
+        // Refresh local list
         fetchVersions(selectedWorkId);
+
+        // Fire the "versionsUpdated" event so other blades (Medite) can also update
+        document.dispatchEvent(new CustomEvent('versionsUpdated', {
+          detail: { workId: selectedWorkId }
+        }));
+
     } catch (err) {
         console.error('Error deleting version:', err);
         alert('Could not delete version.');
     }
 }
+function confirmDeleteVersion(version) {
+    versionToDelete = version.id;
+    // show the Delete Confirmation Modal
+    const modal = new bootstrap.Modal(document.getElementById('deleteVersionConfirm'));
+    modal.show();
+}
+
 </script>
 @endpush

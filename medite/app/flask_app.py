@@ -91,11 +91,11 @@ def run_diff():
 
     # Submit the task to Celery
     task = run_diff_script.apply_async(kwargs={
-        "source_filename": source_path,
-        "target_filename": target_path,
-        "lg_pivot": lg_pivot,
-        "ratio": ratio,
-        "seuil": seuil,
+        "source_filename": source_filename,
+        "target_filename": target_filename,
+        "lg_pivot": int(lg_pivot),
+        "ratio": int(ratio),
+        "seuil": int(seuil),
         "case_sensitive": case_sensitive,
         "diacri_sensitive": diacri_sensitive,
         "output_xml": output_xml
@@ -106,22 +106,24 @@ def run_diff():
 # Route pour app Laravel
 @app.route('/run_diff2', methods=['POST'])
 def run_diff2():
-    """Endpoint to launch the diff script."""
     author_id = request.form.get('author_id')
     work_id = request.form.get('work_id')
-    source_file = request.form.get('source_file')
-    target_file = request.form.get('target_file')
+
+    # ✅ Get values from form fields named *source_filename*, *target_filename*
+    source_filename = request.form.get('source_filename')
+    target_filename = request.form.get('target_filename')
+
     lg_pivot = request.form.get('lg_pivot', 7)
     ratio = request.form.get('ratio', 15)
     seuil = request.form.get('seuil', 50)
+
     case_sensitive = request.form.get('case_sensitive', 'on') == 'on'
     diacri_sensitive = request.form.get('diacri_sensitive', 'on') == 'on'
     output_xml = request.form.get('output_xml')
 
-    # Submit the task to Celery
     task = run_diff_script.apply_async(kwargs={
-        "source_file": source_file,
-        "target_file": target_file,
+        "source_filename": source_filename,
+        "target_filename": target_filename,
         "lg_pivot": int(lg_pivot),
         "ratio": int(ratio),
         "seuil": int(seuil),
@@ -130,7 +132,6 @@ def run_diff2():
         "output_xml": output_xml
     })
 
-    # Return JSON response
     return jsonify({"task_id": task.id}), 200
 
 @app.route('/task_status_page/<task_id>')
