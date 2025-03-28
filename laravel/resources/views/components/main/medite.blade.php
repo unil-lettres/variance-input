@@ -166,31 +166,38 @@ document.addEventListener('DOMContentLoaded', function () {
             const maxRetries = 10;
 
             async function poll() {
-                if (retryCount >= maxRetries) {
-                    progressIndicator.textContent = 'Task timed out. Please try again.';
-                    return;
-                }
-
-                retryCount++;
-
-                const taskResponse = await fetch(`/api/task_status/${taskId}`);
-                const taskData = await taskResponse.json();
-
-                if (taskData.status === 'pending') {
-                    setTimeout(poll, 2000); // poll every 2 seconds
-                } else if (taskData.status === 'completed') {
-                    progressIndicator.style.display = 'none';
-                    resultsDiv.style.display = 'block';
-
-                    // Adjust these if your script outputs differently:
-                    resultHtml.href = `/uploads/result.html`;
-                    resultHtml.textContent = 'View HTML Result';
-                    resultXml.href = `/uploads/result.xml`;
-                    resultXml.textContent = 'Download XML Result';
-                } else if (taskData.status === 'failed') {
-                    progressIndicator.textContent = 'Task failed. Please try again.';
-                }
+            if (retryCount >= maxRetries) {
+                progressIndicator.textContent = 'Task timed out. Please try again.';
+                return;
             }
+
+            retryCount++;
+
+            const taskResponse = await fetch(`/api/task_status/${taskId}`);
+            const taskData = await taskResponse.json();
+
+            if (taskData.status === 'pending') {
+                setTimeout(poll, 2000); // poll every 2 seconds
+            } else if (taskData.status === 'completed') {
+                progressIndicator.style.display = 'none';
+                resultsDiv.style.display = 'block';
+
+                // Adjust these if your script outputs differently:
+                resultHtml.href = `/uploads/result.html`;
+                resultHtml.textContent = 'View HTML Result';
+                resultXml.href = `/uploads/result.xml`;
+                resultXml.textContent = 'Download XML Result';
+
+            } else if (taskData.status === 'failed') {
+                // Show a user-friendly error with details from Flask/Celery
+                progressIndicator.innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                        <strong>Task failed!</strong><br>
+                        <pre>${taskData.error || 'Unknown error. Please check logs.'}</pre>
+                    </div>
+                `;
+            }
+        }
 
             poll();
         } catch (error) {

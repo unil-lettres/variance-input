@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Version;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB;
 
 class VersionController extends Controller
 {
@@ -24,7 +25,7 @@ class VersionController extends Controller
     }
 
     /**
-     * Store a newly uploaded version text file as {versionId}{shortTitle}.txt
+     * Store a newly uploaded version text file as {versionId}{shortTitle}.xml
      * in storage/app/public/uploads/{shortTitle}/versions
      */
     public function store(Request $request)
@@ -32,7 +33,7 @@ class VersionController extends Controller
         // Validate input
         $validated = $request->validate([
             'work_id'      => 'required|exists:works,id',
-            'versionFile'  => 'required|file|mimes:txt,text|max:2048',
+            'versionFile' => 'required|file|mimetypes:text/xml,application/xml,text/plain|max:2048',
             'short_title'  => 'required|string|max:10',
             'version_id'   => [
                 'required',
@@ -40,7 +41,7 @@ class VersionController extends Controller
                 'max:5',
                 'regex:/^[a-zA-Z0-9_-]+$/',
                 function ($attribute, $value, $fail) use ($request) {
-                    $filename = $value . $request->short_title . '.txt';
+                    $filename = $value . $request->short_title . '.xml';
                     $path = "uploads/{$request->short_title}/versions/{$filename}";
                     if (Storage::disk('public')->exists($path)) {
                         $fail("A version with the ID '{$value}' already exists for this work.");
@@ -55,7 +56,7 @@ class VersionController extends Controller
         $editionName = $validated['name'];           // e.g. "Béchet 1882"
         $shortTitle  = $validated['short_title'];    // e.g. "csb"
     
-        $finalName   = $versionId . $shortTitle . '.txt';
+        $finalName   = $versionId . $shortTitle . '.xml';
         $folderPath  = "uploads/{$shortTitle}/versions";
         $fullStoragePath = "{$folderPath}/{$finalName}";
     
@@ -115,4 +116,28 @@ class VersionController extends Controller
 
         return response()->json(['message' => 'Version deleted successfully!']);
     }
+
+    public function viewXmlClean($id)
+    {
+        $version = DB::table('versions')->where('id', $id)->first();
+        if (!$version) abort(404);
+    
+        // Example: "storage/uploads/lvf/versions/1lvf.xml"
+        $relativePath = preg_replace('#^storage/#', '', $version->folder);
+    
+        $fullPath = storage_path("app/public/{$relativePath}");
+    
+        if (!file_exists($fullPath)) {
+            Log::error("Version file not found at: " . $fullPath);
+            abort(404);
+        }
+    
+        $xml = simplexml_load_file($fullPath);
+        $text = trim((string) $xml);
+    
+        return response("<pre>$text</pre>");
+    }
+    
+    
+
 }

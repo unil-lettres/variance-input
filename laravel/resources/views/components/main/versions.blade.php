@@ -7,8 +7,8 @@
         <form id="upload-version-form" enctype="multipart/form-data">
             @csrf
             <div class="mb-3">
-                <label for="versionFile" class="form-label">Sélectionner un ficher .txt à téléverser</label>
-                <input type="file" name="versionFile" id="versionFile" class="form-control" accept=".txt" required>
+                <label for="versionFile" class="form-label">Sélectionner un ficher .xml à téléverser</label>
+                <input type="file" name="versionFile" id="versionFile" class="form-control" accept=".xml" required>
             </div>
 
             <!-- 1) Version ID (used in final filename) -->
@@ -94,7 +94,7 @@
 
 <script>
 let selectedWorkId = null;
-let shortTitle = null;   // We'll use it for filenames: {versionId}{shortTitle}.txt
+let shortTitle = null;   // We'll use it for filenames: {versionId}{shortTitle}.xml
 let authorId = null;
 let versionToDelete = null;
 
@@ -136,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('work_id', selectedWorkId);
         formData.append('versionFile', file);
-        formData.append('version_id', versionIdValue);   // used to rename => {versionId}{shortTitle}.txt
+        formData.append('version_id', versionIdValue);   // used to rename => {versionId}{shortTitle}.xml
         formData.append('name', editionNameValue);       // DB name field
         if (shortTitle) formData.append('short_title', shortTitle);
 
@@ -239,7 +239,7 @@ async function fetchVersions(workId) {
                 actionsTd.className = 'text-end';
 
                 const viewBtn = document.createElement('a');
-                viewBtn.href = '/' + version.folder;
+                viewBtn.href = `/view-version/${version.id}`;
                 viewBtn.target = '_blank';
                 viewBtn.className = 'btn btn-sm btn-secondary me-1';
                 viewBtn.textContent = 'View';

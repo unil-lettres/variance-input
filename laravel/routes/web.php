@@ -53,6 +53,7 @@ Route::post('/api/versions', [VersionController::class, 'store']);
 Route::get('/api/versions', [VersionController::class, 'index']);
 Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
+Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
 
 // Routes pour composant medite
 Route::post('/api/run_medite', [MediteController::class, 'runMedite']);
