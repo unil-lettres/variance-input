@@ -119,24 +119,30 @@ class VersionController extends Controller
 
     public function viewXmlClean($id)
     {
+        // 1) Lookup version row
         $version = DB::table('versions')->where('id', $id)->first();
-        if (!$version) abort(404);
+        if (!$version) {
+            abort(404, "Version #{$id} not found");
+        }
     
-        // Example: "storage/uploads/lvf/versions/1lvf.xml"
-        $relativePath = preg_replace('#^storage/#', '', $version->folder);
-    
+        // 2) Convert DB path to actual file path
+        //    Example DB path: "storage/uploads/lvf/versions/1lvf.xml"
+        $relativePath = preg_replace('#^storage/#', '', $version->folder);    
         $fullPath = storage_path("app/public/{$relativePath}");
     
         if (!file_exists($fullPath)) {
             Log::error("Version file not found at: " . $fullPath);
-            abort(404);
+            abort(404, "File not found at: $fullPath");
         }
     
-        $xml = simplexml_load_file($fullPath);
-        $text = trim((string) $xml);
+        // 3) Read raw XML (instead of simplexml_load_file)
+        $xmlContent = file_get_contents($fullPath);
     
-        return response("<pre>$text</pre>");
+        // 4) Return raw XML with correct MIME type
+        return response($xmlContent, 200)
+            ->header('Content-Type', 'application/xml');
     }
+    
     
     
 

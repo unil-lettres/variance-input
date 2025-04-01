@@ -57,6 +57,24 @@
     </div>
 </div>
 
+<!-- Success Modal -->
+<div class="modal fade" id="comparisonSuccessModal" tabindex="-1" aria-labelledby="comparisonSuccessModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="comparisonSuccessModalLabel">Success</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        New comparison record created successfully.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -67,6 +85,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const resultHtml = document.getElementById('result-html');
     const resultXml = document.getElementById('result-xml');
     const mediteForm = document.getElementById('medite-form');
+
+    /**
+     * Deletes the comparison record via AJAX if the script fails
+     */
+    async function deleteComparison(comparisonId) {
+        try {
+            const resp = await fetch(`/comparisons/${comparisonId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                }
+            });
+            if (!resp.ok) {
+                console.error('Failed to delete comparison:', await resp.text());
+            } else {
+                console.log(`Comparison #${comparisonId} deleted due to script error/failure.`);
+            }
+        } catch (err) {
+            console.error('Error deleting comparison:', err);
+        }
+    }
 
     // =========================
     // 1) Helper to fill Source/Target dropdowns
@@ -99,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 opt1.textContent = version.name;
                 sourceVersionDropdown.appendChild(opt1);
 
-                // clone the same for target
+                // Clone the same for target
                 const opt2 = opt1.cloneNode(true);
                 targetVersionDropdown.appendChild(opt2);
             });
@@ -119,14 +159,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // =========================
-    // 3) NEW: Listen for "versionsUpdated" event
+    // 3) Listen for "versionsUpdated" event
     //    -> a version was uploaded/deleted in another blade
     // =========================
     document.addEventListener('versionsUpdated', async (event) => {
         const { workId } = event.detail;
-        // Optionally update the hidden field:
         document.getElementById('work_id').value = workId;
-        // Refresh the dropdowns to reflect the new version set
         updateVersionDropdowns(workId);
     });
 
@@ -141,13 +179,17 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Show progress indicator and hide results
+        // Show progress indicator and hide previous results or messages
+        progressIndicator.innerHTML = `
+            <p>Processing... <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></p>
+        `;
         progressIndicator.style.display = 'block';
         resultsDiv.style.display = 'none';
 
         const formData = new FormData(mediteForm);
 
         try {
+            // 1) Submit to /api/run_medite
             const response = await fetch('/api/run_medite', {
                 method: 'POST',
                 body: formData,
@@ -160,53 +202,100 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = await response.json();
             const taskId = data.task_id;
+            const comparisonId = data.comparison_id;
 
-            // Poll for task status
+            // 2) Poll for task status
             let retryCount = 0;
             const maxRetries = 10;
 
             async function poll() {
-            if (retryCount >= maxRetries) {
-                progressIndicator.textContent = 'Task timed out. Please try again.';
-                return;
+                if (retryCount >= maxRetries) {
+                    progressIndicator.textContent = 'Task timed out. Please try again.';
+                    return;
+                }
+
+                retryCount++;
+
+                try {
+                    const taskResponse = await fetch(`/api/task_status/${taskId}`);
+                    const taskData = await taskResponse.json();
+
+                    console.log('Task status response:', taskData);
+
+                    if (taskData.status === 'pending') {
+                        // The job hasn't finished; poll again after 2 seconds
+                        setTimeout(poll, 2000);
+
+                    } else if (taskData.status === 'completed') {
+                        // The Celery task is done, but let's see if the script flagged an error
+                        if (taskData.result && taskData.result.status === 'error') {
+                            // => Script-level error: delete new comparison
+                            await deleteComparison(comparisonId);
+
+                            progressIndicator.innerHTML = `
+                                <div class="alert alert-danger" role="alert">
+                                    <strong>Script Error!</strong><br>
+                                    <pre>${taskData.result.error || 'Unknown error'}</pre>
+                                    <button id="error-ok-btn" class="btn btn-sm btn-secondary mt-2">OK</button>
+                                </div>
+                            `;
+                        } else {
+                            // => True success
+                            progressIndicator.style.display = 'none';
+
+                            const successModal = new bootstrap.Modal(document.getElementById('comparisonSuccessModal'));
+                            successModal.show();
+
+                            // Dispatch an event indicating a new comparison was created
+                            document.dispatchEvent(new CustomEvent('comparisonCreated', {
+                                detail: {
+                                    workId: document.getElementById('work_id').value
+                                }
+                            }));
+                        }
+
+                    } else if (taskData.status === 'failed') {
+                        // => The Celery task ended in a real FAILURE, so delete comparison
+                        await deleteComparison(comparisonId);
+
+                        progressIndicator.innerHTML = `
+                            <div class="alert alert-danger" role="alert">
+                                <strong>Task failed!</strong><br>
+                                <pre>${taskData.error || 'Unknown error. Please check logs.'}</pre>
+                                <button id="error-ok-btn" class="btn btn-sm btn-secondary mt-2">OK</button>
+                            </div>
+                        `;
+                    }
+                } catch (err) {
+                    console.error('Error polling task:', err);
+                    progressIndicator.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Polling error:</strong> ${err}
+                        </div>
+                    `;
+                }
             }
 
-            retryCount++;
-
-            const taskResponse = await fetch(`/api/task_status/${taskId}`);
-            const taskData = await taskResponse.json();
-
-            if (taskData.status === 'pending') {
-                setTimeout(poll, 2000); // poll every 2 seconds
-            } else if (taskData.status === 'completed') {
-                progressIndicator.style.display = 'none';
-                resultsDiv.style.display = 'block';
-
-                // Adjust these if your script outputs differently:
-                resultHtml.href = `/uploads/result.html`;
-                resultHtml.textContent = 'View HTML Result';
-                resultXml.href = `/uploads/result.xml`;
-                resultXml.textContent = 'Download XML Result';
-
-            } else if (taskData.status === 'failed') {
-                // Show a user-friendly error with details from Flask/Celery
-                progressIndicator.innerHTML = `
-                    <div class="alert alert-danger" role="alert">
-                        <strong>Task failed!</strong><br>
-                        <pre>${taskData.error || 'Unknown error. Please check logs.'}</pre>
-                    </div>
-                `;
-            }
-        }
-
+            // Start polling
             poll();
+
         } catch (error) {
             console.error(error);
             progressIndicator.textContent = 'An error occurred. Please try again.';
         }
     });
+
+    document.addEventListener('click', function (event) {
+        if (event.target.id === 'error-ok-btn') {
+            const indicator = document.getElementById('progress-indicator');
+            if (indicator) {
+                indicator.innerHTML = '';
+                indicator.style.display = 'none';
+            }
+        }
+    });
+
 });
+
 </script>
 @endpush
-
-

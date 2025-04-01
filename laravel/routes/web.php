@@ -8,6 +8,7 @@ use App\Http\Controllers\AuthorController;
 use App\Http\Controllers\WorkController;
 use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
+use App\Http\Controllers\ComparisonController;
 
 Route::get('/', function () {
     return auth()->check() ? view('pages.main') : redirect('/login');
@@ -59,4 +60,8 @@ Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
 Route::post('/api/run_medite', [MediteController::class, 'runMedite']);
 Route::get('/api/task_status/{taskId}', [MediteController::class, 'taskStatus']);
 Route::post('/api/create_comparison', [MediteController::class, 'createComparison']);
+Route::post('/save_comparison', [MediteController::class, 'saveComparison']);
 
+// Comparisons
+Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
+Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->name('comparisons.destroy');
