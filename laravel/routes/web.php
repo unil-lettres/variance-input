@@ -9,6 +9,7 @@ use App\Http\Controllers\WorkController;
 use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
 use App\Http\Controllers\ComparisonController;
+use App\Http\Controllers\EditorController;
 
 Route::get('/', function () {
     return auth()->check() ? view('pages.main') : redirect('/login');
@@ -65,3 +66,7 @@ Route::post('/save_comparison', [MediteController::class, 'saveComparison']);
 // Comparisons
 Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
 Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->name('comparisons.destroy');
+
+// Editor
+Route::get('/versions/{id}/editor', [EditorController::class, 'show'])->name('versions.editor');
+Route::put('/versions/{id}/editor', [EditorController::class, 'update'])->name('versions.editor.update');

@@ -221,46 +221,57 @@ async function fetchVersions(workId) {
             const tbody = table.querySelector('tbody');
 
             data.forEach(version => {
-                const tr = document.createElement('tr');
+    const tr = document.createElement('tr');
 
-                // Edition name
-                const nameTd = document.createElement('td');
-                nameTd.textContent = version.name;
-                tr.appendChild(nameTd);
+    // Edition name
+    const nameTd = document.createElement('td');
+    nameTd.textContent = version.name;
+    tr.appendChild(nameTd);
 
-                // Filename (extracted from folder path)
-                const filename = version.folder.split('/').pop();
-                const fileTd = document.createElement('td');
-                fileTd.textContent = filename;
-                tr.appendChild(fileTd);
+    // Filename (extracted from folder path)
+    const filename = version.folder.split('/').pop();
+    const fileTd = document.createElement('td');
+    fileTd.textContent = filename;
+    tr.appendChild(fileTd);
 
-                // Actions
-                const actionsTd = document.createElement('td');
-                actionsTd.className = 'text-end';
+    // Actions
+    const actionsTd = document.createElement('td');
+    actionsTd.className = 'text-end';
 
-                const viewBtn = document.createElement('a');
-                viewBtn.href = `/view-version/${version.id}`;
-                viewBtn.target = '_blank';
-                viewBtn.className = 'btn btn-sm btn-secondary me-1';
-                viewBtn.textContent = 'View';
+    // View button
+    const viewBtn = document.createElement('a');
+    viewBtn.href = `/view-version/${version.id}`;
+    viewBtn.target = '_blank';
+    viewBtn.className = 'btn btn-sm btn-secondary me-1';
+    viewBtn.textContent = 'View';
+    actionsTd.appendChild(viewBtn);
 
-                const editBtn = document.createElement('button');
-                editBtn.className = 'btn btn-sm btn-primary me-1';
-                editBtn.textContent = 'Edit';
-                editBtn.addEventListener('click', () => openEditModal(version));
+    // New: Editor button
+    const editorBtn = document.createElement('a');
+    editorBtn.href = `/versions/${version.id}/editor`;   // adjust to your route
+    editorBtn.target = '_blank';                         // opens in new tab
+    editorBtn.className = 'btn btn-sm btn-info me-1';
+    editorBtn.textContent = 'Editor';
+    actionsTd.appendChild(editorBtn);
 
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'btn btn-sm btn-danger';
-                deleteBtn.textContent = 'Delete';
-                deleteBtn.addEventListener('click', () => confirmDeleteVersion(version));
+    // Edit button (existing)
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-sm btn-primary me-1';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => openEditModal(version));
+    actionsTd.appendChild(editBtn);
 
-                actionsTd.appendChild(viewBtn);
-                actionsTd.appendChild(editBtn);
-                actionsTd.appendChild(deleteBtn);
+    // Delete button (existing)
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-sm btn-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => confirmDeleteVersion(version));
+    actionsTd.appendChild(deleteBtn);
 
-                tr.appendChild(actionsTd);
-                tbody.appendChild(tr);
-            });
+    tr.appendChild(actionsTd);
+    tbody.appendChild(tr);
+});
+
 
             versionsList.appendChild(table);
         }
