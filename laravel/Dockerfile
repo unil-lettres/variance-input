@@ -1,21 +1,36 @@
 FROM php:8.2-fpm
 
+# 1) Install system packages + Node
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
     libzip-dev \
+    curl \
+    # Node 18.x
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
     && docker-php-ext-install pdo pdo_mysql zip
 
+# 2) Copy composer from official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www/html/app
+# 3) Set working directory to /var/www/html
+WORKDIR /var/www/html
 
-RUN mkdir -p /var/www/html/app/storage \
-    && mkdir -p /var/www/html/app/bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html/app \
-    && chmod -R 775 /var/www/html/app/storage /var/www/html/app/bootstrap/cache
+# 4) Copy package files & install Node dependencies
+COPY package*.json ./
+RUN npm install
+
+# 5) Copy entire Laravel app
+COPY . .
+
+# 6) Build front-end (Vite) if needed
+RUN npm run build
+
+# 7) Permissions, expose port, run Artisan server
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 775 storage bootstrap/cache
 
 EXPOSE 8000
 
-#CMD ["tail", "-f", "/dev/null"]
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]

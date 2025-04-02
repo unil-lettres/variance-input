@@ -7,16 +7,15 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
+
     <!-- Custom Font -->
     <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
 
-    <!-- CodeMirror 6 CSS: Base styles and One Dark theme -->
-    <link rel="stylesheet" href="https://unpkg.com/@codemirror/view@0.19.0/dist/style.css">
-    <link rel="stylesheet" href="https://unpkg.com/@codemirror/theme-one-dark@0.19.0/dist/index.css">
-
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <!-- Vite Styles -->
+    @vite(['resources/css/app.css'])
 </head>
 <body>
     <header class="bg-dark text-white shadow-sm mb-4">
@@ -49,7 +48,7 @@
     <!-- Bootstrap JavaScript Bundle with Popper.js -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Optional: Stack for Page-Specific Scripts -->
+    <!-- Page-specific JS -->
     @stack('scripts')
 </body>
 </html>
