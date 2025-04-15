@@ -107,6 +107,16 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchVersions(selectedWorkId);
     });
 
+    // Listen for versionsUpdated event
+    // This event is dispatched when a version is uploaded or deleted
+    document.addEventListener('versionsUpdated', (event) => {
+        const workId = event.detail.workId;
+        if (workId) {
+            selectedWorkId = workId;
+            fetchVersions(workId);
+        }
+    });
+
     // 2) Handle Upload
     document.getElementById('upload-version-form').addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -333,7 +343,11 @@ async function doDeleteVersion() {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             }
         });
-        if (!response.ok) throw new Error(`Delete failed: ${response.status}`);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Could not delete version.');
+        }
 
         const data = await response.json();
         console.log('Version deleted =>', data);
@@ -346,14 +360,15 @@ async function doDeleteVersion() {
 
         // Fire the "versionsUpdated" event so other blades (Medite) can also update
         document.dispatchEvent(new CustomEvent('versionsUpdated', {
-          detail: { workId: selectedWorkId }
+            detail: { workId: selectedWorkId }
         }));
 
     } catch (err) {
         console.error('Error deleting version:', err);
-        alert('Could not delete version.');
+        alert(err.message);
     }
 }
+
 function confirmDeleteVersion(version) {
     versionToDelete = version.id;
     // show the Delete Confirmation Modal

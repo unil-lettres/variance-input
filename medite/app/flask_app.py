@@ -11,10 +11,14 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
-app.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/0'
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
+# ✅ Use new-style keys only to avoid Celery config conflict
+celery = Celery(app.name)
+celery.conf.update(
+    broker_url='redis://redis:6379/0',
+    result_backend='redis://redis:6379/0',
+    task_soft_time_limit=300,  # Raise SoftTimeLimitExceeded after 5 minutes
+    task_time_limit=360        # Force kill task after 6 minutes
+)
 
 redis_conn = redis.StrictRedis(host='redis', port=6379, db=0)
 
@@ -44,24 +48,25 @@ def run_diff_script(source_filename, target_filename, lg_pivot, ratio, seuil, ca
         # Run the script and capture stdout/stderr
         result = subprocess.run(command, check=True, capture_output=True, text=True)
 
-        # === Move and rename result files ===
         import shutil
+        from pathlib import Path
 
-        # 1. Get short names
-        source_short = os.path.splitext(os.path.basename(source_filename))[0]
-        target_short = os.path.splitext(os.path.basename(target_filename))[0]
-        comparison_name = f"{source_short}-{target_short}"
+        # === Determine folder based on output_xml path ===
+        output_path = Path(output_xml)  # e.g. /app/uploads/lvf/comparisons/42-17.xml
+        comparisons_folder = output_path.parent  # e.g. /app/uploads/lvf/comparisons
 
-        # 2. Get base path from source file (e.g. /app/uploads/lvf)
-        parent_folder = Path(source_filename).parents[2]  # -> /app/uploads/lvf
-        comparisons_folder = parent_folder / "comparisons"
+        # === Extract source and target IDs from source/target filenames ===
+        source_id = Path(source_filename).stem  # "42"
+        target_id = Path(target_filename).stem  # "17"
+        base_name = f"{source_id}-{target_id}"  # "42-17"
+
         comparisons_folder.mkdir(parents=True, exist_ok=True)
 
-        # 3. Move result.xml and result.html to correct folder with new name
+        # === Move and rename result.{ext} to final filename ===
         moved_files = []
         for ext in ['xml', 'html']:
             src = Path(app.config['UPLOAD_FOLDER']) / f"result.{ext}"
-            dest = comparisons_folder / f"{comparison_name}.{ext}"
+            dest = comparisons_folder / f"{base_name}.{ext}"
             if src.exists():
                 shutil.move(str(src), str(dest))
                 moved_files.append(str(dest))
@@ -81,6 +86,7 @@ def run_diff_script(source_filename, target_filename, lg_pivot, ratio, seuil, ca
             "status": "error",
             "error": error_output
         }
+
 
 
 @app.route('/')
@@ -150,18 +156,23 @@ def run_diff2():
     diacri_sensitive = request.form.get('diacri_sensitive', 'on') == 'on'
     output_xml = request.form.get('output_xml')
 
-    task = run_diff_script.apply_async(kwargs={
-        "source_filename": source_filename,
-        "target_filename": target_filename,
-        "lg_pivot": int(lg_pivot),
-        "ratio": int(ratio),
-        "seuil": int(seuil),
-        "case_sensitive": case_sensitive,
-        "diacri_sensitive": diacri_sensitive,
-        "output_xml": output_xml
-    })
+    task = run_diff_script.apply_async(
+        kwargs={
+            "source_filename": source_filename,
+            "target_filename": target_filename,
+            "lg_pivot": int(lg_pivot),
+            "ratio": int(ratio),
+            "seuil": int(seuil),
+            "case_sensitive": case_sensitive,
+            "diacri_sensitive": diacri_sensitive,
+            "output_xml": output_xml
+        },
+        time_limit=900,        # Hard timeout (seconds)
+        soft_time_limit=840    # Graceful shutdown before hard timeout
+    )
 
     return jsonify({"task_id": task.id}), 200
+
 
 
 @app.route('/task_status_page/<task_id>')

@@ -107,42 +107,104 @@ class WorkController extends Controller
     }
 
     public function update(Request $request, $id)
-    {
-        $work = Work::findOrFail($id);
-    
-        $validated = $request->validate([
-            'title' => 'required|string|min:3|max:80',
-            'short_title' => [
-                'required',
-                'string',
-                'min:3',
-                'max:8',
-                'regex:/^[a-zA-Z0-9_-]+$/',
-                function ($attribute, $value, $fail) use ($work) {
-                    $exists = Work::where('author_id', $work->author_id)
-                        ->where('short_title', $value)
-                        ->where('id', '!=', $work->id)
-                        ->exists();
-                    if ($exists) {
-                        $fail("Un autre travail utilise déjà le titre abrégé '$value' pour ce même auteur.");
-                    }
+{
+    $work = Work::with('versions')->findOrFail($id); // eager load versions
+
+    $validated = $request->validate([
+        'title' => 'required|string|min:3|max:80',
+        'short_title' => [
+            'required',
+            'string',
+            'min:3',
+            'max:8',
+            'regex:/^[a-zA-Z0-9_-]+$/',
+            function ($attribute, $value, $fail) use ($work) {
+                $exists = Work::where('author_id', $work->author_id)
+                    ->where('short_title', $value)
+                    ->where('id', '!=', $work->id)
+                    ->exists();
+                if ($exists) {
+                    $fail("Un autre travail utilise déjà le titre abrégé '$value' pour ce même auteur.");
                 }
-            ],
-        ]);
-    
-        $work->update($validated);
-    
-        return response()->json($work);
+            }
+        ],
+    ]);
+
+    $oldShort = $work->short_title;
+    $newShort = $validated['short_title'];
+
+    if ($oldShort !== $newShort) {
+        $oldPath = storage_path("app/public/uploads/{$oldShort}");
+        $newPath = storage_path("app/public/uploads/{$newShort}");
+
+        if (file_exists($oldPath)) {
+            if (file_exists($newPath)) {
+                return response()->json([
+                    'error' => "Un dossier pour le nouveau titre abrégé '{$newShort}' existe déjà. Veuillez choisir un autre nom ou nettoyer manuellement le dossier."
+                ], 409);
+            }
+
+            // Rename main folder
+            rename($oldPath, $newPath);
+        }
+
+        // Update image/pdf URLs if needed
+        if ($work->image_url) {
+            $work->image_url = str_replace("/uploads/{$oldShort}/", "/uploads/{$newShort}/", $work->image_url);
+        }
+
+        if ($work->pdf_url) {
+            $work->pdf_url = str_replace("/uploads/{$oldShort}/", "/uploads/{$newShort}/", $work->pdf_url);
+        }
+
+        // === Rename version files ===
+        foreach ($work->versions as $version) {
+            $oldFile = str_replace("storage/", "", $version->folder); // get relative path
+            $oldFullPath = storage_path("app/public/{$oldFile}");
+
+            $filename = basename($oldFullPath);         // e.g. 1lvf.xml
+            $newFilename = preg_replace("/{$oldShort}\.xml$/", "{$newShort}.xml", $filename); // → 1lvy.xml
+
+            if ($newFilename !== $filename) {
+                $newFullPath = str_replace($filename, $newFilename, $oldFullPath);
+                if (file_exists($oldFullPath)) {
+                    rename($oldFullPath, $newFullPath);
+                }
+
+                // Update path in DB
+                $relative = "storage/uploads/{$newShort}/versions/{$newFilename}";
+                $version->folder = $relative;
+                $version->save();
+            }
+        }
     }
+
+    $work->update($validated);
+    $work->save();
+
+    return response()->json($work);
+}
+
+    
     
 
     public function destroy($id)
     {
         $work = Work::findOrFail($id);
+    
+        //  Prevent deletion if work has versions
+        if ($work->versions()->exists()) {
+            return response()->json([
+                'error' => 'Impossible de supprimer cette œuvre car elle contient encore des versions.'
+            ], 400);
+        }
+    
+        // Proceed with deletion
         $work->delete();
-
+    
         return response()->json(['success' => true]);
     }
+    
 
 
 

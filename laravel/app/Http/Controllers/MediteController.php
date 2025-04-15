@@ -24,7 +24,20 @@ class MediteController extends Controller
     $caseSensitive   = $request->has('case_sensitive') ? true : false;
     $diacriSensitive = $request->has('diacri_sensitive') ? true : false;
 
-    // Step 1: Create empty comparison to get ID
+    // Define destination folder
+    $workId = $request->input('work_id');
+    $shortTitle = DB::table('works')->where('id', $workId)->value('short_title');
+    
+    // 1. Define relative path
+    $relativeFolder = "uploads/{$shortTitle}/comparisons";
+    $storageFolder = storage_path("app/public/{$relativeFolder}");
+    
+    // 2. Ensure folder exists
+    if (!file_exists($storageFolder)) {
+        mkdir($storageFolder, 0777, true);
+    }
+    
+    // 3. Create empty comparison
     $comparison = new Comparison();
     $comparison->source_id        = $request->input('source_version');
     $comparison->target_id        = $request->input('target_version');
@@ -34,14 +47,14 @@ class MediteController extends Controller
     $comparison->case_sensitive   = $caseSensitive;
     $comparison->diacri_sensitive = $diacriSensitive;
     $comparison->prefix_label     = 'Auto Run';
-    $comparison->number           = 1; // Can be adjusted later
-    $comparison->folder           = "storage/uploads/comparisons"; // Store the directory, not filename
+    $comparison->number           = 1;
+    $comparison->folder           = $relativeFolder;
     $comparison->save();
-
-    // Step 2: Determine filename paths
+    
+    // 4. Define output paths for Flask (inside container)
     $filenameBase = $comparison->id;
-    $outputXml  = "/app/uploads/comparisons/{$filenameBase}.xml";  // For Flask
-    $outputHtml = "/app/uploads/comparisons/{$filenameBase}.html"; // Optional
+    $outputXml  = "/app/{$relativeFolder}/{$filenameBase}.xml";
+    $outputHtml = "/app/{$relativeFolder}/{$filenameBase}.html";    
 
     // Step 3: Convert source/target paths
     $sourceVersion = DB::table('versions')->where('id', $request->input('source_version'))->value('folder');
@@ -66,7 +79,7 @@ class MediteController extends Controller
     // Step 5: Post to Flask
     try {
         $flaskUrl = 'http://medite:5000/run_diff2';
-        $response = Http::asForm()->post($flaskUrl, $payload);
+        $response = Http::timeout(120)->asForm()->post($flaskUrl, $payload);
 
         if ($response->successful()) {
             $taskId = $response->json('task_id');
@@ -116,19 +129,19 @@ class MediteController extends Controller
     /**
      * Example method to create a row in 'comparisons' table
      */
-    public function createComparison(Request $request)
-    {
-        $request->validate([
-            'source_id'    => 'required|exists:versions,id',
-            'target_id'    => 'required|exists:versions,id',
-            'folder'       => 'required|string|max:45',
-            'number'       => 'required|numeric',
-            'prefix_label' => 'required|string|max:250',
-        ]);
+    // public function createComparison(Request $request)
+    // {
+    //     $request->validate([
+    //         'source_id'    => 'required|exists:versions,id',
+    //         'target_id'    => 'required|exists:versions,id',
+    //         'folder'       => 'required|string|max:45',
+    //         'number'       => 'required|numeric',
+    //         'prefix_label' => 'required|string|max:250',
+    //     ]);
 
-        Comparison::create($request->all());
-        return response()->json(['message' => 'Comparison record created']);
-    }
+    //     Comparison::create($request->all());
+    //     return response()->json(['message' => 'Comparison record created']);
+    // }
 
     /**
      * Convert a DB path like "storage/app/public/uploads/csb/versions/1csb.txt"
@@ -145,43 +158,46 @@ class MediteController extends Controller
         return "/app/uploads/{$relative}";
     }
     
-    public function saveComparison(Request $request)
-    {
-        // Validate the required fields
-        $data = $request->validate([
-            'source_id'        => 'required|exists:versions,id',
-            'target_id'        => 'required|exists:versions,id',
-            'lg_pivot'         => 'required|integer',
-            'ratio'            => 'required|integer',
-            'seuil'            => 'required|integer',
-            'case_sensitive'   => 'required|boolean',
-            'diacri_sensitive' => 'required|boolean',
-            // Provide defaults or logic for these fields if you like
-            'folder'           => 'nullable|string|max:255',
-            'prefix_label'     => 'nullable|string|max:255',
-            'number'           => 'nullable|numeric',
-        ]);
+//     public function saveComparison(Request $request)
+// {
+//     // Validate the required fields
+//     $data = $request->validate([
+//         'source_id'        => 'required|exists:versions,id',
+//         'target_id'        => 'required|exists:versions,id',
+//         'lg_pivot'         => 'required|integer',
+//         'ratio'            => 'required|integer',
+//         'seuil'            => 'required|integer',
+//         'case_sensitive'   => 'required|boolean',
+//         'diacri_sensitive' => 'required|boolean',
+//         'folder'           => 'nullable|string|max:255',
+//         'prefix_label'     => 'nullable|string|max:255',
+//         'number'           => 'nullable|numeric',
+//     ]);
 
-        // Create the record in DB
-        // - Notice we pass 'case_sensitive' as boolean; in your table you can store it as TINYINT or a boolean-friendly column
-        // - For missing fields folder/number/prefix_label you can define them in the request or set them here
-        $comparison = new Comparison();
-        $comparison->source_id       = $data['source_id'];
-        $comparison->target_id       = $data['target_id'];
-        $comparison->folder          = $data['folder']           ?? 'my-medite-outputs';  // or any logic
-        $comparison->number          = $data['number']           ?? 1; 
-        $comparison->prefix_label    = $data['prefix_label']     ?? 'Comparison';
-        $comparison->lg_pivot        = $data['lg_pivot'];
-        $comparison->ratio           = $data['ratio'];
-        $comparison->seuil           = $data['seuil'];
-        $comparison->case_sensitive  = $data['case_sensitive'];
-        $comparison->diacri_sensitive= $data['diacri_sensitive'];
-        $comparison->save();
+//     // Compute the next available number regardless of any incoming value
+//     $maxNumber = \App\Models\Comparison::max('number') ?? 0;
+//     $data['number'] = $maxNumber + 1;
 
-        return response()->json([
-            'message'      => 'Comparison saved successfully',
-            'comparisonId' => $comparison->id,
-        ]);
-    }
+//     // Create the record in DB
+//     $comparison = new \App\Models\Comparison();
+//     $comparison->source_id        = $data['source_id'];
+//     $comparison->target_id        = $data['target_id'];
+//     $comparison->folder           = $data['folder'] ?? 'my-medite-outputs';
+//     $comparison->number           = $data['number'];
+//     $comparison->prefix_label     = $data['prefix_label'] ?? 'Comparison';
+//     $comparison->lg_pivot         = $data['lg_pivot'];
+//     $comparison->ratio            = $data['ratio'];
+//     $comparison->seuil            = $data['seuil'];
+//     $comparison->case_sensitive   = $data['case_sensitive'];
+//     $comparison->diacri_sensitive = $data['diacri_sensitive'];
+//     $comparison->save();
+
+//     return response()->json([
+//         'message'      => 'Comparison saved successfully',
+//         'comparisonId' => $comparison->id,
+//     ]);
+// }
+
+
 
 }

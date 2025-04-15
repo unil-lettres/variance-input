@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Version;
+use App\Models\Comparison;
+
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
@@ -33,56 +35,40 @@ class VersionController extends Controller
         // Validate input
         $validated = $request->validate([
             'work_id'      => 'required|exists:works,id',
-            'versionFile' => 'required|file|mimetypes:text/xml,application/xml,text/plain|max:2048',
+            'versionFile'  => 'required|file|mimetypes:text/xml,application/xml,text/plain|max:2048',
             'short_title'  => 'required|string|max:10',
-            'version_id'   => [
-                'required',
-                'string',
-                'max:5',
-                'regex:/^[a-zA-Z0-9_-]+$/',
-                function ($attribute, $value, $fail) use ($request) {
-                    $filename = $value . $request->short_title . '.xml';
-                    $path = "uploads/{$request->short_title}/versions/{$filename}";
-                    if (Storage::disk('public')->exists($path)) {
-                        $fail("A version with the ID '{$value}' already exists for this work.");
-                    }
-                }
-            ],
-            'name'         => 'required|string|max:100',  // Edition name (e.g. "Béchet 1882")
-        ]);        
+            'name'         => 'required|string|max:100',  // Edition name
+        ]);
     
         $file        = $request->file('versionFile');
-        $versionId   = $validated['version_id'];     // e.g. "1"
-        $editionName = $validated['name'];           // e.g. "Béchet 1882"
-        $shortTitle  = $validated['short_title'];    // e.g. "csb"
+        $editionName = $validated['name'];
+        $shortTitle  = $validated['short_title'];
     
-        $finalName   = $versionId . $shortTitle . '.xml';
-        $folderPath  = "uploads/{$shortTitle}/versions";
-        $fullStoragePath = "{$folderPath}/{$finalName}";
-    
-        // ❌ Check if file already exists
-        if (Storage::disk('public')->exists($fullStoragePath)) {
-            return response()->json([
-                'message' => "A version with ID '{$versionId}' already exists for this work.",
-            ], 409);
-        }
-    
-        // ✅ Store file
-        $storedPath = $file->storeAs($folderPath, $finalName, 'public');
-        $dbPath = "storage/{$storedPath}";
-    
-        // DB record
+        // Create version record first to get the auto ID
         $version = Version::create([
             'work_id' => $validated['work_id'],
             'name'    => $editionName,
-            'folder'  => $dbPath,
+            'folder'  => '', // temp, will update after saving file
         ]);
+    
+        // Define new filename and storage path
+        $filename        = "{$version->id}.xml";
+        $folderPath      = "uploads/{$shortTitle}/versions";
+        $fullStoragePath = "{$folderPath}/{$filename}";
+    
+        // Store the file
+        $file->storeAs($folderPath, $filename, 'public');
+    
+        // Update the version's folder path
+        $version->folder = "storage/{$fullStoragePath}";
+        $version->save();
     
         return response()->json([
             'message' => 'Version uploaded successfully!',
             'version' => $version,
         ], 201);
-    }    
+    }
+    
 
     /**
      * Update the version's user-friendly name
@@ -106,15 +92,28 @@ class VersionController extends Controller
     public function destroy($id)
     {
         $version = Version::findOrFail($id);
-
+    
+        // Check if version is used in any comparison
+        $hasComparisons = Comparison::where('source_id', $version->id)
+                          ->orWhere('target_id', $version->id)
+                          ->exists();
+    
+        if ($hasComparisons) {
+            return response()->json([
+                'error' => 'Impossible de supprimer cette version car elle est utilisée dans une ou plusieurs comparaisons.'
+            ], 400);
+        }
+    
+        // Remove version file from disk
         if ($version->folder) {
             $relativePath = str_replace('storage/', '', $version->folder);
             Storage::disk('public')->delete($relativePath);
         }
-
+    
+        // Delete DB record
         $version->delete();
-
-        return response()->json(['message' => 'Version deleted successfully!']);
+    
+        return response()->json(['message' => 'Version supprimée avec succès']);
     }
 
     public function viewXmlClean($id)

@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // 2) Poll for task status
             let retryCount = 0;
-            const maxRetries = 10;
+            const maxRetries = 120;
 
             async function poll() {
                 if (retryCount >= maxRetries) {

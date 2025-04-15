@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Work extends Model
 {
@@ -25,5 +26,13 @@ class Work extends Model
     public function workStatus(): HasOne
     {
         return $this->hasOne(WorkStatus::class, 'work_id');
+    }
+
+    /**
+     * Get all versions related to this work.
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(Version::class);
     }
 }

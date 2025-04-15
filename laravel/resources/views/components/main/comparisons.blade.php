@@ -80,12 +80,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td>${comp.diacri_sensitive ? '✔️' : '❌'}</td>
                     <td>${new Date(comp.created_at).toLocaleString()}</td>
                     <td>
-                        <a href="/${comp.folder}/${comp.id}.html" 
+                        <a href="/storage/${comp.folder}/${comp.id}.html" 
                            class="btn btn-sm btn-outline-primary" 
                            target="_blank">
                            HTML
                         </a>
-                        <a href="/${comp.folder}/${comp.id}.xml" 
+                        <a href="/storage/${comp.folder}/${comp.id}.xml" 
                            class="btn btn-sm btn-outline-secondary" 
                            target="_blank">
                            XML

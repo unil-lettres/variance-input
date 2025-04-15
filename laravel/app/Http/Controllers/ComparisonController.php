@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Comparison;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ComparisonController extends Controller
 {
@@ -27,9 +28,21 @@ class ComparisonController extends Controller
 
     public function destroy($id)
     {
-        $comparison = \App\Models\Comparison::findOrFail($id);
+        $comparison = Comparison::findOrFail($id);
+    
+        // Build the relative paths to the .html and .xml files
+        $folder = $comparison->folder; // e.g. 'uploads/lvf/comparisons'
+        $filename = $comparison->id;
+    
+        $htmlPath = "{$folder}/{$filename}.html";
+        $xmlPath  = "{$folder}/{$filename}.xml";
+    
+        // Delete files if they exist
+        Storage::disk('public')->delete([$htmlPath, $xmlPath]);
+    
+        // Delete the DB record
         $comparison->delete();
-
+    
         return response()->json(['message' => 'Comparison deleted']);
     }
 

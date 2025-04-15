@@ -291,7 +291,14 @@ addWorkBtn.addEventListener("click", () => {
       })
       .then(() => {
         bootstrap.Modal.getInstance(document.getElementById("editWorkModal")).hide();
+  
+        // Refresh the works dropdown
         loadWorks(author_id, id);
+  
+        // Notify the rest of the app that versions may have changed
+        document.dispatchEvent(new CustomEvent('versionsUpdated', {
+          detail: { workId: id }
+        }));
       })
       .catch(err => {
         alert("Erreur lors de la mise à jour de l'œuvre.");
@@ -300,33 +307,40 @@ addWorkBtn.addEventListener("click", () => {
   });
   
   
-    // ============
-    // DELETE WORK
-    // ============
-    deleteWorkBtn.addEventListener("click", () => {
-        const id = workSelector.value;
-        if (!id) return;
-    
-        const name = workSelector.options[workSelector.selectedIndex].text;
-    
-        if (!confirm(`Supprimer cette oeuvre ?\n${name}`)) return;
-    
-        fetch(`/api/works/${id}`, {
+  
+  // ============
+  // DELETE WORK
+  // ============
+  deleteWorkBtn.addEventListener("click", () => {
+    const id = workSelector.value;
+    if (!id) return;
+
+    const name = workSelector.options[workSelector.selectedIndex].text;
+
+    if (!confirm(`Supprimer cette œuvre ?\n${name}`)) return;
+
+    fetch(`/api/works/${id}`, {
         method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': csrfToken }
-        })
-        .then(response => {
-        if (!response.ok) {
-            throw new Error("Erreur lors de la suppression de l'oeuvre.");
+        headers: {
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json'
         }
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Erreur lors de la suppression de l'œuvre.");
+        }
+
         const authorId = authorSelector.value;
         loadWorks(authorId);
-        })
-        .catch(error => {
+    })
+    .catch(error => {
         console.error(error);
-        alert("Une erreur est survenue lors de la suppression de l'oeuvre.");
-        });
+        alert(error.message);
     });
+  });
+
   
     // ==============
     // HELPER FUNCS
