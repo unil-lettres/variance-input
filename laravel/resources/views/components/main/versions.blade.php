@@ -326,6 +326,8 @@ async function updateVersionName() {
         // close modal
         bootstrap.Modal.getInstance(document.getElementById('editVersionModal')).hide();
         fetchVersions(selectedWorkId);
+        document.dispatchEvent(new CustomEvent('versionsUpdated', {
+            detail: { workId: selectedWorkId }}))
     } catch (err) {
         console.error('Error updating version:', err);
         alert('Could not update version name.');

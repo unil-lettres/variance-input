@@ -116,6 +116,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const workId = e.detail.workId;
         loadComparisons(workId);
     });
+    
+    // When a version is added / deleted / renamed, refresh comparisons
+    document.addEventListener('versionsUpdated', e => {
+        const workId = e.detail.workId;
+        loadComparisons(workId);
+    });
 
     /**
      * Delete Comparison Handler

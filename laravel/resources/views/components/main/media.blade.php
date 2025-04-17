@@ -1,338 +1,237 @@
 <!-- resources/views/components/main/media.blade.php -->
-
-<div class="card mb-3">
-    <div class="card-header">
-        <span>Médias</span>
-    </div>
-    <div class="card-body">
-        <!-- Vignette Upload -->
-        <div class="mb-3">
-            <label class="form-label">Image vignette</label>
-            <div id="vignette-dropzone" class="dropzone border border-2 border-secondary p-3 text-center">
-                <p>Glissez une image ici ou cliquez pour sélectionner un fichier</p>
-                <input type="file" id="vignette-input" accept="image/*" class="d-none" />
-            </div>
-            <div id="vignette-preview" class="mt-2"></div>
+<div class="card mb-3" id="media-panel">
+  <div class="card-header fw-bold">Médias</div>
+  <div class="card-body">
+    <!-- ROW 1 : Dropzones -->
+    <div class="row g-4 mb-3">
+      <div class="col-md-6">
+        <label class="form-label">Vignette (jpg/png/webp ≤ 2 Mo)</label>
+        <div id="vignette-dropzone" class="dropzone rounded-3 border border-2 text-center">
+          <p class="mb-0">Glissez une image ici ou cliquez pour sélectionner un fichier</p>
+          <input type="file" id="vignette-input" accept="image/*" class="d-none" />
         </div>
-
-        <!-- PDF Upload -->
-        <div class="mb-3">
-            <label class="form-label">Fichier PDF</label>
-            <div id="pdf-dropzone" class="dropzone border border-2 border-secondary p-3 text-center">
-                <p>Glissez un PDF ici ou cliquez pour sélectionner un fichier</p>
-                <input type="file" id="pdf-input" accept="application/pdf" class="d-none" />
-            </div>
-            <div id="pdf-preview" class="mt-2"></div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Fichier PDF (≤ 10 Mo)</label>
+        <div id="pdf-dropzone" class="dropzone rounded-3 border border-2 text-center">
+          <p class="mb-0">Glissez un PDF ici ou cliquez pour sélectionner un fichier</p>
+          <input type="file" id="pdf-input" accept="application/pdf" class="d-none" />
         </div>
+      </div>
     </div>
+
+    <!-- ROW 2 : Previews -->
+    <div class="row g-4 mb-2">
+      <div class="col-md-6">
+        <div id="vignette-preview" class="preview-box"></div>
+      </div>
+      <div class="col-md-6">
+        <div id="pdf-preview" class="preview-box pdf"></div>
+      </div>
+    </div>
+
+    <!-- ROW 3 : Filenames + Delete buttons -->
+    <div class="row g-4">
+      <div class="col-md-6 text-center">
+        <div id="vignette-btn"></div>
+      </div>
+      <div class="col-md-6 text-center">
+        <div id="pdf-btn"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
-@push('scripts')
+@push('styles')
 <style>
-    .dropzone {
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-    }
-    .dropzone.hover {
-        background-color: #f8f9fa;
-    }
+  :root { --media-box-h: 350px; }
+
+  /* Dropzones hauteur fixe */
+  .dropzone {
+    height: var(--media-box-h);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .dropzone.hover { background: #f8f9fa; }
+
+  /* Previews hauteur fixe */
+  .preview-box {
+    height: var(--media-box-h);
+    border: 1px solid #ced4da;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* centrer horizontalement */
+    overflow: hidden;
+  }
+  .preview-box img{
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .preview-box embed{
+    height: 100%;    /* remplit toute la hauteur comme la vignette */
+    width: auto;      /* s’ajuste en largeur pour garder le ratio A4 */
+    border: none;
+  }
+  
+  .preview-box canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
 </style>
+@endpush
 
+@push('scripts')
+<!-- pdf.js (thumbnail render) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.8.162/pdf.min.js"></script>
 <script>
-    'use strict';
+(() => {
+  'use strict';
 
-//let currentWorkId = null;
-let currentShortTitle = null;
+  window.currentWorkId ??= null;
+  window.currentShortTitle ??= null;
 
-function showMediaFromServer(previewId, fileUrl, type) {
-    const preview = document.getElementById(previewId);
+  // ------------------------------------------------------------------
+  // Helper: render preview (vignette or first page PDF) + filename + btn
+  // ------------------------------------------------------------------
+  function renderMedia(type, fileUrl) {
+    const preview   = document.getElementById(`${type}-preview`);
+    const btnHolder = document.getElementById(`${type}-btn`);
     preview.innerHTML = '';
-
+    btnHolder.innerHTML = '';
     if (!fileUrl) return;
 
     if (type === 'vignette') {
-        const img = document.createElement('img');
-        img.src = `/${fileUrl}`;
-        img.style.maxWidth = '150px';
-        preview.appendChild(img);
-
-        const name = document.createElement('p');
-        name.textContent = fileUrl.split('/').pop();
-        preview.appendChild(name);
-    } else if (type === 'pdf') {
-        const link = document.createElement('a');
-        link.href = `/${fileUrl}`;
-        link.target = '_blank';
-        link.textContent = fileUrl.split('/').pop();
-        preview.appendChild(link);
+      const img = document.createElement('img');
+      img.src = '/' + fileUrl;
+      preview.appendChild(img);
+    } else { // PDF thumbnail with pdf.js
+      const canvas = document.createElement('canvas');
+      canvas.style.width  = '100%';
+      canvas.style.height = '100%';
+      preview.appendChild(canvas);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.8.162/pdf.worker.min.js';
+      pdfjsLib.GlobalWorkerOptions.useWorkerFetch = true; // Activer fetch dans le worker pour charger correctement les fontes
+      pdfjsLib.getDocument({ url: '/' + fileUrl, useWorkerFetch: true }).promise
+        .then(pdf => pdf.getPage(1))
+        .then(page => {
+          // scale to fit container height and width
+          const boxH = preview.clientHeight;
+          const boxW = preview.clientWidth;
+          const vp   = page.getViewport({ scale: 1 });
+          const scale = Math.min(boxW / vp.width, boxH / vp.height) * (window.devicePixelRatio || 1);
+          const view  = page.getViewport({ scale });
+          // set canvas resolution for crisp image
+          canvas.width  = view.width;
+          canvas.height = view.height;
+          // style canvas to fit container
+          canvas.style.width  = (view.width / (window.devicePixelRatio || 1)) + 'px';
+          canvas.style.height = (view.height / (window.devicePixelRatio || 1)) + 'px';
+          return page.render({ canvasContext: canvas.getContext('2d'), viewport: view }).promise;
+        })
+        .catch(err => {
+          console.error(err);
+          preview.textContent = 'Prévisualisation indisponible';
+        });
     }
 
+    // filename link
+    const link = document.createElement('a');
+    link.href = '/' + fileUrl;
+    link.target = '_blank';
+    link.textContent = fileUrl.split('/').pop();
+    btnHolder.appendChild(link);
+
+    // delete button
     const btn = document.createElement('button');
-    btn.textContent = `Supprimer ${type}`;
     btn.className = 'btn btn-sm btn-danger mt-2';
-    btn.addEventListener('click', () => deleteMedia(type));
-    preview.appendChild(btn);
-}
+    btn.textContent = `Supprimer ${type}`;
+    btn.onclick = () => deleteMedia(type);
+    btnHolder.appendChild(btn);
+  }
 
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("[MediaBlade] DOM loaded, setting up dropzones...");
+  // ------------------------------------------------------------------
+  // Dropzone
+  // ------------------------------------------------------------------
+  function setupDropzone(dzId, inputId, acceptPrefix, onSelect) {
+    const dz = document.getElementById(dzId);
+    const input = document.getElementById(inputId);
+    if (!dz || !input) return;
 
-    setupDropzone(
-        'vignette-dropzone',
-        'vignette-input',
-        'image/',
-        file => {
-            console.log("[MediaBlade] Vignette file selected:", file.name);
-            showPreview('vignette-dropzone', file);
-            uploadFileImmediately(file, 'vignette', 'vignette-preview');
-        }
-    );
+    dz.addEventListener('click', () => input.click());
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('hover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('hover'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('hover');
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith(acceptPrefix)) onSelect(f); else alert('Type de fichier invalide');
+    });
+    input.addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (f && f.type.startsWith(acceptPrefix)) onSelect(f); else alert('Type de fichier invalide');
+    });
+  }
 
-    setupDropzone(
-        'pdf-dropzone',
-        'pdf-input',
-        'application/pdf',
-        file => {
-            console.log("[MediaBlade] PDF file selected:", file.name);
-            showPreview('pdf-dropzone', file);
-            uploadFileImmediately(file, 'pdf', 'pdf-preview');
-        }
-    );
+  function localPreview(type, file) {
+    const preview = document.getElementById(`${type}-preview`);
+    preview.innerHTML = '';
+    if (file.type.startsWith('image/')) {
+      const r = new FileReader();
+      r.onload = () => { const img = document.createElement('img'); img.src = r.result; preview.appendChild(img);} ;
+      r.readAsDataURL(file);
+    } else {
+      preview.textContent = file.name;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Upload / delete / reload
+  // ------------------------------------------------------------------
+  function upload(file, field) {
+    if (!currentWorkId || !currentShortTitle) return alert('Sélectionnez d\'abord une œuvre');
+    const fd = new FormData(); fd.append(field, file);
+    fetch(`/api/works/${currentWorkId}/media?short_title=${encodeURIComponent(currentShortTitle)}`, {
+      method:'POST',
+      headers:{ 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content, 'Accept':'application/json' },
+      credentials:'same-origin',
+      body:fd
+    }).then(r=>{ if(!r.ok) throw Error(r.status); return r.json();}).then(reload).catch(console.error);
+  }
+
+  function deleteMedia(type) {
+    if (!currentWorkId) return;
+    fetch(`/api/works/${currentWorkId}/media/${type}`, {
+      method:'DELETE',
+      headers:{ 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content, 'Accept':'application/json' },
+      credentials:'same-origin'
+    }).then(r=>{ if(!r.ok) throw Error(r.status); return r.json();}).then(reload).catch(console.error);
+  }
+
+  function reload() {
+    if (!currentWorkId) return;
+    fetch(`/works/${currentWorkId}/media`, { headers:{'Accept':'application/json'}, credentials:'same-origin' })
+      .then(r=>r.json())
+      .then(d => { renderMedia('vignette', d.image_url); renderMedia('pdf', d.pdf_url); })
+      .catch(console.error);
+  }
+
+  // ------------------------------------------------------------------
+  // init
+  // ------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', () => {
+    setupDropzone('vignette-dropzone', 'vignette-input', 'image/',          f => { localPreview('vignette', f); upload(f, 'vignette'); });
+    setupDropzone('pdf-dropzone',      'pdf-input',      'application/pdf', f => { localPreview('pdf', f);      upload(f, 'pdf');      });
 
     document.addEventListener('workSelected', e => {
-        currentWorkId = e.detail.workId;
-        currentShortTitle = e.detail.short_title || null;
-
-        console.log("[MediaBlade] workSelected event ->", {
-            workId: currentWorkId,
-            shortTitle: currentShortTitle
-        });
-
-        if (currentWorkId) {
-            fetch(`/works/${currentWorkId}/media`)
-                .then(res => res.json())
-                .then(data => {
-                    showMediaFromServer('vignette-preview', data.image_url, 'vignette');
-                    showMediaFromServer('pdf-preview', data.pdf_url, 'pdf');
-                })
-                .catch(err => console.error("Erreur chargement médias", err));
-        }
+      currentWorkId     = e.detail.workId;
+      currentShortTitle = e.detail.short_title || null;
+      reload();
     });
-});
-
-function uploadFileImmediately(file, fieldName, previewId) {
-    if (!currentWorkId || !currentShortTitle) return;
-
-    const formData = new FormData();
-    formData.append(fieldName, file);
-
-    fetch(`/api/works/${currentWorkId}/media?short_title=${encodeURIComponent(currentShortTitle)}`, {
-        method: 'POST',
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        console.log(`${fieldName} uploaded`, data);
-        // Fetch latest media path and re-render
-        return fetch(`/works/${currentWorkId}/media`);
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (fieldName === 'vignette') {
-            showMediaFromServer('vignette-preview', data.image_url, 'vignette');
-        } else if (fieldName === 'pdf') {
-            showMediaFromServer('pdf-preview', data.pdf_url, 'pdf');
-        }
-    })
-    .catch(err => console.error("Upload error", err));
-}
-
-function deleteMedia(type) {
-    if (!currentWorkId) return;
-
-    fetch(`/api/works/${currentWorkId}/media/${type}`, {
-        method: 'DELETE',
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-            'Accept': 'application/json'
-        }
-    })
-    .then(res => {
-        if (!res.ok) throw new Error("Suppression échouée");
-        return res.json();
-    })
-    .then(data => {
-        console.log(`${type} supprimé`, data);
-        if (type === 'vignette') {
-            document.getElementById('vignette-preview').innerHTML = '';
-        } else if (type === 'pdf') {
-            document.getElementById('pdf-preview').innerHTML = '';
-        }
-    })
-    .catch(err => console.error('Erreur suppression', err));
-}
-
-function setupDropzone(dropzoneId, inputId, fileType, onFileSelect) {
-    const dropzone = document.getElementById(dropzoneId);
-    const input = document.getElementById(inputId);
-
-    dropzone.addEventListener('click', () => input.click());
-
-    dropzone.addEventListener('dragover', e => {
-        e.preventDefault();
-        dropzone.classList.add('hover');
-    });
-    dropzone.addEventListener('dragleave', () => {
-        dropzone.classList.remove('hover');
-    });
-
-    dropzone.addEventListener('drop', e => {
-        e.preventDefault();
-        dropzone.classList.remove('hover');
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith(fileType)) {
-            onFileSelect(file);
-        } else {
-            alert('Type de fichier invalide.');
-        }
-    });
-
-    input.addEventListener('change', e => {
-        const file = e.target.files[0];
-        if (file && file.type.startsWith(fileType)) {
-            onFileSelect(file);
-        } else {
-            alert('Type de fichier invalide.');
-        }
-    });
-}
-
-function showPreview(previewId, file) {
-    const preview = document.getElementById(previewId.replace('-dropzone', '-preview'));
-    preview.innerHTML = '';
-
-    // ======================
-    //       IMAGE
-    // ======================
-    if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => {
-            // Show the local image
-            const img = document.createElement('img');
-            img.src = reader.result;
-            img.style.maxWidth = '150px';
-            preview.appendChild(img);
-
-            // ✅ Display the file name too
-            const nameElem = document.createElement('p');
-            nameElem.textContent = file.name;
-            preview.appendChild(nameElem);
-            console.log("Image name appended =>", file.name);
-        };
-        reader.readAsDataURL(file);
-
-    // ======================
-    //        PDF
-    // ======================
-    } else if (file.type === 'application/pdf') {
-        // Show the PDF filename
-        const name = document.createElement('p');
-        name.textContent = file.name; 
-        preview.appendChild(name);
-    }
-}
-
-
-
-
-
-    // ======================
-    //  DRAG & DROP SETUP
-    // ======================
-    function setupDropzone(dropzoneId, inputId, fileType, onFileSelect) {
-        const dropzone = document.getElementById(dropzoneId);
-        const fileInput = document.getElementById(inputId);
-
-        if (!dropzone || !fileInput) {
-            console.warn("[MediaBlade] Missing elements:", dropzoneId, inputId);
-            return;
-        }
-
-        // Click opens file picker
-        dropzone.addEventListener("click", () => {
-            console.log("[MediaBlade] dropzone clicked:", dropzoneId);
-            fileInput.click();
-        });
-
-        // Drag hover style
-        dropzone.addEventListener("dragover", e => {
-            e.preventDefault();
-            dropzone.classList.add("hover");
-        });
-
-        dropzone.addEventListener("dragleave", () => {
-            dropzone.classList.remove("hover");
-        });
-
-        // Drop event
-        dropzone.addEventListener("drop", e => {
-            e.preventDefault();
-            dropzone.classList.remove("hover");
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith(fileType)) {
-                onFileSelect(file);
-            } else {
-                alert("Type de fichier invalide.");
-            }
-        });
-
-        // Manual input
-        fileInput.addEventListener("change", e => {
-            const file = e.target.files[0];
-            if (file && file.type.startsWith(fileType)) {
-                onFileSelect(file);
-            } else {
-                alert("Type de fichier invalide.");
-            }
-        });
-    }
-
-    // ======================
-    //  UPLOAD IMMEDIATELY
-    // ======================
-    function uploadFileImmediately(file, fieldName) {
-        if (!currentWorkId) {
-            alert('Aucune œuvre sélectionnée (workId).');
-            return;
-        }
-        if (!currentShortTitle) {
-            alert('Le short_title n’est pas défini pour cette œuvre.');
-            return;
-        }
-
-        console.log("[MediaBlade] Uploading file for:", fieldName);
-
-        const formData = new FormData();
-        formData.append(fieldName, file);
-
-        fetch(`/api/works/${currentWorkId}/media?short_title=${encodeURIComponent(currentShortTitle)}`, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').content
-            },
-            body: formData
-        })
-        .then(res => {
-            if (!res.ok) throw new Error(`Erreur lors de l’upload: HTTP ${res.status}`);
-            return res.json();
-        })
-        .then(data => {
-            console.log(`[MediaBlade] Fichier ${fieldName} enregistré:`, data);
-        })
-        .catch(err => console.error('[MediaBlade] Upload error', err));
-    }
+  });
+})();
 </script>
 @endpush

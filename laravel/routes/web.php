@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\RegisterController;
 
 use App\Http\Controllers\AuthorController;
 use App\Http\Controllers\WorkController;
+use App\Http\Controllers\MediaController;
 use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
 use App\Http\Controllers\ComparisonController;
@@ -46,9 +47,22 @@ Route::get('/works/{id}/description', [WorkController::class, 'getDescription'])
 Route::post('/works/{workId}/description', [WorkController::class, 'updateDescription']);
 
 // Media
-Route::post('/api/works/{id}/media', [WorkController::class, 'storeMedia']);
-Route::get('/works/{id}/media', [WorkController::class, 'getMedia']);
-Route::delete('/api/works/{workId}/media/{mediaId}', [WorkController::class, 'destroyMedia']);
+// Route::post('/api/works/{id}/media', [WorkController::class, 'storeMedia']);
+// Route::get('/works/{id}/media', [WorkController::class, 'getMedia']);
+// Route::delete('/api/works/{workId}/media/{mediaId}', [WorkController::class, 'destroyMedia']);
+
+// Media (upload, lecture, suppression)
+Route::post('/api/works/{work}/media',                 [MediaController::class, 'store'])
+     ->middleware('auth')
+     ->name('works.media.store');
+
+Route::get('/works/{work}/media',                      [MediaController::class, 'index'])
+     ->middleware('auth')
+     ->name('works.media.index');
+
+Route::delete('/api/works/{work}/media/{type}',        [MediaController::class, 'destroy'])
+     ->middleware('auth')
+     ->name('works.media.destroy');
 
 // Versions
 Route::post('/api/versions', [VersionController::class, 'store']);
