@@ -1,0 +1,8 @@
+{
+    "name": "unil-lettres/variance",
+    "type": "project",
+    "require": {
+        "neitanod/forceutf8": "^2.0",
+        "php": "^7.4"
+    }
+}

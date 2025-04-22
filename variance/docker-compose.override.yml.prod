@@ -1,0 +1,33 @@
+# The following configuration is used for production in conjunction with the
+# main docker-compose.yml. Please follow the instructions in the README.md
+# file to deploy the application.
+
+services:
+  variance-web:
+    restart: unless-stopped
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 200M
+  variance-app:
+    restart: unless-stopped
+    deploy:
+      mode: global
+      resources:
+        limits:
+           memory: 500M
+  variance-mysql-prod:
+    restart: unless-stopped
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 1000M
+  variance-mysql-dev:
+    restart: unless-stopped
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 1000M        

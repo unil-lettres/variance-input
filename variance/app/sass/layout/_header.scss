@@ -1,0 +1,84 @@
+#General-Wrapper {
+  .header-cover{
+    padding: 1em 0 1em;
+    position: relative;
+    color: $grey-90;
+    background: $grey-variance-color url("../../img/cover_site/bkg_cover.jpg");
+    div.logo-wrapper{
+      a{
+        display: block;
+        width: 180px;
+        text-decoration: none;
+      }
+    }
+    nav{
+      padding: 1em 0;
+      font-weight: $font-weight-bold;
+      ul{
+        margin: 0;
+        li{
+          display: inline-block;
+          padding-right: 1em;
+          &:last-child{
+            padding-right: 0;
+          }
+          a{
+            color: $grey-100;
+            display: block;
+            &.active, &:hover, &:focus{
+              text-decoration: none;
+              color: $white;
+              padding-bottom: 5px;
+              border-bottom: #fff 3px solid;
+            }
+          }
+        }
+      }
+    }
+    &__content{
+      min-height: 500px;
+      height: 20vh;
+      .txt{
+        @include vertical-align();
+        h1{
+          margin: 0;
+        }
+        .logo{
+          margin-bottom: ms(0);
+          max-width: 100%;
+        }
+      }
+      .visuel{
+        position: absolute;
+        width: 50%;
+        right: 0;
+        text-align: right;
+        -webkit-transform: translateX(10%);
+        -ms-transform: translateX(10%);
+        transform: translateX(10%);
+        bottom: -80px;
+        img{
+          width: 900px;
+          height: auto;
+        }
+        @include breakpoint($sm) {
+          display: none;
+        }
+      }
+    }
+  }
+  header {
+
+    @include breakpoint($lg) {
+    }
+
+    @include breakpoint($md) {
+    }
+
+    @include breakpoint($sm) {
+    }
+
+    @include breakpoint($xs) {
+    }
+  }
+}

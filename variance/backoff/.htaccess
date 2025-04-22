@@ -1,0 +1,4 @@
+AuthType Basic
+AuthName "Password Protected Area"
+AuthUserFile /home/clients/26456b7a48e0f884ea7ad6fdd7fe0e3e/web/dev/backoff/.htpasswd
+Require valid-user

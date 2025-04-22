@@ -1,0 +1,14 @@
+/* Remove Google Maps navigation */
+
+#map {
+  width: 100%;
+  height: 500px;
+
+  @include breakpoint($lg) {
+    height: 440px;
+  }
+
+  @include breakpoint($md) {
+    height: 300px;
+  }
+}
