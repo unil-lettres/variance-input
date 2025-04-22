@@ -1,12 +1,12 @@
 # Laravel & PHP
-/vendor
-/node_modules
-/public/build
-/public/hot
-/public/storage
+/vendor/
+/node_modules/
+/public/build/
+/public/hot/
+/public/storage/
 /storage/*.key
 /app/storage/*.key
-/storage/pail
+/storage/pail/
 /storage/*
 !storage/.gitignore
 !storage/framework/.gitignore
@@ -22,11 +22,17 @@ auth.json
 Homestead.json
 Homestead.yaml
 
-# Laravel IDE/Editor
-/.idea
-/.vscode
-/.fleet
-/.zed
+# Allow uploads placeholder directories (so .gitkeep can live there)
+!storage/app/public/uploads/
+!storage/app/public/uploads/.gitkeep
+!storage/app/public/uploads_images/
+!storage/app/public/uploads_images/.gitkeep
+
+# Laravel IDE / Editor
+/.idea/
+/.vscode/
+/.fleet/
+/.zed/
 
 # Logs
 npm-debug.log

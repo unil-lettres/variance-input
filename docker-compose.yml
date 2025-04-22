@@ -1,8 +1,8 @@
 # -------------------------------------------
 # Projet Variance - Serveur de développement
 # -------------------------------------------
+name: variance
 services:
-
   laravel:
     build:
       context: ./laravel
@@ -11,6 +11,7 @@ services:
       - ./laravel:/var/www/html
       - ./variance_data:/var/www/html/storage/app/private/variance_data
       - ./laravel/storage/app/public/uploads:/app/uploads
+      - ./variance/uploads:/var/www/html/storage/app/public/uploads
     working_dir: /var/www/html
     environment:
       - PHP_MEMORY_LIMIT=512M
@@ -71,6 +72,35 @@ services:
     working_dir: /app
     networks:
       - variance
+
+  variance-web:
+    image: httpd:2.4
+    working_dir: /var/www
+    volumes:
+      - ./variance/:/var/www
+      - ./variance/docker/config/variance.conf:/usr/local/apache2/conf/httpd.conf
+    ports:
+      - "127.0.0.1:8282:80"
+    networks:
+      - variance
+    container_name: variance-web
+  variance-app:
+    image: unillett/variance:latest
+    build:
+      context: ./variance/docker
+      dockerfile: Dockerfile
+    env_file:
+      - ./variance/.env
+    volumes:
+      - ./variance/uploads:/var/www/uploads
+      - ./variance/:/var/www
+      - ./variance/docker/config/variance.ini:/usr/local/etc/php/conf.d/php.ini
+    working_dir: /var/www
+    expose:
+      - "9000"
+    networks:
+      - variance
+    container_name: variance-app
 
 networks:
   variance:

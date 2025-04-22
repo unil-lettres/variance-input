@@ -42,10 +42,10 @@ class MediaController extends Controller
                 Storage::disk('public')->delete(Str::after($work->image_url, 'storage/'));
             }
             $img      = $request->file('vignette');
-            $imgPath  = "uploads/{$shortTitle}/vignette";
-            $imgName  = $img->hashName();               // nom unique pour éviter les collisions
+            $imgPath  = "uploads/vignettes";
+            $imgName  = $img->hashName();
             $img->storeAs($imgPath, $imgName, 'public');
-            $work->image_url = "storage/{$imgPath}/{$imgName}";
+            $work->image_url = "uploads/vignettes/{$imgName}";
         }
 
         // ---------- PDF ----------
@@ -54,10 +54,12 @@ class MediaController extends Controller
                 Storage::disk('public')->delete(Str::after($work->pdf_url, 'storage/'));
             }
             $pdf      = $request->file('pdf');
-            $pdfPath  = "uploads/{$shortTitle}/pdf";
-            $pdfName  = $pdf->getClientOriginalName();  // on garde le nom d’origine
+            #$pdfPath  = "uploads/{$shortTitle}/pdf";
+            $pdfPath  = "uploads/pdf";
+            #$pdfName  = $pdf->getClientOriginalName();  // on garde le nom d’origine
+            $pdfName = "{$work->id}.pdf";
             $pdf->storeAs($pdfPath, $pdfName, 'public');
-            $work->pdf_url = "storage/{$pdfPath}/{$pdfName}";
+            $work->pdf_url = "{$pdfPath}/{$pdfName}";
         }
 
         $work->save();

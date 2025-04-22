@@ -12,6 +12,7 @@
                     <th>#</th>
                     <th>Source</th>
                     <th>Cible</th>
+                    <th>Folder</th>
                     <th>Ratio</th>
                     <th>Seuil</th>
                     <th>Pivot</th>
@@ -73,11 +74,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td>${comp.id}</td>
                     <td>${comp.source_version?.name || comp.source_id}</td>
                     <td>${comp.target_version?.name || comp.target_id}</td>
+                    <td>${comp.folder}</td>
                     <td>${comp.ratio}</td>
                     <td>${comp.seuil}</td>
                     <td>${comp.lg_pivot}</td>
-                    <td>${comp.case_sensitive ? '✔️' : '❌'}</td>
-                    <td>${comp.diacri_sensitive ? '✔️' : '❌'}</td>
+                    <td>${comp.case_sensitive ? 'yes' : 'no'}</td>
+                    <td>${comp.diacri_sensitive ? 'yes' : 'no'}</td>
                     <td>${new Date(comp.created_at).toLocaleString()}</td>
                     <td>
                         <a href="/storage/${comp.folder}/${comp.id}.html" 

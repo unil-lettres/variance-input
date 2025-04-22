@@ -7,20 +7,30 @@
         <form id="upload-version-form" enctype="multipart/form-data">
             @csrf
             <div class="mb-3">
-                <label for="versionFile" class="form-label">Sélectionner un ficher .xml à téléverser</label>
-                <input type="file" name="versionFile" id="versionFile" class="form-control" accept=".xml" required>
+                <label for="versionFile" class="form-label">
+                    Sélectionner un fichier .xml ou .txt à téléverser
+                </label>
+                <input
+                    type="file"
+                    name="versionFile"
+                    id="versionFile"
+                    class="form-control"
+                    accept=".xml,.txt"
+                    required
+                >
             </div>
 
-            <!-- 1) Version ID (used in final filename) -->
+            <!-- Edition Name (stored in DB 'name' field) -->
             <div class="mb-3">
-                <label for="versionId" class="form-label">Identifiant de version</label>
-                <input type="text" name="versionId" id="versionId" class="form-control" placeholder="1, 2, 3, ..." required>
-            </div>
-
-            <!-- 2) Edition Name (stored in DB 'name' field) -->
-            <div class="mb-3">
-                <label for="editionName" class="form-label">Editeur, année</label>
-                <input type="text" name="editionName" id="editionName" class="form-control" placeholder="Grasset (1913)" required>
+                <label for="editionName" class="form-label">Désignation pour cette version</label>
+                <input
+                    type="text"
+                    name="editionName"
+                    id="editionName"
+                    class="form-control"
+                    placeholder="Grasset (1913)"
+                    required
+                >
             </div>
 
             <button type="submit" class="btn btn-primary">Téléverser</button>
@@ -30,7 +40,7 @@
 
         <!-- List of Versions -->
         <ul id="versions-list" class="list-group">
-            <li class="list-group-item">Sélectionner une oeuvre pour voir les versions</li>
+            <li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>
         </ul>
     </div>
 </div>
@@ -108,7 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Listen for versionsUpdated event
-    // This event is dispatched when a version is uploaded or deleted
     document.addEventListener('versionsUpdated', (event) => {
         const workId = event.detail.workId;
         if (workId) {
@@ -127,26 +136,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const file = document.getElementById('versionFile').files[0];
-        const versionIdValue = document.getElementById('versionId').value.trim();
+        //const versionIdValue = document.getElementById('versionId').value.trim();
         const editionNameValue = document.getElementById('editionName').value.trim();
 
-        if (!file || !versionIdValue || !editionNameValue) {
+        if (!file || !editionNameValue) {
             alert('Please fill all fields.');
             return;
         }
 
         // Frontend validation for versionId format
-        const versionIdRegex = /^[a-zA-Z0-9_-]{1,5}$/;
-        if (!versionIdRegex.test(versionIdValue)) {
-            alert('Version ID must be 1–5 characters long and contain only letters, numbers, underscores (_) or dashes (-).');
-            return;
-        }
+        // const versionIdRegex = /^[a-zA-Z0-9_-]{1,5}$/;
+        // if (!versionIdRegex.test(versionIdValue)) {
+        //     alert('Version ID must be 1–5 characters long and contain only letters, numbers, underscores (_) or dashes (-).');
+        //     return;
+        // }
 
         // Prepare form data
         const formData = new FormData();
         formData.append('work_id', selectedWorkId);
         formData.append('versionFile', file);
-        formData.append('version_id', versionIdValue);   // used to rename => {versionId}{shortTitle}.xml
+        //formData.append('version_id', versionIdValue);   // used to rename => {versionId}{shortTitle}.xml
         formData.append('name', editionNameValue);       // DB name field
         if (shortTitle) formData.append('short_title', shortTitle);
 
@@ -220,8 +229,9 @@ async function fetchVersions(workId) {
             table.innerHTML = `
                 <thead class="table-light">
                     <tr>
-                        <th>Editeur</th>
-                        <th>Nom du fichier</th>
+                        <th>ID</th>
+                        <th>Dénomination</th>
+                        <th>Dossier</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -232,6 +242,11 @@ async function fetchVersions(workId) {
 
             data.forEach(version => {
     const tr = document.createElement('tr');
+
+    // Edition record id
+    const idTd = document.createElement('td');
+    idTd.textContent = version.id;
+    tr.appendChild(idTd);
 
     // Edition name
     const nameTd = document.createElement('td');

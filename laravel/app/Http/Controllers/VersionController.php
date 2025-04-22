@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Work;
 use App\Models\Version;
 use App\Models\Comparison;
 
@@ -26,49 +27,44 @@ class VersionController extends Controller
         return response()->json($versions, 200);
     }
 
-    /**
-     * Store a newly uploaded version text file as {versionId}{shortTitle}.xml
-     * in storage/app/public/uploads/{shortTitle}/versions
-     */
     public function store(Request $request)
     {
-        // Validate input
+        // 1) Validate input: work_id, edition name, and the file
         $validated = $request->validate([
-            'work_id'      => 'required|exists:works,id',
-            'versionFile'  => 'required|file|mimetypes:text/xml,application/xml,text/plain|max:2048',
-            'short_title'  => 'required|string|max:10',
-            'name'         => 'required|string|max:100',  // Edition name
+            'work_id'     => 'required|exists:works,id',
+            'name'         => 'required|string|max:100',      // Edition name
+            'versionFile' => 'required|file|mimetypes:text/plain|max:2048',
         ]);
     
-        $file        = $request->file('versionFile');
-        $editionName = $validated['name'];
-        $shortTitle  = $validated['short_title'];
+        // 2) Fetch the work to get its short_title
+        $work       = Work::findOrFail($validated['work_id']);
+        $shortTitle = $work->short_title;
     
-        // Create version record first to get the auto ID
+        // 3) Determine next available number for this work
+        $nextNumber = Version::where('work_id', $work->id)->count() + 1;
+    
+        // 4) Build filename and storage path
+        $filename   = "{$nextNumber}{$shortTitle}.txt";
+        $folderPath = 'uploads/versions'; // relative to storage/app/public
+    
+        // 5) Store the file on the "public" disk
+        $request->file('versionFile')
+                ->storeAs($folderPath, $filename, 'public');
+    
+        // 6) Create the Version record with the correct folder path
         $version = Version::create([
-            'work_id' => $validated['work_id'],
-            'name'    => $editionName,
-            'folder'  => '', // temp, will update after saving file
+            'work_id' => $work->id,
+            'name'    => $validated['name'],
+            'folder'  => "{$folderPath}/{$filename}",
         ]);
     
-        // Define new filename and storage path
-        $filename        = "{$version->id}.xml";
-        $folderPath      = "uploads/{$shortTitle}/versions";
-        $fullStoragePath = "{$folderPath}/{$filename}";
-    
-        // Store the file
-        $file->storeAs($folderPath, $filename, 'public');
-    
-        // Update the version's folder path
-        $version->folder = "storage/{$fullStoragePath}";
-        $version->save();
-    
+        // 7) Return the new version
         return response()->json([
             'message' => 'Version uploaded successfully!',
             'version' => $version,
         ], 201);
     }
-    
+
 
     /**
      * Update the version's user-friendly name

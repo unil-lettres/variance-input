@@ -1,6 +1,11 @@
-# OS
+# macOS / Windows cruft
 .DS_Store
 Thumbs.db
 
-# Project-specific
+# Docker volumes & data
 variance_data/
+dbdata/
+
+# Editor / OS files
+*.log
+*.pid
