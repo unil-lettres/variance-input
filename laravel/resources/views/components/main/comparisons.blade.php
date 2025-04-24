@@ -1,11 +1,14 @@
 <div class="card mb-3">
     <div class="card-header">Comparaisons</div>
+
     <div class="card-body">
+        <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">
             <div class="spinner-border spinner-border-sm" role="status"></div>
             Chargement des comparaisons...
         </div>
 
+        <!-- Table -->
         <table class="table table-sm table-bordered align-middle comparisons-table" id="comparisons-table">
             <thead>
                 <tr>
@@ -25,6 +28,7 @@
             <tbody></tbody>
         </table>
 
+        <!-- Empty state -->
         <div id="no-comparisons" style="display:none;" class="text-muted">
             Aucune comparaison trouvée pour cette œuvre.
         </div>
@@ -35,32 +39,30 @@
 <style>
     .comparisons-table th {
         font-weight: normal;
-        font-size: 1rem; /* Match Bootstrap card headers */
+        font-size: 1rem;            /* Match Bootstrap card headers */
         color: #333;
     }
-
     .comparisons-table td {
         vertical-align: middle;
     }
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', () => {
     const comparisonsTable = document.querySelector('#comparisons-table tbody');
-    const loading = document.getElementById('comparisons-loading');
-    const noComparisons = document.getElementById('no-comparisons');
+    const loading          = document.getElementById('comparisons-loading');
+    const noComparisons    = document.getElementById('no-comparisons');
 
-    /**
-     * Load comparisons for a specific work,
-     * and populate the table.
-     */
+    /* --------------------------------------------------------
+     * Load comparisons for a work and populate the table
+     * ------------------------------------------------------ */
     async function loadComparisons(workId) {
         loading.style.display = 'block';
         comparisonsTable.innerHTML = '';
         noComparisons.style.display = 'none';
 
         try {
-            const res = await fetch(`/comparisons/by-work?work_id=${workId}`);
+            const res         = await fetch(`/comparisons/by-work?work_id=${workId}`);
             const comparisons = await res.json();
 
             if (comparisons.length === 0) {
@@ -82,17 +84,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td>${comp.diacri_sensitive ? 'yes' : 'no'}</td>
                     <td>${new Date(comp.created_at).toLocaleString()}</td>
                     <td>
-                        <a href="/storage/${comp.folder}/${comp.id}.html" 
-                           class="btn btn-sm btn-outline-primary" 
+                        <a href="/storage/uploads/comparisons/${comp.id}.html"
+                           class="btn btn-sm btn-outline-primary"
                            target="_blank">
                            HTML
                         </a>
-                        <a href="/storage/${comp.folder}/${comp.id}.xml" 
-                           class="btn btn-sm btn-outline-secondary" 
+                        <a href="/storage/uploads/comparisons/${comp.id}.xml"
+                           class="btn btn-sm btn-outline-secondary"
                            target="_blank">
                            XML
                         </a>
-                        <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" 
+                        <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn"
                                 data-id="${comp.id}">
                             🗑️
                         </button>
@@ -107,42 +109,28 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Listen for a selected work
-    document.addEventListener('workSelected', e => {
-        const workId = e.detail.workId;
-        loadComparisons(workId);
-    });
+    /* Re-load comparisons in response to various events emitted elsewhere */
+    document.addEventListener('workSelected',      e => loadComparisons(e.detail.workId));
+    document.addEventListener('comparisonCreated', e => loadComparisons(e.detail.workId));
+    document.addEventListener('versionsUpdated',   e => loadComparisons(e.detail.workId));
 
-    // Listen for a new comparison
-    document.addEventListener('comparisonCreated', e => {
-        const workId = e.detail.workId;
-        loadComparisons(workId);
-    });
-    
-    // When a version is added / deleted / renamed, refresh comparisons
-    document.addEventListener('versionsUpdated', e => {
-        const workId = e.detail.workId;
-        loadComparisons(workId);
-    });
-
-    /**
-     * Delete Comparison Handler
-     *  - uses event delegation
-     *  - if .delete-comparison-btn is clicked, do an AJAX DELETE
-     */
-    document.addEventListener('click', async (event) => {
+    /* --------------------------------------------------------
+     * Delete comparison (event delegation on the whole page)
+     * ------------------------------------------------------ */
+    document.addEventListener('click', async event => {
         const deleteBtn = event.target.closest('.delete-comparison-btn');
         if (!deleteBtn) return;
 
         const comparisonId = deleteBtn.dataset.id;
-        const confirmDelete = confirm(`Voulez-vous vraiment supprimer la comparaison #${comparisonId}?`);
-        if (!confirmDelete) return;
+        if (!confirm(`Voulez-vous vraiment supprimer la comparaison #${comparisonId} ?`)) {
+            return;
+        }
 
         try {
             const response = await fetch(`/comparisons/${comparisonId}`, {
                 method: 'DELETE',
                 headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').getAttribute('content'),
                     'Accept': 'application/json'
                 }
             });
@@ -152,9 +140,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 throw new Error(errorBody);
             }
 
-            // Remove the row from the table
+            /* Remove deleted row */
             deleteBtn.closest('tr').remove();
-
         } catch (err) {
             console.error('Erreur lors de la suppression de la comparaison:', err);
             alert('Impossible de supprimer cette comparaison. Voir la console pour plus de détails.');

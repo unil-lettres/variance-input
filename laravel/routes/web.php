@@ -84,3 +84,6 @@ Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->na
 // Editor
 Route::get('/versions/{id}/editor', [EditorController::class, 'show'])->name('versions.editor');
 Route::put('/versions/{id}/editor', [EditorController::class, 'update'])->name('versions.editor.update');
+
+// TEI to XHTML conversion
+// Route::post('/api/run_xhtml', [XhtmlController::class, 'run']);

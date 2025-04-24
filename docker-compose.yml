@@ -42,7 +42,7 @@ services:
     volumes:
       - ./medite/app:/app
       - ./variance_data:/app/variance_data
-      - ./laravel/storage/app/public/uploads:/app/uploads
+      - ./variance/uploads:/app/uploads
     working_dir: /app
     environment:
       - FLASK_ENV=development
@@ -68,10 +68,13 @@ services:
       context: ./saxon
     container_name: saxon
     volumes:
-      - ./saxon/app:/app
+      #- ./saxon/app:/app
+      - ./variance/uploads:/app/uploads
     working_dir: /app
     networks:
       - variance
+    ports:
+      - "8080:8080"
 
   variance-web:
     image: httpd:2.4

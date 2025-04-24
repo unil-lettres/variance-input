@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class VersionController extends Controller
 {
@@ -27,44 +28,84 @@ class VersionController extends Controller
         return response()->json($versions, 200);
     }
 
+    /**
+     * Store a newly uploaded version (plain-text) and a TEI-XML wrapper
+     */
     public function store(Request $request)
     {
         // 1) Validate input: work_id, edition name, and the file
         $validated = $request->validate([
             'work_id'     => 'required|exists:works,id',
-            'name'         => 'required|string|max:100',      // Edition name
+            'name'        => 'required|string|max:100',      // Edition name
             'versionFile' => 'required|file|mimetypes:text/plain|max:2048',
         ]);
-    
+
         // 2) Fetch the work to get its short_title
         $work       = Work::findOrFail($validated['work_id']);
         $shortTitle = $work->short_title;
-    
+
         // 3) Determine next available number for this work
         $nextNumber = Version::where('work_id', $work->id)->count() + 1;
-    
-        // 4) Build filename and storage path
-        $filename   = "{$nextNumber}{$shortTitle}.txt";
+
+        // 4) Build base filename and storage path
+        $baseName   = "{$nextNumber}{$shortTitle}";
         $folderPath = 'uploads/versions'; // relative to storage/app/public
-    
-        // 5) Store the file on the "public" disk
+
+        // 5) Store the original plain-text file
+        $txtFilename    = "{$baseName}.txt";
+        $txtStoragePath = "{$folderPath}/{$txtFilename}";
         $request->file('versionFile')
-                ->storeAs($folderPath, $filename, 'public');
-    
-        // 6) Create the Version record with the correct folder path
+                ->storeAs($folderPath, $txtFilename, 'public');
+
+        // 6) Read the just-stored text so we can wrap it with TEI
+        $txtFullPath       = storage_path("app/public/{$txtStoragePath}");
+        $rawText           = File::get($txtFullPath);
+        $escapedText       = htmlspecialchars($rawText, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+
+        // 7) Build a minimal TEI wrapper required by Medite
+        $sanitizedShortTitle = preg_replace('/[^A-Za-z0-9]/', '', strtolower($shortTitle));
+        $xmlId               = "v{$nextNumber}{$sanitizedShortTitle}";
+
+        $teiXml = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:id="{$xmlId}" xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>{$validated['name']}</title></titleStmt>
+      <publicationStmt><p>Test</p></publicationStmt>
+      <sourceDesc><p>Generated for testing</p></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div>
+        <p>
+{$escapedText}
+        </p>
+      </div>
+    </body>
+  </text>
+</TEI>
+XML;
+
+        // 8) Persist the .xml file next to the .txt
+        $xmlFilename = "{$baseName}.xml";
+        $xmlPath     = "{$folderPath}/{$xmlFilename}";
+        Storage::disk('public')->put($xmlPath, $teiXml);
+
+        // 9) Create the Version record with just the short name (baseName)
         $version = Version::create([
             'work_id' => $work->id,
             'name'    => $validated['name'],
-            'folder'  => "{$folderPath}/{$filename}",
+            'folder'  => $baseName,
         ]);
-    
-        // 7) Return the new version
+
+        // 10) Return the new version
         return response()->json([
             'message' => 'Version uploaded successfully!',
             'version' => $version,
         ], 201);
     }
-
 
     /**
      * Update the version's user-friendly name
@@ -83,35 +124,40 @@ class VersionController extends Controller
     }
 
     /**
-     * Delete the version from DB and remove file from disk
+     * Delete the version from DB and remove files from disk
      */
     public function destroy($id)
     {
         $version = Version::findOrFail($id);
-    
+
         // Check if version is used in any comparison
         $hasComparisons = Comparison::where('source_id', $version->id)
                           ->orWhere('target_id', $version->id)
                           ->exists();
-    
+
         if ($hasComparisons) {
             return response()->json([
                 'error' => 'Impossible de supprimer cette version car elle est utilisée dans une ou plusieurs comparaisons.'
             ], 400);
         }
-    
-        // Remove version file from disk
-        if ($version->folder) {
-            $relativePath = str_replace('storage/', '', $version->folder);
-            Storage::disk('public')->delete($relativePath);
-        }
-    
+
+        // Compute full file paths based on version->folder (which is now base name)
+        $baseName         = $version->folder;
+        $relativeXmlPath  = "uploads/versions/{$baseName}.xml";
+        $relativeTxtPath  = "uploads/versions/{$baseName}.txt";
+
+        Storage::disk('public')->delete($relativeXmlPath);
+        Storage::disk('public')->delete($relativeTxtPath);
+
         // Delete DB record
         $version->delete();
-    
+
         return response()->json(['message' => 'Version supprimée avec succès']);
     }
 
+    /**
+     * Return raw TEI-XML for display / download
+     */
     public function viewXmlClean($id)
     {
         // 1) Lookup version row
@@ -119,26 +165,22 @@ class VersionController extends Controller
         if (!$version) {
             abort(404, "Version #{$id} not found");
         }
-    
-        // 2) Convert DB path to actual file path
-        //    Example DB path: "storage/uploads/lvf/versions/1lvf.xml"
-        $relativePath = preg_replace('#^storage/#', '', $version->folder);    
-        $fullPath = storage_path("app/public/{$relativePath}");
-    
+
+        // 2) Convert base name to full file path
+        $baseName     = $version->folder;
+        $relativePath = "uploads/versions/{$baseName}.xml";
+        $fullPath     = storage_path("app/public/{$relativePath}");
+
         if (!file_exists($fullPath)) {
             Log::error("Version file not found at: " . $fullPath);
             abort(404, "File not found at: $fullPath");
         }
-    
-        // 3) Read raw XML (instead of simplexml_load_file)
+
+        // 3) Read raw XML
         $xmlContent = file_get_contents($fullPath);
-    
+
         // 4) Return raw XML with correct MIME type
         return response($xmlContent, 200)
             ->header('Content-Type', 'application/xml');
     }
-    
-    
-    
-
 }
