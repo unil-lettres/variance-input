@@ -72,6 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             comparisons.forEach(comp => {
                 const tr = document.createElement('tr');
+
+                tr.dataset.id = comp.id;
+
                 tr.innerHTML = `
                     <td>${comp.id}</td>
                     <td>${comp.source_version?.name || comp.source_id}</td>

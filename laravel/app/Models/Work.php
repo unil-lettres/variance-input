@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Work extends Model
 {
@@ -34,5 +35,13 @@ class Work extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(Version::class);
+    }
+
+    /**
+     * Get the author that owns the work.
+     */
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(Author::class);
     }
 }
