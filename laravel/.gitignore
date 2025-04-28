@@ -44,3 +44,7 @@ text2.xml
 *.egg
 *.egg-info
 __pycache__/
+
+# Fac-similé & other runtime uploads
+laravel/public/uploads/
+storage/

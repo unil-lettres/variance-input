@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-//use Intervention\Image\Facades\Image;
+
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\Encoders\JpegEncoder;
 use Intervention\Image\ImageManager;
 
 use App\Models\Version;
@@ -52,7 +54,7 @@ class FacsimileController extends Controller
 foreach ($validated['images'] as $file) {
     $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
     $basename = "img_{$version->folder}_{$index}";
-    $ext      = Str::lower($file->getClientOriginalExtension() ?: 'jpg');
+    $ext      = 'jpg';
 
     $mainPath  = "{$dirRel}/{$basename}.{$ext}";
     $thumbPath = "{$dirRel}/{$basename}_thumb.jpg";
@@ -65,13 +67,15 @@ foreach ($validated['images'] as $file) {
     // 2) Essaie de faire la miniature – mais sans bloquer l’import
     try {
         $manager = app(ImageManager::class);
-
-        $thumbImg = $manager->make($file->getRealPath())
-            ->resize(200, null, fn($c) => $c->aspectRatio()->upsize())
-            ->encode('jpg', 80);
-        
-
+    
+        $image = $manager->read($file->get());
+    
+        $thumbImg = $image
+            ->scale(200)
+            ->encode(new JpegEncoder(quality: 80));
+    
         $disk->put($thumbPath, (string) $thumbImg);
+    
     } catch (\Throwable $e) {
         Log::warning('Miniature fac-similé échouée', [
             'file' => $file->getClientOriginalName(),
@@ -79,6 +83,7 @@ foreach ($validated['images'] as $file) {
         ]);
         $errors[] = "{$basename}.{$ext}";
     }
+    
 }
 
 
