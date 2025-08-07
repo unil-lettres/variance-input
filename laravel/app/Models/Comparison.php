@@ -9,7 +9,7 @@ class Comparison extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['folder', 'number', 'prefix_label', 'source_id', 'target_id'];
+    protected $guarded = [];
 
     /**
      * Relationship: Source Version of the Comparison

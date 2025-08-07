@@ -10,8 +10,7 @@ services:
     volumes:
       - ./laravel:/var/www/html
       - ./variance_data:/var/www/html/storage/app/private/variance_data
-      - ./laravel/storage/app/public/uploads:/app/uploads
-      - ./variance/uploads:/var/www/html/storage/app/public/uploads
+      - ./variance/uploads:/var/www/uploads
     working_dir: /var/www/html
     environment:
       - PHP_MEMORY_LIMIT=512M
@@ -63,19 +62,6 @@ services:
     networks:
       - variance
 
-  saxon:
-    build:
-      context: ./saxon
-    container_name: saxon
-    volumes:
-      #- ./saxon/app:/app
-      - ./variance/uploads:/app/uploads
-    working_dir: /app
-    networks:
-      - variance
-    ports:
-      - "8080:8080"
-
   variance-web:
     image: httpd:2.4
     working_dir: /var/www
@@ -87,6 +73,8 @@ services:
     networks:
       - variance
     container_name: variance-web
+    env_file:
+      - ./variance/.env
   variance-app:
     image: unillett/variance:latest
     build:
@@ -96,6 +84,7 @@ services:
       - ./variance/.env
     volumes:
       - ./variance/uploads:/var/www/uploads
+      - ./variance/uploads:/app/uploads
       - ./variance/:/var/www
       - ./variance/docker/config/variance.ini:/usr/local/etc/php/conf.d/php.ini
     working_dir: /var/www

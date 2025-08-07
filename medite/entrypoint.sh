@@ -1,13 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+# 1 – (Re)install in editable mode (handles any git-pull you did)
+pip install -e /app/variance --no-deps --force-reinstall
 
-echo "Building and installing the project..."
-poetry run python setup.py build_ext --inplace
-poetry run python setup.py install
+# 2 – (Re)build the C/Cython extension
+(
+  cd /app/variance
+  python setup.py build_ext --inplace
+)
 
-echo "Starting Celery worker..."
-poetry run celery -A flask_app.celery worker --loglevel=info &
+echo "Starting Celery worker…"
+celery -A flask_app.celery worker --loglevel=info &
 
-echo "Starting Flask server..."
-exec poetry run flask run --host=0.0.0.0
+echo "Starting Flask server…"
+exec flask run --host=0.0.0.0 --port=5000

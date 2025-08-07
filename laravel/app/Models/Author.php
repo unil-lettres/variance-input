@@ -4,47 +4,48 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;   // ⬅ import for directory creation
 
 class Author extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'folder', 'order'];
+    protected $fillable = ['name'];        // ‘folder’ is now filled automatically
 
-    /**
-     * Relationship: Works of the Author
-     *
-     * Defines a `hasMany` relationship to the `Work` model, allowing you
-     * to retrieve all works associated with this author.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
-     */
+    /* -----------------------------------------------------------------
+     |  Boot: fill `folder` + create directory
+     * ---------------------------------------------------------------- */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // 1. before INSERT → set slug
+        static::creating(function (self $author) {
+            if (empty($author->folder)) {
+                $author->folder = makeUniqueSlug($author->name, 'folder', 'authors');
+            }
+        });
+
+        // 2. after INSERT succeeds → create folder on disk
+        static::created(function (self $author) {
+            Storage::disk('uploads')
+                   ->makeDirectory($author->folder);
+        });
+    }
+
+    /* -----------------------------------------------------------------
+     |  Relationships (unchanged)
+     * ---------------------------------------------------------------- */
     public function works()
     {
         return $this->hasMany(Work::class);
     }
 
-    /**
-     * Relationship: Status of the Author
-     *
-     * Defines a `hasOne` relationship to the `WorkStatus` model. This
-     * can be used to access the status record specific to this author.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasOne
-     */
     public function status()
     {
         return $this->hasOne(WorkStatus::class);
     }
 
-    /**
-     * Relationship: Permissions on the Author
-     *
-     * Defines a `hasMany` relationship with the `Permission` model, allowing
-     * access to all permissions granted for this author.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
-     */
     public function permissions()
     {
         return $this->hasMany(Permission::class);

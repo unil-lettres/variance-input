@@ -1,24 +1,29 @@
+@php /** components/main/medite.blade.php **/ @endphp
 <div class="card">
-    <div class="card-header">
-        Medite Script
-    </div>
+    <div class="card-header">Medite Script</div>
     <div class="card-body">
         <form id="medite-form">
             @csrf
-            <input type="hidden" id="work_id" name="work_id" value="">
-            <input type="hidden" id="author_id" name="author_id" value="">
+            <!-- Hidden context -->
+            <input type="hidden" id="work_id"          name="work_id">
+            <input type="hidden" id="author_id"        name="author_id">
+            <input type="hidden" id="author_name"      name="author_name">
+            <input type="hidden" id="work_name"        name="work_name">
+            <input type="hidden" id="comparison_id"    name="comparison_id">
+            <input type="hidden" id="src_short"        name="src_short">
+            <input type="hidden" id="tgt_short"        name="tgt_short">
+            <input type="hidden" id="output_xml"       name="output_xml">
+            <input type="hidden" id="xhtml_output_dir" name="xhtml_output_dir">
+            <input type="hidden" id="sep"             name="sep" value=",.;?!"> <!-- default separators -->
 
+            <!-- User‑visible fields -->
             <div class="mb-3">
                 <label for="source_version" class="form-label">Source Version</label>
-                <select id="source_version" name="source_version" class="form-control" required>
-                    <option value="">Select Source Version</option>
-                </select>
+                <select id="source_version" name="source_version" class="form-control" required></select>
             </div>
             <div class="mb-3">
                 <label for="target_version" class="form-label">Target Version</label>
-                <select id="target_version" name="target_version" class="form-control" required>
-                    <option value="">Select Target Version</option>
-                </select>
+                <select id="target_version" name="target_version" class="form-control" required></select>
             </div>
             <div class="mb-3">
                 <label for="lg_pivot" class="form-label">Pivot Length</label>
@@ -33,23 +38,19 @@
                 <input type="number" id="seuil" name="seuil" class="form-control" value="50" required>
             </div>
             <div class="form-check">
-                <input type="checkbox" id="case_sensitive" name="case_sensitive" class="form-check-input" checked>
+                <input class="form-check-input" type="checkbox" id="case_sensitive" name="case_sensitive" checked>
                 <label class="form-check-label" for="case_sensitive">Case Sensitive</label>
             </div>
             <div class="form-check">
-                <input type="checkbox" id="diacri_sensitive" name="diacri_sensitive" class="form-check-input" checked>
+                <input class="form-check-input" type="checkbox" id="diacri_sensitive" name="diacri_sensitive" checked>
                 <label class="form-check-label" for="diacri_sensitive">Diacritical Sensitive</label>
             </div>
             <button type="submit" class="btn btn-primary mt-3">Run Medite</button>
         </form>
 
-        <!-- Progress Indicator -->
-        <div id="progress-indicator" class="mt-4" style="display: none;">
-            <p>Processing... <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></p>
-        </div>
-
-        <!-- Results Section -->
-        <div id="results" class="mt-4" style="display: none;">
+        <!-- Progress / Results unchanged -->
+        <div id="progress-indicator" class="mt-4" style="display:none;"></div>
+        <div id="results" class="mt-4" style="display:none;">
             <h5>Results</h5>
             <a id="result-html" href="#" target="_blank">View HTML Result</a><br>
             <a id="result-xml" href="#" target="_blank">Download XML Result</a>
@@ -57,245 +58,213 @@
     </div>
 </div>
 
-<!-- Success Modal -->
-<div class="modal fade" id="comparisonSuccessModal" tabindex="-1" aria-labelledby="comparisonSuccessModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="comparisonSuccessModalLabel">Success</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        New comparison record created successfully.
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const sourceVersionDropdown = document.getElementById('source_version');
-    const targetVersionDropdown = document.getElementById('target_version');
-    const progressIndicator = document.getElementById('progress-indicator');
-    const resultsDiv = document.getElementById('results');
-    const resultHtml = document.getElementById('result-html');
-    const resultXml = document.getElementById('result-xml');
-    const mediteForm = document.getElementById('medite-form');
+/*------------------------------------------------------------*
+ | Shared helpers                                              |
+ *------------------------------------------------------------*/
+const $srcSel  = document.getElementById('source_version');
+const $tgtSel  = document.getElementById('target_version');
+const $form    = document.getElementById('medite-form');
+const $progress= document.getElementById('progress-indicator');
+const $results = document.getElementById('results');
+const $resHtml = document.getElementById('result-html');
+const $resXml  = document.getElementById('result-xml');
+const CSRF     = document.querySelector('meta[name="csrf-token"]').content;
 
-    /**
-     * Deletes the comparison record via AJAX if the script fails
-     */
-    async function deleteComparison(comparisonId) {
-        try {
-            const resp = await fetch(`/comparisons/${comparisonId}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/json'
-                }
-            });
-            if (!resp.ok) {
-                console.error('Failed to delete comparison:', await resp.text());
-            } else {
-                console.log(`Comparison #${comparisonId} deleted due to script error/failure.`);
-            }
-        } catch (err) {
-            console.error('Error deleting comparison:', err);
-        }
+function fillHidden(id,val){ document.getElementById(id).value = val; }
+
+/*------------------------------------------------------------*
+ | 1) Populate dropdowns when a work is selected               |
+ *------------------------------------------------------------*/
+async function refreshVersions(workId){
+    $srcSel.innerHTML = '<option value="">Select Source Version</option>';
+    $tgtSel.innerHTML = '<option value="">Select Target Version</option>';
+    const res = await fetch(`/api/versions?work_id=${workId}`);
+    if(!res.ok) return;
+    const vers = await res.json();
+    vers.forEach(v=>{
+        const opt1 = new Option(v.name, v.id);
+        const opt2 = new Option(v.name, v.id);
+        opt1.dataset.short = v.folder;   // e.g. "1pda"
+        opt2.dataset.short = v.folder;
+        $srcSel.add(opt1); $tgtSel.add(opt2);
+    });
+}
+
+/* workSelected comes from outer UI */
+document.addEventListener('workSelected', e=>{
+    const {workId, authorId, authorName, workName} = e.detail;
+    fillHidden('work_id', workId);
+    fillHidden('author_id', authorId||'');
+    fillHidden('author_name', authorName||'');
+    fillHidden('work_name', workName||'');
+    refreshVersions(workId);
+});
+
+document.addEventListener('versionsUpdated', e=>{
+    if(e.detail.workId) refreshVersions(e.detail.workId);
+});
+
+/*------------------------------------------------------------*
+ | 2) On submit → add silent params then POST to backend       |
+ *------------------------------------------------------------*/
+$form.addEventListener('submit', async ev => {
+    ev.preventDefault();
+
+    /* basic selection guard */
+    if (!$srcSel.value || !$tgtSel.value) {
+        alert('Select both versions'); return;
     }
 
-    // =========================
-    // 1) Helper to fill Source/Target dropdowns
-    // =========================
-    async function updateVersionDropdowns(workId) {
-        // Clear current items
-        sourceVersionDropdown.innerHTML = '<option value="">Select Source Version</option>';
-        targetVersionDropdown.innerHTML = '<option value="">Select Target Version</option>';
+    /* short names come from <option data-short="1pda"> */
+    const srcShort = $srcSel.selectedOptions[0].dataset.short;
+    const tgtShort = $tgtSel.selectedOptions[0].dataset.short;
+    fillHidden('src_short', srcShort);
+    fillHidden('tgt_short', tgtShort);
 
-        try {
-            const response = await fetch(`/api/versions?work_id=${workId}`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch versions: ${response.statusText}`);
-            }
+    /*──────────────────── 1) Reserve a comparison row ────────────────────*/
+    const cmpResp = await fetch('/api/comparisons', {
+        method : 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept'      : 'application/json',   // ensures JSON error on 4xx/5xx
+            'X-CSRF-TOKEN': CSRF
+        },
+        body: JSON.stringify({
+            /* IDs */
+            source_id:        $srcSel.value,
+            target_id:        $tgtSel.value,
 
-            const versions = await response.json();
-            if (versions.length === 0) {
-                const noVersionOption = document.createElement('option');
-                noVersionOption.textContent = 'No versions available';
-                noVersionOption.disabled = true;
+            /* Unique folder short-name */
+            folder:           `${srcShort}-${tgtShort}`,
 
-                sourceVersionDropdown.appendChild(noVersionOption.cloneNode(true));
-                targetVersionDropdown.appendChild(noVersionOption.cloneNode(true));
-                return;
-            }
+            /* Medite parameters you may want to persist */
+            lg_pivot:         +document.getElementById('lg_pivot').value,
+            ratio:            +document.getElementById('ratio').value,
+            seuil:            +document.getElementById('seuil').value,
+            sep:              document.getElementById('sep').value,
 
-            versions.forEach(version => {
-                const opt1 = document.createElement('option');
-                opt1.value = version.id;
-                opt1.textContent = version.name;
-                sourceVersionDropdown.appendChild(opt1);
+            /* Flags as simple booleans (true / false) */
+            case_sensitive:   document.getElementById('case_sensitive').checked,
+            diacri_sensitive: document.getElementById('diacri_sensitive').checked
+        })
 
-                // Clone the same for target
-                const opt2 = opt1.cloneNode(true);
-                targetVersionDropdown.appendChild(opt2);
-            });
-        } catch (error) {
-            console.error('Error updating version dropdowns:', error);
-        }
+    });
+
+    if (!cmpResp.ok) {
+        /* show Laravel’s JSON message or fallback to raw text */
+        const err = await cmpResp.clone().json().catch(() => cmpResp.text());
+        console.error('Create-comparison error', cmpResp.status, err);
+        alert(`Create comparison failed (${cmpResp.status}). Check console.`);
+        return;
     }
 
-    // =========================
-    // 2) Listen for "workSelected" event
-    //    -> user picks a work => refresh dropdowns
-    // =========================
-    document.addEventListener('workSelected', async (event) => {
-        const { workId } = event.detail;
-        document.getElementById('work_id').value = workId;
-        updateVersionDropdowns(workId);
+    const cmpData = await cmpResp.json();        // { id, folder, … }
+    fillHidden('comparison_id', cmpData.id);
+
+    /*──────────────────── 2) Build output paths for Flask ───────────────*/
+    const authorSlug = document.getElementById('author_name').value || 'author';
+    const workSlug   = document.getElementById('work_name').value   || 'work';
+    const cmpFolder  = `/app/uploads/${authorSlug}/${workSlug}/comparisons/${cmpData.id}`;
+
+    fillHidden('output_xml',        `${cmpFolder}/${srcShort}-${tgtShort}.xml`);
+    fillHidden('xhtml_output_dir',  cmpFolder);
+
+    /*──────────────────── 3) Launch Medite via Laravel proxy ────────────*/
+    $progress.style.display = 'block';
+    $progress.innerHTML = `
+        <p>Processing…
+           <span class="spinner-border spinner-border-sm" role="status"></span>
+        </p>`;
+
+    const fd  = new FormData($form);   // includes all visible + hidden fields
+
+    console.log('Medite FormData 🚀', Object.fromEntries(fd));
+
+
+
+    const run = await fetch('/api/run_medite', {
+        method : 'POST',
+        body   : fd,
+        headers: {
+            'X-CSRF-TOKEN': CSRF,
+            'Accept'      : 'application/json'
+        }
     });
 
-    // =========================
-    // 3) Listen for "versionsUpdated" event
-    //    -> a version was uploaded/deleted in another blade
-    // =========================
-    document.addEventListener('versionsUpdated', async (event) => {
-        const { workId } = event.detail;
-        document.getElementById('work_id').value = workId;
-        updateVersionDropdowns(workId);
-    });
+    if (!run.ok) {
+        const err = await run.clone().json().catch(() => run.text());
+        console.error('run_medite error', run.status, err);
+        $progress.innerHTML =
+            '<div class="alert alert-danger">Launch failed</div>';
+        return;
+    }
 
-    // =========================
-    // 4) Handle the Medite form submission
-    // =========================
-    mediteForm.addEventListener('submit', async function (event) {
-        event.preventDefault();
+    const { task_id } = await run.json();
+    pollTask(task_id, cmpData.id);     // keep existing polling logic
+});
 
-        if (!sourceVersionDropdown.value || !targetVersionDropdown.value) {
-            alert('Please select both source and target versions.');
+
+/*------------------------------------------------------------*
+ | 3) Poll task status                                         |
+ *------------------------------------------------------------*/
+function pollTask(taskId, cmpId){
+    let retries = 0;
+    const max = 120;
+
+    const timer = setInterval(async () => {
+        if (++retries > max) {
+            clearInterval(timer);
+            $progress.textContent = 'Timeout';
             return;
         }
 
-        // Show progress indicator and hide previous results or messages
-        progressIndicator.innerHTML = `
-            <p>Processing... <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></p>
-        `;
-        progressIndicator.style.display = 'block';
-        resultsDiv.style.display = 'none';
+        const r = await fetch(`/api/task_status/${taskId}`);
+        const d = await r.json();
+        if (d.status === 'pending') return;   // still running
 
-        const formData = new FormData(mediteForm);
+        clearInterval(timer);
 
-        try {
-            // 1) Submit to /api/run_medite
-            const response = await fetch('/api/run_medite', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
+        /* ── handle completed / failed ─────────────────────────────── */
+        if (d.status === 'completed') {
+            const outArr = (d.result && d.result.output) || [];
+
+            // find the XML and HTML paths regardless of order
+            const xmlPath  = outArr.find(p => p.endsWith('.xml'));
+            const htmlPath = outArr.find(p => p.endsWith('.html'));
+
+            if (!xmlPath) {
+                $progress.innerHTML =
+                    '<div class="alert alert-danger">No XML produced by Medite</div>';
+                return;
+            }
+
+            // hide spinner
+            $progress.style.display = 'none';
+
+            // show links
+            $resXml.href  = `/uploads/${xmlPath.split('/uploads/')[1]}`;
+            $resXml.style.display = 'inline';
+
+            if (htmlPath) {
+                $resHtml.href = `/uploads/${htmlPath.split('/uploads/')[1]}`;
+                $resHtml.style.display = 'inline';
+            } else {
+                $resHtml.style.display = 'none';
+            }
+            $results.style.display = 'block';
+
+        } else {   // failed → roll back comparison
+            await fetch(`/comparisons/${cmpId}`, {
+                method:'DELETE',
+                headers:{'X-CSRF-TOKEN': CSRF}
             });
-
-            if (!response.ok) throw new Error('Failed to submit Medite task');
-
-            const data = await response.json();
-            const taskId = data.task_id;
-            const comparisonId = data.comparison_id;
-
-            // 2) Poll for task status
-            let retryCount = 0;
-            const maxRetries = 120;
-
-            async function poll() {
-                if (retryCount >= maxRetries) {
-                    progressIndicator.textContent = 'Task timed out. Please try again.';
-                    return;
-                }
-
-                retryCount++;
-
-                try {
-                    const taskResponse = await fetch(`/api/task_status/${taskId}`);
-                    const taskData = await taskResponse.json();
-
-                    console.log('Task status response:', taskData);
-
-                    if (taskData.status === 'pending') {
-                        // The job hasn't finished; poll again after 2 seconds
-                        setTimeout(poll, 2000);
-
-                    } else if (taskData.status === 'completed') {
-                        // The Celery task is done, but let's see if the script flagged an error
-                        if (taskData.result && taskData.result.status === 'error') {
-                            // => Script-level error: delete new comparison
-                            await deleteComparison(comparisonId);
-
-                            progressIndicator.innerHTML = `
-                                <div class="alert alert-danger" role="alert">
-                                    <strong>Script Error!</strong><br>
-                                    <pre>${taskData.result.error || 'Unknown error'}</pre>
-                                    <button id="error-ok-btn" class="btn btn-sm btn-secondary mt-2">OK</button>
-                                </div>
-                            `;
-                        } else {
-                            // => True success
-                            progressIndicator.style.display = 'none';
-
-                            const successModal = new bootstrap.Modal(document.getElementById('comparisonSuccessModal'));
-                            successModal.show();
-
-                            // Dispatch an event indicating a new comparison was created
-                            document.dispatchEvent(new CustomEvent('comparisonCreated', {
-                                detail: {
-                                    workId: document.getElementById('work_id').value
-                                }
-                            }));
-                        }
-
-                    } else if (taskData.status === 'failed') {
-                        // => The Celery task ended in a real FAILURE, so delete comparison
-                        await deleteComparison(comparisonId);
-
-                        progressIndicator.innerHTML = `
-                            <div class="alert alert-danger" role="alert">
-                                <strong>Task failed!</strong><br>
-                                <pre>${taskData.error || 'Unknown error. Please check logs.'}</pre>
-                                <button id="error-ok-btn" class="btn btn-sm btn-secondary mt-2">OK</button>
-                            </div>
-                        `;
-                    }
-                } catch (err) {
-                    console.error('Error polling task:', err);
-                    progressIndicator.innerHTML = `
-                        <div class="alert alert-danger">
-                            <strong>Polling error:</strong> ${err}
-                        </div>
-                    `;
-                }
-            }
-
-            // Start polling
-            poll();
-
-        } catch (error) {
-            console.error(error);
-            progressIndicator.textContent = 'An error occurred. Please try again.';
+            $progress.innerHTML =
+                '<div class="alert alert-danger">Task failed</div>';
         }
-    });
-
-    document.addEventListener('click', function (event) {
-        if (event.target.id === 'error-ok-btn') {
-            const indicator = document.getElementById('progress-indicator');
-            if (indicator) {
-                indicator.innerHTML = '';
-                indicator.style.display = 'none';
-            }
-        }
-    });
-
-});
+    }, 2000);
+}
 
 </script>
 @endpush

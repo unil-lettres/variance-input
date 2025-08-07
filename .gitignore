@@ -1,11 +1,56 @@
-# macOS / Windows cruft
+############################################
+#  OS / Editor noise                       #
+############################################
 .DS_Store
 Thumbs.db
+*.swp
+.idea/
+.vscode/
 
-# Docker volumes & data
-variance_data/
-dbdata/
-
-# Editor / OS files
+############################################
+#  Logs & runtime PIDs                     #
+############################################
 *.log
 *.pid
+
+############################################
+#  Docker bind-mounts / volumes            #
+############################################
+dbdata/                 # MariaDB volume
+variance_data/          # Medite & back-office runtime data
+
+############################################
+#  Uploads (generated at runtime)          #
+############################################
+variance/uploads/
+
+############################################
+#  Test / archive data                     #
+############################################
+assets/
+
+############################################
+#  Python / Medite build artefacts         #
+############################################
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/*.egg
+**/*.egg-info/
+**/build/
+**/dist/
+**/venv/
+**/.venv/
+**/assets/nltk_data/
+
+############################################
+#  Node / front-end                        #
+############################################
+**/node_modules/
+
+############################################
+#  Laravel / PHP runtime files             #
+############################################
+laravel/storage/*.key
+laravel/storage/logs/
+laravel/bootstrap/cache/*.php

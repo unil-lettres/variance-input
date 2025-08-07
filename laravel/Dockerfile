@@ -1,41 +1,53 @@
+############################################################
+#  Laravel PHP-FPM + Node 18 image, ready for MariaDB
+############################################################
 FROM php:8.2-fpm
 
-# 1) Install system packages + Node + PHP GD extension
+# 1) System packages + Node + PHP extensions
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libzip-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libfreetype6-dev \
-    curl \
-    # Node 18.x
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
-    # PHP extensions
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql zip gd
+      git unzip curl mariadb-client \
+      libzip-dev libjpeg-dev libpng-dev libfreetype6-dev \
+  # Node 18.x
+  && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+  && apt-get install -y nodejs \
+  # PHP GD + Zip + MySQL drivers
+  && docker-php-ext-configure gd --with-freetype --with-jpeg \
+  && docker-php-ext-install gd zip pdo pdo_mysql
 
-# 2) Copy composer from official image
+# 2) Composer (copied from official image)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# 3) Set working directory to /var/www/html
+# 3) Project files -----------------------------------------
 WORKDIR /var/www/html
 
-# 4) Copy package files & install Node dependencies
+# copy .env early so composer scripts using env vars work
+COPY .env ./
+
+# 4) PHP dependencies (no scripts yet – artisan not present)
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
+
+# 5) Node dependencies
 COPY package*.json ./
 RUN npm install
 
-# 5) Copy entire Laravel app
+# 6) Copy full source + entrypoint
 COPY . .
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# 6) Build front-end (Vite) if needed
+# 7) Composer post-install scripts, package discovery
+RUN composer dump-autoload --optimize \
+ && php artisan package:discover --ansi
+
+# 8) Build Vite / front-end assets
 RUN npm run build
 
-# 7) Permissions, expose port, run Artisan server
-RUN chown -R www-data:www-data /var/www/html && \
-    chmod -R 775 storage bootstrap/cache
+# 9) Storage permissions
+RUN chown -R www-data:www-data storage bootstrap/cache \
+ && chmod -R 775 storage bootstrap/cache
 
+# 10) Serve application
 EXPOSE 8000
-
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]

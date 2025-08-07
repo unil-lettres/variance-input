@@ -7,39 +7,58 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class Work extends Model
 {
     use HasFactory;
 
+    // `folder` is set automatically via model events
     protected $fillable = [
         'title',
         'short_title',
         'author_id',
-        'folder',
         'desc',
         'image_url',
     ];
 
-    /**
-     * Get the associated work status.
-     */
+    /* -----------------------------------------------------------------
+     |  Boot: generate unique slug + create directory
+     * ---------------------------------------------------------------- */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // before INSERT → generate folder slug
+        static::creating(function (self $work) {
+            if (empty($work->folder)) {
+                $work->folder = makeUniqueSlug($work->title, 'folder', 'works');
+            }
+        });
+
+        // after INSERT → create /uploads/<author>/<work>/ directory
+        static::created(function (self $work) {
+            if (!$work->relationLoaded('author')) {
+                $work->load('author:id,folder');
+            }
+            $path = $work->author->folder . '/' . $work->folder;
+            Storage::disk('uploads')->makeDirectory($path);
+        });
+    }
+
+    /* -----------------------------------------------------------------
+     |  Relationships
+     * ---------------------------------------------------------------- */
     public function workStatus(): HasOne
     {
         return $this->hasOne(WorkStatus::class, 'work_id');
     }
 
-    /**
-     * Get all versions related to this work.
-     */
     public function versions(): HasMany
     {
         return $this->hasMany(Version::class);
     }
 
-    /**
-     * Get the author that owns the work.
-     */
     public function author(): BelongsTo
     {
         return $this->belongsTo(Author::class);

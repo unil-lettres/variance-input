@@ -1,36 +1,29 @@
+@php /**  components/main/versions.blade.php  **/ @endphp
 <div class="card">
-    <div class="card-header">
-        Versions
-    </div>
+    <div class="card-header">Versions</div>
     <div class="card-body">
-        <!-- Upload Form -->
+        <!-- ────────────── Upload form ────────────── -->
         <form id="upload-version-form" enctype="multipart/form-data">
             @csrf
             <div class="mb-3">
-                <label for="versionFile" class="form-label">
-                    Sélectionner un fichier .xml ou .txt à téléverser
-                </label>
-                <input
-                    type="file"
-                    name="versionFile"
-                    id="versionFile"
-                    class="form-control"
-                    accept=".xml,.txt"
-                    required
-                >
+                <label for="versionFile" class="form-label">Sélectionner un fichier <code>.txt</code> à téléverser</label>
+                <input type="file"
+                       name="versionFile"
+                       id="versionFile"
+                       class="form-control"
+                       accept=".txt"
+                       required>
+                <div id="file-info" class="form-text text-muted"></div>
             </div>
 
-            <!-- Edition Name (stored in DB 'name' field) -->
             <div class="mb-3">
                 <label for="editionName" class="form-label">Désignation pour cette version</label>
-                <input
-                    type="text"
-                    name="editionName"
-                    id="editionName"
-                    class="form-control"
-                    placeholder="Grasset (1913)"
-                    required
-                >
+                <input type="text"
+                       name="editionName"
+                       id="editionName"
+                       class="form-control"
+                       placeholder="Grasset (1913)"
+                       required>
             </div>
 
             <button type="submit" class="btn btn-primary">Téléverser</button>
@@ -38,360 +31,262 @@
 
         <hr>
 
-        <!-- List of Versions -->
+        <!-- ────────────── Versions list  ────────────── -->
         <ul id="versions-list" class="list-group">
             <li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>
         </ul>
     </div>
 </div>
 
-<!-- EDIT Version Modal -->
+<!-- ────────────── Edit modal  ────────────── -->
 <div class="modal fade" id="editVersionModal" tabindex="-1" aria-labelledby="editVersionModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="editVersionModalLabel">Editer le nom d'édition</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="edit-version-id">
-        <!-- The DB 'name' field is the *edition name*, not the numeric ID -->
-        <div class="mb-3">
-            <label for="edit-version-name" class="form-label">Editeur/année</label>
-            <input type="text" id="edit-version-name" class="form-control" required>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editVersionModalLabel">Éditer le nom d'édition</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-version-id">
+                <div class="mb-3">
+                    <label for="edit-version-name" class="form-label">Éditeur / année</label>
+                    <input type="text" id="edit-version-name" class="form-control" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="update-version-btn">Update</button>
+            </div>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" id="update-version-btn">Update</button>
-      </div>
     </div>
-  </div>
 </div>
 
-<!-- DELETE Confirmation Modal -->
+<!-- ────────────── Delete confirmation ────────────── -->
 <div class="modal fade" id="deleteVersionConfirm" tabindex="-1" aria-labelledby="deleteVersionConfirmLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="deleteVersionConfirmLabel">Confirm Deletion</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        Are you sure you want to delete this version?
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-danger" id="confirm-delete-version">Delete</button>
-      </div>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteVersionConfirmLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">Are you sure you want to delete this version&nbsp;?</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-version">Delete</button>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
 @push('scripts')
 <style>
-    /* Make table headers match the card title styling */
-    .version-table th {
-        font-weight: normal;
-        font-size: 1rem; /* Match Bootstrap's .card-header size */
-        color: #333;
-    }
-
-    .version-table td {
-        vertical-align: middle;
-    }
+    /* Keep table headers visually consistent with card header */
+    .version-table th { font-weight: normal; font-size: 1rem; color: #333; }
+    .version-table td { vertical-align: middle; }
 </style>
 
 <script>
-let selectedWorkId = null;
-let shortTitle = null;   // We'll use it for filenames: {versionId}{shortTitle}.xml
-let authorId = null;
-let versionToDelete = null;
+/***********************  CONFIG  *************************/
+const MAX_TXT_CHARACTERS = 1_800_000; // ≈ 1 000 pages @ 1 800 chars/page
+/*********************  GLOBAL STATE  *********************/
+let selectedWorkId   = null;
+let shortTitle       = null;
+let authorId         = null;
+let versionToDelete  = null;
+let detectedEncoding = 'Unknown';
+/*********************  UTIL HELPERS  *********************/
+const formatNumber = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+function detectEncodingBOM(file){
+    return new Promise(resolve=>{
+        const r = new FileReader();
+        r.onload = e=>{
+            const v = new Uint8Array(e.target.result||new ArrayBuffer(0));
+            if (v.length>=3 && v[0]===0xEF && v[1]===0xBB && v[2]===0xBF) return resolve('UTF-8 (BOM)');
+            if (v.length>=4 && v[0]===0x00 && v[1]===0x00 && v[2]===0xFE && v[3]===0xFF) return resolve('UTF-32 BE (BOM)');
+            if (v.length>=4 && v[0]===0xFF && v[1]===0xFE && v[2]===0x00 && v[3]===0x00) return resolve('UTF-32 LE (BOM)');
+            if (v.length>=2 && v[0]===0xFE && v[1]===0xFF) return resolve('UTF-16 BE (BOM)');
+            if (v.length>=2 && v[0]===0xFF && v[1]===0xFE) return resolve('UTF-16 LE (BOM)');
+            resolve('No BOM / Unknown');
+        };
+        r.onerror = ()=>resolve('Unknown');
+        r.readAsArrayBuffer(file.slice(0,4));
+    });
+}
+/*********************  MAIN LOGIC  *********************/
+window.addEventListener('DOMContentLoaded',()=>{
+    const $fileInput = document.getElementById('versionFile');
+    const $fileInfo  = document.getElementById('file-info');
 
-document.addEventListener('DOMContentLoaded', () => {
-    // 1) Listen for workSelected
-    document.addEventListener('workSelected', event => {
-        selectedWorkId = event.detail.workId;
-        authorId = event.detail.authorId;
-        shortTitle = event.detail.short_title || null; 
+    /* ——— File change ——— */
+    $fileInput.addEventListener('change', async()=>{
+        const file = $fileInput.files[0];
+        $fileInfo.innerHTML='';
+        detectedEncoding='Unknown';
+        if(!file) return;
+        if(!file.name.toLowerCase().endsWith('.txt')){
+            $fileInfo.textContent='❌ Extension invalide (uniquement .txt)';
+            $fileInput.value='';
+            return;
+        }
+        detectedEncoding = await detectEncodingBOM(file);
+        try{
+            const txt = await file.text();
+            const len = txt.length;
+            $fileInfo.innerHTML = `Encodage : <strong>${detectedEncoding}</strong><br>`+
+                                  `Caractères : <strong>${formatNumber(len)}</strong> / ${formatNumber(MAX_TXT_CHARACTERS)}`+
+                                  (len>MAX_TXT_CHARACTERS ? ' – <span class="text-danger">fichier trop volumineux</span>' : '');
+        }catch(err){
+            console.error(err);
+            $fileInfo.textContent='Erreur lors de la lecture du fichier.';
+        }
+    });
+
+    /* ——— Custom events from parent blades ——— */
+    document.addEventListener('workSelected', e=>{
+        selectedWorkId = e.detail.workId;
+        authorId       = e.detail.authorId;
+        shortTitle     = e.detail.short_title || null;
         fetchVersions(selectedWorkId);
     });
-
-    // Listen for versionsUpdated event
-    document.addEventListener('versionsUpdated', (event) => {
-        const workId = event.detail.workId;
-        if (workId) {
-            selectedWorkId = workId;
-            fetchVersions(workId);
+    document.addEventListener('versionsUpdated', e=>{
+        if(e.detail.workId){
+            selectedWorkId=e.detail.workId;
+            fetchVersions(selectedWorkId);
         }
     });
 
-    // 2) Handle Upload
-    document.getElementById('upload-version-form').addEventListener('submit', async (event) => {
-        event.preventDefault();
+    /* ——— Upload submit ——— */
+    document.getElementById('upload-version-form').addEventListener('submit',async ev=>{
+        ev.preventDefault();
+        if(!selectedWorkId) return alert('Veuillez sélectionner une œuvre.');
+        const file        = $fileInput.files[0];
+        const editionName = document.getElementById('editionName').value.trim();
+        if(!file || !editionName) return alert('Merci de remplir tous les champs.');
+        if(!file.name.toLowerCase().endsWith('.txt')) return alert('Seuls les fichiers .txt sont autorisés.');
+        const txt = await file.text();
+        if(txt.length>MAX_TXT_CHARACTERS) return alert(`Le fichier dépasse ${formatNumber(MAX_TXT_CHARACTERS)} caractères.`);
 
-        if (!selectedWorkId) {
-            alert('Please select a work before uploading a version.');
-            return;
-        }
+        const fd = new FormData();
+        fd.append('work_id',selectedWorkId);
+        fd.append('versionFile',file);
+        fd.append('name',editionName);
+        fd.append('original_encoding',detectedEncoding);
+        if(shortTitle) fd.append('short_title',shortTitle);
 
-        const file = document.getElementById('versionFile').files[0];
-        //const versionIdValue = document.getElementById('versionId').value.trim();
-        const editionNameValue = document.getElementById('editionName').value.trim();
-
-        if (!file || !editionNameValue) {
-            alert('Please fill all fields.');
-            return;
-        }
-
-        // Frontend validation for versionId format
-        // const versionIdRegex = /^[a-zA-Z0-9_-]{1,5}$/;
-        // if (!versionIdRegex.test(versionIdValue)) {
-        //     alert('Version ID must be 1–5 characters long and contain only letters, numbers, underscores (_) or dashes (-).');
-        //     return;
-        // }
-
-        // Prepare form data
-        const formData = new FormData();
-        formData.append('work_id', selectedWorkId);
-        formData.append('versionFile', file);
-        //formData.append('version_id', versionIdValue);   // used to rename => {versionId}{shortTitle}.xml
-        formData.append('name', editionNameValue);       // DB name field
-        if (shortTitle) formData.append('short_title', shortTitle);
-
-        try {
-        const response = await fetch('/api/versions', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Accept': 'application/json'
-            },
-            body: formData
-        });
-
-        if (!response.ok) {
-            const errorDetails = await response.json();
-            console.error("Upload error:", errorDetails);
-
-            if (response.status === 409) {
-                alert(errorDetails.message || 'A version with this ID already exists.');
-            } else if (response.status === 422) {
-                alert('Validation error: ' + (errorDetails.message || 'Please check the input.'));
-            } else {
-                alert('Failed to upload version. Please try again.');
+        try{
+            const res = await fetch('/api/versions',{
+                method:'POST',
+                headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content,'Accept':'application/json'},
+                body:fd
+            });
+            if(!res.ok){
+                console.error(await res.text());
+                return alert('Erreur de téléversement.');
             }
-
-            return; // Stop further processing
+            await res.json();
+            alert('Version téléversée avec succès !');
+            ev.target.reset();
+            $fileInfo.textContent='';
+            fetchVersions(selectedWorkId);
+            document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
+        }catch(err){
+            console.error(err);
+            alert('Erreur réseau ou serveur.');
         }
-
-        const data = await response.json();
-        alert('Version uploaded successfully!');
-        document.getElementById('upload-version-form').reset();
-        fetchVersions(selectedWorkId);
-
-        // Dispatch event to update the versions dropdown
-        document.dispatchEvent(new CustomEvent('versionsUpdated', {
-        detail: { workId: selectedWorkId }
-        }));
-
-        } catch (error) {
-            console.error('Unexpected error uploading version:', error);
-            alert('Unexpected error occurred. Please try again.');
-        }
-
     });
 
-    // 3) Edit
-    document.getElementById('update-version-btn').addEventListener('click', updateVersionName);
-
-    // 4) Delete
-    document.getElementById('confirm-delete-version').addEventListener('click', doDeleteVersion);
+    /* ——— Modal buttons ——— */
+    document.getElementById('update-version-btn').addEventListener('click',updateVersionName);
+    document.getElementById('confirm-delete-version').addEventListener('click',doDeleteVersion);
 });
+/*********************  API HELPERS  *********************/
+async function fetchVersions(workId){
+    const list = document.getElementById('versions-list');
+    list.innerHTML='<div class="text-muted p-2">Loading versions…</div>';
+    try{
+        const res = await fetch(`/api/versions?work_id=${workId}`);
+        if(!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        list.innerHTML='';
+        if(data.length===0) return list.innerHTML='<div class="text-muted p-2">No versions available</div>';
 
-async function fetchVersions(workId) {
-    const versionsList = document.getElementById('versions-list');
-    versionsList.innerHTML = '<div class="text-muted p-2">Loading versions...</div>';
-
-    try {
-        const response = await fetch(`/api/versions?work_id=${workId}`);
-        if (!response.ok) throw new Error(`Failed to fetch versions: ${response.statusText}`);
-
-        const data = await response.json();
-        versionsList.innerHTML = '';
-
-        if (data.length === 0) {
-            versionsList.innerHTML = '<div class="text-muted p-2">No versions available</div>';
-        } else {
-            const table = document.createElement('table');
-            table.className = 'table table-bordered table-hover table-sm version-table';
-
-            // Table header
-            table.innerHTML = `
-                <thead class="table-light">
-                    <tr>
-                        <th>ID</th>
-                        <th>Dénomination</th>
-                        <th>Dossier</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            `;
-
-            const tbody = table.querySelector('tbody');
-
-            data.forEach(version => {
-    const tr = document.createElement('tr');
-
-    // Edition record id
-    const idTd = document.createElement('td');
-    idTd.textContent = version.id;
-    tr.appendChild(idTd);
-
-    // Edition name
-    const nameTd = document.createElement('td');
-    nameTd.textContent = version.name;
-    tr.appendChild(nameTd);
-
-    // Filename (extracted from folder path)
-    const filename = version.folder.split('/').pop();
-    const fileTd = document.createElement('td');
-    fileTd.textContent = filename;
-    tr.appendChild(fileTd);
-
-    // Actions
-    const actionsTd = document.createElement('td');
-    actionsTd.className = 'text-end';
-
-    // View button
-    const viewBtn = document.createElement('a');
-    viewBtn.href = `/view-version/${version.id}`;
-    viewBtn.target = '_blank';
-    viewBtn.className = 'btn btn-sm btn-secondary me-1';
-    viewBtn.textContent = 'View';
-    actionsTd.appendChild(viewBtn);
-
-    // New: Editor button
-    const editorBtn = document.createElement('a');
-    editorBtn.href = `/versions/${version.id}/editor`;   // adjust to your route
-    editorBtn.target = '_blank';                         // opens in new tab
-    editorBtn.className = 'btn btn-sm btn-info me-1';
-    editorBtn.textContent = 'Editor';
-    actionsTd.appendChild(editorBtn);
-
-    // Edit button (existing)
-    const editBtn = document.createElement('button');
-    editBtn.className = 'btn btn-sm btn-primary me-1';
-    editBtn.textContent = 'Edit';
-    editBtn.addEventListener('click', () => openEditModal(version));
-    actionsTd.appendChild(editBtn);
-
-    // Delete button (existing)
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'btn btn-sm btn-danger';
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.addEventListener('click', () => confirmDeleteVersion(version));
-    actionsTd.appendChild(deleteBtn);
-
-    tr.appendChild(actionsTd);
-    tbody.appendChild(tr);
-});
-
-
-            versionsList.appendChild(table);
-        }
-    } catch (error) {
-        console.error('Error fetching versions:', error);
-        versionsList.innerHTML = '<div class="text-danger p-2">Failed to load versions</div>';
-    }
-}
-
-
-// ======================= OPEN EDIT MODAL
-function openEditModal(version) {
-    document.getElementById('edit-version-id').value = version.id;
-    document.getElementById('edit-version-name').value = version.name; // edition name
-    const editModal = new bootstrap.Modal(document.getElementById('editVersionModal'));
-    editModal.show();
-}
-
-// ======================= UPDATE VERSION
-async function updateVersionName() {
-    const versionId = document.getElementById('edit-version-id').value;
-    const newName = document.getElementById('edit-version-name').value.trim();
-    if (!newName) {
-        alert('Edition Name cannot be empty');
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/versions/${versionId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').content
-            },
-            body: JSON.stringify({ name: newName })
+        const table = document.createElement('table');
+        table.className='table table-bordered table-hover table-sm version-table';
+        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th class="text-end">Actions</th></tr></thead><tbody></tbody>`;
+        const tbody = table.querySelector('tbody');
+        data.forEach(v=>{
+            const tr = document.createElement('tr');
+            tr.innerHTML=`<td>${v.id}</td><td>${v.name}</td><td>${v.folder.split('/').pop()}</td>`;
+            const tdActions = document.createElement('td');
+            tdActions.className='text-end';
+            tdActions.innerHTML=`
+                <a href="/view-version/${v.id}" target="_blank" class="btn btn-sm btn-secondary me-1">View</a>
+                <a href="/versions/${v.id}/editor" target="_blank" class="btn btn-sm btn-info me-1">Editor</a>`;
+            const btnEdit = document.createElement('button');
+            btnEdit.className='btn btn-sm btn-primary me-1';
+            btnEdit.textContent='Edit';
+            btnEdit.addEventListener('click',()=>openEditModal(v));
+            tdActions.appendChild(btnEdit);
+            const btnDel = document.createElement('button');
+            btnDel.className='btn btn-sm btn-danger';
+            btnDel.textContent='Delete';
+            btnDel.addEventListener('click',()=>confirmDeleteVersion(v));
+            tdActions.appendChild(btnDel);
+            tr.appendChild(tdActions);
+            tbody.appendChild(tr);
         });
-        if (!response.ok) throw new Error(`Update failed: ${response.status}`);
-
-        const data = await response.json();
-        console.log('Version updated =>', data);
-
-        // close modal
+        list.appendChild(table);
+    }catch(err){
+        console.error(err);
+        list.innerHTML='<div class="text-danger p-2">Failed to load versions</div>';
+    }
+}
+function openEditModal(v){
+    document.getElementById('edit-version-id').value = v.id;
+    document.getElementById('edit-version-name').value = v.name;
+    new bootstrap.Modal(document.getElementById('editVersionModal')).show();
+}
+async function updateVersionName(){
+    const id   = document.getElementById('edit-version-id').value;
+    const name = document.getElementById('edit-version-name').value.trim();
+    if(!name) return alert('Edition Name cannot be empty');
+    try{
+        const res = await fetch(`/api/versions/${id}`,{
+            method:'PUT',
+            headers:{'Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content},
+            body:JSON.stringify({name})
+        });
+        if(!res.ok) throw new Error(res.statusText);
+        await res.json();
         bootstrap.Modal.getInstance(document.getElementById('editVersionModal')).hide();
         fetchVersions(selectedWorkId);
-        document.dispatchEvent(new CustomEvent('versionsUpdated', {
-            detail: { workId: selectedWorkId }}))
-    } catch (err) {
-        console.error('Error updating version:', err);
+        document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
+    }catch(err){
+        console.error(err);
         alert('Could not update version name.');
     }
 }
-
-// ======================= DELETE
-async function doDeleteVersion() {
-    if (!versionToDelete) return;
-
-    try {
-        const response = await fetch(`/api/versions/${versionToDelete}`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            }
+/*********************  DELETE FLOW  *********************/
+function confirmDeleteVersion(v){
+    versionToDelete=v.id;
+    new bootstrap.Modal(document.getElementById('deleteVersionConfirm')).show();
+}
+async function doDeleteVersion(){
+    if(!versionToDelete) return;
+    try{
+        const res = await fetch(`/api/versions/${versionToDelete}`,{
+            method:'DELETE',
+            headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content}
         });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Could not delete version.');
-        }
-
-        const data = await response.json();
-        console.log('Version deleted =>', data);
-
-        // Close the modal
+        if(!res.ok) throw new Error(await res.text());
+        await res.json();
         bootstrap.Modal.getInstance(document.getElementById('deleteVersionConfirm')).hide();
-
-        // Refresh local list
         fetchVersions(selectedWorkId);
-
-        // Fire the "versionsUpdated" event so other blades (Medite) can also update
-        document.dispatchEvent(new CustomEvent('versionsUpdated', {
-            detail: { workId: selectedWorkId }
-        }));
-
-    } catch (err) {
-        console.error('Error deleting version:', err);
-        alert(err.message);
+        document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
+    }catch(err){
+        console.error(err);
+        alert('Could not delete version.');
     }
 }
-
-function confirmDeleteVersion(version) {
-    versionToDelete = version.id;
-    // show the Delete Confirmation Modal
-    const modal = new bootstrap.Modal(document.getElementById('deleteVersionConfirm'));
-    modal.show();
-}
-
 </script>
 @endpush

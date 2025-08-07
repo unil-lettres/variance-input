@@ -74,7 +74,7 @@ Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
 // Routes pour composant medite
 Route::post('/api/run_medite', [MediteController::class, 'runMedite']);
 Route::get('/api/task_status/{taskId}', [MediteController::class, 'taskStatus']);
-Route::post('/api/create_comparison', [MediteController::class, 'createComparison']);
+Route::post('/api/comparisons', [MediteController::class, 'createComparison']);
 Route::post('/save_comparison', [MediteController::class, 'saveComparison']);
 
 // Comparisons

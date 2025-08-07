@@ -20,11 +20,10 @@ return [
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
-    | Below you may configure as many filesystem disks as necessary, and you
-    | may even configure multiple disks for the same driver. Examples for
-    | most supported storage drivers are configured here for reference.
-    |
-    | Supported drivers: "local", "ftp", "sftp", "s3"
+    | You may configure as many filesystem disks as necessary, and you may even
+    | configure multiple disks of the same driver. Examples of each driver
+    | are provided just as reference to get you started. Supported drivers:
+    | "local", "ftp", "sftp", "s3"
     |
     */
 
@@ -32,29 +31,42 @@ return [
 
         'local' => [
             'driver' => 'local',
-            'root' => storage_path('app/private'),
-            'serve' => true,
-            'throw' => false,
+            'root'   => storage_path('app/private'),
+            'serve'  => true,
+            'throw'  => false,
         ],
 
         'public' => [
-            'driver' => 'local',
-            'root' => storage_path('app/public'),
-            'url' => env('APP_URL').'/uploads',
+            'driver'     => 'local',
+            'root'       => storage_path('app/public'),
+            'url'        => env('APP_URL').'/uploads',
             'visibility' => 'public',
-            'throw' => false,
+            'throw'      => false,
+        ],
+
+        /*
+        |--------------------------------------------------------------
+        |  Shared uploads folder (legacy + laravel)
+        |--------------------------------------------------------------
+        |  Path: <project-root>/uploads
+        |  Used for variance_data, media assets, etc.
+        */
+        'uploads' => [
+            'driver' => 'local',
+            'root'   => realpath(base_path('../uploads')),
+            'throw'  => false,
         ],
 
         's3' => [
-            'driver' => 's3',
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION'),
-            'bucket' => env('AWS_BUCKET'),
-            'url' => env('AWS_URL'),
-            'endpoint' => env('AWS_ENDPOINT'),
+            'driver'                  => 's3',
+            'key'                     => env('AWS_ACCESS_KEY_ID'),
+            'secret'                  => env('AWS_SECRET_ACCESS_KEY'),
+            'region'                  => env('AWS_DEFAULT_REGION'),
+            'bucket'                  => env('AWS_BUCKET'),
+            'url'                     => env('AWS_URL'),
+            'endpoint'                => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-            'throw' => false,
+            'throw'                   => false,
         ],
 
     ],
@@ -64,9 +76,9 @@ return [
     | Symbolic Links
     |--------------------------------------------------------------------------
     |
-    | Here you may configure the symbolic links that will be created when the
-    | `storage:link` Artisan command is executed. The array keys should be
-    | the locations of the links and the values should be their targets.
+    | Configure the symbolic links that will be created when the `storage:link`
+    | Artisan command is executed. The array keys are the locations of the
+    | links and the values are their targets.
     |
     */
 

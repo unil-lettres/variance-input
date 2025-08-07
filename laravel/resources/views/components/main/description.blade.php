@@ -4,13 +4,13 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <span>Description</span>
         <div class="d-flex gap-1">
-            <button id="edit-button" type="button" class="btn btn-success btn-sm">Éditer</button>
+            <button id="edit-button" type="button" class="btn btn-success btn-sm" style="display:none;">Éditer</button>
             <button id="save-button" type="button" class="btn btn-success btn-sm" style="display:none;">Enregistrer</button>
             <button id="cancel-button" type="button" class="btn btn-secondary btn-sm" style="display:none;">Annuler</button>
         </div>
     </div>
     <div class="card-body">
-        <!-- Our textarea for CKEditor -->
+        <!-- CKEditor textarea -->
         <textarea id="desc-editor" rows="10"></textarea>
     </div>
 </div>
@@ -20,43 +20,61 @@
 <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 
 <script>
-    let ckeditorInstance = null;      // CKEditor instance
-    let currentWorkId = null;         // Track selected work ID
-    let isEditing = false;           // Whether user is in 'edit' mode
+    let ckeditorInstance = null;   // CKEditor instance
+    let currentWorkId    = null;   // currently selected work ID
+    let isEditing        = false;  // tracks edit state
 
     document.addEventListener('DOMContentLoaded', () => {
-
-        // 2) Initialize CKEditor on our textarea
+        // 2) Initialise CKEditor on our textarea
         ClassicEditor
             .create(document.querySelector('#desc-editor'), {
-                // optional config – specify toolbar items, language, etc.
                 toolbar: [
                     'heading','|','bold','italic','link','bulletedList','numberedList','undo','redo'
                 ]
             })
             .then(editor => {
                 ckeditorInstance = editor;
-                // Start in read-only mode
-                ckeditorInstance.enableReadOnlyMode('initialLoad');
+                ckeditorInstance.enableReadOnlyMode('initialLoad'); // start read‑only
             })
             .catch(error => console.error('CKEditor error:', error));
 
-        // 3) Hook up the top buttons
+        // 3) Cache action buttons
         const editBtn   = document.getElementById('edit-button');
         const saveBtn   = document.getElementById('save-button');
         const cancelBtn = document.getElementById('cancel-button');
 
-        editBtn.addEventListener('click', () => enterEditMode());
-        saveBtn.addEventListener('click', () => saveDescription());
-        cancelBtn.addEventListener('click', () => cancelEdit());
+        editBtn.addEventListener('click', enterEditMode);
+        saveBtn.addEventListener('click', saveDescription);
+        cancelBtn.addEventListener('click', cancelEdit);
 
-        // 4) Listen for when a work is selected
+        // 4) Global listener – reacts to work selection changes
         document.addEventListener('workSelected', event => {
             const { workId } = event.detail;
-            if (workId) {
-                currentWorkId = workId;
-                fetchDescription(workId);
+
+            // ── nothing selected: clear + lock editor ──
+            if (!workId) {
+                currentWorkId = null;
+
+                if (isEditing) cancelEdit();
+
+                if (ckeditorInstance) {
+                    ckeditorInstance.setData('');
+                    ckeditorInstance.enableReadOnlyMode('initialLoad');
+                }
+
+                editBtn.style.display   = 'none';
+                saveBtn.style.display   = 'none';
+                cancelBtn.style.display = 'none';
+                return;
             }
+
+            // ── a real work was selected ──
+            if (isEditing) cancelEdit();
+
+            currentWorkId = workId;
+            fetchDescription(workId);
+
+            editBtn.style.display = 'inline-block';
         });
     });
 
@@ -65,80 +83,72 @@
     // ======================
     function enterEditMode() {
         if (!ckeditorInstance) return;
-        // Switch to 'editing' UI
         isEditing = true;
-        ckeditorInstance.disableReadOnlyMode('initialLoad'); // now user can type
+        ckeditorInstance.disableReadOnlyMode('initialLoad');
 
-        // Show/hide relevant buttons
-        document.getElementById('edit-button').style.display = 'none';
-        document.getElementById('save-button').style.display = 'inline-block';
+        document.getElementById('edit-button').style.display   = 'none';
+        document.getElementById('save-button').style.display   = 'inline-block';
         document.getElementById('cancel-button').style.display = 'inline-block';
     }
 
     function cancelEdit() {
         if (!ckeditorInstance) return;
-        // revert to read-only
         isEditing = false;
         ckeditorInstance.enableReadOnlyMode('initialLoad');
-        // revert text to last known state
-        // just re-fetch from server or store old content in a variable
-        fetchDescription(currentWorkId);
 
-        // Show/hide relevant buttons
-        document.getElementById('edit-button').style.display = 'inline-block';
-        document.getElementById('save-button').style.display = 'none';
+        // reload last saved content
+        if (currentWorkId) fetchDescription(currentWorkId);
+        else ckeditorInstance.setData('');
+
+        document.getElementById('edit-button').style.display   = currentWorkId ? 'inline-block' : 'none';
+        document.getElementById('save-button').style.display   = 'none';
         document.getElementById('cancel-button').style.display = 'none';
     }
 
+    // ======================
+    //   SAVE DESCRIPTION
+    // ======================
     function saveDescription() {
-        if (!ckeditorInstance) return;
-        if (!currentWorkId) return;
+        if (!ckeditorInstance || !currentWorkId) return;
 
-        // 1) Get HTML from editor
         const updatedDesc = ckeditorInstance.getData();
-        // 2) Save to DB
+
         fetch(`/works/${currentWorkId}/description`, {
-            method: 'POST',
+            method : 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                'Content-Type' : 'application/json',
+                'X-CSRF-TOKEN' : document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             },
-            body: JSON.stringify({ desc: updatedDesc })
+            body   : JSON.stringify({ desc: updatedDesc })
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to save description');
-            }
-            return response.json();
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to save description');
+            return res.json();
         })
-        .then(data => {
-            console.log('Description saved successfully:', data);
-            alert('Description mise à jour !');
-        })
-        .catch(error => console.error('Error saving description:', error))
+        .then(() => alert('Description mise à jour !'))
+        .catch(err => console.error('Error saving description:', err))
         .finally(() => {
-            // read-only again
             isEditing = false;
             ckeditorInstance.enableReadOnlyMode('initialLoad');
-            document.getElementById('edit-button').style.display = 'inline-block';
-            document.getElementById('save-button').style.display = 'none';
+
+            document.getElementById('edit-button').style.display   = 'inline-block';
+            document.getElementById('save-button').style.display   = 'none';
             document.getElementById('cancel-button').style.display = 'none';
         });
     }
 
     // ======================
-    //  FETCH DESCRIPTION
+    //   FETCH DESCRIPTION
     // ======================
     function fetchDescription(workId) {
-        if (!workId) return;
+        if (!workId || !ckeditorInstance) return;
+
         fetch(`/works/${workId}/description`)
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
-                if (!ckeditorInstance) return;
-                const description = data.description || '';
-                ckeditorInstance.setData(description);
+                ckeditorInstance.setData(data.description || '');
             })
-            .catch(error => console.error('Error fetching description:', error));
+            .catch(err => console.error('Error fetching description:', err));
     }
 </script>
 @endpush

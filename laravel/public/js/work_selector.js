@@ -18,32 +18,56 @@ document.addEventListener("DOMContentLoaded", () => {
     const saveWorkBtn     = document.getElementById("save-work-btn");
     const updateWorkBtn   = document.getElementById("update-work-btn");
   
-  // ==============
-  //  LOAD + TOGGLE
-  // ==============
-  loadAuthors(); // load on page load
+// ==============
+//  LOAD + TOGGLE
+// ==============
+loadAuthors();   // load on page load
 
-  authorSelector.addEventListener("change", () => {
-    toggleAuthorButtons();
-    const authorId = authorSelector.value;
-    if (authorId) loadWorks(authorId);
-  });
+// ——— AUTHOR CHANGE ———
+authorSelector.addEventListener("change", () => {
+  toggleAuthorButtons();
 
-  workSelector.addEventListener("change", () => {
-    toggleWorkButtons();
-    const workId = workSelector.value;
+  const authorId = authorSelector.value;
 
-    if (workId) {
-      const authorId = authorSelector.value;
-      const selectedOption = workSelector.options[workSelector.selectedIndex];
-      const shortTitle = selectedOption?.getAttribute('data-short-title') || null;
+  // Always clear the works UI first
+  workSelector.innerHTML = '<option value="">Sélectionner une oeuvre</option>';
+  workSelector.value     = '';
+  workSelector.disabled  = !authorId;
+  toggleWorkButtons();
 
-      const evt = new CustomEvent('workSelected', {
-        detail: { workId, authorId, short_title: shortTitle }
-      });
-      document.dispatchEvent(evt);
-    }
-  });
+  // Tell every blade: “no work currently selected”
+  document.dispatchEvent(new CustomEvent('workSelected', {
+    detail: { workId: null, authorId }
+  }));
+
+  // Then (optionally) load that author’s works
+  if (authorId) loadWorks(authorId);
+});
+
+// ——— WORK CHANGE ———
+workSelector.addEventListener("change", () => {
+  toggleWorkButtons();
+
+  const workId   = workSelector.value;
+  const authorId = authorSelector.value;
+
+  // ⬇️ If user picked the blank option, clear description zone, etc.
+  if (!workId) {
+    document.dispatchEvent(new CustomEvent('workSelected', {
+      detail: { workId: null, authorId }
+    }));
+    return;
+  }
+
+  // ⬇️ Normal case: a real work was chosen
+  const selectedOption = workSelector.options[workSelector.selectedIndex];
+  const shortTitle     = selectedOption?.getAttribute('data-short-title') || null;
+
+  document.dispatchEvent(new CustomEvent('workSelected', {
+    detail: { workId, authorId, short_title: shortTitle }
+  }));
+});
+
 
   
 // ==============
@@ -139,34 +163,43 @@ addAuthorBtn.addEventListener("click", () => {
   });
   
   
-    // ==============
-    // DELETE AUTHOR
-    // ==============
-    deleteAuthorBtn.addEventListener("click", () => {
-        const id = authorSelector.value;
-        if (!id) return;
-    
-        const name = authorSelector.options[authorSelector.selectedIndex].text;
-    
-        if (!confirm(`Supprimer cet auteur ?\n${name}`)) return;
-    
-        fetch(`/api/authors/${id}`, {
-        method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': csrfToken }
-        })
-        .then(response => {
-        if (!response.ok) {
-            throw new Error("Erreur lors de la suppression de l'auteur.");
-        }
-        loadAuthors();
-        })
-        .catch(error => {
-        console.error(error);
-        alert("Impossible de supprimer cet auteur. Vérifiez qu'il n'a pas encore d'oeuvres associées.");
-        });
-    });
-  
-    // ==============
+// ==============
+// DELETE AUTHOR
+// ==============
+deleteAuthorBtn.addEventListener("click", () => {
+  const id = authorSelector.value;
+  if (!id) return;
+
+  const name = authorSelector.options[authorSelector.selectedIndex].text;
+  if (!confirm(`Supprimer cet auteur ?\n${name}`)) return;
+
+  fetch(`/api/authors/${id}`, {
+      method : 'DELETE',
+      headers: { 'X-CSRF-TOKEN': csrfToken }
+  })
+  .then(response => {
+    if (!response.ok) throw new Error("Erreur lors de la suppression de l'auteur.");
+
+    // refresh authors list (no author pre-selected)
+    loadAuthors();
+
+    // reset works dropdown UI
+    workSelector.innerHTML = '<option value=\"\">Sélectionner une oeuvre</option>';
+    workSelector.disabled  = true;
+    toggleWorkButtons();
+
+    // 🔔 notify all blades to clear their work-dependent state
+    document.dispatchEvent(new CustomEvent('workSelected', {
+      detail: { workId: null, authorId: null }
+    }));
+  })
+  .catch(error => {
+    console.error(error);
+    alert("Impossible de supprimer cet auteur. Vérifiez qu'il n'a pas encore d'oeuvres associées.");
+  });
+});
+
+// ==============
 //  ADD WORK
 // ==============
 addWorkBtn.addEventListener("click", () => {
@@ -334,6 +367,8 @@ addWorkBtn.addEventListener("click", () => {
 
         const authorId = authorSelector.value;
         loadWorks(authorId);
+        // 🔔 clear description + other blades
+        document.dispatchEvent(new CustomEvent('workSelected', { detail: { workId: null, authorId } }));
     })
     .catch(error => {
         console.error(error);
@@ -342,59 +377,81 @@ addWorkBtn.addEventListener("click", () => {
   });
 
   
-    // ==============
-    // HELPER FUNCS
-    // ==============
-    function loadAuthors(selectedAuthorId = null) {
-      fetch('/api/authors')
-        .then(r => r.json())
-        .then(authors => {
-          authorSelector.innerHTML = '<option value=\"\">Sélectionner un auteur</option>';
-          authors.forEach(author => {
-            const opt = document.createElement('option');
-            opt.value = author.id;
-            opt.textContent = author.name;
-            authorSelector.appendChild(opt);
-          });
-          if (selectedAuthorId) {
-            authorSelector.value = selectedAuthorId;
-            loadWorks(selectedAuthorId);
-          }
-          toggleAuthorButtons();
-        })
-        .catch(console.error);
-    }
+// ==============
+// HELPER FUNCS
+// ==============
+function loadAuthors(selectedAuthorId = null) {
+  fetch('/api/authors')
+    .then(r => r.json())
+    .then(authors => {
+      authorSelector.innerHTML = '<option value="">Sélectionner un auteur</option>';
+
+      authors.forEach(author => {
+        const opt = document.createElement('option');
+        opt.value = author.id;
+        opt.textContent = author.name;
+        authorSelector.appendChild(opt);
+      });
+
+      if (selectedAuthorId) {
+        // make the new author current in the dropdown
+        authorSelector.value = selectedAuthorId;
+
+        // 🔔 clear description & other work-dependent blades
+        document.dispatchEvent(new CustomEvent('workSelected', {
+          detail: { workId: null, authorId: selectedAuthorId }
+        }));
+
+        // repopulate works list (will start empty)
+        loadWorks(selectedAuthorId);
+      }
+
+      toggleAuthorButtons();
+    })
+    .catch(console.error);
+}
+
   
-    function loadWorks(authorId, selectedWorkId = null) {
-      if (!authorId) return;
-    
-      fetch(`/api/author/${authorId}/works`)
-        .then(r => r.json())
-        .then(works => {
-          workSelector.innerHTML = '<option value="">Sélectionner une oeuvre</option>';
-    
-          works.forEach(work => {
-            const opt = document.createElement('option');
-            opt.value = work.id;
-            opt.textContent = work.short_title
-              ? `${work.title} [${work.short_title}]`
-              : work.title;
-            opt.setAttribute('data-short-title', work.short_title || '');
-            workSelector.appendChild(opt);
-          });
-    
-          workSelector.disabled = false;
-          addWorkBtn.disabled = false;
-    
-          if (selectedWorkId) {
-            workSelector.value = selectedWorkId;
-          }
-    
-          // Ensure toggles reflect newly loaded works
-          toggleWorkButtons();
-        })
-        .catch(console.error);
-    }
+function loadWorks(authorId, selectedWorkId = null) {
+  if (!authorId) return;
+
+  fetch(`/api/author/${authorId}/works`)
+    .then(r => r.json())
+    .then(works => {
+      workSelector.innerHTML = '<option value="">Sélectionner une oeuvre</option>';
+
+      works.forEach(work => {
+        const opt = document.createElement('option');
+        opt.value = work.id;
+        opt.textContent = work.short_title
+          ? `${work.title} [${work.short_title}]`
+          : work.title;
+        opt.setAttribute('data-short-title', work.short_title || '');
+        workSelector.appendChild(opt);
+      });
+
+      workSelector.disabled = false;
+      addWorkBtn.disabled   = false;
+
+      if (selectedWorkId) {
+        // pre-select the freshly created / requested work
+        workSelector.value = selectedWorkId;
+
+        // 🔔 let every listening blade refresh itself (description, versions, …)
+        const shortTitle = workSelector.options[workSelector.selectedIndex]
+                             ?.getAttribute('data-short-title') || null;
+
+        document.dispatchEvent(new CustomEvent('workSelected', {
+          detail: { workId: selectedWorkId, authorId, short_title: shortTitle }
+        }));
+      }
+
+      // keep edit / delete buttons in sync
+      toggleWorkButtons();
+    })
+    .catch(console.error);
+}
+
     
   
     function toggleAuthorButtons() {
