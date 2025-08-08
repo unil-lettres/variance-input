@@ -8,9 +8,10 @@ services:
       context: ./laravel
     container_name: laravel
     volumes:
+      - uploads:/var/www/html/public/uploads
+      - uploads_images:/var/www/html/public/uploads_images
       - ./laravel:/var/www/html
       - ./variance_data:/var/www/html/storage/app/private/variance_data
-      - ./variance/uploads:/var/www/uploads
     working_dir: /var/www/html
     environment:
       - PHP_MEMORY_LIMIT=512M
@@ -100,3 +101,5 @@ networks:
 
 volumes:
   dbdata:
+  uploads:
+  uploads_images:

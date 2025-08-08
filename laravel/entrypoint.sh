@@ -15,7 +15,12 @@ mkdir -p /var/www/html/storage/app \
          /var/www/html/storage/logs \
          /var/www/html/bootstrap/cache
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+chmod -R 775      /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Ensure uploads directory exists and set permissions
+mkdir -p /var/www/html/public/uploads
+chown -R www-data:www-data /var/www/html/public/uploads
+chmod -R 775      /var/www/html/public/uploads
 
 # 2) Install PHP dependencies and run artisan tasks
 cd /var/www/html

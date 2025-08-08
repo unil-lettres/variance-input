@@ -4,38 +4,43 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;   // ⬅ import for directory creation
+use Illuminate\Support\Facades\Storage;
 
 class Author extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name'];        // ‘folder’ is now filled automatically
+    /** Mass‑assignable; `folder` is set automatically via events */
+    protected $fillable = ['name'];
 
-    /* -----------------------------------------------------------------
-     |  Boot: fill `folder` + create directory
-     * ---------------------------------------------------------------- */
+    /* ---------------------------------------------------------------------
+     |  Boot callbacks:     slug ▸ mkdir ▸ rmdir on delete                  |
+     * -------------------------------------------------------------------*/
     protected static function boot()
     {
         parent::boot();
 
-        // 1. before INSERT → set slug
+        /** 1️⃣  Before INSERT – generate unique slug for `folder` */
         static::creating(function (self $author) {
             if (empty($author->folder)) {
                 $author->folder = makeUniqueSlug($author->name, 'folder', 'authors');
             }
         });
 
-        // 2. after INSERT succeeds → create folder on disk
+        /** 2️⃣  After INSERT – create uploads/<author>/ directory */
         static::created(function (self $author) {
-            Storage::disk('uploads')
-                   ->makeDirectory($author->folder);
+            Storage::disk('uploads')->makeDirectory($author->folder);
+        });
+
+        /** 3️⃣  After DELETE – remove that directory (works are already gone) */
+        static::deleted(function (self $author) {
+            Storage::disk('uploads')->deleteDirectory($author->folder);
         });
     }
 
     /* -----------------------------------------------------------------
-     |  Relationships (unchanged)
-     * ---------------------------------------------------------------- */
+     |  Relationships                                                   |
+     * ----------------------------------------------------------------*/
     public function works()
     {
         return $this->hasMany(Work::class);

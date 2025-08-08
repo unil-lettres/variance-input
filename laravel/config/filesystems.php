@@ -39,22 +39,30 @@ return [
         'public' => [
             'driver'     => 'local',
             'root'       => storage_path('app/public'),
-            'url'        => env('APP_URL').'/uploads',
+            'url'        => env('APP_URL').'/storage',
             'visibility' => 'public',
             'throw'      => false,
         ],
 
-        /*
-        |--------------------------------------------------------------
-        |  Shared uploads folder (legacy + laravel)
-        |--------------------------------------------------------------
-        |  Path: <project-root>/uploads
-        |  Used for variance_data, media assets, etc.
-        */
+        // ────────────────────────────────────────────────────
+        // “works” and “versions” live under uploads/
         'uploads' => [
-            'driver' => 'local',
-            'root'   => realpath(base_path('../uploads')),
-            'throw'  => false,
+            'driver'     => 'local',
+            'root'       => public_path('uploads'),
+            'url'        => env('APP_URL') . '/uploads',
+            'visibility' => 'public',
+            'throw'      => false,
+        ],
+
+
+        // ────────────────────────────────────────────────────
+        // Cover images alongside uploads/
+        'uploads_images' => [
+            'driver'     => 'local',
+            'root'       => public_path('uploads_images'),
+            'url'        => '/uploads_images',
+            'visibility' => 'public',
+            'throw'      => false,
         ],
 
         's3' => [

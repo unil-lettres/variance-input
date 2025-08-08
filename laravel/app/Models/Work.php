@@ -13,7 +13,9 @@ class Work extends Model
 {
     use HasFactory;
 
-    // `folder` is set automatically via model events
+    /**
+     * Mass‑assignable columns. `folder` is set automatically in model events.
+     */
     protected $fillable = [
         'title',
         'short_title',
@@ -22,33 +24,38 @@ class Work extends Model
         'image_url',
     ];
 
-    /* -----------------------------------------------------------------
-     |  Boot: generate unique slug + create directory
-     * ---------------------------------------------------------------- */
+    /* ---------------------------------------------------------------------
+     |  Boot callbacks:        create slug ▸ mkdir ▸ rmdir on delete        |
+     * -------------------------------------------------------------------*/
     protected static function boot()
     {
         parent::boot();
 
-        // before INSERT → generate folder slug
+        /** 1️⃣  Before INSERT – generate unique folder slug */
         static::creating(function (self $work) {
             if (empty($work->folder)) {
                 $work->folder = makeUniqueSlug($work->title, 'folder', 'works');
             }
         });
 
-        // after INSERT → create /uploads/<author>/<work>/ directory
+        /** 2️⃣  After INSERT – create uploads/<author>/<work>/ directory */
         static::created(function (self $work) {
-            if (!$work->relationLoaded('author')) {
-                $work->load('author:id,folder');
-            }
+            $work->loadMissing('author:id,folder');
             $path = $work->author->folder . '/' . $work->folder;
             Storage::disk('uploads')->makeDirectory($path);
+        });
+
+        /** 3️⃣  After DELETE – remove that directory */
+        static::deleted(function (self $work) {
+            $work->loadMissing('author:id,folder');
+            $path = $work->author->folder . '/' . ($work->folder ?? '');
+            Storage::disk('uploads')->deleteDirectory($path);
         });
     }
 
     /* -----------------------------------------------------------------
-     |  Relationships
-     * ---------------------------------------------------------------- */
+     |  Relationships                                                  |
+     * ----------------------------------------------------------------*/
     public function workStatus(): HasOne
     {
         return $this->hasOne(WorkStatus::class, 'work_id');
