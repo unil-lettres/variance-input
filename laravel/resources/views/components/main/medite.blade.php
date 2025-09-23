@@ -50,11 +50,7 @@
 
         <!-- Progress / Results unchanged -->
         <div id="progress-indicator" class="mt-4" style="display:none;"></div>
-        <div id="results" class="mt-4" style="display:none;">
-            <h5>Results</h5>
-            <a id="result-html" href="#" target="_blank">View HTML Result</a><br>
-            <a id="result-xml" href="#" target="_blank">Download XML Result</a>
-        </div>
+        <div id="results" class="mt-4" style="display:none;"></div>
     </div>
 </div>
 
@@ -68,11 +64,18 @@ const $tgtSel  = document.getElementById('target_version');
 const $form    = document.getElementById('medite-form');
 const $progress= document.getElementById('progress-indicator');
 const $results = document.getElementById('results');
-const $resHtml = document.getElementById('result-html');
-const $resXml  = document.getElementById('result-xml');
 const CSRF     = document.querySelector('meta[name="csrf-token"]').content;
 
 function fillHidden(id,val){ document.getElementById(id).value = val; }
+
+function notifyComparison(eventName, comparisonId) {
+    document.dispatchEvent(new CustomEvent(eventName, {
+        detail: {
+            comparisonId,
+            workId: document.getElementById('work_id').value || null,
+        }
+    }));
+}
 
 /*------------------------------------------------------------*
  | 1) Populate dropdowns when a work is selected               |
@@ -94,11 +97,11 @@ async function refreshVersions(workId){
 
 /* workSelected comes from outer UI */
 document.addEventListener('workSelected', e=>{
-    const {workId, authorId, authorName, workName} = e.detail;
+    const {workId, authorId, author_folder, work_folder} = e.detail;
     fillHidden('work_id', workId);
     fillHidden('author_id', authorId||'');
-    fillHidden('author_name', authorName||'');
-    fillHidden('work_name', workName||'');
+    fillHidden('author_name', author_folder || '');
+    fillHidden('work_name', work_folder || '');
     refreshVersions(workId);
 });
 
@@ -163,6 +166,8 @@ $form.addEventListener('submit', async ev => {
     const cmpData = await cmpResp.json();        // { id, folder, … }
     fillHidden('comparison_id', cmpData.id);
 
+    notifyComparison('comparisonCreated', cmpData.id);
+
     /*──────────────────── 2) Build output paths for Flask ───────────────*/
     const authorSlug = document.getElementById('author_name').value || 'author';
     const workSlug   = document.getElementById('work_name').value   || 'work';
@@ -177,6 +182,11 @@ $form.addEventListener('submit', async ev => {
         <p>Processing…
            <span class="spinner-border spinner-border-sm" role="status"></span>
         </p>`;
+
+    if (!document.getElementById('diacri_sensitive').checked) {
+        alert('Medite currently requires diacritical sensitivity; the option was re-enabled.');
+        document.getElementById('diacri_sensitive').checked = true;
+    }
 
     const fd  = new FormData($form);   // includes all visible + hidden fields
 
@@ -228,40 +238,159 @@ function pollTask(taskId, cmpId){
 
         /* ── handle completed / failed ─────────────────────────────── */
         if (d.status === 'completed') {
-            const outArr = (d.result && d.result.output) || [];
+            const result = d.result || {};
+            const outArr = result.output || [];
+            const publicUrls = result.public_urls || {};
+            const meta = result.meta || {};
 
             // find the XML and HTML paths regardless of order
             const xmlPath  = outArr.find(p => p.endsWith('.xml'));
             const htmlPath = outArr.find(p => p.endsWith('.html'));
 
-            if (!xmlPath) {
-                $progress.innerHTML =
-                    '<div class="alert alert-danger">No XML produced by Medite</div>';
+            const xmlUrl = (() => {
+                if (publicUrls.xml) return publicUrls.xml;
+                if (xmlPath && xmlPath.includes('/uploads/')) {
+                    return `/uploads/${xmlPath.split('/uploads/')[1]}`;
+                }
+                return null;
+            })();
+
+            const htmlUrl = (() => {
+                if (publicUrls.html) return publicUrls.html;
+                if (htmlPath && htmlPath.includes('/uploads/')) {
+                    return `/uploads/${htmlPath.split('/uploads/')[1]}`;
+                }
+                return null;
+            })();
+
+            if (!xmlUrl) {
+                console.warn('Medite finished without XML output', result);
+                $progress.textContent = '';
+
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger';
+
+                const heading = document.createElement('p');
+                heading.textContent = 'Medite did not produce an XML output.';
+                alert.appendChild(heading);
+
+                const extra = [];
+                if (result?.status && result.status !== 'success') {
+                    extra.push(`Status: ${result.status}`);
+                }
+                if (result?.error) {
+                    extra.push(result.error.trim());
+                }
+                if (result?.stdout) {
+                    extra.push(result.stdout.trim());
+                }
+                if (result?.stderr) {
+                    extra.push(result.stderr.trim());
+                }
+                if (result?.traceback) {
+                    extra.push(result.traceback.trim());
+                }
+
+                if (!extra.length) {
+                    const fallback = document.createElement('p');
+                    fallback.textContent = 'No additional diagnostics were returned.';
+                    alert.appendChild(fallback);
+                } else {
+                    extra.forEach(text => {
+                        if (!text) return;
+                        const hasBreaks = /\n/.test(text);
+                        const block = document.createElement(hasBreaks ? 'pre' : 'p');
+                        block.textContent = text;
+                        if (hasBreaks) {
+                            block.classList.add('mb-0');
+                        }
+                        alert.appendChild(block);
+                    });
+                }
+
+                $progress.appendChild(alert);
+                notifyComparison('comparisonFailed', cmpId);
                 return;
             }
 
-            // hide spinner
-            $progress.style.display = 'none';
+            // show success message
+            const successMsg = meta.html_fallback === false
+                ? 'Medite run completed successfully. You can open the consolidated results from the comparisons table.'
+                : 'Medite run completed successfully. Component XHTML outputs were generated; open them from the comparisons table.';
 
-            // show links
-            $resXml.href  = `/uploads/${xmlPath.split('/uploads/')[1]}`;
-            $resXml.style.display = 'inline';
+            $progress.innerHTML = '';
+            const success = document.createElement('div');
+            success.className = 'alert alert-success';
+            success.textContent = successMsg;
+            $progress.appendChild(success);
+            $progress.style.display = 'block';
 
-            if (htmlPath) {
-                $resHtml.href = `/uploads/${htmlPath.split('/uploads/')[1]}`;
-                $resHtml.style.display = 'inline';
-            } else {
-                $resHtml.style.display = 'none';
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'btn btn-link btn-sm p-0 mt-2';
+            closeBtn.type = 'button';
+            closeBtn.textContent = 'Fermer ce message';
+            closeBtn.addEventListener('click', () => {
+                $progress.innerHTML = '';
+                $progress.style.display = 'none';
+            });
+            $progress.appendChild(closeBtn);
+
+            $results.style.display = 'none';
+
+            if (Array.isArray(meta.xhtml_components) && meta.xhtml_components.length) {
+                const list = document.createElement('ul');
+                list.className = 'mt-3 mb-0 small';
+                const counts = meta.component_counts || {};
+                const labels = {
+                    'd.xhtml': { title: 'd.xhtml', desc: 'déplacements', one: 'déplacement', many: 'déplacements' },
+                    'i.xhtml': { title: 'i.xhtml', desc: 'insertions', one: 'insertion', many: 'insertions' },
+                    'r.xhtml': { title: 'r.xhtml', desc: 'remplacements', one: 'remplacement', many: 'remplacements' },
+                    's.xhtml': { title: 's.xhtml', desc: 'suppressions', one: 'suppression', many: 'suppressions' },
+                    'source.xhtml': { title: 'source.xhtml', desc: 'texte source aligné' },
+                    'target.xhtml': { title: 'target.xhtml', desc: 'texte cible aligné' },
+                };
+
+                meta.xhtml_components.forEach(name => {
+                    const key = name.toLowerCase();
+                    const info = labels[key] || { title: name };
+                    const li = document.createElement('li');
+                    const count = counts[name] ?? counts[key] ?? null;
+
+                    if (typeof count === 'number') {
+                        const unit = info;
+                        const noun = count === 1 ? (unit.one || 'entrée') : (unit.many || 'entrées');
+                        li.innerHTML = `<strong>${info.title}</strong> — ${count} ${noun}`;
+                    } else if (info.desc) {
+                        li.innerHTML = `<strong>${info.title}</strong> — ${info.desc}`;
+                    } else {
+                        li.textContent = info.title;
+                    }
+
+                    list.appendChild(li);
+                });
+
+                const hint = document.createElement('div');
+                hint.className = 'alert alert-info mt-3';
+                hint.innerHTML = '<strong>Composants générés :</strong>';
+                hint.appendChild(list);
+                $progress.appendChild(hint);
             }
-            $results.style.display = 'block';
+
+            notifyComparison('comparisonReady', cmpId);
 
         } else {   // failed → roll back comparison
             await fetch(`/comparisons/${cmpId}`, {
                 method:'DELETE',
                 headers:{'X-CSRF-TOKEN': CSRF}
             });
-            $progress.innerHTML =
-                '<div class="alert alert-danger">Task failed</div>';
+
+            const msg = d.error || 'Task failed';
+            $progress.textContent = '';
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger';
+            alert.textContent = msg;
+            $progress.appendChild(alert);
+            notifyComparison('comparisonFailed', cmpId);
         }
     }, 2000);
 }

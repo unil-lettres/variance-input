@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use App\Models\Comparison;
 
 class MediteController extends Controller
@@ -36,29 +38,35 @@ class MediteController extends Controller
         Log::debug('createComparison payload', $data);
 
 
-        /* ─── 2. Re-use if the folder already exists ─────────────────────── */
-        if ($cmp = Comparison::where('folder', $data['folder'])->first()) {
-            return response()->json($cmp, 200);            // OK → existing row
-        }
+        /* ─── 2. Insert a new row (fill every NOT-NULL col) ──────────────── */
+        [ $folder, $sequence ] = $this->nextFolderAndNumber(
+            $data['folder'],
+            (int) $data['source_id'],
+            (int) $data['target_id']
+        );
 
-        /* ─── 3. Insert a new row (fill every NOT-NULL col) ──────────────── */
-        $cmp = Comparison::create([
+        $payload = [
             'source_id'        => $data['source_id'],
             'target_id'        => $data['target_id'],
-            'folder'           => $data['folder'],
+            'folder'           => $folder,
 
             /* Medite parameters (fallback to sensible defaults) */
             'lg_pivot'         => $data['lg_pivot']         ?? 7,
             'ratio'            => $data['ratio']            ?? 15,
             'seuil'            => $data['seuil']            ?? 50,
-            'sep'              => $data['sep']              ?? ',.;?!',
             'case_sensitive'   => $data['case_sensitive']   ?? false,
             'diacri_sensitive' => $data['diacri_sensitive'] ?? false,
 
             /* house-keeping */
             'prefix_label'     => 'Auto',
-            'number'           => 1,
-        ]);
+            'number'           => $sequence,
+        ];
+
+        if (Schema::hasColumn('comparisons', 'sep')) {
+            $payload['sep'] = $data['sep'] ?? ',.;?!';
+        }
+
+        $cmp = Comparison::create($payload);
 
         return response()->json($cmp, 201);                // Created
     }
@@ -76,11 +84,17 @@ class MediteController extends Controller
             'ratio'          => 'required|integer',
             'seuil'          => 'required|integer',
             'sep'            => 'nullable|string',
+            'comparison_id'  => 'nullable|exists:comparisons,id',
         ]);
 
         $caseSensitive   = $request->has('case_sensitive');
         $diacriSensitive = $request->has('diacri_sensitive');
-        $separators      = $validated['sep'] ?? ',.;?!';
+
+        if (!$diacriSensitive) {
+            Log::warning('Medite diacri_sensitive forced to true');
+            $diacriSensitive = true;
+        }
+        $separators      = $validated['sep'] ? trim($validated['sep']) : ',.;?!';
 
         /* ───── Short names for versions ───── */
         $sourceShort = DB::table('versions')
@@ -91,8 +105,8 @@ class MediteController extends Controller
                         ->value('folder');
         $comparisonShort = "$sourceShort-$targetShort";
 
-        /* ───── Create DB row first ───── */
-        $cmp = Comparison::create([
+        /* ───── Create or update comparison ───── */
+        $comparisonPayload = [
             'source_id'        => $validated['source_version'],
             'target_id'        => $validated['target_version'],
             'lg_pivot'         => $validated['lg_pivot'],
@@ -100,19 +114,81 @@ class MediteController extends Controller
             'seuil'            => $validated['seuil'],
             'case_sensitive'   => $caseSensitive,
             'diacri_sensitive' => $diacriSensitive,
-            'prefix_label'     => 'Auto Run',
-            'number'           => 1,
-            'folder'           => $comparisonShort,
-        ]);
+        ];
+
+        if (Schema::hasColumn('comparisons', 'sep')) {
+            $comparisonPayload['sep'] = $separators;
+        }
+
+        $comparisonId = $validated['comparison_id'] ?? null;
+
+        if ($comparisonId) {
+            $cmp = Comparison::findOrFail($comparisonId);
+            $cmp->fill($comparisonPayload);
+
+            if (empty($cmp->folder)) {
+                [ $folder, $sequence ] = $this->nextFolderAndNumber(
+                    $comparisonShort,
+                    (int) $validated['source_version'],
+                    (int) $validated['target_version'],
+                    $cmp->id
+                );
+                $cmp->folder = $folder;
+                $cmp->number = $sequence;
+            }
+
+            if (!$cmp->prefix_label) {
+                $cmp->prefix_label = 'Auto Run';
+            }
+
+            if (!$cmp->number) {
+                [ $_folder, $sequence ] = $this->nextFolderAndNumber(
+                    $comparisonShort,
+                    (int) $validated['source_version'],
+                    (int) $validated['target_version'],
+                    $cmp->id
+                );
+                $cmp->number = $sequence;
+            }
+
+            $cmp->save();
+        } else {
+            [ $folder, $sequence ] = $this->nextFolderAndNumber(
+                $comparisonShort,
+                (int) $validated['source_version'],
+                (int) $validated['target_version']
+            );
+
+            $cmp = Comparison::create($comparisonPayload + [
+                'folder'       => $folder,
+                'prefix_label' => 'Auto Run',
+                'number'       => $sequence,
+            ]);
+        }
 
         /* ───── Paths for Flask outputs ───── */
-        $baseDir   = $request->input('xhtml_output_dir');     // provided by JS
-        $outputXml = $request->input('output_xml');           // provided by JS
-        if (!$outputXml) {                                    // Fallback
-            $relative = "uploads/comparisons/{$cmp->id}";
-            $baseDir  = "/app/{$relative}";
-            $outputXml = "{$baseDir}/{$cmp->id}.xml";
+        $workRow = DB::table('works')
+            ->select('id', 'folder', 'title', 'author_id')
+            ->where('id', $validated['work_id'])
+            ->first();
+
+        if (!$workRow) {
+            return response()->json([
+                'error' => 'Œuvre introuvable pour cette comparaison.'
+            ], 422);
         }
+
+        $authorFolder = DB::table('authors')
+            ->where('id', $workRow->author_id)
+            ->value('folder') ?? 'author';
+
+        $workFolder = $workRow->folder;
+        if (!$workFolder) {
+            $workFolder = Str::slug($workRow->title ?? 'work') ?: 'work';
+        }
+
+        $baseDir   = "/app/uploads/{$authorFolder}/{$workFolder}/comparisons/{$cmp->id}";
+        $outputXml = "{$baseDir}/{$sourceShort}-{$targetShort}.xml";
 
         /* ───── Source / Target absolute paths ───── */
         $sourceFile = $this->convertPath($sourceShort);
@@ -129,6 +205,7 @@ class MediteController extends Controller
             'diacri_sensitive'  => $diacriSensitive ? 'on' : 'off',
             'output_xml'        => $outputXml,
             'xhtml_output_dir'  => $baseDir,
+            'comparison_id'     => $cmp->id,
         ];
 
         /* ───── Call Flask ───── */
@@ -175,6 +252,83 @@ class MediteController extends Controller
     /*──────────────────────── Helper ───────────────────────*/
     private function convertPath(string $short): string
     {
-        return "/app/uploads/versions/{$short}.xml";
+        $storageRoot = storage_path('app/public');
+        $localPath   = storage_path("app/public/uploads/versions/{$short}.xml");
+        $publicPath  = public_path("uploads/versions/{$short}.xml");
+
+        if (file_exists($localPath)) {
+            $relative = substr($localPath, strlen($storageRoot));
+            $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+            return "/app/storage_public{$relative}";
+        }
+
+        if (file_exists($publicPath)) {
+            return "/app/uploads/versions/{$short}.xml";
+        }
+
+        Log::warning('Medite source file missing from storage', [
+            'short'       => $short,
+            'storagePath' => $localPath,
+            'publicPath'  => $publicPath,
+        ]);
+
+        return "/app/storage_public/uploads/versions/{$short}.xml";
+    }
+
+    private function nextFolderAndNumber(string $base, int $sourceId, int $targetId, ?int $excludeId = null): array
+    {
+        $slug = Str::slug($base, '-');
+        if ($slug === '') {
+            $slug = 'comparison';
+        }
+
+        $query = Comparison::where('source_id', $sourceId)
+                            ->where('target_id', $targetId);
+
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        $maxExisting = (int) $query->max('number');
+        if ($maxExisting <= 0) {
+            $maxExisting = (int) $query->count();
+        }
+
+        $number = $maxExisting + 1;
+
+        $suffix = "run{$number}";
+        $separator = '-';
+        $maxBaseLength = 45 - strlen($suffix) - strlen($separator);
+
+        if ($maxBaseLength < 1) {
+            $folder = Str::limit($suffix, 45, '');
+        } else {
+            $basePart = substr($slug, 0, $maxBaseLength);
+            $folder = $basePart !== ''
+                ? "{$basePart}{$separator}{$suffix}"
+                : Str::limit($suffix, 45, '');
+        }
+
+        // Ensure uniqueness if numbers in DB are inconsistent
+        while (
+            Comparison::where('source_id', $sourceId)
+                ->where('target_id', $targetId)
+                ->where('folder', $folder)
+                ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
+                ->exists()
+        ) {
+            $number += 1;
+            $suffix = "run{$number}";
+            if ($maxBaseLength < 1) {
+                $folder = Str::limit($suffix, 45, '');
+            } else {
+                $basePart = substr($slug, 0, $maxBaseLength);
+                $folder = $basePart !== ''
+                    ? "{$basePart}{$separator}{$suffix}"
+                    : Str::limit($suffix, 45, '');
+            }
+        }
+
+        return [$folder, $number];
     }
 }

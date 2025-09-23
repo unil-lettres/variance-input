@@ -52,100 +52,120 @@
 
 @push('scripts')
 <script>
- // Listen for the workSelected event
-document.addEventListener('workSelected', function (event) {
-    const { workId, canEdit } = event.detail;
+(function () {
+  function isValidWorkId(id) {
+    const s = String(id ?? '').trim();
+    return /^\d+$/.test(s) && Number(s) > 0;
+  }
 
-    // Store workId in the container's data attribute
+  function resetStatusUI() {
+    ['description-toggle','notice-toggle','vignette-toggle','comparisons-toggle'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.checked = false; el.disabled = true; }
+    });
+    const msg = document.getElementById('edit-rights-message');
+    if (msg) msg.style.display = 'none'; // hide “Lecture seule” when no selection
+    const wc = document.getElementById('work-container');
+    if (wc) wc.setAttribute('data-current-work-id', '');
+  }
+
+  async function setToggles(workId, canEdit) {
+    if (!isValidWorkId(workId)) { resetStatusUI(); return; }
+
+    try {
+      const res = await fetch(`/works/${workId}/status`, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      document.getElementById('description-toggle').checked  = !!data.desc_status;
+      document.getElementById('notice-toggle').checked       = !!data.notice_status;
+      document.getElementById('vignette-toggle').checked     = !!data.image_status;
+      document.getElementById('comparisons-toggle').checked  = !!data.comparison_status;
+
+      enableToggles(!!canEdit); // keep your rights logic
+    } catch (err) {
+      console.error('Error fetching work status:', err);
+      resetStatusUI();
+    }
+  }
+
+  function enableToggles(canEdit) {
+    document.querySelectorAll('.form-check-input').forEach(t => { t.disabled = !canEdit; });
+  }
+
+  // Listen for selection changes from work_selector.js
+  document.addEventListener('workSelected', function (event) {
+    const { workId, canEdit } = event.detail || {};
     const workContainer = document.getElementById('work-container');
-    workContainer.setAttribute('data-current-work-id', workId);
-
-    // Handle edit rights message
     const messageElement = document.getElementById('edit-rights-message');
-    if (canEdit) {
-        messageElement.style.display = "none";
-        enableToggles(true);
-    } else {
-        messageElement.style.display = "inline";
-        enableToggles(false);
+
+    // Remember current workId (blank if invalid)
+    workContainer.setAttribute('data-current-work-id', isValidWorkId(workId) ? String(workId) : '');
+
+    // No valid selection → reset and quit
+    if (!isValidWorkId(workId)) {
+      if (messageElement) messageElement.style.display = 'none';
+      resetStatusUI();
+      return;
     }
 
-    // Set toggles based on work status
-    setToggles(workId, canEdit);
-});
+    // With a selection: update UI + rights hint
+    if (messageElement) messageElement.style.display = canEdit ? 'none' : 'inline';
+    enableToggles(!!canEdit);
+    setToggles(workId, !!canEdit);
+  });
 
-function setToggles(workId, canEdit) {
-    fetch(`/works/${workId}/status`)
-        .then((response) => response.json())
-        .then((data) => {
-            document.getElementById('description-toggle').checked = !!data.desc_status;
-            document.getElementById('notice-toggle').checked = !!data.notice_status;
-            document.getElementById('vignette-toggle').checked = !!data.image_status;
-            document.getElementById('comparisons-toggle').checked = !!data.comparison_status;
-
-            enableToggles(canEdit);
-        })
-        .catch((error) => console.error('Error fetching work status:', error));
-}
-
-function enableToggles(canEdit) {
-    document.querySelectorAll('.form-check-input').forEach((toggle) => {
-        toggle.disabled = !canEdit;
-    });
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    // Add event listeners to each toggle to send updates
+  // Attach change handlers for the 4 toggles
+  document.addEventListener('DOMContentLoaded', function () {
     const toggles = [
-        { id: 'description-toggle', field: 'desc_status' },
-        { id: 'notice-toggle', field: 'notice_status' },
-        { id: 'vignette-toggle', field: 'image_status' },
-        { id: 'comparisons-toggle', field: 'comparison_status' },
+      { id: 'description-toggle', field: 'desc_status' },
+      { id: 'notice-toggle',      field: 'notice_status' },
+      { id: 'vignette-toggle',    field: 'image_status' },
+      { id: 'comparisons-toggle', field: 'comparison_status' },
     ];
 
-    toggles.forEach((toggle) => {
-        const element = document.getElementById(toggle.id);
+    toggles.forEach(({ id, field }) => {
+      const el = document.getElementById(id);
+      if (!el) return;
 
-        if (element) {
-            element.addEventListener('change', function () {
-                // Get the current workId from the container
-                const workContainer = document.getElementById('work-container');
-                const workId = workContainer.getAttribute('data-current-work-id');
+      el.addEventListener('change', function () {
+        const workContainer = document.getElementById('work-container');
+        const workId = workContainer.getAttribute('data-current-work-id');
 
-                if (!workId) {
-                    console.error('No work ID available for update.');
-                    return;
-                }
-
-                const body = {};
-                body[toggle.field] = element.checked ? 1 : 0;
-
-                updateStatus(workId, body);
-            });
+        if (!isValidWorkId(workId)) {
+          console.error('No valid work ID available for update.');
+          return;
         }
+
+        const body = {};
+        body[field] = el.checked ? 1 : 0;
+        updateStatus(workId, body);
+      });
     });
-});
+  });
 
-function updateStatus(workId, body) {
+  function updateStatus(workId, body) {
+    if (!isValidWorkId(workId)) return;
+
     fetch(`/works/${workId}/status`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': '{{ csrf_token() }}',
-        },
-        body: JSON.stringify(body),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(body),
     })
-        .then((response) => {
-            if (!response.ok) {
-                throw new Error('Failed to update status');
-            }
-            return response.json();
-        })
-        .then((data) => {
-            console.log('Status updated successfully:', data);
-        })
-        .catch((error) => console.error('Error updating status:', error));
-}
-
+    .then((response) => {
+      if (!response.ok) throw new Error('Failed to update status');
+      return response.json();
+    })
+    .then((data) => {
+      console.log('Status updated successfully:', data);
+    })
+    .catch((error) => console.error('Error updating status:', error));
+  }
+})();
 </script>
 @endpush
+

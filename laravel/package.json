@@ -1,22 +1,23 @@
 {
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build",
-        "dev": "vite"
-    },
-    "devDependencies": {
-        "@codemirror/lang-xml": "^6.1.0",
-        "@codemirror/state": "^6.5.2",
-        "@codemirror/theme-one-dark": "^6.1.2",
-        "@codemirror/view": "^6.36.5",
-        "autoprefixer": "^10.4.20",
-        "axios": "^1.7.4",
-        "codemirror": "^6.0.1",
-        "concurrently": "^9.0.1",
-        "laravel-vite-plugin": "^1.0",
-        "postcss": "^8.4.47",
-        "tailwindcss": "^3.4.13",
-        "vite": "^6.2"
-    }
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "watch": "vite build --mode development --watch",
+    "prod": "vite build",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@codemirror/lang-xml": "^6.1.0",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.5",
+    "autoprefixer": "^10.4.20",
+    "axios": "^1.7.4",
+    "concurrently": "^9.0.1",
+    "laravel-vite-plugin": "^1.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "vite": "^6.2"
+  }
 }

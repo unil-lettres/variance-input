@@ -13,6 +13,10 @@ class MediaController extends Controller
      */
     public function index(Work $work)
     {
+        if ($work->image_url) {
+            $this->mirrorToLegacy($work->image_url);
+        }
+
         return response()->json([
             'image_url' => $work->image_url
                 ? '/uploads_images/' . $work->image_url
@@ -43,23 +47,36 @@ class MediaController extends Controller
         if ($request->hasFile('vignette')) {
             if ($work->image_url) {
                 Storage::disk('uploads_images')->delete($work->image_url);
+                $this->deleteLegacyImage($work->image_url);
             }
             $img  = $request->file('vignette');
             $name = $img->hashName();
+            \Log::debug('Uploading vignette', [
+                'work_id'    => $work->id,
+                'filename'   => $name,
+                'target_dir' => public_path('uploads_images'),
+                'is_dir'     => is_dir(public_path('uploads_images')),
+                'is_writable'=> is_writable(public_path('uploads_images')),
+            ]);
             Storage::disk('uploads_images')->putFileAs('', $img, $name);
             $work->image_url = $name;
+
+            $this->mirrorToLegacy($name);
         }
 
         // ---------- PDF ----------
         if ($request->hasFile('pdf')) {
             if ($work->pdf_url) {
                 Storage::disk('uploads')->delete('pdf/' . $work->pdf_url);
+                $this->deleteLegacyPdf($work->pdf_url);
             }
             $pdf     = $request->file('pdf');
             $pdfName = $work->id . '.pdf';
             // Stocke sous public/uploads/pdf/{work_id}.pdf
             Storage::disk('uploads')->putFileAs('pdf', $pdf, $pdfName);
             $work->pdf_url = $pdfName;
+
+            $this->mirrorPdfToLegacy($pdfName);
         }
 
         $work->save();
@@ -74,15 +91,88 @@ class MediaController extends Controller
     {
         if ($type === 'vignette' && $work->image_url) {
             Storage::disk('uploads_images')->delete($work->image_url);
+            $this->deleteLegacyImage($work->image_url);
             $work->image_url = null;
         }
 
         if ($type === 'pdf' && $work->pdf_url) {
             Storage::disk('uploads')->delete('pdf/' . $work->pdf_url);
+            $this->deleteLegacyPdf($work->pdf_url);
             $work->pdf_url = null;
         }
 
         $work->save();
         return response()->json(['success' => true]);
+}
+
+    private function mirrorToLegacy(string $fileName): void
+    {
+        $source = public_path('uploads_images/' . $fileName);
+        if (!is_file($source)) {
+            return;
+        }
+
+        $legacyRoot = base_path('../variance/uploads_images');
+        $legacyExists = is_dir($legacyRoot);
+        \Log::debug('Mirror legacy image path', [
+            'legacy_root' => $legacyRoot,
+            'exists'      => $legacyExists,
+            'base_path'   => base_path(),
+            'parent_exists' => is_dir(dirname($legacyRoot)),
+        ]);
+        if (!$legacyExists) {
+            if (!@mkdir($legacyRoot, 0775, true) && !is_dir($legacyRoot)) {
+                \Log::warning('Failed to create legacy uploads_images directory', ['path' => $legacyRoot]);
+                return;
+            }
+        }
+
+        $destination = $legacyRoot . '/' . $fileName;
+        if (!@copy($source, $destination)) {
+            \Log::warning('Failed to mirror image to legacy site', [
+                'source' => $source,
+                'destination' => $destination,
+            ]);
+        }
+    }
+
+    private function deleteLegacyImage(string $fileName): void
+    {
+        $legacyPath = base_path('../variance/uploads_images/' . $fileName);
+        if (is_file($legacyPath)) {
+            @unlink($legacyPath);
+        }
+    }
+
+    private function mirrorPdfToLegacy(string $fileName): void
+    {
+        $source = public_path('uploads/pdf/' . $fileName);
+        if (!is_file($source)) {
+            return;
+        }
+
+        $legacyRoot = base_path('../variance/uploads/pdf');
+        if (!is_dir($legacyRoot)) {
+            if (!@mkdir($legacyRoot, 0775, true) && !is_dir($legacyRoot)) {
+                \Log::warning('Failed to create legacy uploads/pdf directory', ['path' => $legacyRoot]);
+                return;
+            }
+        }
+
+        $destination = $legacyRoot . '/' . $fileName;
+        if (!@copy($source, $destination)) {
+            \Log::warning('Failed to mirror PDF to legacy site', [
+                'source' => $source,
+                'destination' => $destination,
+            ]);
+        }
+    }
+
+    private function deleteLegacyPdf(string $fileName): void
+    {
+        $legacyPath = base_path('../variance/uploads/pdf/' . $fileName);
+        if (is_file($legacyPath)) {
+            @unlink($legacyPath);
+        }
     }
 }

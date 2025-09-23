@@ -9,6 +9,15 @@ use App\Models\Comparison;
 
 class PublishController extends Controller
 {
+    public const COMPONENTS = [
+        'd.xhtml',
+        'i.xhtml',
+        'r.xhtml',
+        's.xhtml',
+        'source.xhtml',
+        'target.xhtml',
+    ];
+
     public function publish(Request $request)
     {
         $request->validate(['comparison_id' => 'required|integer']);
@@ -18,45 +27,126 @@ class PublishController extends Controller
         $comparison = Comparison::findOrFail($request->input('comparison_id'));
 
         // 2. Récupérer l’œuvre via la version source ------------------------
-        $workId = DB::table('versions')
-                    ->where('id', $comparison->source_id)
-                    ->value('work_id');
-
-        if (!$workId) {
+        try {
+            [ $sourceDir, $destDir, $destPath ] = $this->resolvePaths($comparison);
+        } catch (\RuntimeException $e) {
             return response()->json([
-                'error' => 'Impossible de retrouver l’œuvre pour cette comparaison'
+                'error' => $e->getMessage(),
+                'comparison_id' => $comparison->id,
             ], 422);
         }
-
-        // 3. Récupérer les « folder » auteur / œuvre ------------------------
-        $work  = DB::table('works')->where('id', $workId)->first(['folder', 'author_id']);
-        $authorFolder = DB::table('authors')
-                          ->where('id', $work->author_id)
-                          ->value('folder');
-
-        // 4. Construire le dossier de destination final ---------------------
-        $destDir = "uploads/{$authorFolder}/{$work->folder}/{$comparison->folder}";
-        $destPath = storage_path("app/public/{$destDir}");
-
         if (!is_dir($destPath)) {
-            mkdir($destPath, 0777, true);
+            Storage::disk('public')->makeDirectory($destDir);
         }
 
-        // 5. Copier les XHTML déjà générés ----------------------------------
-        //   (ils se trouvent dans uploads/comparisons/{id}/)
-        $srcDir = storage_path("app/public/uploads/comparisons/{$comparison->id}");
+        // 5. Copier uniquement les composants XHTML nécessaires -----------
+        if (!is_dir($sourceDir)) {
+            return response()->json([
+                'error' => 'Dossier source introuvable pour cette comparaison.',
+                'source_dir' => $sourceDir,
+            ], 404);
+        }
 
-        foreach (glob("{$srcDir}/*.xhtml") as $file) {
-            $basename = basename($file);
+        $copied = [];
+        $missing = [];
+        foreach (self::COMPONENTS as $name) {
+            $srcFile = $sourceDir . DIRECTORY_SEPARATOR . $name;
+            if (!is_file($srcFile)) {
+                $missing[] = $name;
+                continue;
+            }
+
             Storage::disk('public')->put(
-                "{$destDir}/{$basename}",
-                file_get_contents($file)
+                "{$destDir}/{$name}",
+                file_get_contents($srcFile)
             );
+            $copied[] = $name;
         }
 
         return response()->json([
-            'status'       => 'ok',
-            'published_to' => $destDir
+            'status'        => 'ok',
+            'published_to'  => $destDir,
+            'copied_files'  => $copied,
+            'missing_files' => $missing,
         ]);
+    }
+
+    public function unpublish(Comparison $comparison)
+    {
+        try {
+            [ $sourceDir, $destDir, $destPath ] = $this->resolvePaths($comparison);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'comparison_id' => $comparison->id,
+            ], 422);
+        }
+
+        if (!is_dir($destPath)) {
+            return response()->json([
+                'status' => 'ok',
+                'deleted_files' => [],
+                'not_found' => self::COMPONENTS,
+            ]);
+        }
+
+        $deleted = [];
+        $notFound = [];
+        foreach (self::COMPONENTS as $name) {
+            $relative = "{$destDir}/{$name}";
+            if (Storage::disk('public')->exists($relative)) {
+                Storage::disk('public')->delete($relative);
+                $deleted[] = $name;
+            } else {
+                $notFound[] = $name;
+            }
+        }
+
+        if (empty(Storage::disk('public')->files($destDir))
+            && empty(Storage::disk('public')->directories($destDir))) {
+            Storage::disk('public')->deleteDirectory($destDir);
+        }
+
+        return response()->json([
+            'status'        => 'ok',
+            'deleted_files' => $deleted,
+            'not_found'     => $notFound,
+        ]);
+    }
+
+    private function resolvePaths(Comparison $comparison): array
+    {
+        $workInfo = DB::table('versions')
+            ->where('versions.id', $comparison->source_id)
+            ->join('works', 'versions.work_id', '=', 'works.id')
+            ->select('works.folder as work_folder', 'works.author_id', 'works.title as work_title')
+            ->first();
+
+        if (!$workInfo) {
+            throw new \RuntimeException('Impossible de retrouver l’œuvre pour cette comparaison');
+        }
+
+        $author = DB::table('authors')
+            ->where('id', $workInfo->author_id)
+            ->select('folder', 'name')
+            ->first();
+
+        if (!$author || !$author->folder) {
+            throw new \RuntimeException('Impossible de retrouver le dossier auteur.');
+        }
+
+        $basePath  = "uploads/{$author->folder}/{$workInfo->work_folder}";
+        $sourceDir = storage_path("app/public/{$basePath}/comparisons/{$comparison->id}");
+        if (!is_dir($sourceDir)) {
+            $legacy = public_path("{$basePath}/comparisons/{$comparison->id}");
+            if (is_dir($legacy)) {
+                $sourceDir = $legacy;
+            }
+        }
+
+        $destDir  = "{$basePath}/{$comparison->folder}";
+        $destPath = storage_path("app/public/{$destDir}");
+
+        return [$sourceDir, $destDir, $destPath];
     }
 }

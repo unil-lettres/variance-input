@@ -8,8 +8,11 @@ services:
       context: ./laravel
     container_name: laravel
     volumes:
+      - storage_public:/var/www/html/storage/app/public
       - uploads:/var/www/html/public/uploads
       - uploads_images:/var/www/html/public/uploads_images
+      - ./variance/uploads_images:/var/www/variance/uploads_images
+      - ./variance/uploads/pdf:/var/www/variance/uploads/pdf
       - ./laravel:/var/www/html
       - ./variance_data:/var/www/html/storage/app/private/variance_data
     working_dir: /var/www/html
@@ -41,6 +44,7 @@ services:
     container_name: medite
     volumes:
       - ./medite/app:/app
+      - storage_public:/app/storage_public
       - ./variance_data:/app/variance_data
       - ./variance/uploads:/app/uploads
     working_dir: /app
@@ -103,3 +107,4 @@ volumes:
   dbdata:
   uploads:
   uploads_images:
+  storage_public:

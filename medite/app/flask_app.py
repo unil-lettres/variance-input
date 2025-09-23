@@ -1,11 +1,14 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, send_from_directory
 from celery import Celery
-from scripts.diff import run
 import subprocess
 import redis
 import os
+import sys
 import time
+import html
 from pathlib import Path
+
+SCRIPT_DIFF = Path(__file__).resolve().parent / "variance" / "scripts" / "diff.py"
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -29,27 +32,69 @@ def uploaded_file(filename):
 
 
 @celery.task
-def run_diff_script(source_filename, target_filename, lg_pivot, ratio, seuil, case_sensitive, diacri_sensitive, output_xml):
+def run_diff_script(
+    source_filename,
+    target_filename,
+    lg_pivot,
+    ratio,
+    seuil,
+    case_sensitive,
+    diacri_sensitive,
+    output_xml,
+    sep=None,
+    xhtml_output_dir=None,
+    comparison_id=None,
+):
     """Run the diff script asynchronously."""
+    def _compact(log: str) -> str:
+        if not log:
+            return ''
+        lines = log.splitlines()
+        filtered = [
+            ln for ln in lines
+            if 'INFO -' not in ln or any(key in ln for key in ('sim =', 'yINS', 'yREMP', 'yDEP'))
+        ]
+        if not filtered:
+            filtered = lines
+        keep = 25
+        if len(filtered) > keep:
+            omitted = len(filtered) - keep
+            filtered = ['(... {} lines omitted ...)'.format(omitted)] + filtered[-keep:]
+        return '\n'.join(filtered).strip()
+
     try:
         command = [
-            "poetry", "run", "python", "/app/scripts/diff.py",
+            sys.executable,
+            str(SCRIPT_DIFF),
             source_filename,
             target_filename,
+            "--lg_pivot", str(lg_pivot),
             "--ratio", str(ratio),
             "--seuil", str(seuil),
             "--case-sensitive" if case_sensitive else "--no-case-sensitive",
             "--diacri-sensitive" if diacri_sensitive else "--no-diacri-sensitive",
-            "--output-xml", output_xml
+            "--output-xml", output_xml,
         ]
+
+        if sep:
+            command.extend(["--sep", sep])
+
+        if xhtml_output_dir:
+            Path(xhtml_output_dir).mkdir(parents=True, exist_ok=True)
+            command.extend(["--xhtml-output-dir", xhtml_output_dir])
 
         print(f"[run_diff_script] Running command: {' '.join(command)}")
 
         # Run the script and capture stdout/stderr
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=str(SCRIPT_DIFF.parent.parent),
+        )
 
         import shutil
-        from pathlib import Path
 
         # === Determine folder based on output_xml path ===
         output_path = Path(output_xml)  # e.g. /app/uploads/lvf/comparisons/42-17.xml
@@ -62,25 +107,138 @@ def run_diff_script(source_filename, target_filename, lg_pivot, ratio, seuil, ca
 
         comparisons_folder.mkdir(parents=True, exist_ok=True)
 
-        # === Move and rename result.{ext} to final filename ===
-        moved_files = []
-        for ext in ['xml', 'html']:
-            src = Path(app.config['UPLOAD_FOLDER']) / f"result.{ext}"
-            dest = comparisons_folder / f"{base_name}.{ext}"
-            if src.exists():
-                shutil.move(str(src), str(dest))
-                moved_files.append(str(dest))
+        produced_files = []
+        meta = {}
+
+        # --- Ensure TEI diff is recorded ----------------------------------
+        if output_path.exists():
+            produced_files.append(str(output_path))
+        else:
+            print(f"[run_diff_script] Warning: expected XML at {output_path} but not found")
+
+        if xhtml_output_dir:
+            out_dir = Path(xhtml_output_dir)
+            if out_dir.exists():
+                for candidate in sorted(out_dir.glob('*.xhtml')):
+                    produced_files.append(str(candidate))
             else:
-                print(f"[run_diff_script] Warning: {src} not found")
+                print(f"[run_diff_script] Warning: XHTML dir {out_dir} missing")
+
+        public_urls = {}
+        shared_files = []
+        component_names = sorted({Path(path).name for path in produced_files if path.endswith('.xhtml')})
+        if component_names:
+            meta['xhtml_components'] = component_names
+
+        component_counts = {}
+        component_files = sorted({Path(path) for path in produced_files if path.endswith('.xhtml')})
+        for comp_path in component_files:
+            try:
+                text = comp_path.read_text(encoding='utf-8', errors='ignore')
+            except Exception as err:
+                print(f"[run_diff_script] Could not read {comp_path} for counting: {err}")
+                continue
+            key = comp_path.name
+            if key.lower() in {'d.xhtml', 'i.xhtml', 'r.xhtml', 's.xhtml'}:
+                component_counts[key] = text.count('<li')
+
+        if component_counts:
+            meta['component_counts'] = component_counts
+
+        html_candidates = []
+        if comparison_id:
+            public_root = Path('/app/storage_public/uploads/comparisons')
+            public_root.mkdir(parents=True, exist_ok=True)
+
+            if output_path.exists():
+                public_xml = public_root / f"{comparison_id}.xml"
+                shutil.copy2(output_path, public_xml)
+                shared_files.append(str(public_xml))
+                public_urls['xml'] = f"/storage/uploads/comparisons/{comparison_id}.xml"
+
+            # copy a primary HTML view if we can locate one
+            fallback_sources = []
+            if xhtml_output_dir:
+                out_dir = Path(xhtml_output_dir)
+                if out_dir.exists():
+                    html_candidates.extend(sorted(out_dir.glob('*.html')))
+                    fallback_sources.extend(str(p) for p in sorted(out_dir.glob('*.xhtml')))
+
+            for candidate in html_candidates:
+                if candidate.suffix.lower() not in {'.html', '.xhtml'}:
+                    continue
+                public_html = public_root / f"{comparison_id}{candidate.suffix.lower()}"
+                shutil.copy2(candidate, public_html)
+                shared_files.append(str(public_html))
+                public_urls['html'] = f"/storage/uploads/comparisons/{comparison_id}{candidate.suffix.lower()}"
+                break
+
+            if 'html' not in public_urls:
+                fallback = public_root / f"{comparison_id}.html"
+                try:
+                    artifact_names = sorted(
+                        {Path(path).name for path in (*produced_files, *fallback_sources)}
+                    )
+                    fallback.write_text(
+                        "<!doctype html><meta charset='utf-8'><title>Medite results"\
+                        "</title><body><h1>Medite outputs available</h1>"\
+                        "<p>No primary HTML view was generated. Available artifacts:</p><ul>" +
+                        ''.join(
+                            f"<li><code>{html.escape(name)}</code></li>"
+                            for name in artifact_names
+                        ) +
+                        "</ul></body>",
+                        encoding='utf-8'
+                    )
+                    public_urls['html'] = f"/storage/uploads/comparisons/{comparison_id}.html"
+                    shared_files.append(str(fallback))
+                    meta['html_fallback'] = True
+                except Exception as err:
+                    print(f"[run_diff_script] Could not write fallback HTML: {err}")
+            else:
+                meta['html_fallback'] = False
+
+            # Mirror XHTML components to shared storage so Laravel can access them directly
+            if xhtml_output_dir:
+                out_dir = Path(xhtml_output_dir)
+                try:
+                    rel = out_dir.relative_to(Path('/app/uploads'))
+                except ValueError:
+                    rel = None
+
+                if rel:
+                    shared_dir = Path('/app/storage_public/uploads') / rel
+                    shared_dir.mkdir(parents=True, exist_ok=True)
+                    print(f"[run_diff_script] Mirroring components to {shared_dir}")
+                    components = ['d.xhtml', 'i.xhtml', 'r.xhtml', 's.xhtml', 'source.xhtml', 'target.xhtml']
+                    for name in components:
+                        src = out_dir / name
+                        if not src.exists():
+                            print(f"[run_diff_script] Component missing at source for mirror: {src}")
+                            continue
+                        dest = shared_dir / name
+                        try:
+                            shutil.copy2(src, dest)
+                            print(f"[run_diff_script] Copied {src} -> {dest}")
+                        except Exception as err:
+                            print(f"[run_diff_script] Could not copy {src} to {dest}: {err}")
+
+        if 'html_fallback' not in meta and html_candidates:
+            meta['html_fallback'] = False
 
         return {
             "status": "success",
-            "output": moved_files,
-            "stdout": result.stdout.strip()
+            "output": produced_files,
+            "public_urls": public_urls,
+            "shared_files": shared_files,
+            "stdout": _compact(result.stdout),
+            "stderr": _compact(result.stderr),
+            "meta": meta,
         }
 
     except subprocess.CalledProcessError as e:
-        error_output = e.stderr if e.stderr else str(e)
+        combined = (e.stdout or '') + (e.stderr or '')
+        error_output = _compact(combined) or str(e)
         print("[run_diff_script] ERROR:", error_output)
         return {
             "status": "error",
@@ -146,6 +304,7 @@ def run_diff2():
     """Endpoint for calls from Laravel"""
     author_id = request.form.get('author_id')
     work_id = request.form.get('work_id')
+    comparison_id = request.form.get('comparison_id')
 
     source_filename = request.form.get('source_filename')
     target_filename = request.form.get('target_filename')
@@ -155,6 +314,8 @@ def run_diff2():
     case_sensitive = request.form.get('case_sensitive', 'on') == 'on'
     diacri_sensitive = request.form.get('diacri_sensitive', 'on') == 'on'
     output_xml = request.form.get('output_xml')
+    sep = request.form.get('sep')
+    xhtml_output_dir = request.form.get('xhtml_output_dir')
 
     task = run_diff_script.apply_async(
         kwargs={
@@ -165,7 +326,10 @@ def run_diff2():
             "seuil": int(seuil),
             "case_sensitive": case_sensitive,
             "diacri_sensitive": diacri_sensitive,
-            "output_xml": output_xml
+            "output_xml": output_xml,
+            "sep": sep,
+            "xhtml_output_dir": xhtml_output_dir,
+            "comparison_id": comparison_id,
         },
         time_limit=900,        # Hard timeout (seconds)
         soft_time_limit=840    # Graceful shutdown before hard timeout

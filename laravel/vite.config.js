@@ -1,11 +1,15 @@
-import { defineConfig } from 'vite';
-import laravel from 'laravel-vite-plugin';
+import { defineConfig } from 'vite'
+import laravel from 'laravel-vite-plugin'
 
 export default defineConfig({
-    plugins: [
-        laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
-            refresh: true,
-        }),
-    ],
-});
+  plugins: [
+    laravel({
+      // For now, only bundle the CodeMirror entry
+      input: ['resources/js/codemirror.js'],
+      refresh: true,          // harmless in prod builds; useful if you run `vite` in dev
+      buildDirectory: 'build' // outputs to public/build (default), explicit for clarity
+    }),
+  ],
+  // If you ever run the dev server inside Docker, uncomment:
+  // server: { host: '0.0.0.0', port: 5173, strictPort: true }
+})

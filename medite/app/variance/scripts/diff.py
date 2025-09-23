@@ -118,9 +118,14 @@ def run(
 
         # optional: copy the final TEI diff into the same folder
         final_tei = Path(output_xml)
-        shutil.copy(final_tei, outdir / final_tei.name)
+        dest = outdir / final_tei.name
+        try:
+            if final_tei.resolve() != dest.resolve():
+                shutil.copy(final_tei, dest)
+        except FileNotFoundError:
+            # if dest parent vanished just skip the copy
+            logger.warning("skipping TEI copy; destination missing", extra={"dest": str(dest)})
 
 
 if __name__ == "__main__":
     run()
-

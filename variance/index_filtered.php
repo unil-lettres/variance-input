@@ -120,7 +120,10 @@ error_reporting(E_ALL);
 						<?php endif; ?>
 						<?php if ($element['w_id'] != $previous['w_id']): ?>
                             <div class="img col-sm-4">
-                                <img class="img-responsive" src="<?= DIR_REL ?>/uploads_images/<?php echo $element['w_image'] ?>" alt="<?php echo $element['w_image'] ?>" />
+                                <img class="img-responsive"
+                                     src="<?= DIR_REL ?>/uploads_images/<?= htmlspecialchars($element['w_image'], ENT_QUOTES, 'UTF-8') ?>"
+                                     alt="<?= htmlspecialchars($element['w_title'], ENT_QUOTES, 'UTF-8') ?>"
+                                     onerror="this.onerror=null;this.src='<?= DIR_REL ?>/img/cover_site/main_visuel.png';" />
                             </div>
 						<?php endif; ?>
 

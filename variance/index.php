@@ -122,7 +122,10 @@ require_once 'php/settings.inc.php';
                             </h4>
                             <div class="work_<?php echo $element['w_id']; ?>" style="display:none">
                                 <div class="img col-sm-4">
-                                    <img class="img-responsive" src="<?= DIR_REL ?>/uploads_images/<?php echo $element['w_image'] ?>" alt="<?php echo $element['w_image'] ?>" />
+                                    <img class="img-responsive"
+                                         src="<?= DIR_REL ?>/uploads_images/<?= htmlspecialchars($element['w_image'], ENT_QUOTES, 'UTF-8') ?>"
+                                         alt="<?= htmlspecialchars($element['w_title'], ENT_QUOTES, 'UTF-8') ?>"
+                                         onerror="this.onerror=null;this.src='<?= DIR_REL ?>/img/cover_site/main_visuel.png';" />
                                 </div>
 						<?php endif; ?>
 
@@ -190,7 +193,20 @@ require_once 'php/settings.inc.php';
                                        href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); ?>">
                                         <div class="wrapper_flex">
 
-                                            <div style="white-space: nowrap;"><?php echo ((isset($version['c_number'])) ? $version['c_number'] . '. ' : '') . $version['c_prefix_label'] . $version['s_name']; ?> </div>
+                                            <?php
+                                                $prefix = isset($version['c_prefix_label'])
+                                                    ? trim($version['c_prefix_label'])
+                                                    : '';
+                                                if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
+                                                    $prefix = '';
+                                                }
+                                                if ($prefix !== '' && substr($prefix, -1) !== ' ') {
+                                                    $prefix .= ' ';
+                                                }
+                                            ?>
+                                            <div style="white-space: nowrap;">
+                                                <?php echo ((isset($version['c_number'])) ? $version['c_number'] . '. ' : '') . $prefix . $version['s_name']; ?>
+                                            </div>
                                             <div style="text-align: center">
                                                 <span class="arrow-versions">&rarr;</span>
                                             </div>
@@ -204,7 +220,20 @@ require_once 'php/settings.inc.php';
                                            href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); ?>">
                                             <div class="wrapper_flex">
 
-                                                <div style="white-space: nowrap;"><?php echo ((isset($version['c_number'])) ? $version['c_number'] . '. ' : '') . $version['c_prefix_label'] . $version['s_name']; ?> </div>
+                                                <?php
+                                                    $prefix = isset($version['c_prefix_label'])
+                                                        ? trim($version['c_prefix_label'])
+                                                        : '';
+                                                    if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
+                                                        $prefix = '';
+                                                    }
+                                                    if ($prefix !== '' && substr($prefix, -1) !== ' ') {
+                                                        $prefix .= ' ';
+                                                    }
+                                                ?>
+                                                <div style="white-space: nowrap;">
+                                                    <?php echo ((isset($version['c_number'])) ? $version['c_number'] . '. ' : '') . $prefix . $version['s_name']; ?>
+                                                </div>
                                                 <div style="text-align: center">
                                                     <span class="arrow-versions">&rarr;</span>
                                                 </div>
@@ -215,9 +244,14 @@ require_once 'php/settings.inc.php';
 
 								<?php endif;?>
                                 <br style="clear:both" />
+                                <?php
+                                    $pdfPath = ROOT . '/uploads/pdf/' . $element['w_id'] . '.pdf';
+                                    if (is_file($pdfPath)):
+                                ?>
                                 <div class="dia_btn align-right primary small">
                                     <a href="/uploads/pdf/<?php echo $element['w_id']; ?>.pdf" target="_blank">Notice</a>
                                 </div>
+                                <?php endif; ?>
 
                             </div>
 						<?php endif; ?>

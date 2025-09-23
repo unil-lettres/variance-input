@@ -46,16 +46,6 @@
         @include('components.main.medite')
     </div>
 
-    {{-- Génération XHTML (Saxon) --}}
-    <div id="zone-7" class="mb-4">
-        @include('components.main.saxon')
-    </div>
-
-    {{-- Publication des fichiers --}}
-    <div id="zone-8" class="mb-4">
-        @include('components.main.publish')
-    </div>
-
 </div>
 
 @push('scripts')
