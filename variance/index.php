@@ -144,9 +144,9 @@ require_once 'php/settings.inc.php';
 								$comparisonStatement = $cnx->prepare($query);
 								$comparisonStatement->bindValue(':id', $element['w_id'], PDO::PARAM_INT);
 								$comparisonStatement->execute();
-								$version = $comparisonStatement->fetch();
-								$isPlural = $comparisonStatement->rowCount() > 1;
-								if ($version): ?>
+								$comparisons = $comparisonStatement->fetchAll(PDO::FETCH_ASSOC);
+								$isPlural = count($comparisons) > 1;
+								if (!empty($comparisons)): ?>
                                     <p><strong>Comparaison<?php echo (($isPlural) ? 's' : ''); ?></strong></p>
                                     <style>
                                         .wrapper_flex {
@@ -189,33 +189,8 @@ require_once 'php/settings.inc.php';
 
                                     </style>
 
-                                    <a class="wrapper_menu_a" title="cliquez pour comparer"
-                                       href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); ?>">
-                                        <div class="wrapper_flex">
-
-                                            <?php
-                                                $prefix = isset($version['c_prefix_label'])
-                                                    ? trim($version['c_prefix_label'])
-                                                    : '';
-                                                if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
-                                                    $prefix = '';
-                                                }
-                                                if ($prefix !== '' && substr($prefix, -1) !== ' ') {
-                                                    $prefix .= ' ';
-                                                }
-                                            ?>
-                                            <div style="white-space: nowrap;">
-                                                <?php echo ((isset($version['c_number'])) ? $version['c_number'] . '. ' : '') . $prefix . $version['s_name']; ?>
-                                            </div>
-                                            <div style="text-align: center">
-                                                <span class="arrow-versions">&rarr;</span>
-                                            </div>
-                                            <div style="text-align: right; white-space: nowrap;"><?php echo $version['t_name']; ?></div>
-                                        </div>
-                                    </a>
-
-
-                                    <?php while ($version = $comparisonStatement->fetch()): ?>
+                                    <?php $displayIndex = 1; ?>
+                                    <?php foreach ($comparisons as $version): ?>
                                         <a class="wrapper_menu_a" title="cliquez pour comparer"
                                            href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); ?>">
                                             <div class="wrapper_flex">
@@ -230,17 +205,21 @@ require_once 'php/settings.inc.php';
                                                     if ($prefix !== '' && substr($prefix, -1) !== ' ') {
                                                         $prefix .= ' ';
                                                     }
+                                                    $sourceLabel = trim($prefix . $version['s_name']);
                                                 ?>
                                                 <div style="white-space: nowrap;">
-                                                    <?php echo ((isset($version['c_number'])) ? $version['c_number'] . '. ' : '') . $prefix . $version['s_name']; ?>
+                                                    <?php echo $displayIndex . '. ' . $sourceLabel; ?>
                                                 </div>
                                                 <div style="text-align: center">
                                                     <span class="arrow-versions">&rarr;</span>
                                                 </div>
-                                                <div style="text-align: right"><?php echo $version['t_name']; ?></div>
+                                                <div style="text-align: right; white-space: nowrap;">
+                                                    <?php echo $version['t_name']; ?>
+                                                </div>
                                             </div>
                                         </a>
-                                    <?php endwhile; ?>
+                                        <?php $displayIndex++; ?>
+                                    <?php endforeach; ?>
 
 								<?php endif;?>
                                 <br style="clear:both" />

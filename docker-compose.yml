@@ -13,6 +13,7 @@ services:
       - uploads_images:/var/www/html/public/uploads_images
       - ./variance/uploads_images:/var/www/variance/uploads_images
       - ./variance/uploads/pdf:/var/www/variance/uploads/pdf
+      - ./variance/uploads:/var/www/variance/uploads
       - ./laravel:/var/www/html
       - ./variance_data:/var/www/html/storage/app/private/variance_data
     working_dir: /var/www/html

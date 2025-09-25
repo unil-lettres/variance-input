@@ -44,14 +44,36 @@
 
 @push('styles')
 <style>
-  :root { --media-box-h: 350px; }
-  .dropzone { height: var(--media-box-h); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s; }
+  :root { --media-box-h: 240px; --media-max-w: 220px; }
+  .dropzone {
+    height: var(--media-box-h);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background .2s;
+  }
   .dropzone.hover { background: #f8f9fa; }
   .dropzone.disabled { cursor: not-allowed; opacity:.5; }
-  .preview-box { height: var(--media-box-h); border: 1px solid #ced4da; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .preview-box img{ width:100%; height:100%; object-fit:contain; }
-  .preview-box embed{ height:100%; width:auto; border:none; }
-  .preview-box canvas{ max-width:100%; max-height:100%; object-fit:contain; }
+  .preview-box {
+    height: var(--media-box-h);
+    border: 1px solid #ced4da;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #fff;
+    padding: .5rem;
+  }
+  .preview-box img,
+  .preview-box canvas,
+  .preview-box embed {
+    max-width: var(--media-max-w);
+    max-height: calc(var(--media-box-h) - 1rem);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
 </style>
 @endpush
 
@@ -83,22 +105,25 @@
       preview.appendChild(img);
     } else {
       const canvas = document.createElement('canvas');
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
       preview.appendChild(canvas);
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.8.162/pdf.worker.min.js';
       pdfjsLib.GlobalWorkerOptions.useWorkerFetch = true;
       pdfjsLib.getDocument({ url: fileUrl, useWorkerFetch: true }).promise
         .then(pdf => pdf.getPage(1))
         .then(page => {
-          const box = preview.getBoundingClientRect();
-          const vp = page.getViewport({ scale: 1 });
-          const scale = Math.min(box.width/vp.width, box.height/vp.height) * (window.devicePixelRatio||1);
+          const styles = getComputedStyle(document.documentElement);
+          const dpr = window.devicePixelRatio || 1;
+          const maxW = parseFloat(styles.getPropertyValue('--media-max-w')) || 220;
+          const maxH = parseFloat(styles.getPropertyValue('--media-box-h')) || 240;
+          const viewport = page.getViewport({ scale: 1 });
+          const scaleForWidth = (maxW * dpr) / viewport.width;
+          const scaleForHeight = ((maxH - 16) * dpr) / viewport.height;
+          const scale = Math.min(scaleForWidth, scaleForHeight);
           const view = page.getViewport({ scale });
           canvas.width = view.width;
           canvas.height = view.height;
-          canvas.style.width = view.width/(window.devicePixelRatio||1) + 'px';
-          canvas.style.height = view.height/(window.devicePixelRatio||1) + 'px';
+          canvas.style.width = (view.width / dpr) + 'px';
+          canvas.style.height = (view.height / dpr) + 'px';
           return page.render({ canvasContext: canvas.getContext('2d'), viewport: view }).promise;
         })
         .catch(() => { preview.textContent = 'Prévisualisation indisponible'; });

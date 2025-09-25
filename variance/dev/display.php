@@ -147,7 +147,7 @@ if (!empty($_COOKIE['viewer_params'])) {
 
                                 <select name="comparison" id="comparisonId" class="form-control">
                                     <?php $versionNames = array(); ?>
-                                    <?php $options = array(); ?>
+                                    <?php $optionEntries = array(); ?>
                                     <?php foreach ($content as $element): ?>
                                         <?php
 
@@ -162,30 +162,62 @@ if (!empty($_COOKIE['viewer_params'])) {
 
 
                                         while ($folderName = $foldersStatement->fetch(PDO::FETCH_ASSOC)) {
-                                            $versionNames[$folderName['folder']] = array($folderName['c_number'], $folderName['c_prefix_label'], $folderName['name']);
+                                            $prefix = isset($folderName['c_prefix_label'])
+                                                ? trim($folderName['c_prefix_label'])
+                                                : '';
+                                            if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
+                                                $prefix = '';
+                                            }
+                                            if ($prefix !== '' && substr($prefix, -1) !== ' ') {
+                                                $prefix .= ' ';
+                                            }
+
+                                            $versionNames[$folderName['folder']] = array(
+                                                $folderName['c_number'],
+                                                $prefix,
+                                                $folderName['name']
+                                            );
 
                                         }
 
-                                        $readable = ((isset($versionNames[$folders[0]][0])) ? $versionNames[$folders[0]][0] . '. ' : '') . $versionNames[$folders[0]][1] . $versionNames[$folders[0]][2] . ' -> ' . $versionNames[$folders[1]][2];
-                                        ob_start();
-                                        ?>
-                                        <option
-                                                value="<?php echo getOeuvreUrl($_GET['author'], $_GET['work'], substr(strrchr($element, '/'), 1)); ?>"
-                                            <?php if (!empty($_GET['comparison']) && UPLOAD_ROOT . '/' . $_GET['comparison'] == $element): $path = $_GET['comparison']; ?> selected="selected"<?php endif; ?>>
-                                            <?php echo $readable;
+                                        $sourceLabel = isset($versionNames[$folders[0]])
+                                            ? trim($versionNames[$folders[0]][1] . $versionNames[$folders[0]][2])
+                                            : '';
+                                        $targetLabel = isset($versionNames[$folders[1]][2])
+                                            ? $versionNames[$folders[1]][2]
+                                            : '';
 
-                                            ?>
-                                        </option>
-                                        <?php
-                                        $options[$versionNames[$folders[0]][0]] = ob_get_clean();
+                                        $isSelected = !empty($_GET['comparison']) && (UPLOAD_ROOT . '/' . $_GET['comparison'] == $element);
+                                        if ($isSelected) {
+                                            $path = $_GET['comparison'];
+                                        }
+
+                                        $optionEntries[] = array(
+                                            'order'    => isset($versionNames[$folders[0]][0]) ? (int)$versionNames[$folders[0]][0] : PHP_INT_MAX,
+                                            'label'    => trim($sourceLabel) . ' -> ' . $targetLabel,
+                                            'value'    => getOeuvreUrl($_GET['author'], $_GET['work'], substr(strrchr($element, '/'), 1)),
+                                            'selected' => $isSelected,
+                                        );
 
                                         ?>
                                     <?php endforeach; ?>
                                     <?php
-                                    ksort($options);
+                                    usort($optionEntries, function ($a, $b) {
+                                        if ($a['order'] === $b['order']) {
+                                            return strcmp($a['label'], $b['label']);
+                                        }
+                                        return ($a['order'] < $b['order']) ? -1 : 1;
+                                    });
 
-                                    foreach ($options as $option) {
-                                        echo $option;
+                                    $displayIndex = 1;
+                                    foreach ($optionEntries as $entry) {
+                                        $label = $displayIndex . '. ' . $entry['label'];
+                                        ?>
+                                        <option value="<?php echo $entry['value']; ?>"<?php if ($entry['selected']): ?> selected="selected"<?php endif; ?>>
+                                            <?php echo $label; ?>
+                                        </option>
+                                        <?php
+                                        $displayIndex++;
                                     }
                                     ?>
                                 </select>
