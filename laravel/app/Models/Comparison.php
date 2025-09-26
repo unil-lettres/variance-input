@@ -11,6 +11,11 @@ class Comparison extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'case_sensitive'   => 'boolean',
+        'diacri_sensitive' => 'boolean',
+    ];
+
     /**
      * Relationship: Source Version of the Comparison
      *

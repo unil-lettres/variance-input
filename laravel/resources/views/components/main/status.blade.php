@@ -90,7 +90,9 @@
   }
 
   function enableToggles(canEdit) {
-    document.querySelectorAll('.form-check-input').forEach(t => { t.disabled = !canEdit; });
+    document.querySelectorAll('#work-container .form-check-input').forEach(t => {
+      t.disabled = !canEdit;
+    });
   }
 
   // Listen for selection changes from work_selector.js
@@ -168,4 +170,3 @@
 })();
 </script>
 @endpush
-

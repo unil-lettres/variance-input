@@ -17,10 +17,8 @@
                     <th>Cible</th>
           <th>Folder</th>
           <th>Ratio</th>
-          <th>Seuil</th>
           <th>Pivot</th>
           <th>Sens. Casse</th>
-          <th>Sens. Diac.</th>
           <th>Composants</th>
           <th>Publié</th>
           <th>Publier</th>
@@ -88,6 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      const boolVal = value => value === true || value === 1 || value === '1';
+
       comparisons.forEach(comp => {
         const tr = document.createElement('tr');
         tr.dataset.id = comp.id;
@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const missing = Array.isArray(comp.publish_missing) ? comp.publish_missing : [];
         const ready = comp.components_ready && missing.length === 0;
         const published = comp.published;
+        const caseSensitive = boolVal(comp.case_sensitive);
         const publishedTitle = published
           ? 'Fichiers publiés disponibles'
           : 'Comparaison non publiée';
@@ -118,10 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${comp.target_version?.name ?? comp.target_id}</td>
           <td>${comp.folder ?? ''}</td>
           <td>${comp.ratio ?? ''}</td>
-          <td>${comp.seuil ?? ''}</td>
           <td>${comp.lg_pivot ?? ''}</td>
-          <td>${comp.case_sensitive ? 'yes' : 'no'}</td>
-          <td>${comp.diacri_sensitive ? 'yes' : 'no'}</td>
+          <td>${caseSensitive ? 'yes' : 'no'}</td>
          <td class="text-center components-status">${statusHtml}</td>
           <td class="text-center published-status">${published ? `<span class="text-success" title="${publishedTitle}">✔</span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
           <td class="text-center">

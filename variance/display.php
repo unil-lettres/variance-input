@@ -724,27 +724,78 @@ if (!empty($_COOKIE['viewer_params'])) {
         var params = {
             scrollInertia: 0
         };
+        var commonsLeft = [];
+        var commonsRight = [];
+
+        $('.sync').each(function () {
+            var $this = $(this);
+            var id = $this.attr('id');
+            var href = $this.attr('href');
+            var corresp = $this.attr('corresp');
+            var isSelfLink = !href || href.replace(/^#/, '') === id;
+
+            if (corresp && isSelfLink) {
+                $this.attr('href', '#' + corresp);
+                return;
+            }
+
+            if (!$this.hasClass('span_c') || !isSelfLink || !id) {
+                return;
+            }
+
+            if ($this.closest('#js-workarea-right').length) {
+                commonsRight.push($this);
+            } else if ($this.closest('#js-workarea-left').length) {
+                commonsLeft.push($this);
+            }
+        });
+
+        var pairCount = Math.min(commonsLeft.length, commonsRight.length);
+        if (commonsLeft.length !== commonsRight.length) {
+            console.warn('Nombre de segments communs différent entre les colonnes', commonsLeft.length, commonsRight.length);
+        }
+
+        for (var idx = 0; idx < pairCount; idx++) {
+            var $left = commonsLeft[idx];
+            var $right = commonsRight[idx];
+            if (!$left || !$right) {
+                continue;
+            }
+
+            var leftId = $left.attr('id');
+            var rightId = $right.attr('id');
+
+            if (leftId && (!$left.attr('href') || $left.attr('href').replace(/^#/, '') === leftId)) {
+                $left.attr('href', '#' + rightId);
+            }
+
+            if (rightId && (!$right.attr('href') || $right.attr('href').replace(/^#/, '') === rightId)) {
+                $right.attr('href', '#' + leftId);
+            }
+        }
+
         $('.sync').click(function (e) {
-            var target = $(e.target).attr('href');
+            var $link = $(this);
+            var target = $link.attr('href');
             var $parent;
-            if ($(e.target).is('.sync-twice')) {
-                target = $(e.target).attr('id').substr(2);
-                $parent = $('#b' + target).closest('.wrkarea');
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#b' + target).offset().top);
-                $("#b" + target).addClass("highlight-text").delay(4000).queue(function () {
+            if ($link.hasClass('sync-twice')) {
+                var baseId = $link.attr('id').substr(2);
+                $parent = $('#b' + baseId).closest('.wrkarea');
+                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#b' + baseId).offset().top);
+                $("#b" + baseId).addClass("highlight-text").delay(4000).queue(function () {
                     $(this).removeClass("highlight-text").dequeue();
                 });
-                target = '#a' + target;
-            } else if ($(this).closest('.wrkarea').length > 0) {
+                target = '#a' + baseId;
+            } else if ($link.closest('.wrkarea').length > 0) {
                 $parent = $(target).closest('.wrkarea');
-                $currentParent = $(this).closest('.wrkarea');
-                $currentParent.scrollTop($currentParent.scrollTop() - $currentParent.offset().top + $('#' + e.target.id).offset().top);
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#' + e.target.id).offset().top);
-                setTimeout(function () {
-                    $('#' + e.target.id).addClass("highlight-text").delay(4000).queue(function () {
+                $currentParent = $link.closest('.wrkarea');
+                $currentParent.scrollTop($currentParent.scrollTop() - $currentParent.offset().top + $('#' + $link.attr('id')).offset().top);
+                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#' + $link.attr('id')).offset().top);
+                setTimeout(function (id) {
+                    $('#' + id).addClass("highlight-text").delay(4000).queue(function () {
                         $(this).removeClass("highlight-text").dequeue();
                     });
-                }, 800);
+                }, 800, $link.attr('id'));
             }
 
             setTimeout(function () {

@@ -134,49 +134,52 @@ class WorkController extends Controller
     $newShort = $validated['short_title'];
 
     if ($oldShort !== $newShort) {
-        $oldPath = storage_path("app/public/uploads/{$oldShort}");
-        $newPath = storage_path("app/public/uploads/{$newShort}");
+        $work->loadMissing('author:id,folder');
 
-        if (file_exists($oldPath)) {
-            if (file_exists($newPath)) {
+        // Prevent edits once versions exist (XML filenames depend on short title)
+        if ($work->versions()->exists()) {
+            return response()->json([
+                'error' => "Impossible de modifier le titre abrégé car des versions existent déjà pour cette œuvre."
+            ], 409);
+        }
+
+        if (!empty($work->image_url) || !empty($work->pdf_url)) {
+            return response()->json([
+                'error' => "Impossible de modifier le titre abrégé car des médias (vignette ou PDF) sont déjà associés à cette œuvre."
+            ], 409);
+        }
+
+        // Guard against comparisons linked to this work (future-proof)
+        $versionIds = $work->versions->pluck('id');
+        if ($versionIds->isNotEmpty()) {
+            $hasComparisons = DB::table('comparisons')
+                ->whereIn('source_id', $versionIds)
+                ->orWhereIn('target_id', $versionIds)
+                ->exists();
+
+            if ($hasComparisons) {
                 return response()->json([
-                    'error' => "Un dossier pour le nouveau titre abrégé '{$newShort}' existe déjà. Veuillez choisir un autre nom ou nettoyer manuellement le dossier."
+                    'error' => "Impossible de modifier le titre abrégé car des comparaisons existent déjà pour cette œuvre."
                 ], 409);
             }
-
-            // Rename main folder
-            rename($oldPath, $newPath);
         }
 
-        // Update image/pdf URLs if needed
-        if ($work->image_url) {
-            $work->image_url = str_replace("/uploads/{$oldShort}/", "/uploads/{$newShort}/", $work->image_url);
+        // Ensure uploads/<author>/<work>/ is empty before allowing rename
+        $authorFolder = $work->author->folder ?? null;
+        $workFolder   = $work->folder ?? null;
+        if ($authorFolder && $workFolder) {
+            $relativePath = $authorFolder . '/' . $workFolder;
+            $uploadsDisk  = Storage::disk('uploads');
+            if ($uploadsDisk->exists($relativePath)) {
+                $containsFiles = !empty($uploadsDisk->allFiles($relativePath));
+                $containsDirs  = !empty($uploadsDisk->directories($relativePath));
+                if ($containsFiles || $containsDirs) {
+                    return response()->json([
+                        'error' => "Impossible de modifier le titre abrégé car des fichiers sont déjà présents dans le dossier de l'œuvre."
+                    ], 409);
+                }
+            }
         }
-
-        if ($work->pdf_url) {
-            $work->pdf_url = str_replace("/uploads/{$oldShort}/", "/uploads/{$newShort}/", $work->pdf_url);
-        }
-
-        // // === Rename version files ===
-        // foreach ($work->versions as $version) {
-        //     $oldFile = str_replace("storage/", "", $version->folder); // get relative path
-        //     $oldFullPath = storage_path("app/public/{$oldFile}");
-
-        //     $filename = basename($oldFullPath);         // e.g. 1lvf.xml
-        //     $newFilename = preg_replace("/{$oldShort}\.xml$/", "{$newShort}.xml", $filename); // → 1lvy.xml
-
-        //     if ($newFilename !== $filename) {
-        //         $newFullPath = str_replace($filename, $newFilename, $oldFullPath);
-        //         if (file_exists($oldFullPath)) {
-        //             rename($oldFullPath, $newFullPath);
-        //         }
-
-        //         // Update path in DB
-        //         $relative = "storage/uploads/{$newShort}/versions/{$newFilename}";
-        //         $version->folder = $relative;
-        //         $version->save();
-        //     }
-        // }
     }
 
     $work->update($validated);

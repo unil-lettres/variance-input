@@ -29,14 +29,16 @@ class MediteController extends Controller
             /* optional but accepted */
             'lg_pivot'         => 'nullable|integer',
             'ratio'            => 'nullable|integer',
-            'seuil'            => 'nullable|integer',
             'sep'              => 'nullable|string|max:50',
             'case_sensitive'   => 'nullable|boolean',
-            'diacri_sensitive' => 'nullable|boolean',
         ]);
 
         Log::debug('createComparison payload', $data);
 
+        $sep = array_key_exists('sep', $data) ? $data['sep'] : null;
+        if ($sep === '') {
+            $sep = null;
+        }
 
         /* ─── 2. Insert a new row (fill every NOT-NULL col) ──────────────── */
         [ $folder, $sequence ] = $this->nextFolderAndNumber(
@@ -53,9 +55,8 @@ class MediteController extends Controller
             /* Medite parameters (fallback to sensible defaults) */
             'lg_pivot'         => $data['lg_pivot']         ?? 7,
             'ratio'            => $data['ratio']            ?? 15,
-            'seuil'            => $data['seuil']            ?? 50,
             'case_sensitive'   => $data['case_sensitive']   ?? false,
-            'diacri_sensitive' => $data['diacri_sensitive'] ?? false,
+            'diacri_sensitive' => true,
 
             /* house-keeping */
             'prefix_label'     => 'Auto',
@@ -63,7 +64,7 @@ class MediteController extends Controller
         ];
 
         if (Schema::hasColumn('comparisons', 'sep')) {
-            $payload['sep'] = $data['sep'] ?? ',.;?!';
+            $payload['sep'] = $sep;
         }
 
         $cmp = Comparison::create($payload);
@@ -82,19 +83,18 @@ class MediteController extends Controller
             'work_id'        => 'required|exists:works,id',
             'lg_pivot'       => 'required|integer',
             'ratio'          => 'required|integer',
-            'seuil'          => 'required|integer',
             'sep'            => 'nullable|string',
             'comparison_id'  => 'nullable|exists:comparisons,id',
         ]);
 
         $caseSensitive   = $request->has('case_sensitive');
-        $diacriSensitive = $request->has('diacri_sensitive');
+        $diacriSensitive = true;
 
-        if (!$diacriSensitive) {
-            Log::warning('Medite diacri_sensitive forced to true');
-            $diacriSensitive = true;
+        $rawSep = $request->input('sep', null);
+        if ($rawSep === '') {
+            $rawSep = null;
         }
-        $separators      = $validated['sep'] ? trim($validated['sep']) : ',.;?!';
+        $separators = $rawSep;
 
         /* ───── Short names for versions ───── */
         $sourceShort = DB::table('versions')
@@ -111,7 +111,6 @@ class MediteController extends Controller
             'target_id'        => $validated['target_version'],
             'lg_pivot'         => $validated['lg_pivot'],
             'ratio'            => $validated['ratio'],
-            'seuil'            => $validated['seuil'],
             'case_sensitive'   => $caseSensitive,
             'diacri_sensitive' => $diacriSensitive,
         ];
@@ -199,14 +198,16 @@ class MediteController extends Controller
             'target_filename'   => $targetFile,
             'lg_pivot'          => $validated['lg_pivot'],
             'ratio'             => $validated['ratio'],
-            'seuil'             => $validated['seuil'],
-            'sep'               => $separators,
             'case_sensitive'    => $caseSensitive ? 'on' : 'off',
             'diacri_sensitive'  => $diacriSensitive ? 'on' : 'off',
             'output_xml'        => $outputXml,
             'xhtml_output_dir'  => $baseDir,
             'comparison_id'     => $cmp->id,
         ];
+
+        if ($separators !== null) {
+            $payload['sep'] = $separators;
+        }
 
         /* ───── Call Flask ───── */
         try {

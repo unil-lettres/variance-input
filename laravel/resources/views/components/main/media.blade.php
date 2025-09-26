@@ -44,7 +44,11 @@
 
 @push('styles')
 <style>
-  :root { --media-box-h: 240px; --media-max-w: 220px; }
+  :root {
+    --media-box-h: 220px;
+    --media-preview-w: 220px;
+    --media-preview-h: 300px;
+  }
   .dropzone {
     height: var(--media-box-h);
     display: flex;
@@ -56,20 +60,22 @@
   .dropzone.hover { background: #f8f9fa; }
   .dropzone.disabled { cursor: not-allowed; opacity:.5; }
   .preview-box {
-    height: var(--media-box-h);
+    width: var(--media-preview-w);
+    height: var(--media-preview-h);
     border: 1px solid #ced4da;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     background: #fff;
-    padding: .5rem;
+    padding: .75rem;
+    margin: 0 auto;
   }
   .preview-box img,
   .preview-box canvas,
   .preview-box embed {
-    max-width: var(--media-max-w);
-    max-height: calc(var(--media-box-h) - 1rem);
+    max-width: 100%;
+    max-height: 100%;
     width: auto;
     height: auto;
     object-fit: contain;
@@ -105,19 +111,23 @@
       preview.appendChild(img);
     } else {
       const canvas = document.createElement('canvas');
+      canvas.style.maxWidth = '100%';
+      canvas.style.maxHeight = '100%';
       preview.appendChild(canvas);
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.8.162/pdf.worker.min.js';
       pdfjsLib.GlobalWorkerOptions.useWorkerFetch = true;
       pdfjsLib.getDocument({ url: fileUrl, useWorkerFetch: true }).promise
         .then(pdf => pdf.getPage(1))
         .then(page => {
-          const styles = getComputedStyle(document.documentElement);
           const dpr = window.devicePixelRatio || 1;
-          const maxW = parseFloat(styles.getPropertyValue('--media-max-w')) || 220;
-          const maxH = parseFloat(styles.getPropertyValue('--media-box-h')) || 240;
+          const styles = getComputedStyle(preview);
+          const padX = parseFloat(styles.paddingLeft || 0) + parseFloat(styles.paddingRight || 0);
+          const padY = parseFloat(styles.paddingTop || 0) + parseFloat(styles.paddingBottom || 0);
+          const boxWidth = Math.max(preview.clientWidth - padX, 1);
+          const boxHeight = Math.max(preview.clientHeight - padY, 1);
           const viewport = page.getViewport({ scale: 1 });
-          const scaleForWidth = (maxW * dpr) / viewport.width;
-          const scaleForHeight = ((maxH - 16) * dpr) / viewport.height;
+          const scaleForWidth = (boxWidth * dpr) / viewport.width;
+          const scaleForHeight = (boxHeight * dpr) / viewport.height;
           const scale = Math.min(scaleForWidth, scaleForHeight);
           const view = page.getViewport({ scale });
           canvas.width = view.width;
@@ -168,7 +178,13 @@
     preview.innerHTML = '';
     if(file.type.startsWith('image/')) {
       const reader = new FileReader();
-      reader.onload = () => { const img = document.createElement('img'); img.src = reader.result; preview.appendChild(img); };
+      reader.onload = () => {
+        const img = document.createElement('img');
+        img.src = reader.result;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        preview.appendChild(img);
+      };
       reader.readAsDataURL(file);
     } else preview.textContent = file.name;
   }

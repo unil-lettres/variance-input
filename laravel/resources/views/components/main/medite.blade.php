@@ -1,6 +1,6 @@
 @php /** components/main/medite.blade.php **/ @endphp
 <div class="card">
-    <div class="card-header">Medite Script</div>
+    <div class="card-header">Script Medite</div>
     <div class="card-body">
         <form id="medite-form">
             @csrf
@@ -14,38 +14,44 @@
             <input type="hidden" id="tgt_short"        name="tgt_short">
             <input type="hidden" id="output_xml"       name="output_xml">
             <input type="hidden" id="xhtml_output_dir" name="xhtml_output_dir">
-            <input type="hidden" id="sep"             name="sep" value=",.;?!"> <!-- default separators -->
 
             <!-- User‑visible fields -->
             <div class="mb-3">
-                <label for="source_version" class="form-label">Source Version</label>
-                <select id="source_version" name="source_version" class="form-control" required></select>
+                <label for="source_version" class="form-label">Version source</label>
+                <select id="source_version" name="source_version" class="form-control" required aria-describedby="sourceHelp"></select>
+                <div id="sourceHelp" class="form-text">Choisissez la version qui servira de texte de référence.</div>
             </div>
             <div class="mb-3">
-                <label for="target_version" class="form-label">Target Version</label>
-                <select id="target_version" name="target_version" class="form-control" required></select>
+                <label for="target_version" class="form-label">Version cible</label>
+                <select id="target_version" name="target_version" class="form-control" required aria-describedby="targetHelp"></select>
+                <div id="targetHelp" class="form-text">Sélectionnez la version à comparer avec la source.</div>
             </div>
             <div class="mb-3">
-                <label for="lg_pivot" class="form-label">Pivot Length</label>
-                <input type="number" id="lg_pivot" name="lg_pivot" class="form-control" value="7" required>
+                <label for="lg_pivot" class="form-label">Longueur de pivot</label>
+                <input type="number" id="lg_pivot" name="lg_pivot" class="form-control" value="7" required aria-describedby="pivotHelp">
+                <div id="pivotHelp" class="form-text">Plus la valeur est grande, plus Medite exige de caractères consécutifs identiques pour aligner deux passages. Réduisez-la pour détecter des micro-variantes, augmentez-la pour ne garder que des correspondances substantielles.</div>
             </div>
             <div class="mb-3">
                 <label for="ratio" class="form-label">Ratio</label>
-                <input type="number" id="ratio" name="ratio" class="form-control" value="15" required>
+                <input type="number" id="ratio" name="ratio" class="form-control" value="15" required aria-describedby="ratioHelp">
+                <div id="ratioHelp" class="form-text">Pourcentage du texte concerné par un déplacement avant qu’il ne soit signalé. Une valeur élevée élimine les déplacements mineurs ; une valeur plus faible permet de voir des mouvements de texte plus localisés.</div>
             </div>
             <div class="mb-3">
-                <label for="seuil" class="form-label">Threshold</label>
-                <input type="number" id="seuil" name="seuil" class="form-control" value="50" required>
+                <label for="sep" class="form-label">Séparateurs</label>
+                <input type="text" id="sep" name="sep" class="form-control" value=",.;?!" aria-describedby="sepHelp" data-default-example=",.;?!" placeholder="Laisser vide pour utiliser les valeurs par défaut">
+                <div id="sepHelp" class="form-text">
+                    Liste personnalisée des caractères séparateurs. Laissez le champ vide (ou cochez l’option ci-dessous) pour que Medite applique ses valeurs par défaut : espace, !, retour chariot (\r), saut de ligne (\n), deux-points (:), tabulation (\t), point-virgule (;), trait d’union (-), point d’interrogation (?), guillemet double (&quot;), apostrophe droite ('), accent grave (`), apostrophe typographique (’), parenthèses ouvrantes et fermantes.
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="use_default_sep" checked>
+                    <label class="form-check-label" for="use_default_sep">Utiliser la liste de séparateurs par défaut de Medite</label>
+                </div>
             </div>
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="case_sensitive" name="case_sensitive" checked>
-                <label class="form-check-label" for="case_sensitive">Case Sensitive</label>
+                <label class="form-check-label" for="case_sensitive">Sensibilité à la casse</label>
             </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="diacri_sensitive" name="diacri_sensitive" checked>
-                <label class="form-check-label" for="diacri_sensitive">Diacritical Sensitive</label>
-            </div>
-            <button type="submit" class="btn btn-primary mt-3">Run Medite</button>
+            <button type="submit" class="btn btn-primary mt-3">Lancer Medite</button>
         </form>
 
         <!-- Progress / Results unchanged -->
@@ -64,9 +70,38 @@ const $tgtSel  = document.getElementById('target_version');
 const $form    = document.getElementById('medite-form');
 const $progress= document.getElementById('progress-indicator');
 const $results = document.getElementById('results');
+const $sepInput = document.getElementById('sep');
+const $useDefaultSep = document.getElementById('use_default_sep');
 const CSRF     = document.querySelector('meta[name="csrf-token"]').content;
+const DEFAULT_SEP_VALUE = ($sepInput && $sepInput.dataset.defaultExample) ? $sepInput.dataset.defaultExample : ',.;?!';
+let cachedCustomSep = $sepInput ? $sepInput.value : DEFAULT_SEP_VALUE;
 
 function fillHidden(id,val){ document.getElementById(id).value = val; }
+
+function updateSeparatorControl() {
+  if (!$sepInput || !$useDefaultSep) return;
+
+  if ($useDefaultSep.checked) {
+    const current = $sepInput.value;
+    if (current) {
+      cachedCustomSep = current;
+    }
+    $sepInput.value = '';
+    $sepInput.readOnly = true;
+    $sepInput.classList.add('text-muted');
+  } else {
+    $sepInput.readOnly = false;
+    $sepInput.classList.remove('text-muted');
+    if (!$sepInput.value) {
+      $sepInput.value = cachedCustomSep || DEFAULT_SEP_VALUE;
+    }
+  }
+}
+
+if ($useDefaultSep && $sepInput) {
+  $useDefaultSep.addEventListener('change', updateSeparatorControl);
+  updateSeparatorControl();
+}
 
 function notifyComparison(eventName, comparisonId) {
     document.dispatchEvent(new CustomEvent(eventName, {
@@ -81,8 +116,8 @@ function notifyComparison(eventName, comparisonId) {
  | 1) Populate dropdowns when a work is selected               |
  *------------------------------------------------------------*/
 async function refreshVersions(workId){
-    $srcSel.innerHTML = '<option value="">Select Source Version</option>';
-    $tgtSel.innerHTML = '<option value="">Select Target Version</option>';
+    $srcSel.innerHTML = '<option value="">Choisir la version source</option>';
+    $tgtSel.innerHTML = '<option value="">Choisir la version cible</option>';
     const res = await fetch(`/api/versions?work_id=${workId}`);
     if(!res.ok) return;
     const vers = await res.json();
@@ -117,7 +152,12 @@ $form.addEventListener('submit', async ev => {
 
     /* basic selection guard */
     if (!$srcSel.value || !$tgtSel.value) {
-        alert('Select both versions'); return;
+        alert('Veuillez sélectionner une version source et une version cible.');
+        return;
+    }
+
+    if ($useDefaultSep && $useDefaultSep.checked && $sepInput) {
+        $sepInput.value = '';
     }
 
     /* short names come from <option data-short="1pda"> */
@@ -145,12 +185,11 @@ $form.addEventListener('submit', async ev => {
             /* Medite parameters you may want to persist */
             lg_pivot:         +document.getElementById('lg_pivot').value,
             ratio:            +document.getElementById('ratio').value,
-            seuil:            +document.getElementById('seuil').value,
             sep:              document.getElementById('sep').value,
 
             /* Flags as simple booleans (true / false) */
             case_sensitive:   document.getElementById('case_sensitive').checked,
-            diacri_sensitive: document.getElementById('diacri_sensitive').checked
+            diacri_sensitive: true
         })
 
     });
@@ -182,11 +221,6 @@ $form.addEventListener('submit', async ev => {
         <p>Processing…
            <span class="spinner-border spinner-border-sm" role="status"></span>
         </p>`;
-
-    if (!document.getElementById('diacri_sensitive').checked) {
-        alert('Medite currently requires diacritical sensitivity; the option was re-enabled.');
-        document.getElementById('diacri_sensitive').checked = true;
-    }
 
     const fd  = new FormData($form);   // includes all visible + hidden fields
 
