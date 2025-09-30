@@ -774,40 +774,51 @@ if (!empty($_COOKIE['viewer_params'])) {
             }
         }
 
+        ensureGhostStyle();
+        ensureReplacementCrossLinks();
+
+        var ghostState = {
+            '#js-workarea-left': {last: null},
+            '#js-workarea-right': {last: null}
+        };
+
         $('.sync').click(function (e) {
             var $link = $(this);
-            var target = $link.attr('href');
-            var $parent;
+            var originalTarget = $link.attr('href');
+            var targetSelectors = normalizeTargetSelectors(originalTarget);
+            var primaryTarget = targetSelectors.length ? targetSelectors[0] : null;
+
             if ($link.hasClass('sync-twice')) {
                 var baseId = $link.attr('id').substr(2);
-                $parent = $('#b' + baseId).closest('.wrkarea');
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#b' + baseId).offset().top);
+                var $paired = $('#b' + baseId);
+                scrollContainerToElement($paired.closest('.wrkarea'), $paired);
                 $("#b" + baseId).addClass("highlight-text").delay(4000).queue(function () {
                     $(this).removeClass("highlight-text").dequeue();
                 });
-                target = '#a' + baseId;
+                primaryTarget = '#a' + baseId;
+                targetSelectors = [primaryTarget];
             } else if ($link.closest('.wrkarea').length > 0) {
-                $parent = $(target).closest('.wrkarea');
-                $currentParent = $link.closest('.wrkarea');
-                $currentParent.scrollTop($currentParent.scrollTop() - $currentParent.offset().top + $('#' + $link.attr('id')).offset().top);
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#' + $link.attr('id')).offset().top);
+                var linkId = $link.attr('id');
+                var $linkElement = $('#' + linkId);
+                var $currentParent = $link.closest('.wrkarea');
+                scrollContainerToElement($currentParent, $linkElement);
+                if (primaryTarget) {
+                    var $primaryTargetElement = $(primaryTarget);
+                    if ($primaryTargetElement.length) {
+                        scrollContainerToElement($primaryTargetElement.closest('.wrkarea'), $primaryTargetElement);
+                    }
+                }
                 setTimeout(function (id) {
-                    $('#' + id).addClass("highlight-text").delay(4000).queue(function () {
-                        $(this).removeClass("highlight-text").dequeue();
-                    });
-                }, 800, $link.attr('id'));
+                    var $el = $('#' + id);
+                    if ($el.length) {
+                        $el.addClass("highlight-text").delay(4000).queue(function () {
+                            $(this).removeClass("highlight-text").dequeue();
+                        });
+                    }
+                }, 800, linkId);
             }
 
-            setTimeout(function () {
-                $parent = $(target).closest('.wrkarea');
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $(target).offset().top);
-
-                setTimeout(function () {
-                    $(target).addClass("highlight-text").delay(4000).queue(function () {
-                        $(this).removeClass("highlight-text").dequeue();
-                    });
-                }, 800);
-            }, 800);
+            processTargets(targetSelectors);
             return false;
             e.stopPropagation();
         });
@@ -818,6 +829,269 @@ if (!empty($_COOKIE['viewer_params'])) {
                 $(this).removeClass("highlight-text").dequeue();
             });
         })
+
+        function ensureGhostStyle() {
+            if ($('#ghost-anchor-style').length) {
+                return;
+            }
+            var css = '.ghost-anchor{display:inline-block;width:0;height:0;margin:0;padding:0;border:0;pointer-events:none;}';
+            $('<style>', {id: 'ghost-anchor-style', text: css}).appendTo('head');
+        }
+
+        function ensureReplacementCrossLinks() {
+            $('#replace .sync').each(function () {
+                var selectors = normalizeTargetSelectors($(this).attr('href'));
+                if (selectors.length !== 2) {
+                    return;
+                }
+
+                var $first = $(selectors[0]);
+                var $second = $(selectors[1]);
+
+                if ($first.length && $second.length) {
+                    $first.attr('href', selectors[1]);
+                    $second.attr('href', selectors[0]);
+                }
+            });
+        }
+
+        function findReferenceInOtherColumn($element, otherSideSelector) {
+            var $previous = $element.prevAll('.sync').filter(function () {
+                return getCounterpartInOtherColumn($(this), otherSideSelector).length > 0;
+            }).first();
+
+            if ($previous.length) {
+                var $previousCounterpart = getCounterpartInOtherColumn($previous, otherSideSelector);
+                if ($previousCounterpart.length) {
+                    return {element: $previousCounterpart, placement: 'after'};
+                }
+            }
+
+            var $next = $element.nextAll('.sync').filter(function () {
+                return getCounterpartInOtherColumn($(this), otherSideSelector).length > 0;
+            }).first();
+
+            if ($next.length) {
+                var $nextCounterpart = getCounterpartInOtherColumn($next, otherSideSelector);
+                if ($nextCounterpart.length) {
+                    return {element: $nextCounterpart, placement: 'before'};
+                }
+            }
+
+            return null;
+        }
+
+        function getCounterpartInOtherColumn($candidate, otherSideSelector) {
+            if (!$candidate || !$candidate.length) {
+                return $();
+            }
+
+            var ghostCounterpartId = $candidate.attr('data-ghost-counterpart');
+            if (ghostCounterpartId) {
+                var $ghost = $('#' + ghostCounterpartId);
+                if ($ghost.length && $ghost.closest(otherSideSelector).length) {
+                    return $ghost;
+                }
+            }
+
+            var corresp = $candidate.attr('corresp');
+            if (corresp) {
+                var $corresp = $('#' + corresp);
+                if ($corresp.length && $corresp.closest(otherSideSelector).length) {
+                    return $corresp;
+                }
+            }
+
+            var href = $candidate.attr('href');
+            if (href && href.charAt(0) === '#') {
+                var $target = $(href);
+                if ($target.length && $target.closest(otherSideSelector).length) {
+                    return $target;
+                }
+            }
+
+            var candidateId = $candidate.attr('id');
+            if (candidateId) {
+                var altId = null;
+                if (candidateId.charAt(0) === 'a') {
+                    altId = '#b' + candidateId.substr(1);
+                } else if (candidateId.charAt(0) === 'b') {
+                    altId = '#a' + candidateId.substr(1);
+                }
+                if (altId) {
+                    var $alt = $(altId);
+                    if ($alt.length && $alt.closest(otherSideSelector).length) {
+                        return $alt;
+                    }
+                }
+            }
+
+            return $();
+        }
+
+        function scrollContainerToElement($container, $element, linesAbove) {
+            if (!$container || !$container.length || !$element || !$element.length) {
+                return;
+            }
+            if (typeof linesAbove !== 'number' || linesAbove <= 0) {
+                linesAbove = 1;
+            }
+            var lineHeight = parseFloat($element.css('line-height'));
+            if (isNaN(lineHeight) || !lineHeight) {
+                var fontSize = parseFloat($element.css('font-size'));
+                lineHeight = fontSize ? fontSize * 1.2 : 20;
+            }
+
+            var targetScroll = $container.scrollTop() - $container.offset().top + $element.offset().top - (lineHeight * linesAbove);
+            if (targetScroll < 0) {
+                targetScroll = 0;
+            }
+            $container.scrollTop(targetScroll);
+        }
+
+        function alignPartnerColumn($element) {
+            if (!$element || !$element.length) {
+                return;
+            }
+
+            var targetId = $element.attr('id');
+            var ghostId = $element.attr('data-ghost-counterpart');
+            var $ghost = ghostId ? $('#' + ghostId) : $();
+
+            if (!$ghost.length) {
+                $ghost = ensureGhostForElement($element);
+            }
+
+            if (!$ghost.length && targetId) {
+                $ghost = $('.ghost-anchor[data-ghost-for="' + targetId + '"]').first();
+            }
+
+            if ($ghost.length) {
+                var linesAbove = 1;
+                if ($element.hasClass('span_s') || $element.hasClass('span_i')) {
+                    linesAbove = 2;
+                }
+                scrollContainerToElement($ghost.closest('.wrkarea'), $ghost, linesAbove);
+            }
+        }
+
+        function processTargets(selectors) {
+            if (!selectors || !selectors.length) {
+                return;
+            }
+
+            selectors.forEach(function (selector) {
+                setTimeout(function (targetSelector) {
+                    if (!targetSelector || targetSelector.charAt(0) !== '#') {
+                        return;
+                    }
+                    var $targetElement = $(targetSelector);
+                    if (!$targetElement.length) {
+                        return;
+                    }
+                    scrollContainerToElement($targetElement.closest('.wrkarea'), $targetElement);
+                    alignPartnerColumn($targetElement);
+
+                    setTimeout(function (selectorToHighlight) {
+                        var $el = $(selectorToHighlight);
+                        if ($el.length) {
+                            $el.addClass("highlight-text").delay(4000).queue(function () {
+                                $(this).removeClass("highlight-text").dequeue();
+                            });
+                        }
+                    }, 800, targetSelector);
+                }, 800, selector);
+            });
+        }
+
+        function normalizeTargetSelectors(raw) {
+            if (!raw) {
+                return [];
+            }
+
+            if (Array.isArray(raw)) {
+                return raw.slice();
+            }
+
+            return raw.split(',').map(function (item) {
+                var cleaned = item.trim();
+                if (!cleaned) {
+                    return null;
+                }
+                cleaned = cleaned.replace(/^#+/, '');
+                return '#' + cleaned;
+            }).filter(function (item) {
+                return !!item && item !== '#';
+            });
+        }
+
+        function ensureGhostForElement($element) {
+            var elementId = $element.attr('id');
+            if (!elementId) {
+                return $();
+            }
+
+            var otherSideSelector = getOtherSideSelector($element);
+            if (!otherSideSelector) {
+                return $();
+            }
+
+            var ghostId = $element.attr('data-ghost-counterpart');
+            if (ghostId) {
+                var $existingGhost = $('#' + ghostId);
+                if ($existingGhost.length) {
+                    return $existingGhost;
+                }
+            }
+
+            var $already = $('.ghost-anchor[data-ghost-for="' + elementId + '"]').first();
+            if ($already.length) {
+                $element.attr('data-ghost-counterpart', $already.attr('id'));
+                ghostState[otherSideSelector].last = $already;
+                return $already;
+            }
+
+            var reference = findReferenceInOtherColumn($element, otherSideSelector);
+            var generatedId = 'ghost-' + elementId;
+            var $ghost = $('<span/>', {
+                id: generatedId,
+                'class': 'ghost-anchor',
+                'data-ghost-for': elementId,
+                'aria-hidden': 'true'
+            });
+
+            if (reference && reference.element.length) {
+                if (reference.placement === 'after') {
+                    reference.element.after($ghost);
+                } else {
+                    reference.element.before($ghost);
+                }
+            } else {
+                var state = ghostState[otherSideSelector];
+                if (state && state.last && state.last.closest(otherSideSelector).length) {
+                    state.last.after($ghost);
+                } else {
+                    var $container = $(otherSideSelector + ' .txt-container');
+                    if ($container.length) {
+                        $container.append($ghost);
+                    }
+                }
+            }
+
+            $element.attr('data-ghost-counterpart', generatedId);
+            ghostState[otherSideSelector].last = $ghost;
+            return $ghost;
+        }
+
+        function getOtherSideSelector($element) {
+            if ($element.closest('#js-workarea-left').length) {
+                return '#js-workarea-right';
+            }
+            if ($element.closest('#js-workarea-right').length) {
+                return '#js-workarea-left';
+            }
+            return null;
+        }
 
         $('.closer').click(function (e) {
             e.preventDefault();
