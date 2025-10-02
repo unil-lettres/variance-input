@@ -57,13 +57,14 @@
 window.vg = window.vg || { selectedWorkId:null, shortTitle:null, authorId:null };
 let versionToDelete = null;
 const publishLocks = new Set();
+const pagerLocks = new Set();
 /********************** RENDER ****************************/
 function buildVersionsTable(data){
     const table = document.createElement('table');
     table.className = 'table table-bordered table-hover table-sm version-table mb-0';
     table.innerHTML = `
         <thead class="table-light"><tr>
-            <th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th>
+            <th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th>Pagination</th>
             <th class="text-end">Actions</th>
         </tr></thead><tbody></tbody>`;
     const tbody = table.querySelector('tbody');
@@ -73,6 +74,9 @@ function buildVersionsTable(data){
         const tdStatus = document.createElement('td');
         tdStatus.appendChild(renderFacsimileStatus(v));
         tr.appendChild(tdStatus);
+        const tdPaging = document.createElement('td');
+        tdPaging.appendChild(renderPageMarkerStatus(v));
+        tr.appendChild(tdPaging);
         const tdA = document.createElement('td');
         tdA.className='text-end';
         tdA.innerHTML = `
@@ -92,6 +96,41 @@ function buildVersionsTable(data){
         tbody.appendChild(tr);
     });
     return table;
+}
+
+function renderPageMarkerStatus(version){
+    const status = version.page_markers || {};
+    const wrap = document.createElement('div');
+
+    const total = status.total ?? 0;
+    const badge = document.createElement('div');
+    badge.innerHTML = `<span class="badge bg-secondary">${total} pages</span>`;
+    wrap.appendChild(badge);
+
+    const uploadBtn = document.createElement('button');
+    uploadBtn.type = 'button';
+    uploadBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
+    uploadBtn.textContent = '_lignes → pages';
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt,.tsv,.csv';
+    input.className = 'd-none';
+    input.addEventListener('change', (e) => {
+        if (!input.files || !input.files.length) return;
+        uploadPageMarkers(version, input.files[0], uploadBtn);
+        input.value = '';
+    });
+
+    uploadBtn.addEventListener('click', () => {
+        if (pagerLocks.has(version.id)) return;
+        input.click();
+    });
+
+    wrap.appendChild(input);
+    wrap.appendChild(uploadBtn);
+
+    return wrap;
 }
 
 function renderFacsimileStatus(version){
@@ -167,6 +206,53 @@ function publishFacsimiles(version, triggerButton){
         }
     });
 }
+
+async function uploadPageMarkers(version, file, triggerButton){
+    if (pagerLocks.has(version.id)) return;
+
+    pagerLocks.add(version.id);
+    const originalLabel = triggerButton ? triggerButton.textContent : '';
+    if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+
+    const form = new FormData();
+    form.append('lignes', file);
+    form.append('clear_existing', '1');
+
+    try {
+        const res = await fetch(`/api/versions/${version.id}/page-markers`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: form
+        });
+
+        const payload = await res.json();
+        if (!res.ok) {
+            throw new Error(payload.message || `HTTP ${res.status}`);
+        }
+
+        const srcInserted = payload.summary?.source?.inserted ?? 0;
+        const tgtInserted = payload.summary?.target?.inserted ?? 0;
+        const srcMissed   = payload.summary?.source?.missed ?? 0;
+        const tgtMissed   = payload.summary?.target?.missed ?? 0;
+
+        alert(`Page markers mis à jour — source : ${srcInserted} (miss: ${srcMissed}) · cible : ${tgtInserted} (miss: ${tgtMissed})`);
+        fetchVersions(vg.selectedWorkId);
+    } catch (err) {
+        console.error(err);
+        alert("Impossible d'appliquer le fichier _lignes : " + err.message);
+    } finally {
+        pagerLocks.delete(version.id);
+        if (triggerButton) {
+            triggerButton.disabled = false;
+            triggerButton.textContent = originalLabel || '_lignes → pages';
+        }
+    }
+}
 /******************** FETCH LIST **************************/
 async function fetchVersions(workId){
     const list = document.getElementById('versions-list');
@@ -185,6 +271,12 @@ async function fetchVersions(workId){
         list.innerHTML='<li class="list-group-item text-danger">Erreur de chargement</li>';
     }
 }
+
+document.addEventListener('facsimilesUploaded', () => {
+    if (vg.selectedWorkId) {
+        fetchVersions(vg.selectedWorkId);
+    }
+});
 /******************** EDIT / UPDATE ***********************/
 function openEditModal(v){
     document.getElementById('edit-version-id').value = v.id;

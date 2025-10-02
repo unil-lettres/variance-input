@@ -70,6 +70,7 @@ Route::get('/api/versions', [VersionController::class, 'index']);
 Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
 Route::post('/api/facsimiles/publish', [VersionController::class, 'publishFacsimiles']);
+Route::post('/api/versions/{version}/page-markers', [VersionController::class, 'applyPageMarkers']);
 Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
 
 // Routes pour composant medite

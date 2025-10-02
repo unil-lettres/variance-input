@@ -9,10 +9,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use App\Services\PageMarkerService;
 
 class VersionController extends Controller
 {
+    public function __construct(private PageMarkerService $pageMarkerService)
+    {
+    }
+
     /* ───────────────────────── PUBLIC ENDPOINTS ───────────────────────── */
 
     /** List versions for a given work */
@@ -33,6 +37,7 @@ class VersionController extends Controller
                     'folder'     => $version->folder,
                     'work_id'    => $version->work_id,
                     'facsimiles' => $this->facsimileStatus($version),
+                    'page_markers' => $this->pageMarkerService->countMarkers($version),
                 ];
             });
 
@@ -187,6 +192,43 @@ class VersionController extends Controller
             'message'    => "{$copied} fichier(s) publié(s) dans {$paths['dest_dir']}",
             'facsimiles' => $status,
             'manifests'  => $manifestInfo,
+        ]);
+    }
+
+    public function applyPageMarkers(Request $request, Version $version)
+    {
+        $validated = $request->validate([
+            'lignes'         => 'required|file|max:4096',
+            'clear_existing' => 'sometimes|boolean',
+        ]);
+
+        $tempPath = $request->file('lignes')->store('tmp/lignes');
+        $absolute = storage_path('app/' . $tempPath);
+
+        try {
+            $summary = $this->pageMarkerService->applyLignesToVersion(
+                $version->loadMissing('work.author'),
+                $absolute,
+                ['clear_existing' => $request->boolean('clear_existing', true)]
+            );
+        } catch (\Throwable $e) {
+            Storage::delete($tempPath);
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        Storage::delete($tempPath);
+
+        $manifests = $this->publishManifestsForVersion($version);
+        $counts    = $this->pageMarkerService->countMarkers($version);
+
+        return response()->json([
+            'status'        => 'ok',
+            'summary'       => $summary,
+            'manifests'     => $manifests,
+            'page_markers'  => $counts,
         ]);
     }
 
