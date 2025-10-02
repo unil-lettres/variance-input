@@ -56,19 +56,23 @@
 /**************** GLOBAL shared from upload ***************/
 window.vg = window.vg || { selectedWorkId:null, shortTitle:null, authorId:null };
 let versionToDelete = null;
+const publishLocks = new Set();
 /********************** RENDER ****************************/
 function buildVersionsTable(data){
     const table = document.createElement('table');
     table.className = 'table table-bordered table-hover table-sm version-table mb-0';
     table.innerHTML = `
         <thead class="table-light"><tr>
-            <th>ID</th><th>Dénomination</th><th>Dossier</th>
+            <th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th>
             <th class="text-end">Actions</th>
         </tr></thead><tbody></tbody>`;
     const tbody = table.querySelector('tbody');
     data.forEach(v=>{
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${v.id}</td><td>${v.name}</td><td>${v.folder.split('/').pop()}</td>`;
+        const tdStatus = document.createElement('td');
+        tdStatus.appendChild(renderFacsimileStatus(v));
+        tr.appendChild(tdStatus);
         const tdA = document.createElement('td');
         tdA.className='text-end';
         tdA.innerHTML = `
@@ -88,6 +92,80 @@ function buildVersionsTable(data){
         tbody.appendChild(tr);
     });
     return table;
+}
+
+function renderFacsimileStatus(version){
+    const status = version.facsimiles || {};
+    const wrap = document.createElement('div');
+
+    if (!status.source_count) {
+        wrap.innerHTML = '<span class="text-muted">Aucun fac-similé</span>';
+        return wrap;
+    }
+
+    const badges = document.createElement('div');
+    badges.innerHTML = `<span class="badge bg-secondary me-1">${status.source_count} source</span>` +
+        `<span class="badge ${status.in_sync ? 'bg-success' : 'bg-warning text-dark'}">${status.published_count} publié</span>`;
+    wrap.appendChild(badges);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm mt-2 ' + (status.in_sync ? 'btn-outline-success' : 'btn-outline-primary');
+    btn.textContent = status.in_sync ? 'À jour' : 'Publier';
+    const needsPublish = status.source_count !== status.published_count;
+    btn.disabled = publishLocks.has(version.id) || !status.can_publish || (status.in_sync && !needsPublish);
+    btn.addEventListener('click', () => publishFacsimiles(version, btn));
+    wrap.appendChild(btn);
+
+    if (status.dest_dir && status.published_count) {
+        const hint = document.createElement('div');
+        hint.className = 'text-muted small mt-1';
+        hint.textContent = status.dest_dir.replace('/var/www/variance', '');
+        wrap.appendChild(hint);
+    }
+
+    return wrap;
+}
+
+function publishFacsimiles(version, triggerButton){
+    if (publishLocks.has(version.id)) return;
+    if (!window.confirm(`Publier les fac-similés de « ${version.name} » ?`)) return;
+
+    publishLocks.add(version.id);
+    const originalLabel = triggerButton ? triggerButton.textContent : '';
+    if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+
+    fetch('/api/facsimiles/publish', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ version_id: version.id })
+    })
+    .then(async res => {
+        const payload = await res.json();
+        if (!res.ok) {
+            throw new Error(payload.message || `HTTP ${res.status}`);
+        }
+        alert(payload.message || 'Publication terminée');
+        fetchVersions(vg.selectedWorkId);
+        document.dispatchEvent(new CustomEvent('facsimilesPublished', { detail: { versionId: version.id } }));
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Publication impossible : ' + err.message);
+    })
+    .finally(() => {
+        publishLocks.delete(version.id);
+        if (triggerButton) {
+            triggerButton.disabled = false;
+            triggerButton.textContent = originalLabel || 'Publier';
+        }
+    });
 }
 /******************** FETCH LIST **************************/
 async function fetchVersions(workId){

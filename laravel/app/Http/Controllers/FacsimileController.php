@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
 use Intervention\Image\Drivers\Gd\Driver;
@@ -36,12 +37,32 @@ class FacsimileController extends Controller
 
         $dirRel  = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
         $disk    = Storage::disk('public');           // = storage/app/public
+
+        if ($request->boolean('reset')) {
+            $disk->deleteDirectory($dirRel);
+            $legacyDir = base_path('../variance/' . $dirRel);
+            if (is_dir($legacyDir)) {
+                File::deleteDirectory($legacyDir);
+            }
+
+            collect($disk->files($dirRel))
+                ->filter(fn ($path) => str_contains(basename($path), 'images_'))
+                ->each(fn ($path) => $disk->delete($path));
+        }
         $disk->makeDirectory($dirRel);
 
-        // Point de départ : nb d’images déjà présentes + 1
-        $startIndex = collect($disk->files($dirRel))
-            ->filter(fn($p) => preg_match('/^img_.*\d+\.(jpe?g|png)$/i', $p))
-            ->count() + 1;
+        // Point de départ : numéro suivant en se basant sur les fichiers déjà présents
+        $existingIndexes = collect($disk->files($dirRel))
+            ->map(fn ($path) => basename($path))
+            ->map(function ($name) use ($version) {
+                if (preg_match('/^img_' . preg_quote($version->folder, '/') . '_(\d+)\.(?:jpe?g|png)$/i', $name, $m)) {
+                    return (int) $m[1];
+                }
+                return null;
+            })
+            ->filter();
+
+        $startIndex = ($existingIndexes->max() ?? 0) + 1;
 
         // -----------------------------------------------------------------
         // 2. Boucle de traitement
@@ -49,42 +70,39 @@ class FacsimileController extends Controller
         $i       = $startIndex;
         $added   = 0;
         $errors  = [];
+        foreach ($validated['images'] as $file) {
+            $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
+            $basename = "img_{$version->folder}_{$index}";
+            $ext      = 'jpg';
 
-// ↓ Remplacez la boucle dans FacsimileController::store()
-foreach ($validated['images'] as $file) {
-    $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
-    $basename = "img_{$version->folder}_{$index}";
-    $ext      = 'jpg';
+            $mainPath  = "{$dirRel}/{$basename}.{$ext}";
+            $thumbPath = "{$dirRel}/{$basename}_thumb.jpg";
 
-    $mainPath  = "{$dirRel}/{$basename}.{$ext}";
-    $thumbPath = "{$dirRel}/{$basename}_thumb.jpg";
+            // 1) Copie l’original (toujours)
+            $disk->putFileAs($dirRel, $file, basename($mainPath));
+            $added++;      // ← on compte tout de suite
+            $i++;
 
-    // 1) Copie l’original (toujours)
-    $disk->putFileAs($dirRel, $file, basename($mainPath));
-    $added++;      // ← on compte tout de suite
-    $i++;
+            // 2) Essaie de faire la miniature – mais sans bloquer l’import
+            try {
+                $manager = app(ImageManager::class);
 
-    // 2) Essaie de faire la miniature – mais sans bloquer l’import
-    try {
-        $manager = app(ImageManager::class);
-    
-        $image = $manager->read($file->get());
-    
-        $thumbImg = $image
-            ->scale(200)
-            ->encode(new JpegEncoder(quality: 80));
-    
-        $disk->put($thumbPath, (string) $thumbImg);
-    
-    } catch (\Throwable $e) {
-        Log::warning('Miniature fac-similé échouée', [
-            'file' => $file->getClientOriginalName(),
-            'err'  => $e->getMessage(),
-        ]);
-        $errors[] = "{$basename}.{$ext}";
-    }
-    
-}
+                $image = $manager->read($file->get());
+
+                $thumbImg = $image
+                    ->scale(200)
+                    ->encode(new JpegEncoder(quality: 80));
+
+                $disk->put($thumbPath, (string) $thumbImg);
+
+            } catch (\Throwable $e) {
+                Log::warning('Miniature fac-similé échouée', [
+                    'file' => $file->getClientOriginalName(),
+                    'err'  => $e->getMessage(),
+                ]);
+                $errors[] = "{$basename}.{$ext}";
+            }
+        }
 
 
         return response()->json([

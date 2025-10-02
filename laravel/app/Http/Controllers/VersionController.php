@@ -22,7 +22,21 @@ class VersionController extends Controller
         if (!$workId) {
             return response()->json(['error' => 'work_id is required'], 400);
         }
-        return response()->json(Version::where('work_id', $workId)->get(), 200);
+
+        $versions = Version::with(['work.author'])
+            ->where('work_id', $workId)
+            ->get()
+            ->map(function (Version $version) {
+                return [
+                    'id'         => $version->id,
+                    'name'       => $version->name,
+                    'folder'     => $version->folder,
+                    'work_id'    => $version->work_id,
+                    'facsimiles' => $this->facsimileStatus($version),
+                ];
+            });
+
+        return response()->json($versions, 200);
     }
 
     /** Upload → save .txt untouched → generate TEI (UTF‑8 LF) */
@@ -137,6 +151,45 @@ class VersionController extends Controller
         return response(file_get_contents($path), 200)->header('Content-Type', 'application/xml');
     }
 
+    public function publishFacsimiles(Request $request)
+    {
+        $validated = $request->validate([
+            'version_id' => 'required|exists:versions,id',
+        ]);
+
+        $version = Version::with('work.author')->findOrFail($validated['version_id']);
+        $paths   = $this->facsimilePaths($version);
+
+        if (!$paths['source_exists'] || empty($paths['source_files'])) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Aucun fac-similé à publier pour cette version.',
+            ], 400);
+        }
+
+        File::ensureDirectoryExists($paths['dest_dir']);
+        File::cleanDirectory($paths['dest_dir']);
+
+        $copied = 0;
+        $disk   = Storage::disk('public');
+
+        foreach ($paths['source_files'] as $fileName) {
+            $contents = $disk->get($paths['source_prefix'] . '/' . $fileName);
+            File::put($paths['dest_dir'] . '/' . $fileName, $contents);
+            $copied++;
+        }
+
+        $manifestInfo = $this->publishManifestsForVersion($version);
+        $status       = $this->facsimileStatus($version);
+
+        return response()->json([
+            'status'     => 'ok',
+            'message'    => "{$copied} fichier(s) publié(s) dans {$paths['dest_dir']}",
+            'facsimiles' => $status,
+            'manifests'  => $manifestInfo,
+        ]);
+    }
+
     /* ──────────────────────────── HELPERS ──────────────────────────── */
 
     /** Detect + convert arbitrary bytes to UTF‑8 LF */
@@ -177,5 +230,151 @@ class VersionController extends Controller
     {
         $txt = str_replace("\t", ' ', $txt);
         return preg_replace('/ {2,}/', ' ', $txt);
+    }
+
+    private function facsimileStatus(Version $version): array
+    {
+        $paths = $this->facsimilePaths($version);
+
+        $sourceCount = collect($paths['source_files'])
+            ->reject(fn ($file) => $this->isThumbnail($file))
+            ->count();
+
+        $publishedCount = File::exists($paths['dest_dir'])
+            ? collect(File::files($paths['dest_dir']))
+                ->map(fn ($file) => basename($file))
+                ->reject(fn ($file) => $this->isThumbnail($file))
+                ->count()
+            : 0;
+
+        return [
+            'source_count'    => $sourceCount,
+            'published_count' => $publishedCount,
+            'can_publish'     => $sourceCount > 0,
+            'in_sync'         => $sourceCount > 0 && $sourceCount === $publishedCount,
+            'source_dir'      => $paths['source_prefix'],
+            'dest_dir'        => $paths['dest_dir'],
+        ];
+    }
+
+    private function facsimilePaths(Version $version): array
+    {
+        $authorFolder  = $version->work->author->folder;
+        $workFolder    = $version->work->folder;
+        $versionFolder = $version->folder;
+
+        $sourcePrefix = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $disk         = Storage::disk('public');
+
+        $files = $disk->exists($sourcePrefix)
+            ? collect($disk->files($sourcePrefix))
+                ->map(fn ($path) => basename($path))
+                ->filter(fn ($name) => preg_match('/\.(jpe?g|png)$/i', $name))
+                ->values()
+                ->toArray()
+            : [];
+
+        $destDir = "/var/www/variance/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+
+        return [
+            'source_prefix' => $sourcePrefix,
+            'source_exists' => $disk->exists($sourcePrefix),
+            'source_files'  => $files,
+            'dest_dir'      => $destDir,
+        ];
+    }
+
+    private function publishManifestsForVersion(Version $version): array
+    {
+        $version->loadMissing('work.author');
+        $authorFolder = $version->work->author->folder ?? null;
+        $workFolder   = $version->work->folder ?? null;
+        if (!$authorFolder || !$workFolder) {
+            return [];
+        }
+
+        $entries = $this->collectManifestEntries($authorFolder, $workFolder, $version->folder);
+        if (empty($entries)) {
+            return [];
+        }
+
+        $comparisons = Comparison::where('source_id', $version->id)
+            ->orWhere('target_id', $version->id)
+            ->get();
+
+        $results = [];
+        foreach ($comparisons as $comparison) {
+            $baseName = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparison->folder));
+
+            if ($comparison->source_id === $version->id) {
+                $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'source', $baseName, $entries);
+                $results[] = ['comparison_id' => $comparison->id, 'type' => 'source'] + $info;
+            }
+
+            if ($comparison->target_id === $version->id) {
+                $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'target', $baseName, $entries);
+                $results[] = ['comparison_id' => $comparison->id, 'type' => 'target'] + $info;
+            }
+        }
+
+        return $results;
+    }
+
+    private function writeManifest(string $authorFolder, string $workFolder, string $versionFolder, string $type, string $baseName, array $entries): array
+    {
+        $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $filename    = sprintf('images_%s_%s.json', $type, $baseName);
+        $payload     = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        Storage::disk('public')->put("{$relativeDir}/{$filename}", $payload);
+        $this->mirrorToLegacy($relativeDir, $filename, $payload);
+
+        return ['file' => "{$relativeDir}/{$filename}", 'count' => count($entries)];
+    }
+
+    private function collectManifestEntries(string $authorFolder, string $workFolder, string $versionFolder): array
+    {
+        $disk = Storage::disk('public');
+        $prefix = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        if (!$disk->exists($prefix)) {
+            return [];
+        }
+
+        $files = collect($disk->files($prefix))
+            ->map(fn ($path) => basename($path))
+            ->filter(fn ($name) => preg_match('/\.(jpe?g|png)$/i', $name))
+            ->reject(fn ($name) => $this->isThumbnail($name))
+            ->sort(fn ($a, $b) => strnatcasecmp($a, $b))
+            ->values();
+
+        return $files->map(function ($file) use ($disk, $prefix, $authorFolder, $workFolder, $versionFolder) {
+            $base = pathinfo($file, PATHINFO_FILENAME);
+            $ext  = pathinfo($file, PATHINFO_EXTENSION);
+            $thumbName = $base . '_thumb.' . $ext;
+
+            $big   = "/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}/{$file}";
+            $small = $disk->exists("{$prefix}/{$thumbName}")
+                ? "/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}/{$thumbName}"
+                : $big;
+
+            return [
+                'small' => $small,
+                'big'   => $big,
+            ];
+        })->toArray();
+    }
+
+    private function mirrorToLegacy(string $relativeDir, string $fileName, string $contents): void
+    {
+        $legacyDir = base_path('../variance/' . $relativeDir);
+        if (!is_dir($legacyDir)) {
+            File::makeDirectory($legacyDir, 0775, true, true);
+        }
+        File::put($legacyDir . DIRECTORY_SEPARATOR . $fileName, $contents);
+    }
+
+    private function isThumbnail(string $filename): bool
+    {
+        return str_contains(strtolower($filename), '_thumb');
     }
 }

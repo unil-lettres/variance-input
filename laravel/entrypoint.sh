@@ -22,6 +22,14 @@ mkdir -p /var/www/html/public/uploads
 chown -R www-data:www-data /var/www/html/public/uploads
 chmod -R 775      /var/www/html/public/uploads
 
+# Configure PHP upload limits (useful when running artisan serve)
+cat <<'PHPINI' > /usr/local/etc/php/conf.d/uploads.ini
+; Increased limits for large facsimile uploads
+upload_max_filesize = 256M
+post_max_size = 300M
+max_file_uploads = 300
+PHPINI
+
 # 2) Install PHP dependencies and run artisan tasks
 cd /var/www/html
 composer install --no-dev --optimize-autoloader
