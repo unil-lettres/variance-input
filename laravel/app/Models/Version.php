@@ -83,4 +83,49 @@ class Version extends Model
             return $size . ' octets';
         }
     }
+
+    /**
+     * Get Facsimiles associated with this Version as an array with the following structure:
+     * [
+     *   {
+     *     'name': 'basename.jpg',
+     *     'big': 'path/to/big/image.jpg',
+     *     'thumb': 'path/to/thumb/image.jpg' or null,
+     *     'hasThumb': true or false
+     *   },
+     *   ...
+     * ]
+     */
+    public function getFacsimiles() {
+      $work    = $this->work;
+      $author  = $work->author;
+
+      // Dossier relatif (dans storage/app/public)
+      $dirRel = "uploads/{$author->folder}/{$work->folder}/{$this->folder}";
+      $disk   = Storage::disk('public');
+
+      if (! $disk->exists($dirRel)) {
+          return null;          // aucun fichier
+      }
+
+      // Liste des fichiers
+      $all = collect($disk->files($dirRel));
+
+      return $all
+          ->filter(fn ($p) => preg_match('/\.(jpe?g|png)$/i', $p) && ! str_contains($p, '_thumb'))
+          ->values()
+          ->map(function ($p) use ($disk) {
+
+              // chemin miniature : img_*_thumb.jpg
+              $thumbPath  = preg_replace('/(\.\w+)$/', '_thumb$1', $p);
+              $thumbExist = $disk->exists($thumbPath);
+
+              return [
+                  'name'      => basename($p),
+                  'big'       => '/storage/'.$p,                    // ✅ URL publique
+                  'thumb'     => $thumbExist ? '/storage/'.$thumbPath : null,
+                  'hasThumb'  => $thumbExist,
+              ];
+          });
+    }
 }
