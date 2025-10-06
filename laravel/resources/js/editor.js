@@ -22,14 +22,39 @@ window.initEditor = (initialXml, versionId) => {
   const view = new EditorView({ state: startState, parent: container });
 
   window.editor = {
-    insertAtCursor: (text) => {
+    insertAtCursor(text) {
       const { from, to } = view.state.selection.main;
       view.dispatch({
         changes: { from, to, insert: text },
         selection: { anchor: from + text.length }
       });
       view.focus();
-    }
+    },
+    
+    findTagPosition(tagName) {
+      const content = view.state.doc.toString();
+      const tagPattern = new RegExp(`<${tagName}[\\s>]`, 'i');
+      const match = content.match(tagPattern);
+      if (match) {
+        return content.indexOf(match[0]);
+      }
+      return -1;
+    },
+    
+    scrollToTag(tagName) {
+      const pos = this.findTagPosition(tagName);
+      if (pos !== -1) {
+        view.dispatch({
+          selection: { anchor: pos, head: pos + tagName.length + 2 },
+          scrollIntoView: true
+        });
+        view.focus();
+      }
+    },
+
+    isTagInserted(tagName) {
+      return this.findTagPosition(tagName) !== -1;
+    },
   };
 
   saveBtn.addEventListener('click', async () => {

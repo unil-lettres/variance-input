@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container mt-4">
+<div class="container mt-4 editor">
     <h2>XML Editor for: {{ $version->name }}</h2>
     <p>File: {{ $version->folder }}</p>
 
@@ -15,12 +15,12 @@
         <div class="col col-4">
           <div class="d-flex flex-column gap-2">
             <div class="col">
-              <button class="btn btn-primary btn-sm mb-1" onclick="window.editor.insertAtCursor('<i></i>')">Italic</button>
+              <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>">Italic</button>
             </div>
             
             <div class="col">
               @foreach ($version->getFacsimiles() ?? [] as $facsimile)
-                <button class="btn btn-primary btn-sm mb-1" onclick="window.editor.insertAtCursor('<tag{{ $facsimile['name'] }}>')">Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
+                <button class="btn btn-primary btn-sm mb-1" data-tag="tag{{ $facsimile['name'] }}" data-tag-text="<tag{{ $facsimile['name'] }}>">Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
               @endforeach
             </div>
         </div>
@@ -36,7 +36,34 @@
 document.addEventListener('DOMContentLoaded', () => {
     const xmlContent = @json($xmlContent);
     const versionId  = {{ $version->id }};
+
     window.initEditor(xmlContent, versionId);
+
+    document.querySelectorAll('.editor [data-tag]').forEach(button => {
+        const setTagInserted = (button) => {
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+            button.setAttribute('data-inserted', 'true');
+        };
+        const tagName = button.getAttribute('data-tag');
+
+        // Change button color if tag is already inserted
+        if (window.editor && window.editor.isTagInserted(tagName)) {
+            setTagInserted(button);
+        }
+        
+        button.addEventListener('click', () => {
+            const inserted = button.getAttribute('data-inserted') === 'true';
+            const tagText = button.getAttribute('data-tag-text');
+
+            if (inserted) {
+                window.editor.scrollToTag(tagName);
+            } else {
+                window.editor.insertAtCursor(tagText);
+                setTagInserted(button);
+            }
+        });
+    });
 });
 </script>
 @endpush
