@@ -19,7 +19,7 @@ class EditorController extends Controller
             $relativePath = substr($relativePath, strlen('storage/'));
         }
     
-        $path = storage_path("app/public/{$relativePath}");
+        $path = storage_path("app/public/uploads/versions/{$version->folder}.xml");
         
         if (!file_exists($path)) {
             abort(404, "XML file not found at: {$path}");
@@ -40,7 +40,7 @@ class EditorController extends Controller
         $newXml = $request->getContent(); // raw XML body
 
         $relativePath = $version->folder;
-        $path = storage_path("app/public/{$relativePath}");
+        $path = storage_path("app/public/uploads/versions/{$version->folder}.xml");
 
         if (!file_exists($path)) {
             abort(404, "File not found: {$path}");
