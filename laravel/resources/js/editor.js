@@ -1,5 +1,6 @@
 import { EditorState } from "@codemirror/state";
-import { EditorView, basicSetup } from "codemirror"; // <- from new "codemirror" meta-package
+import { EditorView, lineNumbers } from "@codemirror/view";
+import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
 
@@ -10,14 +11,26 @@ window.initEditor = (initialXml, versionId) => {
   const startState = EditorState.create({
     doc: initialXml,
     extensions: [
-      basicSetup,
       xml(),
+      lineNumbers(),
+      foldGutter(),
       oneDark,
-      EditorView.lineWrapping
+      EditorView.lineWrapping,
     ]
   });
 
   const view = new EditorView({ state: startState, parent: container });
+
+  window.editor = {
+    insertAtCursor: (text) => {
+      const { from, to } = view.state.selection.main;
+      view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor: from + text.length }
+      });
+      view.focus();
+    }
+  };
 
   saveBtn.addEventListener('click', async () => {
     const updatedXml = view.state.doc.toString();
