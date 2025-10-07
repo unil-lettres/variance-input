@@ -90,14 +90,19 @@ window.initEditor = (initialXml, versionId) => {
         const lineStart = line.from;
         const lineEnd = line.to;
         
-        // Remove the entire line including the newline character
-        // Check if there's a newline after this line
-        const hasNextLine = lineEnd < view.state.doc.length;
-        const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
+        this.scrollToTag(tagName);
         
-        view.dispatch({
-          changes: { from: lineStart, to: deleteEnd, insert: '' }
-        });
+        // Wait 1 second, then remove the line
+        setTimeout(() => {
+          // Check if there's a newline after this line
+          const hasNextLine = lineEnd < view.state.doc.length;
+          const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
+          
+          view.dispatch({
+            changes: { from: lineStart, to: deleteEnd, insert: '' }
+          });
+        }, 500);
+        
         return true;
       }
       return false;
