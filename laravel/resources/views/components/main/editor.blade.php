@@ -45,6 +45,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle toggle readonly button
     const toggleBtn = document.getElementById('toggle-readonly');
     
+    const setTagInserted = (button) => {
+        button.classList.remove('btn-primary');
+        button.classList.add('btn-success');
+        button.setAttribute('data-inserted', 'true');
+    };
+    
+    const setTagNotInserted = (button) => {
+        button.classList.remove('btn-success');
+        button.classList.add('btn-primary');
+        button.removeAttribute('data-inserted');
+    };
+    
+    const refreshButtonStates = () => {
+        document.querySelectorAll('.editor [data-tag]').forEach(button => {
+            const tagName = button.getAttribute('data-tag');
+            if (window.editor && window.editor.isTagInserted(tagName)) {
+                setTagInserted(button);
+            } else {
+                setTagNotInserted(button);
+            }
+        });
+    };
+    
     toggleBtn.addEventListener('click', () => {
         const isReadOnly = window.editor.toggleReadOnly();
         toggleBtn.textContent = isReadOnly ? 'Enable Edit Mode' : 'Enable Read-Only';
@@ -55,15 +78,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-enable-when-readonly]').forEach(btn => {
             btn.disabled = !isReadOnly;
         });
+        
+        if (isReadOnly) {
+            refreshButtonStates();
+        }
     });
 
     // Handle insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
-        const setTagInserted = (button) => {
-            button.classList.remove('btn-primary');
-            button.classList.add('btn-success');
-            button.setAttribute('data-inserted', 'true');
-        };
         const tagName = button.getAttribute('data-tag');
 
         // Change button color if tag is already inserted
