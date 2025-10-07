@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, Compartment } from "@codemirror/state";
 import { EditorView, lineNumbers, drawSelection, highlightActiveLine } from "@codemirror/view";
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
@@ -7,6 +7,10 @@ import { oneDark } from "@codemirror/theme-one-dark";
 window.initEditor = (initialXml, versionId) => {
   const container = document.getElementById('editor-container');
   const saveBtn = document.getElementById('save-xml');
+
+  // Create compartments for dynamic reconfiguration
+  const readOnlyCompartment = new Compartment();
+  const editableCompartment = new Compartment();
 
   const startState = EditorState.create({
     doc: initialXml,
@@ -18,8 +22,8 @@ window.initEditor = (initialXml, versionId) => {
       EditorView.lineWrapping,
       drawSelection(),
       highlightActiveLine(),
-      EditorState.readOnly.of(true),
-      EditorView.editable.of(false),
+      readOnlyCompartment.of(EditorState.readOnly.of(true)),
+      editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
         ".cm-cursor": { 
           borderLeftColor: "#528bff !important",
@@ -39,7 +43,20 @@ window.initEditor = (initialXml, versionId) => {
 
   const view = new EditorView({ state: startState, parent: container });
 
+  let isReadOnly = true;
+
   window.editor = {
+    toggleReadOnly() {
+      isReadOnly = !isReadOnly;
+      view.dispatch({
+        effects: [
+          readOnlyCompartment.reconfigure(EditorState.readOnly.of(isReadOnly)),
+          editableCompartment.reconfigure(EditorView.editable.of(!isReadOnly))
+        ]
+      });
+      view.focus();
+      return isReadOnly;
+    },
     insertAtCursor(text) {
       const { head } = view.state.selection.main;
       const line = view.state.doc.lineAt(head);

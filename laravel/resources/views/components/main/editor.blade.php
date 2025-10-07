@@ -6,6 +6,7 @@
     <p>File: {{ $version->folder }}</p>
 
     <button id="save-xml" class="btn btn-success mb-2">Save</button>
+    <button id="toggle-readonly" class="btn btn-warning mb-2">Enable Edit Mode</button>
 
     <div class="flex gap-2">
       <div class="row">
@@ -40,6 +41,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const versionId  = {{ $version->id }};
 
     window.initEditor(xmlContent, versionId);
+
+    // Handle toggle readonly button
+    const toggleBtn = document.getElementById('toggle-readonly');
+    toggleBtn.addEventListener('click', () => {
+        const isReadOnly = window.editor.toggleReadOnly();
+        toggleBtn.textContent = isReadOnly ? 'Enable Edit Mode' : 'Enable Read-Only';
+        toggleBtn.classList.toggle('btn-warning');
+        toggleBtn.classList.toggle('btn-info');
+    });
 
     // Handle insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
