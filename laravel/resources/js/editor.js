@@ -131,7 +131,7 @@ window.initEditor = (initialXml, versionId) => {
               changes: { from: tagPos, to: tagEnd, insert: '' }
             });
           }
-        }, 500);
+        }, 200);
         
         return true;
       }
