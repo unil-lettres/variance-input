@@ -16,14 +16,14 @@
         <div class="col col-4">
           <div class="d-flex flex-column gap-2">
             <div class="col">
-              <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>">Italic</button>
-              <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i">Remove</button>
+              <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly>Italic</button>
+              <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly>Remove</button>
             </div>
             
             <div class="col">
               @foreach ($version->getFacsimiles() ?? [] as $facsimile)
-                <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>">Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
-                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>">Remove</button>
+                <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
+                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Remove</button>
               @endforeach
             </div>
         </div>
@@ -44,11 +44,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle toggle readonly button
     const toggleBtn = document.getElementById('toggle-readonly');
+    
     toggleBtn.addEventListener('click', () => {
         const isReadOnly = window.editor.toggleReadOnly();
         toggleBtn.textContent = isReadOnly ? 'Enable Edit Mode' : 'Enable Read-Only';
         toggleBtn.classList.toggle('btn-warning');
         toggleBtn.classList.toggle('btn-info');
+        
+        // Disable/enable buttons with data-enable-when-readonly attribute
+        document.querySelectorAll('[data-enable-when-readonly]').forEach(btn => {
+            btn.disabled = !isReadOnly;
+        });
     });
 
     // Handle insert buttons
