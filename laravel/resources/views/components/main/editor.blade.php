@@ -16,11 +16,13 @@
           <div class="d-flex flex-column gap-2">
             <div class="col">
               <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>">Italic</button>
+              <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i">Remove</button>
             </div>
             
             <div class="col">
               @foreach ($version->getFacsimiles() ?? [] as $facsimile)
-                <button class="btn btn-primary btn-sm mb-1" data-tag="tag{{ $facsimile['name'] }}" data-tag-text="<tag{{ $facsimile['name'] }}>">Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
+                <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>">Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
+                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>">Remove</button>
               @endforeach
             </div>
         </div>
@@ -39,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.initEditor(xmlContent, versionId);
 
+    // Handle insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
         const setTagInserted = (button) => {
             button.classList.remove('btn-primary');
@@ -54,13 +57,32 @@ document.addEventListener('DOMContentLoaded', () => {
         
         button.addEventListener('click', () => {
             const inserted = button.getAttribute('data-inserted') === 'true';
-            const tagText = button.getAttribute('data-tag-text');
 
             if (inserted) {
                 window.editor.scrollToTag(tagName);
             } else {
-                window.editor.insertAtCursor(tagText);
+                window.editor.insertAtCursor(tagName);
                 setTagInserted(button);
+            }
+        });
+    });
+    
+    // Handle remove buttons
+    document.querySelectorAll('.editor [data-tag-remove]').forEach(removeBtn => {
+        removeBtn.addEventListener('click', () => {
+            const tagName = removeBtn.getAttribute('data-tag-remove');
+            const removed = window.editor.removeTag(tagName);
+            
+            if (removed) {
+                // Reset the corresponding insert button
+                const insertBtn = document.querySelector(`[data-tag="${tagName}"]`);
+                if (insertBtn) {
+                    insertBtn.classList.remove('btn-success');
+                    insertBtn.classList.add('btn-primary');
+                    insertBtn.removeAttribute('data-inserted');
+                }
+            } else {
+                console.error(`Tag "${tagName}" not found in the editor`);
             }
         });
     });

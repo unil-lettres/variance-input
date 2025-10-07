@@ -74,6 +74,29 @@ window.initEditor = (initialXml, versionId) => {
     isTagInserted(tagName) {
       return this.findTagPosition(tagName) !== -1;
     },
+    
+    removeTag(tagName) {
+      const content = view.state.doc.toString();
+      const tagPos = content.indexOf(tagName);
+
+      if (tagPos !== -1) {
+        // Find the line containing the tag
+        const line = view.state.doc.lineAt(tagPos);
+        const lineStart = line.from;
+        const lineEnd = line.to;
+        
+        // Remove the entire line including the newline character
+        // Check if there's a newline after this line
+        const hasNextLine = lineEnd < view.state.doc.length;
+        const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
+        
+        view.dispatch({
+          changes: { from: lineStart, to: deleteEnd, insert: '' }
+        });
+        return true;
+      }
+      return false;
+    },
   };
 
   saveBtn.addEventListener('click', async () => {
