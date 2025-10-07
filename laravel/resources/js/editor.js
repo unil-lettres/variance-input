@@ -42,29 +42,34 @@ window.initEditor = (initialXml, versionId) => {
   window.editor = {
     insertAtCursor(text) {
       const { head } = view.state.selection.main;
+      const line = view.state.doc.lineAt(head);
+      const lineStart = line.from;
+      const lineText = line.text;
+      
+      // Extract indentation from current line
+      const indentMatch = lineText.match(/^(\s*)/);
+      const indent = indentMatch ? indentMatch[1] : '';
+      
+      // Insert indented text + new line before current line
+      const insertText = indent + text + '\n';
       
       view.dispatch({
-        changes: { from: head, insert: text },
-        selection: { anchor: head + text.length }
+        changes: { from: lineStart, insert: insertText },
+        selection: { anchor: lineStart }
       });
       view.focus();
     },
     
     findTagPosition(tagName) {
       const content = view.state.doc.toString();
-      const tagPattern = new RegExp(`<${tagName}[\\s>]`, 'i');
-      const match = content.match(tagPattern);
-      if (match) {
-        return content.indexOf(match[0]);
-      }
-      return -1;
+      return content.indexOf(tagName);
     },
     
     scrollToTag(tagName) {
       const pos = this.findTagPosition(tagName);
       if (pos !== -1) {
         view.dispatch({
-          selection: { anchor: pos, head: pos + tagName.length + 2 },
+          selection: { anchor: pos, head: pos + tagName.length },
           scrollIntoView: true
         });
         view.focus();
