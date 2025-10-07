@@ -106,18 +106,31 @@ window.initEditor = (initialXml, versionId) => {
         const line = view.state.doc.lineAt(tagPos);
         const lineStart = line.from;
         const lineEnd = line.to;
+        const lineText = line.text;
+        
+        // Check if the tag is alone on the line (only whitespace around it)
+        const lineWithoutTag = lineText.replace(tagName, '');
+        const isTagAlone = lineWithoutTag.trim() === '';
         
         this.scrollToTag(tagName);
         
-        // Wait 1 second, then remove the line
+        // Wait before removing the line to allow user to see the line being targeted
         setTimeout(() => {
-          // Check if there's a newline after this line
-          const hasNextLine = lineEnd < view.state.doc.length;
-          const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
-          
-          view.dispatch({
-            changes: { from: lineStart, to: deleteEnd, insert: '' }
-          });
+          if (isTagAlone) {
+            // Remove the entire line including the newline character
+            const hasNextLine = lineEnd < view.state.doc.length;
+            const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
+            
+            view.dispatch({
+              changes: { from: lineStart, to: deleteEnd, insert: '' }
+            });
+          } else {
+            // Remove only the tag
+            const tagEnd = tagPos + tagName.length;
+            view.dispatch({
+              changes: { from: tagPos, to: tagEnd, insert: '' }
+            });
+          }
         }, 500);
         
         return true;
