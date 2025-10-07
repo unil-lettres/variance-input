@@ -97,45 +97,58 @@ window.initEditor = (initialXml, versionId) => {
       return this.findTagPosition(tagName) !== -1;
     },
     
-    removeTag(tagName) {
+    countTagOccurrences(tagName) {
       const content = view.state.doc.toString();
-      const tagPos = content.indexOf(tagName);
-
-      if (tagPos !== -1) {
-        // Find the line containing the tag
-        const line = view.state.doc.lineAt(tagPos);
-        const lineStart = line.from;
-        const lineEnd = line.to;
-        const lineText = line.text;
-        
-        // Check if the tag is alone on the line (only whitespace around it)
-        const lineWithoutTag = lineText.replace(tagName, '');
-        const isTagAlone = lineWithoutTag.trim() === '';
-        
-        this.scrollToTag(tagName);
-        
-        // Wait before removing the line to allow user to see the line being targeted
-        setTimeout(() => {
-          if (isTagAlone) {
-            // Remove the entire line including the newline character
-            const hasNextLine = lineEnd < view.state.doc.length;
-            const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
-            
-            view.dispatch({
-              changes: { from: lineStart, to: deleteEnd, insert: '' }
-            });
-          } else {
-            // Remove only the tag
-            const tagEnd = tagPos + tagName.length;
-            view.dispatch({
-              changes: { from: tagPos, to: tagEnd, insert: '' }
-            });
-          }
-        }, 200);
-        
-        return true;
+      let count = 0;
+      let pos = 0;
+      while ((pos = content.indexOf(tagName, pos)) !== -1) {
+        count++;
+        pos += tagName.length;
       }
-      return false;
+      return count;
+    },
+    
+    removeTag(tagName) {
+      return new Promise((resolve) => {
+        const content = view.state.doc.toString();
+        const tagPos = content.indexOf(tagName);
+
+        if (tagPos !== -1) {
+          // Find the line containing the tag
+          const line = view.state.doc.lineAt(tagPos);
+          const lineStart = line.from;
+          const lineEnd = line.to;
+          const lineText = line.text;
+          
+          // Check if the tag is alone on the line (only whitespace around it)
+          const lineWithoutTag = lineText.replace(tagName, '');
+          const isTagAlone = lineWithoutTag.trim() === '';
+          
+          this.scrollToTag(tagName);
+          
+          // Wait before removing the line to allow user to see the line being targeted
+          setTimeout(() => {
+            if (isTagAlone) {
+              // Remove the entire line including the newline character
+              const hasNextLine = lineEnd < view.state.doc.length;
+              const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
+              
+              view.dispatch({
+                changes: { from: lineStart, to: deleteEnd, insert: '' }
+              });
+            } else {
+              // Remove only the tag
+              const tagEnd = tagPos + tagName.length;
+              view.dispatch({
+                changes: { from: tagPos, to: tagEnd, insert: '' }
+              });
+            }
+            resolve(true);
+          }, 200);
+        } else {
+          resolve(false);
+        }
+      });
     },
   };
 

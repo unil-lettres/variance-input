@@ -24,6 +24,7 @@
               @foreach ($version->getFacsimiles() ?? [] as $facsimile)
                 <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
                 <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Remove</button>
+                <span class="badge bg-secondary ms-1" data-tag-count="<tag{{ $facsimile['name'] }}/>" style="display: none;"></span>
               @endforeach
             </div>
         </div>
@@ -57,6 +58,22 @@ document.addEventListener('DOMContentLoaded', () => {
         button.removeAttribute('data-inserted');
     };
     
+    const updateTagCountBadges = () => {
+        document.querySelectorAll('[data-tag-count]').forEach(badge => {
+            const tagName = badge.getAttribute('data-tag-count');
+            if (window.editor) {
+                const count = window.editor.countTagOccurrences(tagName);
+                if (count > 1) {
+                    badge.textContent = `×${count}`;
+                    badge.style.display = 'inline';
+                    badge.title = `This tag appears ${count} times in the document`;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        });
+    };
+    
     const refreshButtonStates = () => {
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
             const tagName = button.getAttribute('data-tag');
@@ -66,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTagNotInserted(button);
             }
         });
+        updateTagCountBadges();
     };
     
     toggleBtn.addEventListener('click', () => {
@@ -88,11 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
         const tagName = button.getAttribute('data-tag');
 
-        // Change button color if tag is already inserted
-        if (window.editor && window.editor.isTagInserted(tagName)) {
-            setTagInserted(button);
-        }
-        
         button.addEventListener('click', () => {
             const inserted = button.getAttribute('data-inserted') === 'true';
 
@@ -100,30 +113,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.editor.scrollToTag(tagName);
             } else {
                 window.editor.insertAtCursor(tagName);
-                setTagInserted(button);
+                refreshButtonStates();
             }
         });
     });
     
     // Handle remove buttons
     document.querySelectorAll('.editor [data-tag-remove]').forEach(removeBtn => {
-        removeBtn.addEventListener('click', () => {
+        removeBtn.addEventListener('click', async () => {
             const tagName = removeBtn.getAttribute('data-tag-remove');
-            const removed = window.editor.removeTag(tagName);
+            const removed = await window.editor.removeTag(tagName);
             
             if (removed) {
-                // Reset the corresponding insert button
-                const insertBtn = document.querySelector(`[data-tag="${tagName}"]`);
-                if (insertBtn) {
-                    insertBtn.classList.remove('btn-success');
-                    insertBtn.classList.add('btn-primary');
-                    insertBtn.removeAttribute('data-inserted');
-                }
+                refreshButtonStates();
             } else {
                 console.error(`Tag "${tagName}" not found in the editor`);
             }
         });
     });
+
+    refreshButtonStates();
 });
 </script>
 @endpush
