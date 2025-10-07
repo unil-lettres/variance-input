@@ -1,5 +1,5 @@
 import { EditorState } from "@codemirror/state";
-import { EditorView, lineNumbers } from "@codemirror/view";
+import { EditorView, lineNumbers, drawSelection, highlightActiveLine } from "@codemirror/view";
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -16,6 +16,24 @@ window.initEditor = (initialXml, versionId) => {
       foldGutter(),
       oneDark,
       EditorView.lineWrapping,
+      drawSelection(),
+      highlightActiveLine(),
+      EditorState.readOnly.of(true),
+      EditorView.editable.of(false),
+      EditorView.theme({
+        ".cm-cursor": { 
+          borderLeftColor: "#528bff !important",
+          borderLeftWidth: "2px !important",
+          display: "block !important",
+          visibility: "visible !important"
+        },
+        ".cm-selectionBackground": { 
+          backgroundColor: "#3d5975 !important" 
+        },
+        ".cm-activeLine": {
+          backgroundColor: "#2c313c !important"
+        }
+      }),
     ]
   });
 
@@ -23,10 +41,11 @@ window.initEditor = (initialXml, versionId) => {
 
   window.editor = {
     insertAtCursor(text) {
-      const { from, to } = view.state.selection.main;
+      const { head } = view.state.selection.main;
+      
       view.dispatch({
-        changes: { from, to, insert: text },
-        selection: { anchor: from + text.length }
+        changes: { from: head, insert: text },
+        selection: { anchor: head + text.length }
       });
       view.focus();
     },
