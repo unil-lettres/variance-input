@@ -70,7 +70,7 @@ window.initEditor = (initialXml, versionId) => {
       if (pos !== -1) {
         view.dispatch({
           selection: { anchor: pos, head: pos + tagName.length },
-          scrollIntoView: true
+          effects: EditorView.scrollIntoView(pos, { y: "center" })
         });
         view.focus();
       }
