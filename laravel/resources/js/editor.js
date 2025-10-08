@@ -21,7 +21,6 @@ window.initEditor = (initialXml, versionId) => {
       oneDark,
       EditorView.lineWrapping,
       drawSelection(),
-      highlightActiveLine(),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
@@ -32,11 +31,8 @@ window.initEditor = (initialXml, versionId) => {
           visibility: "visible !important"
         },
         ".cm-selectionBackground": { 
-          backgroundColor: "#3d5975 !important" 
+          backgroundColor: "#2e4862ff !important"
         },
-        ".cm-activeLine": {
-          backgroundColor: "#2c313c !important"
-        }
       }),
     ]
   });
