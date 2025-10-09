@@ -244,6 +244,9 @@ document.addEventListener('DOMContentLoaded', () => {
             imgInput.value = '';
             toggleBtn();
             loadGallery(versionSelect.value);
+            document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
+                detail: { versionId: Number(versionSelect.value) }
+            }));
         } else {
             // réactiver le bouton pour retenter un envoi
             uploadBtn.disabled = false;
