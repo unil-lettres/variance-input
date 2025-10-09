@@ -2,25 +2,28 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Version;
+use App\Models\Comparison;
 use Illuminate\Support\Facades\Storage;
 
 class EditorController extends Controller
 {
-    public function show($id)
+    public function show(Comparison $comparison, Request $request)
     {
-        $version = Version::findOrFail($id);
-    
-        // Get the XML file content
-        $relativePath = $version->folder; // e.g. "storage/uploads/lvf/versions/1lvf.xml"
-        
-        // Remove leading "storage/" if present
-        if (strpos($relativePath, 'storage/') === 0) {
-            $relativePath = substr($relativePath, strlen('storage/'));
+        $request->validate([
+            'type' => 'in:source,target'
+        ]);
+
+        $type = $request->query('type', 'source');
+        $isTarget = $type === 'target';
+
+        if ($isTarget) {
+          $version = $comparison->targetVersion;
+          $path = $comparison->getTargetFilePath();
+        } else {
+          $version = $comparison->sourceVersion;
+          $path = $comparison->getSourceFilePath();
         }
-    
-        $path = storage_path("app/public/uploads/versions/{$version->folder}.xml");
-        
+
         if (!file_exists($path)) {
             abort(404, "XML file not found at: {$path}");
         }
@@ -28,20 +31,26 @@ class EditorController extends Controller
         $xmlContent = file_get_contents($path);
     
         return view('components.main.editor', [
-            'version'    => $version,
+            'comparison' => $comparison,
+            'version' => $version,
             'xmlContent' => $xmlContent,
+            'isSource' => !$isTarget,
         ]);
     }
     
 
-    public function update(Request $request, $id)
+    public function update(Comparison $comparison, Request $request)
     {
-        $version = Version::findOrFail($id);
-        $newXml = $request->getContent(); // raw XML body
+        $request->validate([
+            'type' => 'in:source,target'
+        ]);
 
-        $relativePath = $version->folder;
-        $path = storage_path("app/public/uploads/versions/{$version->folder}.xml");
-
+        $newXml = $request->getContent();
+        $path = match ($request->query('type', 'source')) {
+            'source' => $comparison->getSourceFilePath(),
+            'target' => $comparison->getTargetFilePath(),
+        };
+        
         if (!file_exists($path)) {
             abort(404, "File not found: {$path}");
         }

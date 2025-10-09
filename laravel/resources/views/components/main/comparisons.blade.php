@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>
             <a href="/storage/uploads/comparisons/${comp.id}.html" class="btn btn-sm btn-outline-primary" target="_blank">HTML</a>
             <a href="/storage/uploads/comparisons/${comp.id}.xml"  class="btn btn-sm btn-outline-secondary" target="_blank">XML</a>
+            <a href="/comparison/${comp.id}/editor"  class="btn btn-sm btn-outline-secondary" target="_blank">✏️</a>
             <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}">🗑️</button>
           </td>
         `;

@@ -4,7 +4,7 @@ import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
 
-window.initEditor = (initialXml, versionId) => {
+window.initEditor = (initialXml, comparisonId) => {
   const container = document.getElementById('editor-container');
   const saveBtn = document.getElementById('save-xml');
 
@@ -150,7 +150,7 @@ window.initEditor = (initialXml, versionId) => {
 
   saveBtn.addEventListener('click', async () => {
     const updatedXml = view.state.doc.toString();
-    const response = await fetch(`/versions/${versionId}/editor`, {
+    const response = await fetch(`/comparison/${comparisonId}/editor`, {
       method: 'PUT',
       headers: {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),

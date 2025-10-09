@@ -3,7 +3,7 @@
 @section('content')
 <div class="container mt-4 editor">
     <h2>XML Editor for: {{ $version->name }}</h2>
-    <p>File: {{ $version->folder }}</p>
+    <p>File: {{ $isSource ? 'Source' : 'Cible' }}</p>
 
     <button id="save-xml" class="btn btn-success mb-2">Save</button>
     <button id="toggle-readonly" class="btn btn-warning mb-2">Enable Edit Mode</button>
@@ -39,9 +39,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const xmlContent = @json($xmlContent);
-    const versionId  = {{ $version->id }};
+    const comparisonId  = {{ $comparison->id }};
 
-    window.initEditor(xmlContent, versionId);
+    window.initEditor(xmlContent, comparisonId);
 
     // Handle toggle readonly button
     const toggleBtn = document.getElementById('toggle-readonly');
