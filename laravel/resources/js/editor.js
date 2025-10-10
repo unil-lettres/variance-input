@@ -69,7 +69,7 @@ const hideTagsField = StateField.define({
   })
 });
 
-window.initEditor = (initialXml, comparisonId) => {
+window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
   const container = document.getElementById('editor-container');
   const saveBtn = document.getElementById('save-xml');
 
@@ -223,7 +223,7 @@ window.initEditor = (initialXml, comparisonId) => {
 
   saveBtn.addEventListener('click', async () => {
     const updatedXml = view.state.doc.toString();
-    const response = await fetch(`/comparison/${comparisonId}/editor`, {
+    const response = await fetch(`/comparison/${comparisonId}/editor?type=${fileType}`, {
       method: 'PUT',
       headers: {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),

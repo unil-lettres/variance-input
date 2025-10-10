@@ -2,9 +2,17 @@
 
 @section('content')
 <div class="container mt-4 editor">
-    <h2>XML Editor for: {{ $version->name }}</h2>
-    <p>File: {{ $isSource ? 'Source' : 'Cible' }}</p>
     <h2>Edition de la comparaison: {{ $version->name }}</h2>
+    <p>
+        <a href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'source']) }}" 
+           class="btn btn-sm {{ $isSource ? 'btn-primary' : 'btn-outline-primary' }}">
+            Source
+        </a>
+        <a href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'target']) }}" 
+           class="btn btn-sm {{ !$isSource ? 'btn-primary' : 'btn-outline-primary' }}">
+            Cible
+        </a>
+    </p>
 
     <button id="save-xml" class="btn btn-success mb-2">Enregistrer</button>
     <button id="toggle-readonly" class="btn btn-warning mb-2">Activer le mode édition</button>
@@ -42,8 +50,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const xmlContent = @json($xmlContent);
     const comparisonId  = {{ $comparison->id }};
+    const fileType = '{{ $isSource ? "source" : "target" }}';
 
-    window.initEditor(xmlContent, comparisonId);
+    window.initEditor(xmlContent, comparisonId, fileType);
 
     // Handle toggle readonly button
     const toggleBtn = document.getElementById('toggle-readonly');
