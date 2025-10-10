@@ -53,53 +53,50 @@
             >Afficher les balises</button>
             <div class="flex gap-2">
                 <div class="row">
-                    <div class="col col-8">
+                    <div class="col col-6">
                         <div
                             id="editor-container"
                             style="border:1px solid #ccc; height:500px;"
                             class="overflow-scroll"
                         ></div>
                     </div>
+                    <div class="col col-2">
+                        @foreach ($imagesData ?? [] as $facsimile)
+                          <div class="d-flex gap-2 align-items-center">
+                              <button
+                                  class="btn btn-primary btn-sm mb-1"
+                                  data-tag="{{ $loop->iteration }}"
+                                  data-img-src="{{ Storage::url($facsimile['big']) }}"
+                                  data-enable-when-readonly
+                                  {{ !$canEdit ? 'disabled' : '' }}
+                              >Insérer {{ $loop->iteration }}</button>
+                              <button
+                                  class="btn btn-danger btn-sm mb-1"
+                                  data-tag-remove="{{ $loop->iteration }}"
+                                  data-enable-when-readonly
+                                  {{ !$canEdit ? 'disabled' : '' }}
+                              >✖️</button>
+                              <span
+                                  class="badge bg-secondary ms-1"
+                                  data-tag-count="{{ $loop->iteration }}"
+                                  style="display: none;"
+                              ></span>
+                          </div>
+                        @endforeach
+                    </div>
                     <div class="col col-4">
-                        <div class="d-flex flex-column gap-2">
-                            <div class="col">
-                                <button
-                                    class="btn btn-primary btn-sm mb-1"
-                                    data-tag="i"
-                                    data-tag-text="<i></i>"
-                                    data-enable-when-readonly
-                                    {{ !$canEdit ? 'disabled' : '' }}
-                                >Italique</button>
-                                <button
-                                    class="btn btn-danger btn-sm mb-1"
-                                    data-tag-remove="i"
-                                    data-enable-when-readonly
-                                    {{ !$canEdit ? 'disabled' : '' }}
-                                >✖️</button>
-                            </div>
-
-                            <div class="col">
-                                @foreach ($imagesData ?? [] as $facsimile)
-                                    <button
-                                        class="btn btn-primary btn-sm mb-1"
-                                        data-tag="<tag{{ $facsimile['small'] }}/>"
-                                        data-enable-when-readonly
-                                        {{ !$canEdit ? 'disabled' : '' }}
-                                    >Insérer &lt;tag{{ $facsimile['small'] }}&gt;</button>
-                                    <button
-                                        class="btn btn-danger btn-sm mb-1"
-                                        data-tag-remove="<tag{{ $facsimile['small'] }}/>"
-                                        data-enable-when-readonly
-                                        {{ !$canEdit ? 'disabled' : '' }}
-                                    >✖️</button>
-                                    <span
-                                        class="badge bg-secondary ms-1"
-                                        data-tag-count="<tag{{ $facsimile['small'] }}/>"
-                                        style="display: none;"
-                                    ></span>
-                                @endforeach
-                            </div>
+                      <div id="loading-spinner" class="text-center" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                          <span class="visually-hidden">Chargement...</span>
                         </div>
+                      </div>
+                      <img 
+                        id="facsimile-preview" 
+                        src="" 
+                        alt="Aperçu du facsimilé" 
+                        style="max-width: 100%; display: none; border: 1px solid #ccc; padding: 5px;"
+                      >
+                      <p id="no-preview" class="text-muted">Survolez un bouton pour voir l'aperçu du facsimilé</p>
                     </div>
                 </div>
             </div>
@@ -222,6 +219,64 @@
             });
 
             refreshButtonStates();
+
+            // Handle image preview on hover
+            const previewImg = document.getElementById('facsimile-preview');
+            const noPreviewText = document.getElementById('no-preview');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            let spinnerTimeout = null;
+            
+            document.querySelectorAll('.editor [data-img-src]').forEach(button => {
+                button.addEventListener('mouseenter', () => {
+                    const imgSrc = button.getAttribute('data-img-src');
+                    if (imgSrc) {
+                        // Hide text and image immediately
+                        previewImg.style.display = 'none';
+                        if (noPreviewText) noPreviewText.style.display = 'none';
+                        
+                        // Set timeout to show spinner only if loading takes more than 500ms
+                        spinnerTimeout = setTimeout(() => {
+                            loadingSpinner.style.display = 'block';
+                        }, 500);
+                        
+                        // Create a new image to preload
+                        const img = new Image();
+                        
+                        img.onload = () => {
+                            // Clear the spinner timeout and hide spinner
+                            clearTimeout(spinnerTimeout);
+                            loadingSpinner.style.display = 'none';
+                            // Show the image
+                            previewImg.src = imgSrc;
+                            previewImg.style.display = 'block';
+                        };
+                        
+                        img.onerror = () => {
+                            // Clear the spinner timeout and hide spinner
+                            clearTimeout(spinnerTimeout);
+                            loadingSpinner.style.display = 'none';
+                            // Show error message
+                            if (noPreviewText) {
+                                noPreviewText.textContent = 'Erreur lors du chargement de l\'image';
+                                noPreviewText.style.display = 'block';
+                            }
+                        };
+                        
+                        img.src = imgSrc;
+                    }
+                });
+
+                button.addEventListener('mouseleave', () => {
+                    // Clear spinner timeout if still pending
+                    clearTimeout(spinnerTimeout);
+                    loadingSpinner.style.display = 'none';
+                    previewImg.style.display = 'none';
+                    if (noPreviewText) {
+                        noPreviewText.textContent = 'Survolez un bouton pour voir l\'aperçu du facsimilé';
+                        noPreviewText.style.display = 'block';
+                    }
+                });
+            });
         });
     </script>
 @endpush
