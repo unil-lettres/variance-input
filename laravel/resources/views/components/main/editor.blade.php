@@ -96,7 +96,7 @@
                         alt="Aperçu du facsimilé" 
                         style="max-width: 100%; display: none; border: 1px solid #ccc; padding: 5px;"
                       >
-                      <p id="no-preview" class="text-muted">Survolez un bouton pour voir l'aperçu du facsimilé</p>
+                      <p id="no-preview" class="text-muted">Cliquez sur un bouton "Insérer..." pour activer l'insertion</p>
                     </div>
                 </div>
             </div>
@@ -177,6 +177,20 @@
 
                 if (isReadOnly) {
                     refreshButtonStates();
+                } else {
+                    // Désactiver le mode d'insertion quand on active le mode édition
+                    if (activeButton) {
+                        activeButton.classList.remove('btn-warning');
+                        activeButton.classList.add('btn-primary');
+                        activeButton = null;
+                        
+                        // Masquer l'image
+                        previewImg.style.display = 'none';
+                        if (noPreviewText) {
+                            noPreviewText.textContent = 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion';
+                            noPreviewText.style.display = 'block';
+                        }
+                    }
                 }
             });
 
@@ -188,21 +202,87 @@
                 toggleTagsBtn.classList.toggle('btn-info');
             });
 
-            // Handle insert buttons
+            // Handle insert buttons - toggle mode
+            let activeButton = null;
+
             document.querySelectorAll('.editor [data-tag]').forEach(button => {
                 const tagName = button.getAttribute('data-tag');
+                const imgSrc = button.getAttribute('data-img-src');
 
                 button.addEventListener('click', () => {
-                    const inserted = button.getAttribute('data-inserted') === 'true';
+                    // Si le bouton est déjà actif, on le désactive
+                    if (activeButton === button) {
+                        button.classList.remove('btn-warning');
+                        button.classList.add('btn-primary');
+                        activeButton = null;
+                        
+                        // Masquer l'image
+                        previewImg.style.display = 'none';
+                        if (noPreviewText) {
+                            noPreviewText.textContent = 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion';
+                            noPreviewText.style.display = 'block';
+                        }
+                        return;
+                    }
 
-                    if (inserted) {
-                        window.editor.scrollToTag(tagName);
-                    } else {
-                        window.editor.insertAtCursor(tagName);
-                        refreshButtonStates();
+                    // Désactiver le bouton précédent s'il existe
+                    if (activeButton) {
+                        activeButton.classList.remove('btn-warning');
+                        activeButton.classList.add('btn-primary');
+                    }
+
+                    // Activer le bouton actuel
+                    button.classList.remove('btn-primary', 'btn-success');
+                    button.classList.add('btn-warning');
+                    activeButton = button;
+
+                    // Afficher l'image
+                    if (imgSrc) {
+                        if (noPreviewText) noPreviewText.style.display = 'none';
+                        loadingSpinner.style.display = 'block';
+                        
+                        const img = new Image();
+                        img.onload = () => {
+                            loadingSpinner.style.display = 'none';
+                            previewImg.src = imgSrc;
+                            previewImg.style.display = 'block';
+                        };
+                        img.onerror = () => {
+                            loadingSpinner.style.display = 'none';
+                            if (noPreviewText) {
+                                noPreviewText.textContent = 'Erreur lors du chargement de l\'image';
+                                noPreviewText.style.display = 'block';
+                            }
+                        };
+                        img.src = imgSrc;
                     }
                 });
             });
+
+            // Gérer le clic dans l'éditeur pour insérer le tag
+            const editorContainer = document.getElementById('editor-container');
+            if (editorContainer) {
+                editorContainer.addEventListener('click', () => {
+                    if (activeButton && window.editor) {
+                        const tagName = activeButton.getAttribute('data-tag');
+                        window.editor.insertAtCursor(tagName);
+                        
+                        // Désactiver le bouton
+                        activeButton.classList.remove('btn-warning');
+                        activeButton.classList.add('btn-primary');
+                        activeButton = null;
+                        
+                        // Masquer l'image
+                        previewImg.style.display = 'none';
+                        if (noPreviewText) {
+                            noPreviewText.textContent = 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion';
+                            noPreviewText.style.display = 'block';
+                        }
+                        
+                        refreshButtonStates();
+                    }
+                });
+            }
 
             // Handle remove buttons
             document.querySelectorAll('.editor [data-tag-remove]').forEach(removeBtn => {
@@ -220,63 +300,10 @@
 
             refreshButtonStates();
 
-            // Handle image preview on hover
+            // Handle image preview on hover (removed - now handled by button click)
             const previewImg = document.getElementById('facsimile-preview');
             const noPreviewText = document.getElementById('no-preview');
             const loadingSpinner = document.getElementById('loading-spinner');
-            let spinnerTimeout = null;
-            
-            document.querySelectorAll('.editor [data-img-src]').forEach(button => {
-                button.addEventListener('mouseenter', () => {
-                    const imgSrc = button.getAttribute('data-img-src');
-                    if (imgSrc) {
-                        // Hide text and image immediately
-                        previewImg.style.display = 'none';
-                        if (noPreviewText) noPreviewText.style.display = 'none';
-                        
-                        // Set timeout to show spinner only if loading takes more than 500ms
-                        spinnerTimeout = setTimeout(() => {
-                            loadingSpinner.style.display = 'block';
-                        }, 500);
-                        
-                        // Create a new image to preload
-                        const img = new Image();
-                        
-                        img.onload = () => {
-                            // Clear the spinner timeout and hide spinner
-                            clearTimeout(spinnerTimeout);
-                            loadingSpinner.style.display = 'none';
-                            // Show the image
-                            previewImg.src = imgSrc;
-                            previewImg.style.display = 'block';
-                        };
-                        
-                        img.onerror = () => {
-                            // Clear the spinner timeout and hide spinner
-                            clearTimeout(spinnerTimeout);
-                            loadingSpinner.style.display = 'none';
-                            // Show error message
-                            if (noPreviewText) {
-                                noPreviewText.textContent = 'Erreur lors du chargement de l\'image';
-                                noPreviewText.style.display = 'block';
-                            }
-                        };
-                        
-                        img.src = imgSrc;
-                    }
-                });
-
-                button.addEventListener('mouseleave', () => {
-                    // Clear spinner timeout if still pending
-                    clearTimeout(spinnerTimeout);
-                    loadingSpinner.style.display = 'none';
-                    previewImg.style.display = 'none';
-                    if (noPreviewText) {
-                        noPreviewText.textContent = 'Survolez un bouton pour voir l\'aperçu du facsimilé';
-                        noPreviewText.style.display = 'block';
-                    }
-                });
-            });
         });
     </script>
 @endpush
