@@ -2,41 +2,47 @@
 
 @section('content')
 <div class="container mt-4 editor">
-    <h2>Edition de la comparaison: {{ $version->name }}</h2>
-    <p>
-        <a href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'source']) }}" 
-           class="btn btn-sm {{ $isSource ? 'btn-primary' : 'btn-outline-primary' }}">
-            Source
-        </a>
-        <a href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'target']) }}" 
-           class="btn btn-sm {{ !$isSource ? 'btn-primary' : 'btn-outline-primary' }}">
-            Cible
-        </a>
-    </p>
+    <h1>Edition de la comparaison <b>{{ $version->name }}</b></h1>
+    
+    <ul class="nav nav-tabs mt-3">
+        <li class="nav-item">
+            <a href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'source']) }}" 
+               class="nav-link {{ $isSource ? 'active' : '' }}">
+                Source
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'target']) }}" 
+               class="nav-link {{ !$isSource ? 'active' : '' }}">
+                Cible
+            </a>
+        </li>
+    </ul>
+    <div class="border border-top-0 p-3">
+      <button id="save-xml" class="btn btn-success mb-2">Enregistrer</button>
+      <button id="toggle-readonly" class="btn btn-warning mb-2">Activer le mode édition</button>
+      <button id="toggle-tags" class="btn btn-secondary mb-2">Afficher les balises</button>
 
-    <button id="save-xml" class="btn btn-success mb-2">Enregistrer</button>
-    <button id="toggle-readonly" class="btn btn-warning mb-2">Activer le mode édition</button>
-    <button id="toggle-tags" class="btn btn-secondary mb-2">Afficher les balises</button>
-
-    <div class="flex gap-2">
-      <div class="row">
-        <div class="col col-8">
-          <div id="editor-container" style="border:1px solid #ccc; height:500px;" class="overflow-scroll"></div>
-        </div>
-        <div class="col col-4">
-          <div class="d-flex flex-column gap-2">
-            <div class="col">
-              <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly>Italique</button>
-              <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly>❌</button>
-            </div>
-            
-            <div class="col">
-              @foreach ($version->getFacsimiles() ?? [] as $facsimile)
-                <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Insérer &lt;tag{{ $facsimile['name'] }}&gt;</button>
-                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>❌</button>
-                <span class="badge bg-secondary ms-1" data-tag-count="<tag{{ $facsimile['name'] }}/>" style="display: none;"></span>
-              @endforeach
-            </div>
+      <div class="flex gap-2">
+        <div class="row">
+          <div class="col col-8">
+            <div id="editor-container" style="border:1px solid #ccc; height:500px;" class="overflow-scroll"></div>
+          </div>
+          <div class="col col-4">
+            <div class="d-flex flex-column gap-2">
+              <div class="col">
+                <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly>Italique</button>
+                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly>✖️</button>
+              </div>
+              
+              <div class="col">
+                @foreach ($version->getFacsimiles() ?? [] as $facsimile)
+                  <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Insérer &lt;tag{{ $facsimile['name'] }}&gt;</button>
+                  <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>✖️</button>
+                  <span class="badge bg-secondary ms-1" data-tag-count="<tag{{ $facsimile['name'] }}/>" style="display: none;"></span>
+                @endforeach
+              </div>
+          </div>
         </div>
       </div>
     </div>
