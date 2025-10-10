@@ -4,9 +4,14 @@
 <div class="container mt-4 editor">
     <h1>Edition de la version <b>{{ $version->name }}</b> pour la comparaison <b>#{{ $comparison->id }}</b></h1>
     
-    @if($isPublished)
+    @if(!$canEdit)
     <div class="alert alert-warning mt-3" role="alert">
-        <strong>⚠️ Attention :</strong> Cette comparaison est actuellement publiée. Les modifications ne sont pas autorisées.
+        <strong>⚠️ Attention :</strong> Les modifications ne sont pas autorisées.
+        @if($isPublished)
+            Cette comparaison est actuellement publiée.
+        @elseif(!$imagesData)
+            Les facsimilés pour cette version ne sont pas publiés.
+        @endif
     </div>
     @endif
     
@@ -25,8 +30,8 @@
         </li>
     </ul>
     <div class="border border-top-0 p-3">
-      <button id="save-xml" class="btn btn-success mb-2" {{ $isPublished ? 'disabled' : '' }}>Enregistrer</button>
-      <button id="toggle-readonly" class="btn btn-warning mb-2" {{ $isPublished ? 'disabled' : '' }}>Activer le mode édition</button>
+      <button id="save-xml" class="btn btn-success mb-2" {{ !$canEdit ? 'disabled' : '' }}>Enregistrer</button>
+      <button id="toggle-readonly" class="btn btn-warning mb-2" {{ !$canEdit ? 'disabled' : '' }}>Activer le mode édition</button>
       <button id="toggle-tags" class="btn btn-secondary mb-2">Afficher les balises</button>
 
       <div class="flex gap-2">
@@ -37,15 +42,15 @@
           <div class="col col-4">
             <div class="d-flex flex-column gap-2">
               <div class="col">
-                <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>Italique</button>
-                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>✖️</button>
+                <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly {{ !$canEdit ? 'disabled' : '' }}>Italique</button>
+                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly {{ !$canEdit ? 'disabled' : '' }}>✖️</button>
               </div>
               
               <div class="col">
-                @foreach ($version->getFacsimiles() ?? [] as $facsimile)
-                  <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>Insérer &lt;tag{{ $facsimile['name'] }}&gt;</button>
-                  <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>✖️</button>
-                  <span class="badge bg-secondary ms-1" data-tag-count="<tag{{ $facsimile['name'] }}/>" style="display: none;"></span>
+                @foreach ($imagesData ?? [] as $facsimile)
+                  <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['small'] }}/>" data-enable-when-readonly {{ !$canEdit ? 'disabled' : '' }}>Insérer &lt;tag{{ $facsimile['small'] }}&gt;</button>
+                  <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['small'] }}/>" data-enable-when-readonly {{ !$canEdit ? 'disabled' : '' }}>✖️</button>
+                  <span class="badge bg-secondary ms-1" data-tag-count="<tag{{ $facsimile['small'] }}/>" style="display: none;"></span>
                 @endforeach
               </div>
           </div>
@@ -63,11 +68,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const xmlContent = @json($xmlContent);
     const comparisonId  = {{ $comparison->id }};
     const fileType = '{{ $isSource ? "source" : "target" }}';
+    const canEdit = {{ $canEdit ? 'true' : 'false' }};
     const isPublished = {{ $isPublished ? 'true' : 'false' }};
+    const imagesData = @json($imagesData ?? null); // TODO not used yet
 
     window.initEditor(xmlContent, comparisonId, fileType);
 
-    if (isPublished && window.editor) {
+    if (!canEdit && window.editor) {
         window.editor.setReadOnly(true);
     }
 

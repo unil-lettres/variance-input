@@ -32,14 +32,16 @@ class EditorController extends Controller
     
         $xmlContent = file_get_contents($path);
 
-        $isPublished = $this->isComparisonPublished($comparison);
+        $publicationInfo = $this->getPublicationInfo($comparison, $type);
     
         return view('components.main.editor', [
             'comparison' => $comparison,
             'version' => $version,
             'xmlContent' => $xmlContent,
             'isSource' => !$isTarget,
-            'isPublished' => $isPublished,
+            'isPublished' => $publicationInfo['is_published'],
+            'canEdit' => $publicationInfo['can_edit'],
+            'imagesData' => $publicationInfo['images_data'],
         ]);
     }
     
@@ -50,10 +52,11 @@ class EditorController extends Controller
             'type' => 'in:source,target'
         ]);
 
-        if ($this->isComparisonPublished($comparison)) {
-            return response()->json([
-                'error' => 'Cette comparaison est actuellement publiée. Les modifications ne sont pas autorisées.'
-            ], 403);
+        $type = $request->query('type', 'source');
+        $publicationInfo = $this->getPublicationInfo($comparison, $type);
+        
+        if (!$publicationInfo['can_edit']) {
+            return response()->json(['error' => 'Les modifications ne sont pas autorisées.'], 403);
         }
 
         $newXml = $request->getContent();
@@ -72,10 +75,15 @@ class EditorController extends Controller
     }
 
     /**
-    * Check if a comparison is published by verifying that all required files
-    * exist in the destination directory.
+     * Get publication information including the status and images JSON data.
+     * Returns [
+     *   'is_published' => bool,
+     *   'has_json' => bool,
+     *   'images_data' => array|null,
+     *   'can_edit' => bool
+     * ]
      */
-    private function isComparisonPublished(Comparison $comparison): bool
+    private function getPublicationInfo(Comparison $comparison, string $type = 'source'): array
     {
         $workInfo = DB::table('versions')
             ->where('versions.id', $comparison->source_id)
@@ -84,7 +92,12 @@ class EditorController extends Controller
             ->first();
 
         if (!$workInfo) {
-            return false;
+            return [
+                'is_published' => false,
+                'has_json' => false,
+                'images_data' => null,
+                'can_edit' => false
+            ];
         }
 
         $authorFolder = DB::table('authors')
@@ -92,18 +105,46 @@ class EditorController extends Controller
             ->value('folder');
 
         if (!$authorFolder) {
-            return false;
+            return [
+                'is_published' => false,
+                'has_json' => false,
+                'images_data' => null,
+                'can_edit' => false
+            ];
         }
 
         $destDir = "uploads/{$authorFolder}/{$workInfo->work_folder}/{$comparison->folder}";
         $required = PublishController::COMPONENTS;
 
+        // Check if all required files exist (is published)
+        $isPublished = true;
         foreach ($required as $file) {
             if (!Storage::disk('public')->exists("{$destDir}/{$file}")) {
-                return false;
+                $isPublished = false;
+                break;
             }
         }
 
-        return true;
+        // Check for images JSON file
+        $baseName = strtolower(sprintf('%s--%s--%s', $authorFolder, $workInfo->work_folder, $comparison->folder));
+        
+        $versionId = ($type === 'target') ? $comparison->target_id : $comparison->source_id;
+        $version = DB::table('versions')->select('folder')->find($versionId);
+        
+        $imagesData = null;
+
+        if ($version && $version->folder) {
+            $jsonPath = "uploads/{$authorFolder}/{$workInfo->work_folder}/{$version->folder}/images_{$type}_{$baseName}.json";
+            if (Storage::disk('public')->exists($jsonPath)) {
+                $jsonContent = Storage::disk('public')->get($jsonPath);
+                $imagesData = json_decode($jsonContent, true);
+            }
+        }
+
+        return [
+            'is_published' => $isPublished,
+            'images_data' => $imagesData,
+            'can_edit' => !$isPublished && $imagesData !== null,
+        ];
     }
 }
