@@ -61,7 +61,6 @@
 @endsection
 
 @push('scripts')
-@vite(['resources/js/app.js'])
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
