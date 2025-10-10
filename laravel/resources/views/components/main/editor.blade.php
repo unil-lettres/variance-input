@@ -136,6 +136,7 @@
 
             // State
             let activeButton = null;
+            let lastImageSrc = null; // Track the last image displayed
 
             // Initialize editor
             window.initEditor(xmlContent, comparisonId, fileType);
@@ -162,31 +163,41 @@
             showMessage(MESSAGES.DEFAULT);
 
             const hidePreview = () => {
-                elements.previewImg.style.display = 'none';
-                showMessage(MESSAGES.DEFAULT);
+                // Only hide if no image has been displayed yet
+                if (!lastImageSrc) {
+                    elements.previewImg.style.display = 'none';
+                    showMessage(MESSAGES.DEFAULT);
+                }
             };
 
             const deactivateInsertMode = () => {
                 if (activeButton) {
                     setButtonState(activeButton, BUTTON_STATES.INACTIVE);
                     activeButton = null;
-                    hidePreview();
                 }
             };
 
             const loadImage = (imgSrc) => {
                 if (!imgSrc) return;
                 
+                lastImageSrc = imgSrc;
                 if (elements.noPreviewText) elements.noPreviewText.style.display = 'none';
-                elements.loadingSpinner.style.display = 'block';
+                
+                // Set a timeout to show spinner only if loading takes more than 500ms
+                let spinnerTimeout = setTimeout(() => {
+                    elements.previewImg.style.display = 'none';
+                    elements.loadingSpinner.style.display = 'block';
+                }, 500);
                 
                 const img = new Image();
                 img.onload = () => {
+                    clearTimeout(spinnerTimeout);
                     elements.loadingSpinner.style.display = 'none';
                     elements.previewImg.src = imgSrc;
                     elements.previewImg.style.display = 'block';
                 };
                 img.onerror = () => {
+                    clearTimeout(spinnerTimeout);
                     elements.loadingSpinner.style.display = 'none';
                     showMessage(MESSAGES.ERROR);
                 };
@@ -252,9 +263,10 @@
 
             // Insert buttons
             document.querySelectorAll('.editor [data-tag]').forEach(button => {
+                const imgSrc = button.getAttribute('data-img-src');
+
                 button.addEventListener('click', () => {
                     const imageName = button.getAttribute('data-tag');
-                    const imgSrc = button.getAttribute('data-img-src');
 
                     // Si le tag est déjà inséré, scroll vers celui-ci
                     if (window.editor && window.editor.isPageMarkerInserted(imageName)) {
@@ -275,6 +287,23 @@
                     setButtonState(button, BUTTON_STATES.ACTIVE);
                     activeButton = button;
                     loadImage(imgSrc);
+                });
+
+                // Hover to show image preview
+                button.addEventListener('mouseenter', () => {
+                    if (imgSrc) {
+                        loadImage(imgSrc);
+                    }
+                });
+
+                // On mouse leave, restore active button image or keep last image
+                button.addEventListener('mouseleave', () => {
+                    if (activeButton && activeButton !== button) {
+                        // Restore active button image
+                        const activeImgSrc = activeButton.getAttribute('data-img-src');
+                        loadImage(activeImgSrc);
+                    }
+                    // If no active button, keep the last image displayed (no hiding)
                 });
             });
 
