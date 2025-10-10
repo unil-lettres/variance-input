@@ -10,14 +10,14 @@ class InvisibleTagWidget extends WidgetType {
     super();
     this.tag = tag;
   }
-  
+
   toDOM() {
     const span = document.createElement("span");
     span.style.display = "none";
     span.textContent = this.tag;
     return span;
   }
-  
+
   ignoreEvent() {
     return false;
   }
@@ -41,20 +41,20 @@ const hideTagsField = StateField.define({
   },
   provide: f => EditorView.decorations.from(f, hideTags => {
     if (!hideTags) return Decoration.none;
-    
+
     return view => {
       const widgets = [];
       const doc = view.state.doc;
       const text = doc.toString();
-      
+
       // Regex to match XML tags: <tag...> or </tag> or <tag/>
       const tagRegex = /<\/?[a-zA-Z][^>]*\/?>/g;
       let match;
-      
+
       while ((match = tagRegex.exec(text)) !== null) {
         const from = match.index;
         const to = from + match[0].length;
-        
+
         widgets.push(
           Decoration.replace({
             widget: new InvisibleTagWidget(match[0]),
@@ -63,7 +63,7 @@ const hideTagsField = StateField.define({
           }).range(from, to)
         );
       }
-      
+
       return Decoration.set(widgets);
     };
   })
@@ -90,13 +90,13 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
-        ".cm-cursor": { 
+        ".cm-cursor": {
           borderLeftColor: "#528bff !important",
           borderLeftWidth: "2px !important",
           display: "block !important",
           visibility: "visible !important"
         },
-        ".cm-selectionBackground": { 
+        ".cm-selectionBackground": {
           backgroundColor: "#2e4862ff !important"
         },
       }),
@@ -119,6 +119,15 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       view.focus();
       return isReadOnly;
     },
+    setReadOnly(value) {
+      isReadOnly = value;
+      view.dispatch({
+        effects: [
+          readOnlyCompartment.reconfigure(EditorState.readOnly.of(isReadOnly)),
+          editableCompartment.reconfigure(EditorView.editable.of(!isReadOnly))
+        ]
+      });
+    },
     toggleTagVisibility() {
       const currentState = view.state.field(hideTagsField);
       view.dispatch({
@@ -131,26 +140,26 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       const line = view.state.doc.lineAt(head);
       const lineStart = line.from;
       const lineText = line.text;
-      
+
       // Extract indentation from current line
       const indentMatch = lineText.match(/^(\s*)/);
       const indent = indentMatch ? indentMatch[1] : '';
-      
+
       // Insert indented text + new line before current line
       const insertText = indent + text + '\n';
-      
+
       view.dispatch({
         changes: { from: lineStart, insert: insertText },
         selection: { anchor: lineStart }
       });
       view.focus();
     },
-    
+
     findTagPosition(tagName) {
       const content = view.state.doc.toString();
       return content.indexOf(tagName);
     },
-    
+
     scrollToTag(tagName) {
       const pos = this.findTagPosition(tagName);
       if (pos !== -1) {
@@ -165,7 +174,7 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
     isTagInserted(tagName) {
       return this.findTagPosition(tagName) !== -1;
     },
-    
+
     countTagOccurrences(tagName) {
       const content = view.state.doc.toString();
       let count = 0;
@@ -176,7 +185,7 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       }
       return count;
     },
-    
+
     removeTag(tagName) {
       return new Promise((resolve) => {
         const content = view.state.doc.toString();
@@ -188,20 +197,20 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
           const lineStart = line.from;
           const lineEnd = line.to;
           const lineText = line.text;
-          
+
           // Check if the tag is alone on the line (only whitespace around it)
           const lineWithoutTag = lineText.replace(tagName, '');
           const isTagAlone = lineWithoutTag.trim() === '';
-          
+
           this.scrollToTag(tagName);
-          
+
           // Wait before removing the line to allow user to see the line being targeted
           setTimeout(() => {
             if (isTagAlone) {
               // Remove the entire line including the newline character
               const hasNextLine = lineEnd < view.state.doc.length;
               const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
-              
+
               view.dispatch({
                 changes: { from: lineStart, to: deleteEnd, insert: '' }
               });
@@ -234,6 +243,13 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
     });
 
     const data = await response.json();
-    alert(data.message || 'XML saved successfully!');
+
+    if (response.status === 403) {
+      alert(data.error || 'Modification non autorisée : cette comparaison est publiée.');
+    } else if (response.ok) {
+      alert(data.message || 'Fichier sauvegardé avec succès !');
+    } else {
+      alert(data.error || 'Une erreur est survenue lors de la sauvegarde.');
+    }
   });
 };

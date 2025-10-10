@@ -4,6 +4,12 @@
 <div class="container mt-4 editor">
     <h1>Edition de la version <b>{{ $version->name }}</b> pour la comparaison <b>#{{ $comparison->id }}</b></h1>
     
+    @if($isPublished)
+    <div class="alert alert-warning mt-3" role="alert">
+        <strong>⚠️ Attention :</strong> Cette comparaison est actuellement publiée. Les modifications ne sont pas autorisées.
+    </div>
+    @endif
+    
     <ul class="nav nav-tabs mt-3">
         <li class="nav-item">
             <a href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'source']) }}" 
@@ -19,8 +25,8 @@
         </li>
     </ul>
     <div class="border border-top-0 p-3">
-      <button id="save-xml" class="btn btn-success mb-2">Enregistrer</button>
-      <button id="toggle-readonly" class="btn btn-warning mb-2">Activer le mode édition</button>
+      <button id="save-xml" class="btn btn-success mb-2" {{ $isPublished ? 'disabled' : '' }}>Enregistrer</button>
+      <button id="toggle-readonly" class="btn btn-warning mb-2" {{ $isPublished ? 'disabled' : '' }}>Activer le mode édition</button>
       <button id="toggle-tags" class="btn btn-secondary mb-2">Afficher les balises</button>
 
       <div class="flex gap-2">
@@ -31,14 +37,14 @@
           <div class="col col-4">
             <div class="d-flex flex-column gap-2">
               <div class="col">
-                <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly>Italique</button>
-                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly>✖️</button>
+                <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>Italique</button>
+                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>✖️</button>
               </div>
               
               <div class="col">
                 @foreach ($version->getFacsimiles() ?? [] as $facsimile)
-                  <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Insérer &lt;tag{{ $facsimile['name'] }}&gt;</button>
-                  <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>✖️</button>
+                  <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>Insérer &lt;tag{{ $facsimile['name'] }}&gt;</button>
+                  <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly {{ $isPublished ? 'disabled' : '' }}>✖️</button>
                   <span class="badge bg-secondary ms-1" data-tag-count="<tag{{ $facsimile['name'] }}/>" style="display: none;"></span>
                 @endforeach
               </div>
@@ -57,8 +63,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const xmlContent = @json($xmlContent);
     const comparisonId  = {{ $comparison->id }};
     const fileType = '{{ $isSource ? "source" : "target" }}';
+    const isPublished = {{ $isPublished ? 'true' : 'false' }};
 
     window.initEditor(xmlContent, comparisonId, fileType);
+
+    if (isPublished && window.editor) {
+        window.editor.setReadOnly(true);
+    }
 
     // Handle toggle readonly button
     const toggleBtn = document.getElementById('toggle-readonly');
