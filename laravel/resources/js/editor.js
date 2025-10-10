@@ -69,6 +69,44 @@ const hideTagsField = StateField.define({
   })
 });
 
+// Helper function to create page number decorations
+function createPageNumberDecorations(state) {
+  const decorations = [];
+  const text = state.doc.toString();
+
+  // Regex to match page number content: <span class="page-number">XXX</span>
+  const pageNumberRegex = /<span class="page-number">([^<]*)<\/span>/g;
+  let match;
+
+  while ((match = pageNumberRegex.exec(text)) !== null) {
+    const contentStart = match.index + '<span class="page-number">'.length;
+    const contentEnd = contentStart + match[1].length;
+
+    decorations.push(
+      Decoration.mark({
+        class: "cm-page-number"
+      }).range(contentStart, contentEnd)
+    );
+  }
+
+  return Decoration.set(decorations);
+}
+
+// State field to highlight page numbers
+const pageNumberHighlight = StateField.define({
+  create(state) {
+    return createPageNumberDecorations(state);
+  },
+  update(decorations, tr) {
+    // Only recalculate if the document has changed
+    if (tr.docChanged) {
+      return createPageNumberDecorations(tr.state);
+    }
+    return decorations;
+  },
+  provide: f => EditorView.decorations.from(f)
+});
+
 window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
   const container = document.getElementById('editor-container');
   const saveBtn = document.getElementById('save-xml');
@@ -87,6 +125,7 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField, // Add the tag hiding field
+      pageNumberHighlight, // Add the page number highlighting field
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
@@ -98,6 +137,16 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
         },
         ".cm-selectionBackground": {
           backgroundColor: "#2e4862ff !important"
+        },
+        ".cm-page-number": {
+          backgroundColor: "#ff6b35 !important",
+          color: "#ffffff !important",
+          fontWeight: "bold !important",
+          padding: "2px 6px !important",
+          borderRadius: "3px !important",
+          border: "2px solid #ff4500 !important",
+          display: "inline-block !important",
+          fontSize: "1.1em !important"
         },
       }),
     ]
