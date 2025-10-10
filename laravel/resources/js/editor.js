@@ -155,6 +155,20 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       view.focus();
     },
 
+    insertPageMarker(imageName, pageNumber = '001') {
+      const { head } = view.state.selection.main;
+
+      // Build the page marker tag
+      const pageMarkerTag = `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">${pageNumber}</span><img src="/img/settings/page_right.svg" /></span>`;
+
+      // Insert at cursor position
+      view.dispatch({
+        changes: { from: head, insert: pageMarkerTag },
+        selection: { anchor: head + pageMarkerTag.length }
+      });
+      view.focus();
+    },
+
     findTagPosition(tagName) {
       const content = view.state.doc.toString();
       return content.indexOf(tagName);

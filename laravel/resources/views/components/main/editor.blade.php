@@ -275,8 +275,9 @@
             if (elements.editorContainer) {
                 elements.editorContainer.addEventListener('click', () => {
                     if (activeButton && window.editor) {
-                        const tagName = activeButton.getAttribute('data-tag');
-                        window.editor.insertAtCursor(tagName);
+                        const imageName = activeButton.getAttribute('data-tag');
+                        const pageNumber = '001'; // Hard coded for now
+                        window.editor.insertPageMarker(imageName, pageNumber);
                         deactivateInsertMode();
                         refreshButtonStates();
                     }
