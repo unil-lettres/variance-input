@@ -147,7 +147,7 @@
                         if (count > 1) {
                             badge.textContent = `×${count}`;
                             badge.style.display = 'inline';
-                            badge.title = `This tag appears ${count} times in the document`;
+                            badge.title = `Cette balise apparaît ${count} fois dans le document`;
                         } else {
                             badge.style.display = 'none';
                         }
@@ -169,7 +169,7 @@
 
             toggleBtn.addEventListener('click', () => {
                 const isReadOnly = window.editor.toggleReadOnly();
-                toggleBtn.textContent = isReadOnly ? 'Enable Edit Mode' : 'Enable Read-Only';
+                toggleBtn.textContent = isReadOnly ? 'Activer le mode édition' : 'Activer le mode lecture seule';
                 toggleBtn.classList.toggle('btn-warning');
                 toggleBtn.classList.toggle('btn-info');
 
@@ -186,7 +186,7 @@
             // Handle toggle tags visibility button
             toggleTagsBtn.addEventListener('click', () => {
                 const tagsHidden = window.editor.toggleTagVisibility();
-                toggleTagsBtn.textContent = tagsHidden ? 'Show Tags' : 'Hide Tags';
+                toggleTagsBtn.textContent = tagsHidden ? 'Afficher les balises' : 'Masquer les balises';
                 toggleTagsBtn.classList.toggle('btn-secondary');
                 toggleTagsBtn.classList.toggle('btn-info');
             });
@@ -216,7 +216,7 @@
                     if (removed) {
                         refreshButtonStates();
                     } else {
-                        console.error(`Tag "${tagName}" not found in the editor`);
+                        console.error(`Balise "${tagName}" introuvable dans l'éditeur`);
                     }
                 });
             });

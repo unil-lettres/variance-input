@@ -66,12 +66,12 @@ class EditorController extends Controller
         };
         
         if (!file_exists($path)) {
-            abort(404, "File not found: {$path}");
+            abort(404, "Fichier introuvable: {$path}");
         }
 
         file_put_contents($path, $newXml);
 
-        return response()->json(['message' => 'XML updated successfully']);
+        return response()->json(['message' => 'Fichier mis à jour avec succès']);
     }
 
     /**
