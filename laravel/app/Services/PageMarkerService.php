@@ -6,10 +6,13 @@ use App\Models\Comparison;
 use App\Models\Version;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 class PageMarkerService
 {
     private const MARKER_TEMPLATE = '<span class="page-marker" data-image-name="%s"><span class="page-number">%s</span><img src="%s" /></span>';
+    private ?string $progressPath = null;
+    private array $progress = [];
 
     /**
      * Apply a _lignes file to every comparison that involves the given version.
@@ -27,6 +30,14 @@ class PageMarkerService
         }
 
         $clear = Arr::get($options, 'clear_existing', true);
+        $replaceExisting = Arr::get($options, 'replace_existing', true);
+        $limitComparisons = Arr::get($options, 'comparisons');
+        if ($limitComparisons) {
+            $limitComparisons = collect($limitComparisons)
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values();
+        }
 
         $version->loadMissing('work.author');
         $authorFolder = $version->work->author->folder ?? null;
@@ -36,29 +47,37 @@ class PageMarkerService
             throw new \RuntimeException('Version incomplète : dossier auteur/œuvre introuvable.');
         }
 
+        $this->initProgress($version->id, count($entries));
+
         $summary = [
             'source' => ['comparisons' => 0, 'processed' => 0, 'inserted' => 0, 'missed' => 0, 'skipped' => 0, 'details' => []],
             'target' => ['comparisons' => 0, 'processed' => 0, 'inserted' => 0, 'missed' => 0, 'skipped' => 0, 'details' => []],
         ];
 
-        $comparisons = Comparison::where('source_id', $version->id)
-            ->orWhere('target_id', $version->id)
-            ->get();
+        $comparisonsQuery = Comparison::where('source_id', $version->id)
+            ->orWhere('target_id', $version->id);
+
+        if ($limitComparisons && $limitComparisons->isNotEmpty()) {
+            $comparisonsQuery->whereIn('id', $limitComparisons->all());
+        }
+
+        $comparisons = $comparisonsQuery->get();
 
         foreach ($comparisons as $comparison) {
             if ($comparison->source_id === $version->id) {
                 $summary['source']['comparisons']++;
-                $result = $this->applyToComparison($entries, $authorFolder, $workFolder, $comparison, 'source', $clear);
+                $result = $this->applyToComparison($entries, $authorFolder, $workFolder, $comparison, 'source', $clear, $replaceExisting);
                 $this->mergeDetail($summary['source'], $result);
             }
 
             if ($comparison->target_id === $version->id) {
                 $summary['target']['comparisons']++;
-                $result = $this->applyToComparison($entries, $authorFolder, $workFolder, $comparison, 'target', $clear);
+                $result = $this->applyToComparison($entries, $authorFolder, $workFolder, $comparison, 'target', $clear, $replaceExisting);
                 $this->mergeDetail($summary['target'], $result);
             }
         }
 
+        $this->finishProgress($summary);
         return $summary;
     }
 
@@ -106,7 +125,135 @@ class PageMarkerService
         return $summary;
     }
 
+    /**
+     * Ensure a fallback page marker exists for both source and target XHTML
+     * files of the given comparison. Returns true if at least one file was
+     * modified.
+     */
+    public function ensureDefaultMarkers(Comparison $comparison): bool
+    {
+        $comparison->loadMissing(
+            'sourceVersion.work.author',
+            'targetVersion.work.author'
+        );
+
+        $updated = false;
+
+        $roles = [
+            'source' => $comparison->sourceVersion,
+            'target' => $comparison->targetVersion,
+        ];
+
+        foreach ($roles as $role => $version) {
+            if (!$version) {
+                continue;
+            }
+
+            $work    = $version->work;
+            $author  = $work?->author;
+            $authorFolder = $author?->folder;
+            $workFolder   = $work?->folder;
+            $versionFolder = $version->folder;
+
+            if (!$authorFolder || !$workFolder || !$versionFolder) {
+                continue;
+            }
+
+            $fileName = $role === 'source' ? 'source.xhtml' : 'target.xhtml';
+            $paths    = $this->candidatePaths($authorFolder, $workFolder, $comparison, $fileName);
+            $existing = array_values(array_filter($paths, 'is_file'));
+            if (empty($existing)) {
+                continue;
+            }
+
+            $html = file_get_contents($existing[0]);
+            if ($html === false || stripos($html, 'page-marker') !== false) {
+                continue;
+            }
+
+            $imageNumbers = $this->collectImageNumbers($authorFolder, $workFolder, $versionFolder);
+            if (empty($imageNumbers)) {
+                continue;
+            }
+
+            $first = min($imageNumbers);
+            $orient = $role === 'source' ? 'right' : 'left';
+            $padded = str_pad((string) $first, 3, '0', STR_PAD_LEFT);
+            $marker = sprintf(
+                '<span class="page-marker" data-image-name="%1$s"><span class="page-number">%1$s</span><img src="/img/settings/page_%2$s.svg" /></span>',
+                $padded,
+                $orient
+            );
+
+            $newHtml = $marker . "\n" . ltrim($html, "\xEF\xBB\xBF\r\n\t ");
+
+            foreach ($existing as $path) {
+                File::put($path, $newHtml);
+            }
+
+            $updated = true;
+        }
+
+        return $updated;
+    }
+
     /* ───────────────────────── INTERNALS ───────────────────────── */
+
+    /** @return array<int> */
+    private function collectImageNumbers(string $authorFolder, string $workFolder, string $versionFolder): array
+    {
+        $directories = $this->candidateImageDirectories($authorFolder, $workFolder, $versionFolder);
+        $numbers = [];
+
+        foreach ($directories as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+
+            $glob = glob($dir . '/img_*_*.*');
+            if (!$glob) {
+                continue;
+            }
+
+            foreach ($glob as $file) {
+                $base = basename($file);
+                if (preg_match('/_(\d+)\.(?:jpe?g|png)$/i', $base, $match)) {
+                    $numbers[] = (int) $match[1];
+                }
+            }
+
+            if (!empty($numbers)) {
+                break; // prefer first directory that yields results
+            }
+        }
+
+        $numbers = array_values(array_unique($numbers));
+        sort($numbers, SORT_NUMERIC);
+        return $numbers;
+    }
+
+    /**
+     * @return array<int, string> Candidate absolute directories where facsimile
+     *         images for a version may be stored.
+     */
+    private function candidateImageDirectories(string $authorFolder, string $workFolder, string $versionFolder): array
+    {
+        $relative = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+
+        $dirs = [
+            storage_path("app/public/{$relative}"),
+            base_path("../variance/{$relative}"),
+        ];
+
+        $lower = strtolower($versionFolder);
+        if ($lower !== $versionFolder) {
+            $relativeLower = "uploads/{$authorFolder}/{$workFolder}/{$lower}";
+            $dirs[] = storage_path("app/public/{$relativeLower}");
+            $dirs[] = base_path("../variance/{$relativeLower}");
+        }
+
+        return array_values(array_unique($dirs));
+    }
 
     private function mergeDetail(array &$bucket, array $result): void
     {
@@ -121,10 +268,13 @@ class PageMarkerService
         $bucket['missed']   += count($result['misses']);
     }
 
-    private function applyToComparison(array $entries, string $authorFolder, string $workFolder, Comparison $comparison, string $role, bool $clearExisting): array
+    private function applyToComparison(array $entries, string $authorFolder, string $workFolder, Comparison $comparison, string $role, bool $clearExisting, bool $replaceExisting): array
     {
         $fileName = $role === 'source' ? 'source.xhtml' : 'target.xhtml';
         $paths    = $this->candidatePaths($authorFolder, $workFolder, $comparison, $fileName);
+
+        // Report comparison start to progress even if files are missing
+        $this->progressTick($role, 'start', ['total' => count($entries), 'comparison_id' => $comparison->id]);
 
         $existing = array_values(array_filter($paths, fn ($path) => is_file($path)));
         if (empty($existing)) {
@@ -143,7 +293,16 @@ class PageMarkerService
         }
 
         $orientation = $role === 'source' ? 'right' : 'left';
-        $result      = $this->insertMarkers($html, $entries, $orientation);
+        $result      = $this->insertMarkers(
+            $html,
+            $entries,
+            $orientation,
+            function(string $event, array $data = []) use ($role, $comparison) {
+                $this->progressTick($role, $event, $data + ['comparison_id' => $comparison->id]);
+            },
+            $replaceExisting,
+            $clearExisting
+        );
 
         foreach ($existing as $path) {
             File::put($path, $result['html']);
@@ -215,7 +374,7 @@ class PageMarkerService
             $rawLines[0] = ltrim($rawLines[0], "\u{FEFF}");
         }
 
-        $oneLineRegex = '/^\s*(\d{1,4})\s+([0-9]{1,4}[a-z]?|[ivxlcdm]+)\s+(.+)$/iu';
+        $oneLineRegex = '/^\s*(\d{1,4})\s+([0-9]{1,4}[a-z]?|[ivxlcdm]+)(?:\s+(.+))?$/iu';
         $hits = 0;
         foreach (array_slice($rawLines, 0, 40) as $sample) {
             if (preg_match($oneLineRegex, $sample ?? '')) {
@@ -233,7 +392,7 @@ class PageMarkerService
                 $entries[] = [
                     'image'  => ltrim($match[1], '0') ?: '0',
                     'page'   => trim($match[2]),
-                    'phrase' => trim($match[3]),
+                    'phrase' => trim((string) ($match[3] ?? '')),
                     'line'   => $idx + 1,
                 ];
             }
@@ -305,62 +464,142 @@ class PageMarkerService
 
     private function clearExistingMarkers(string $html): string
     {
-        return preg_replace('/<span\s+class="page-marker"[^>]*?>.*?<\/span>/is', '', $html);
+        return preg_replace('/\s*<span\s+class="page-marker"[^>]*>\s*<span[^>]*>.*?<\/span>\s*<img[^>]*\/>\s*<\/span>\s*/is', ' ', $html);
     }
 
-    private function insertMarkers(string $html, array $entries, string $orientation): array
+    /**
+     * Remove the first page-marker matching the provided image code.
+     *
+     * @return array{0:string,1:bool} Updated HTML and whether a marker was removed.
+     */
+    private function removeExistingMarkerForImage(string $html, string $imageCode): array
     {
-        [$shadow, $map] = $this->buildIndexedPlaintext($html);
+        $pattern = sprintf('/\s*<span\s+class="page-marker"[^>]*data-image-name=(["\'])%1$s\1[^>]*>\s*<span[^>]*>.*?<\/span>\s*<img[^>]*\/>\s*<\/span>\s*/is', preg_quote($imageCode, '/'));
+        $count = 0;
+        $result = preg_replace($pattern, '', $html, 1, $count);
+        if ($result === null) {
+            return [$html, false];
+        }
+        return [$result, $count > 0];
+    }
+
+    private function insertMarkers(string $html, array $entries, string $orientation, ?callable $progressCb = null, bool $replaceExisting = true, bool $clearExisting = true): array
+    {
+        [$shadow, $map, $fold] = $this->buildIndexedPlaintext($html);
         $posShadow = 0;
         $inserted  = 0;
         $misses    = [];
 
+        if ($progressCb) { $progressCb('start', ['total' => count($entries)]); }
+
+        $i = 0;
         foreach ($entries as $entry) {
-            $image = $entry['image'];
-            if (!preg_match('/^\d+$/', $image)) {
-                $misses[] = ['entry' => $entry, 'reason' => 'image_non_numerique'];
-                continue;
+            $i++;
+            $image = $entry['image'] ?? '';
+            $phrase = trim((string) ($entry['phrase'] ?? ''));
+            $imageKey = str_pad((string) $image, 3, '0', STR_PAD_LEFT);
+            $matched = false;
+            $failureReason = null;
+
+            if (!preg_match('/^\d+$/', (string) $image)) {
+                $failureReason = 'image_non_numerique';
+            } elseif ($phrase === '') {
+                $failureReason = 'phrase_vide';
+            } else {
+                $variants = $this->phraseVariants($phrase);
+                if (empty($variants)) {
+                    $failureReason = 'phrase_vide';
+                } else {
+                    $attempts = ($replaceExisting && !$clearExisting) ? 2 : 1;
+                    for ($attempt = 0; $attempt < $attempts; $attempt++) {
+                        $match = null;
+                        foreach ($variants as $variant) {
+                            $foldedVariant = $this->foldString($variant);
+                            if ($foldedVariant === '') {
+                                continue;
+                            }
+                            $pattern = $this->buildFlexibleRegex($foldedVariant, true);
+                            $match = $this->findMatchWindow($pattern, $fold, $posShadow);
+                            if ($match) {
+                                break;
+                            }
+                        }
+
+                        if (!$match) {
+                            $failureReason = 'phrase_introuvable';
+                            break;
+                        }
+
+                        [$matchedText, $shadowOffset] = $match;
+                        if (!array_key_exists($shadowOffset, $map)) {
+                            $failureReason = 'mapping_introuvable';
+                            break;
+                        }
+
+                        if ($replaceExisting && !$clearExisting && $attempt === 0) {
+                            [$htmlCandidate, $wasRemoved] = $this->removeExistingMarkerForImage($html, $imageKey);
+                            if ($wasRemoved) {
+                                $html = $htmlCandidate;
+                                [$shadow, $map, $fold] = $this->buildIndexedPlaintext($html);
+                                $posShadow = 0;
+                                continue;
+                            }
+                        }
+
+                        $htmlOffset = $map[$shadowOffset];
+                        $insertAt   = $this->moveBeforeOpeningChain($html, $htmlOffset);
+
+                        $marker = sprintf(
+                            self::MARKER_TEMPLATE,
+                            $imageKey,
+                            $this->formatPageLabel($entry['page']),
+                            $orientation === 'left' ? '/img/settings/page_left.svg' : '/img/settings/page_right.svg'
+                        );
+
+                        $html = substr($html, 0, $insertAt) . $marker . substr($html, $insertAt);
+                        $inserted++;
+
+                        [$markerShadow, $markerMap, $markerFold] = $this->buildIndexedPlaintext($marker);
+                        $markerLen = strlen($marker);
+                        $markerChars = count($markerMap);
+
+                        if ($markerChars) {
+                            $prefix = mb_substr($shadow, 0, $shadowOffset, 'UTF-8');
+                            $suffix = mb_substr($shadow, $shadowOffset, null, 'UTF-8');
+                            $shadow = $prefix . $markerShadow . $suffix;
+                            $fold   = mb_substr($fold, 0, $shadowOffset, 'UTF-8') . $markerFold . mb_substr($fold, $shadowOffset, null, 'UTF-8');
+
+                            foreach ($markerMap as &$offsetRef) {
+                                $offsetRef += $insertAt;
+                            }
+                            unset($offsetRef);
+
+                            array_splice($map, $shadowOffset, 0, $markerMap);
+                        }
+
+                        $mapCount = count($map);
+                        for ($iMap = $shadowOffset + $markerChars; $iMap < $mapCount; $iMap++) {
+                            $map[$iMap] += $markerLen;
+                        }
+
+                        $posShadow = $shadowOffset + $markerChars + mb_strlen($matchedText ?? '', 'UTF-8');
+                        $matched = true;
+                        break;
+                    }
+                }
             }
 
-            $phrase = trim((string) $entry['phrase']);
-            if ($phrase === '') {
-                $misses[] = ['entry' => $entry, 'reason' => 'phrase_vide'];
-                continue;
-            }
-            $pattern = $this->buildFlexibleRegex($phrase);
-
-            $match = $this->findMatch($pattern, $shadow, $posShadow);
-            if (!$match) {
-                $collapsed = preg_replace('/\s+/u', ' ', $phrase ?? '');
-                $match = $this->findMatch($this->buildFlexibleRegex($collapsed), $shadow, $posShadow);
+            if (!$matched) {
+                $misses[] = ['entry' => $entry, 'reason' => $failureReason ?? 'phrase_introuvable'];
             }
 
-            if (!$match) {
-                $misses[] = ['entry' => $entry, 'reason' => 'phrase_introuvable'];
-                continue;
+            if ($progressCb) {
+                $progressCb('progress', [
+                    'processed' => $i,
+                    'inserted'  => $inserted,
+                    'missed'    => count($misses),
+                ]);
             }
-
-            [$matchedText, $shadowOffset] = $match;
-            if (!array_key_exists($shadowOffset, $map)) {
-                $misses[] = ['entry' => $entry, 'reason' => 'mapping_introuvable'];
-                continue;
-            }
-
-            $htmlOffset = $map[$shadowOffset];
-            $insertAt   = $this->moveBeforeOpeningChain($html, $htmlOffset);
-
-            $marker = sprintf(
-                self::MARKER_TEMPLATE,
-                str_pad($image, 3, '0', STR_PAD_LEFT),
-                $this->formatPageLabel($entry['page']),
-                $orientation === 'left' ? '/img/settings/page_left.svg' : '/img/settings/page_right.svg'
-            );
-
-            $html = substr($html, 0, $insertAt) . $marker . substr($html, $insertAt);
-            $inserted++;
-
-            [$shadow, $map] = $this->buildIndexedPlaintext($html);
-            $posShadow = $this->shadowIndexForHtmlOffset($map, $insertAt + strlen($marker));
         }
 
         return [
@@ -373,6 +612,7 @@ class PageMarkerService
     private function buildIndexedPlaintext(string $src): array
     {
         $shadow = '';
+        $fold   = '';
         $map    = [];
         $length = strlen($src);
         $offset = 0;
@@ -400,6 +640,7 @@ class PageMarkerService
                         foreach ($chars as $_) {
                             $map[] = $offset;
                         }
+                        $fold .= $this->foldString($decoded);
                         $offset = $semi + 1;
                         continue;
                     }
@@ -414,14 +655,38 @@ class PageMarkerService
             $glyphLen = strlen($glyph);
 
             $shadow .= $glyph;
+            $fold   .= $this->foldString($glyph);
             $map[] = $offset;
             $offset += $glyphLen;
         }
 
-        return [$shadow, $map];
+        return [$shadow, $map, $fold];
     }
 
-    private function buildFlexibleRegex(string $phrase): string
+    private function foldString(string $s): string
+    {
+        // Replace diacritics and special letters with single ASCII letters to make matching accent-insensitive.
+        static $map = null;
+        if ($map === null) {
+            $from = 'ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćČčĎďĐđÈÉÊËèéêëĒēĖėĘęÌÍÎÏìíîïĪīĮįŁłÑñŃńŇňÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŘřŚśŠšŢţŤťÙÚÛÜùúûüŪūŮůŰűŲųÝýÿŸŹźŻżŽžŒœÆæß’‘ʼ`´᾿ʹ’ʼʼ"“”„«»•··–—‑‑−…';
+            $to   = 'AAAAAAaaaaaaAaAaAaCcCcCcDdDdEEEEeeeeEeEeEeIIIIiiiiIiIiLlNnNnOOOOOOooooooOoOoOoRrRrSsSsTtTtUUUUuuuuUuUuUuYyyYZzZzZzOeOeAeaeSs\'\'\'\'\'\'\'\'"""""..-- --...';
+            // Build associative map per Unicode char to single replacement char
+            $map = [];
+            $fromChars = preg_split('//u', $from, -1, PREG_SPLIT_NO_EMPTY);
+            $toChars   = preg_split('//u', $to,   -1, PREG_SPLIT_NO_EMPTY);
+            $count = min(count($fromChars), count($toChars));
+            for ($i = 0; $i < $count; $i++) {
+                $map[$fromChars[$i]] = $toChars[$i];
+            }
+        }
+        $out = '';
+        foreach (preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) as $ch) {
+            $out .= $map[$ch] ?? $ch;
+        }
+        return $out;
+    }
+
+    private function buildFlexibleRegex(string $phrase, bool $isFolded = false): string
     {
         $parts = [];
         $chars = preg_split('//u', $phrase ?? '', -1, PREG_SPLIT_NO_EMPTY);
@@ -462,7 +727,94 @@ class PageMarkerService
         }
 
         $pattern = implode('', $parts);
-        return '/' . $pattern . '/ius';
+        return $isFolded
+            ? '/' . $pattern . '/ius'
+            : '/' . $pattern . '/ius';
+    }
+
+    private function limitPhrase(string $phrase): string
+    {
+        // Keep only the first N characters to avoid pathological regex costs
+        // Prefer to cut at a word boundary.
+        $max = 160; // tuning knob
+        if (mb_strlen($phrase, 'UTF-8') <= $max) {
+            return $phrase;
+        }
+        $cut = mb_substr($phrase, 0, $max, 'UTF-8');
+        // Trim back to last space to avoid chopping in the middle of a token
+        $pos = mb_strrpos($cut, ' ', 0, 'UTF-8');
+        if ($pos !== false && $pos > 40) {
+            $cut = mb_substr($cut, 0, $pos, 'UTF-8');
+        }
+        return $cut;
+    }
+
+    /** @return array<int, string> */
+    private function phraseVariants(string $phrase): array
+    {
+        $variants = [];
+        $base = $this->limitPhrase($phrase);
+        $this->appendVariant($variants, $base);
+
+        $collapsed = preg_replace('/\s+/u', ' ', $base);
+        $this->appendVariant($variants, $collapsed);
+
+        $clause = $this->clipLeadingClause($collapsed ?? '');
+        $this->appendVariant($variants, $clause);
+
+        $leading = $this->takeLeadingWords($collapsed ?? '', 8);
+        $this->appendVariant($variants, $leading);
+
+        return $variants;
+    }
+
+    private function appendVariant(array &$variants, ?string $candidate): void
+    {
+        $candidate = trim((string) $candidate);
+        if ($candidate === '') {
+            return;
+        }
+        if (mb_strlen($candidate, 'UTF-8') < 8) {
+            return;
+        }
+        if (!in_array($candidate, $variants, true)) {
+            $variants[] = $candidate;
+        }
+    }
+
+    private function clipLeadingClause(string $phrase): ?string
+    {
+        if ($phrase === '') {
+            return null;
+        }
+
+        if (preg_match('/^(.{12,}?)[,;:!?»].*$/u', $phrase, $matches)) {
+            return rtrim($matches[1]);
+        }
+
+        if (preg_match('/^(.{12,}?)….*$/u', $phrase, $matches)) {
+            return rtrim($matches[1]);
+        }
+
+        return null;
+    }
+
+    private function takeLeadingWords(string $phrase, int $maxWords): ?string
+    {
+        $phrase = trim($phrase);
+        if ($phrase === '') {
+            return null;
+        }
+
+        $words = preg_split('/\s+/u', $phrase, -1, PREG_SPLIT_NO_EMPTY);
+        if (count($words) <= $maxWords) {
+            return null;
+        }
+
+        $slice = array_slice($words, 0, $maxWords);
+        $candidate = implode(' ', $slice);
+
+        return mb_strlen($candidate, 'UTF-8') >= 8 ? $candidate : null;
     }
 
     private function findMatch(string $pattern, string $subject, int $offset): ?array
@@ -472,6 +824,26 @@ class PageMarkerService
         }
 
         return [$matches[0][0], $matches[0][1]];
+    }
+
+    private function findMatchWindow(string $pattern, string $subject, int $offset, int $window = 200000): ?array
+    {
+        $len = strlen($subject);
+        if ($offset >= $len) {
+            return null;
+        }
+
+        $slice = substr($subject, $offset, $window);
+        if ($slice === '') {
+            return null;
+        }
+
+        if (preg_match($pattern, $slice, $matches, PREG_OFFSET_CAPTURE)) {
+            return [$matches[0][0], $offset + $matches[0][1]];
+        }
+
+        // Fallback once on the full tail if not found in window
+        return $this->findMatch($pattern, $subject, $offset);
     }
 
     private function moveBeforeOpeningChain(string $html, int $idx): int
@@ -512,22 +884,222 @@ class PageMarkerService
         return str_replace('.', '.<br />', $safe);
     }
 
-    private function shadowIndexForHtmlOffset(array $map, int $offset): int
+    /* ───────────────────── Progress helpers ───────────────────── */
+    public function markQueued(int $versionId): void
     {
-        $low = 0;
-        $high = count($map) - 1;
-        $answer = count($map);
+        $path = $this->progressFilePath($versionId);
+        $payload = [
+            'status' => 'queued',
+            'version_id' => $versionId,
+            'entries_total' => 0,
+            'updated_at' => time(),
+            'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'target' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+        ];
+        $this->writeProgressPayload($path, $payload);
+    }
 
-        while ($low <= $high) {
-            $mid = intdiv($low + $high, 2);
-            if ($map[$mid] >= $offset) {
-                $answer = $mid;
-                $high = $mid - 1;
-            } else {
-                $low = $mid + 1;
-            }
+    public function markFailed(int $versionId, string $message): void
+    {
+        $path = $this->progressFilePath($versionId);
+        $error = mb_substr($message, 0, 1000, 'UTF-8');
+
+        if ($this->progressPath === $path && !empty($this->progress)) {
+            $data = $this->progress;
+            $data['status'] = 'failed';
+            $data['error'] = $error;
+            $data['updated_at'] = time();
+        } else {
+            $data = [
+                'status' => 'failed',
+                'version_id' => $versionId,
+                'entries_total' => $this->progress['entries_total'] ?? 0,
+                'updated_at' => time(),
+                'error' => $error,
+                'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+                'target' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            ];
         }
 
-        return $answer;
+        $this->writeProgressPayload($path, $data);
     }
+
+    private function initProgress(int $versionId, int $totalEntries): void
+    {
+        $this->progressPath = $this->progressFilePath($versionId);
+        $this->progress = [
+            'status' => 'running',
+            'version_id' => $versionId,
+            'entries_total' => $totalEntries,
+            'updated_at' => time(),
+            'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'target' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+        ];
+        $this->writeProgress();
+    }
+
+    private function progressTick(string $role, string $event, array $data = []): void
+    {
+        if (!$this->progressPath) return;
+        if (!isset($this->progress[$role])) {
+            $this->progress[$role] = ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0];
+        }
+        $p =& $this->progress[$role];
+        if ($event === 'start') {
+            $p['comparisons'] = ($p['comparisons'] ?? 0) + 1;
+            if (isset($data['total'])) {
+                $this->progress['entries_total'] = max($this->progress['entries_total'] ?? 0, (int) $data['total']);
+            }
+        } elseif ($event === 'progress') {
+            $current = (int)($data['processed'] ?? 0);
+            $limit   = $this->progress['entries_total'] ?? null;
+            if (is_int($limit) && $limit > 0) {
+                $current = min($current, $limit);
+            }
+            $p['processed'] = max($p['processed'] ?? 0, $current);
+            $p['inserted']  = max($p['inserted'] ?? 0,  (int)($data['inserted'] ?? 0));
+            $p['missed']    = max($p['missed'] ?? 0,    (int)($data['missed'] ?? 0));
+        }
+        $this->progress['updated_at'] = time();
+        $this->writeProgress();
+    }
+
+    private function finishProgress(array $summary): void
+    {
+        if (!$this->progressPath) return;
+        $this->progress['status']  = 'done';
+        $this->progress['summary'] = $summary;
+        $this->progress['updated_at'] = time();
+        $this->writeProgress();
+    }
+
+    private function writeProgress(): void
+    {
+        if (!$this->progressPath) return;
+        $this->writeProgressPayload($this->progressPath, $this->progress);
+    }
+
+    private function progressFilePath(int $versionId): string
+    {
+        $dir = storage_path('app/tmp/pager');
+        File::ensureDirectoryExists($dir);
+        return $dir . '/' . $versionId . '.json';
+    }
+
+    private function writeProgressPayload(string $path, array $payload): void
+    {
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $tmp = $path . '.tmp';
+        @file_put_contents($tmp, $json, LOCK_EX);
+        @rename($tmp, $path);
+    }
+
+    public function getLignesInfo(int $versionId): ?array
+    {
+        $relative = $this->lignesRelativePath($versionId);
+        if (!Storage::disk('local')->exists($relative)) {
+            return null;
+        }
+
+        return [
+            'path'       => $relative,
+            'updated_at' => Storage::disk('local')->lastModified($relative),
+            'size'       => Storage::disk('local')->size($relative),
+        ];
+    }
+
+    public function hasLignesFile(int $versionId): bool
+    {
+        return Storage::disk('local')->exists($this->lignesRelativePath($versionId));
+    }
+
+    public function getStoredLignesAbsolutePath(int $versionId): ?string
+    {
+        $relative = $this->lignesRelativePath($versionId);
+        if (!Storage::disk('local')->exists($relative)) {
+            return null;
+        }
+        return Storage::disk('local')->path($relative);
+    }
+
+    public function lignesRelativePath(int $versionId): string
+    {
+        return "private/lignes/{$versionId}.txt";
+    }
+
+    public function countMarkersForComparison(Comparison $comparison): array
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $result = [
+            'source' => [
+                'markers'          => 0,
+                'lignes_available' => false,
+                'lignes'           => null,
+                'progress'         => null,
+            ],
+            'target' => [
+                'markers'          => 0,
+                'lignes_available' => false,
+                'lignes'           => null,
+                'progress'         => null,
+            ],
+        ];
+
+        $sourceVersion = $comparison->sourceVersion;
+        $targetVersion = $comparison->targetVersion;
+
+        if ($sourceVersion && ($work = $sourceVersion->work) && ($author = $work->author)) {
+            $result['source']['markers'] = $this->countMarkersForRole(
+                $author->folder,
+                $work->folder,
+                $comparison,
+                'source'
+            );
+            $result['source']['lignes_available'] = $this->hasLignesFile($sourceVersion->id);
+            $result['source']['lignes']           = $this->getLignesInfo($sourceVersion->id);
+            $result['source']['progress']         = $this->getProgressSnapshot($sourceVersion->id);
+        }
+
+        if ($targetVersion && ($work = $targetVersion->work) && ($author = $work->author)) {
+            $result['target']['markers'] = $this->countMarkersForRole(
+                $author->folder,
+                $work->folder,
+                $comparison,
+                'target'
+            );
+            $result['target']['lignes_available'] = $this->hasLignesFile($targetVersion->id);
+            $result['target']['lignes']           = $this->getLignesInfo($targetVersion->id);
+            $result['target']['progress']         = $this->getProgressSnapshot($targetVersion->id);
+        }
+
+        return $result;
+    }
+
+    public function getProgressSnapshot(int $versionId): ?array
+    {
+        $path = storage_path('app/tmp/pager/' . $versionId . '.json');
+        if (!is_file($path)) {
+            return null;
+        }
+        $json = @file_get_contents($path);
+        if ($json === false) {
+            return null;
+        }
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return null;
+        }
+
+        return [
+            'status'        => $data['status'] ?? null,
+            'updated_at'    => $data['updated_at'] ?? null,
+            'entries_total' => $data['entries_total'] ?? null,
+            'source'        => $data['source'] ?? null,
+            'target'        => $data['target'] ?? null,
+            'summary'       => $data['summary'] ?? null,
+            'error'         => $data['error'] ?? null,
+        ];
+    }
+
 }

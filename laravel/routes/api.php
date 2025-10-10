@@ -3,8 +3,14 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PublishController;
 use App\Http\Controllers\FacsimileController;
+use App\Http\Controllers\VersionController;
+use App\Http\Controllers\ComparisonController;
 
 Route::post('/publish_xhtml', [PublishController::class, 'publish']);
 Route::delete('/publish_xhtml/{comparison}', [PublishController::class, 'unpublish']);
 Route::post('/upload_facsimiles', [FacsimileController::class, 'store']);
 Route::get('/facsimiles', [FacsimileController::class, 'index']);
+Route::get('/versions/{version}/page-markers/progress', [VersionController::class, 'pageMarkersProgress']);
+Route::get('/comparisons/{comparison}/manifests/{role}', [ComparisonController::class, 'showManifest'])
+    ->where('role', 'source|target')
+    ->name('comparisons.manifest');

@@ -57,7 +57,57 @@
 window.vg = window.vg || { selectedWorkId:null, shortTitle:null, authorId:null };
 let versionToDelete = null;
 const publishLocks = new Set();
+const lignesLocks = new Set();
 const pagerLocks = new Set();
+const pagerCompletionNotified = new Set();
+const pagerPollers = new Map();
+
+const formatTimestamp = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { hour12: false }) : null;
+
+function buildPagerStatusText(progress){
+    const fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n : 0;
+    if (!progress || !progress.status) {
+        return 'Pagination : aucune exécution enregistrée';
+    }
+    const status = progress.status;
+    const suffix = formatTimestamp(progress.updated_at) ? ` (maj ${formatTimestamp(progress.updated_at)})` : '';
+
+    if (status === 'queued') {
+        return `🕒 En file d'attente…${suffix}`;
+    }
+
+    if (status === 'running') {
+        const source = progress.source || {};
+        const target = progress.target || {};
+        const total = progress.entries_total || 0;
+        const processedRaw = Math.max(fmt(source.processed), fmt(target.processed));
+        const processed = total ? Math.min(processedRaw, total) : processedRaw;
+        const inserted = fmt(source.inserted) + fmt(target.inserted);
+        const missed   = fmt(source.missed) + fmt(target.missed);
+        const segments = [];
+        segments.push(`source : ${fmt(source.inserted)} ins · ${fmt(source.missed)} ratés`);
+        if ((target.comparisons ?? 0) > 0) {
+            segments.push(`cible : ${fmt(target.inserted)} ins · ${fmt(target.missed)} ratés`);
+        }
+        return `⏳ Progression : ${processed}/${total || '—'} — ${segments.join(' · ')} · total insérés : ${inserted}, manqués : ${missed}${suffix}`;
+    }
+
+    if (status === 'failed') {
+        const error = progress.error || 'opération interrompue';
+        return `❌ Échec : ${error}${suffix}`;
+    }
+
+    if (status === 'done') {
+        const summary = progress.summary || {};
+        const source = summary.source || progress.source || {};
+        const target = summary.target || progress.target || {};
+        const totalInserted = fmt(source.inserted) + fmt(target.inserted);
+        const totalMissed   = fmt(source.missed) + fmt(target.missed);
+        return `✅ Terminé — insérés : ${totalInserted}, manqués : ${totalMissed}${suffix}`;
+    }
+
+    return `ℹ️ Statut : ${status}${suffix}`;
+}
 /********************** RENDER ****************************/
 function buildVersionsTable(data){
     const table = document.createElement('table');
@@ -107,6 +157,37 @@ function renderPageMarkerStatus(version){
     badge.innerHTML = `<span class="badge bg-secondary">${total} pages</span>`;
     wrap.appendChild(badge);
 
+    const clearId   = `pager-clear-${version.id}`;
+    const replaceId = `pager-replace-${version.id}`;
+    const options = document.createElement('div');
+    options.className = 'mt-2';
+    options.innerHTML = `
+        <div class="form-check form-check-sm">
+            <input class="form-check-input" type="checkbox" id="${clearId}" checked>
+            <label class="form-check-label small" for="${clearId}">
+                Supprimer tous les marqueurs existants
+            </label>
+        </div>
+        <div class="form-check form-check-sm">
+            <input class="form-check-input" type="checkbox" id="${replaceId}" checked>
+            <label class="form-check-label small" for="${replaceId}">
+                Remplacer les marqueurs existants du même fac-similé
+            </label>
+        </div>`;
+    wrap.appendChild(options);
+
+    const clearToggle = options.querySelector(`#${clearId}`);
+    const replaceToggle = options.querySelector(`#${replaceId}`);
+    if (clearToggle && replaceToggle) {
+        replaceToggle.disabled = clearToggle.checked;
+        clearToggle.addEventListener('change', () => {
+            replaceToggle.disabled = clearToggle.checked;
+            if (clearToggle.checked) {
+                replaceToggle.checked = true;
+            }
+        });
+    }
+
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
     uploadBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
@@ -124,11 +205,19 @@ function renderPageMarkerStatus(version){
 
     uploadBtn.addEventListener('click', () => {
         if (pagerLocks.has(version.id)) return;
+        const progressEl = document.getElementById(`pager-status-${version.id}`);
+        if (progressEl) progressEl.textContent = 'Préparation…';
         input.click();
     });
 
     wrap.appendChild(input);
     wrap.appendChild(uploadBtn);
+
+    const progress = document.createElement('div');
+    progress.id = `pager-status-${version.id}`;
+    progress.className = 'text-muted small mt-1';
+    progress.textContent = buildPagerStatusText(version.page_marker_progress || null);
+    wrap.appendChild(progress);
 
     return wrap;
 }
@@ -211,17 +300,113 @@ async function uploadPageMarkers(version, file, triggerButton){
     if (pagerLocks.has(version.id)) return;
 
     pagerLocks.add(version.id);
+    pagerCompletionNotified.delete(version.id);
+
     const originalLabel = triggerButton ? triggerButton.textContent : '';
     if (triggerButton) {
         triggerButton.disabled = true;
         triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     }
 
+    const progressEl = document.getElementById(`pager-status-${version.id}`);
+    if (progressEl) progressEl.textContent = 'Préparation…';
+
     const form = new FormData();
     form.append('lignes', file);
-    form.append('clear_existing', '1');
+    const clearToggle = document.getElementById(`pager-clear-${version.id}`);
+    const replaceToggle = document.getElementById(`pager-replace-${version.id}`);
+    const clearExisting = clearToggle ? clearToggle.checked : true;
+    const replaceExisting = replaceToggle ? replaceToggle.checked : true;
+    form.append('clear_existing', clearExisting ? '1' : '0');
+    form.append('replace_existing', replaceToggle && replaceToggle.disabled ? '1' : (replaceExisting ? '1' : '0'));
+
+    let pollTimer = null;
+    let cleanedUp = false;
+
+    const cleanup = (status) => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+        pagerPollers.delete(version.id);
+        pagerLocks.delete(version.id);
+        if (triggerButton) {
+            triggerButton.disabled = false;
+            triggerButton.textContent = originalLabel || '_lignes → pages';
+        }
+    };
+
+    const fmt = (n) => (typeof n === 'number' ? n : 0);
+
+    const ensurePolling = () => {
+        const tick = async () => {
+            const targetEl = document.getElementById(`pager-status-${version.id}`);
+            try {
+                const res = await fetch(`/api/versions/${version.id}/page-markers/progress?ts=${Date.now()}`, {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store'
+                });
+                if (!res.ok) return;
+                const p = await res.json();
+                if (!p || !p.status || p.status === 'idle') {
+                    if (targetEl) targetEl.textContent = 'Pagination : initialisation en cours…';
+                    return;
+                }
+
+                if (targetEl) {
+                    targetEl.textContent = buildPagerStatusText(p);
+                }
+
+                if (p.status === 'queued') {
+                    return;
+                }
+
+                if (p.status === 'failed') {
+                    if (!pagerCompletionNotified.has(version.id)) {
+                        alert("Impossible d'appliquer le fichier _lignes : " + (p.error || 'erreur inconnue'));
+                        pagerCompletionNotified.add(version.id);
+                    }
+                    cleanup('failed');
+                    return;
+                }
+
+                if (p.status === 'done') {
+                    const summary = p.summary || {};
+                    const src = summary.source || {};
+                    const tgt = summary.target || {};
+                    const msg = `Page markers mis à jour — source : ${fmt(src.inserted)} (miss: ${fmt(src.missed)}) · cible : ${fmt(tgt.inserted)} (miss: ${fmt(tgt.missed)})`;
+                    if (!pagerCompletionNotified.has(version.id)) {
+                        alert(msg);
+                        pagerCompletionNotified.add(version.id);
+                    }
+                    cleanup('done');
+                    if (vg.selectedWorkId) {
+                        fetchVersions(vg.selectedWorkId);
+                    }
+                    return;
+                }
+            } catch (err) {
+                console.error(err);
+                const targetEl = document.getElementById(`pager-status-${version.id}`);
+                if (targetEl) targetEl.textContent = '⚠️ Erreur de suivi, nouvelle tentative…';
+            }
+        };
+
+        if (pagerPollers.has(version.id)) {
+            pollTimer = pagerPollers.get(version.id);
+            tick();
+            return;
+        }
+
+        pollTimer = setInterval(tick, 1000);
+        pagerPollers.set(version.id, pollTimer);
+        tick();
+    };
 
     try {
+        ensurePolling();
         const res = await fetch(`/api/versions/${version.id}/page-markers`, {
             method: 'POST',
             headers: {
@@ -232,25 +417,43 @@ async function uploadPageMarkers(version, file, triggerButton){
 
         const payload = await res.json();
         if (!res.ok) {
+            if (res.status === 409 && payload?.status === 'busy') {
+                if (progressEl) {
+                    progressEl.textContent = payload.message || 'Une importation _lignes est déjà en cours…';
+                }
+                pagerLocks.delete(version.id);
+                if (triggerButton) {
+                    triggerButton.disabled = false;
+                    triggerButton.textContent = originalLabel || '_lignes → pages';
+                }
+                ensurePolling();
+                alert(payload.message || "Une importation _lignes est déjà en cours pour cette version.");
+                return;
+            }
             throw new Error(payload.message || `HTTP ${res.status}`);
         }
 
-        const srcInserted = payload.summary?.source?.inserted ?? 0;
-        const tgtInserted = payload.summary?.target?.inserted ?? 0;
-        const srcMissed   = payload.summary?.source?.missed ?? 0;
-        const tgtMissed   = payload.summary?.target?.missed ?? 0;
+        ensurePolling();
 
-        alert(`Page markers mis à jour — source : ${srcInserted} (miss: ${srcMissed}) · cible : ${tgtInserted} (miss: ${tgtMissed})`);
-        fetchVersions(vg.selectedWorkId);
+        if (payload.status && payload.status !== 'queued') {
+            // Edge-case: synchronous completion
+            if (payload.summary) {
+                const srcInserted = fmt(payload.summary.source?.inserted);
+                const tgtInserted = fmt(payload.summary.target?.inserted);
+                const srcMissed   = fmt(payload.summary.source?.missed);
+                const tgtMissed   = fmt(payload.summary.target?.missed);
+                alert(`Page markers mis à jour — source : ${srcInserted} (miss: ${srcMissed}) · cible : ${tgtInserted} (miss: ${tgtMissed})`);
+                pagerCompletionNotified.add(version.id);
+                cleanup('done');
+                if (vg.selectedWorkId) {
+                    fetchVersions(vg.selectedWorkId);
+                }
+            }
+        }
     } catch (err) {
         console.error(err);
+        cleanup('failed');
         alert("Impossible d'appliquer le fichier _lignes : " + err.message);
-    } finally {
-        pagerLocks.delete(version.id);
-        if (triggerButton) {
-            triggerButton.disabled = false;
-            triggerButton.textContent = originalLabel || '_lignes → pages';
-        }
     }
 }
 /******************** FETCH LIST **************************/

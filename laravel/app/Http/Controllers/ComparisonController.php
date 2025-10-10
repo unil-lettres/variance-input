@@ -3,15 +3,22 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Comparison;
 use App\Http\Controllers\PublishController;
+use App\Services\PageMarkerService;
+use App\Jobs\ApplyLignesJob;
 
 class ComparisonController extends Controller
 {
+    public function __construct(private PageMarkerService $pageMarkerService)
+    {
+    }
+
     /**
      * Return all comparisons connected to a work (by its versions).
      */
@@ -36,15 +43,18 @@ class ComparisonController extends Controller
         $destBase = ($authorFolder && $workInfo)
             ? "uploads/{$authorFolder}/{$workInfo->folder}"
             : null;
+        $workFolder = $workInfo->folder ?? null;
 
         $required = PublishController::COMPONENTS;
 
-        $comparisons = Comparison::with(['sourceVersion', 'targetVersion'])
+        $comparisons = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author'])
             ->whereIn('source_id', $versionIds)
             ->orWhereIn('target_id', $versionIds)
             ->orderByDesc('created_at')
             ->get()
-            ->map(function (Comparison $cmp) use ($destBase, $required) {
+            ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder) {
+                $this->pageMarkerService->ensureDefaultMarkers($cmp);
+
                 $cmp->published = false;
                 $cmp->publish_missing = $required;
                 $cmp->publish_dest = null;
@@ -93,6 +103,9 @@ class ComparisonController extends Controller
                     'missing'       => $missing,
                 ]);
 
+                $cmp->pagination = $this->pageMarkerService->countMarkersForComparison($cmp);
+                $cmp->manifests  = $this->manifestStatusForComparison($cmp, $authorFolder, $workFolder);
+
                 return $cmp;
             });
 
@@ -140,6 +153,64 @@ class ComparisonController extends Controller
         return response()->json(['message' => 'Comparison deleted']);
     }
 
+    public function applyPageMarkers(Request $request, Comparison $comparison)
+    {
+        $validated = $request->validate([
+            'clear_existing'   => 'sometimes|boolean',
+            'replace_existing' => 'sometimes|boolean',
+        ]);
+
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $clear   = Arr::get($validated, 'clear_existing', true);
+        $replace = Arr::get($validated, 'replace_existing', true);
+
+        $roles = [
+            'source' => $comparison->sourceVersion,
+            'target' => $comparison->targetVersion,
+        ];
+
+        $missing = [];
+        foreach ($roles as $role => $version) {
+            if (!$version) {
+                $missing[] = "Version {$role} manquante";
+                continue;
+            }
+            if (!$this->pageMarkerService->hasLignesFile($version->id)) {
+                $missing[] = "Aucun fichier _lignes associé à la version {$version->name}";
+            }
+        }
+
+        if (!empty($missing)) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => implode(' | ', $missing),
+            ], 422);
+        }
+
+        foreach ($roles as $role => $version) {
+            if (!$version) {
+                continue;
+            }
+
+            $this->pageMarkerService->markQueued($version->id);
+            $relative = $this->pageMarkerService->lignesRelativePath($version->id);
+            ApplyLignesJob::dispatch(
+                $version->id,
+                $relative,
+                false,
+                (bool) $clear,
+                (bool) $replace,
+                $comparison->id
+            );
+        }
+
+        return response()->json([
+            'status'  => 'queued',
+            'message' => 'Pagination en file d\'attente pour cette comparaison.',
+        ], 202);
+    }
+
     private function resolvePublicationPaths(Comparison $comparison): array
     {
         $workInfo = DB::table('versions')
@@ -177,5 +248,142 @@ class ComparisonController extends Controller
             'dest_dir'   => $destDir,
             'published'  => $published,
         ];
+    }
+
+    private function manifestStatusForComparison(Comparison $comparison, ?string $authorFolder, ?string $workFolder): array
+    {
+        $status = [
+            'source' => ['exists' => false, 'count' => 0, 'file' => null, 'url' => null, 'api_url' => null],
+            'target' => ['exists' => false, 'count' => 0, 'file' => null, 'url' => null, 'api_url' => null],
+        ];
+
+        if (!$authorFolder || !$workFolder || empty($comparison->folder)) {
+            return $status;
+        }
+
+        $baseName = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparison->folder));
+        $disk = Storage::disk('public');
+
+        foreach ([
+            'source' => $comparison->sourceVersion?->folder,
+            'target' => $comparison->targetVersion?->folder,
+        ] as $role => $versionFolder) {
+            if (!$versionFolder) {
+                continue;
+            }
+
+            $relativeDir  = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+            $filename     = sprintf('images_%s_%s.json', $role, $baseName);
+            $relativePath = "{$relativeDir}/{$filename}";
+
+            $entries = null;
+            $exists  = false;
+            $url     = null;
+            $apiUrl  = null;
+
+            if ($disk->exists($relativePath)) {
+                $exists = true;
+                try {
+                    $entries = json_decode($disk->get($relativePath), true);
+                } catch (\Throwable $e) {
+                    $entries = null;
+                }
+
+                try {
+                    $url = $disk->url($relativePath);
+                } catch (\Throwable $e) {
+                    $url = null;
+                }
+            } else {
+                $legacyPath = base_path('../variance/' . $relativePath);
+                if (is_file($legacyPath)) {
+                    $exists = true;
+                    try {
+                        $entries = json_decode(File::get($legacyPath), true);
+                    } catch (\Throwable $e) {
+                        $entries = null;
+                    }
+                }
+            }
+
+            try {
+                $apiUrl = route('comparisons.manifest', [
+                    'comparison' => $comparison->id,
+                    'role'       => $role,
+                ]);
+            } catch (\Throwable $e) {
+                $apiUrl = null;
+            }
+
+            $status[$role] = [
+                'exists' => $exists,
+                'count'  => is_array($entries) ? count($entries) : 0,
+                'file'   => $exists ? $relativePath : null,
+                'url'    => $url,
+                'api_url'=> $apiUrl,
+            ];
+        }
+
+        return $status;
+    }
+
+    private function resolveManifestFolders(Comparison $comparison): array
+    {
+        $workInfo = DB::table('versions')
+            ->where('versions.id', $comparison->source_id)
+            ->join('works', 'versions.work_id', '=', 'works.id')
+            ->join('authors', 'works.author_id', '=', 'authors.id')
+            ->select(
+                'works.folder as work_folder',
+                'authors.folder as author_folder'
+            )
+            ->first();
+
+        if (!$workInfo || !$workInfo->author_folder || !$workInfo->work_folder) {
+            return [null, null];
+        }
+
+        return [$workInfo->author_folder, $workInfo->work_folder];
+    }
+
+    public function showManifest(Comparison $comparison, string $role)
+    {
+        $role = strtolower($role);
+        if (!in_array($role, ['source', 'target'], true)) {
+            abort(404);
+        }
+
+        $comparison->loadMissing('sourceVersion', 'targetVersion');
+        [$authorFolder, $workFolder] = $this->resolveManifestFolders($comparison);
+
+        if (!$authorFolder || !$workFolder) {
+            abort(404);
+        }
+
+        $manifests = $this->manifestStatusForComparison($comparison, $authorFolder, $workFolder);
+        $entry = $manifests[$role] ?? null;
+
+        if (!$entry || !$entry['exists']) {
+            abort(404);
+        }
+
+        $relative = $entry['file'];
+        if ($relative && Storage::disk('public')->exists($relative)) {
+            $content = Storage::disk('public')->get($relative);
+            return response($content, 200, [
+                'Content-Type' => 'application/json; charset=UTF-8',
+            ]);
+        }
+
+        if ($relative) {
+            $legacyPath = base_path('../variance/' . $relative);
+            if (is_file($legacyPath)) {
+                return response(File::get($legacyPath), 200, [
+                    'Content-Type' => 'application/json; charset=UTF-8',
+                ]);
+            }
+        }
+
+        abort(404);
     }
 }

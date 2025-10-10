@@ -126,8 +126,6 @@ class PublishController extends Controller
             File::deleteDirectory($legacyDir);
         }
 
-        $this->removeManifests($comparison, $paths);
-
         return response()->json([
             'status'        => 'ok',
             'deleted_files' => $deleted,

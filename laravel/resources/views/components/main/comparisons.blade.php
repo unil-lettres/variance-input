@@ -20,6 +20,7 @@
           <th>Pivot</th>
           <th>Sens. Casse</th>
           <th>Composants</th>
+          <th>Pagination</th>
           <th>Publié</th>
           <th>Publier</th>
           <th>Date</th>
@@ -56,6 +57,392 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentWorkId = null;
   const runningComparisons = window.__runningComparisons || new Set();
   window.__runningComparisons = runningComparisons;
+  const paginationLocks = new Set();
+  const paginationObservers = new Map();
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+  const formatTimestamp = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { hour12: false }) : null;
+  const formatNumber = value => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value.toLocaleString('fr-FR');
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed.toLocaleString('fr-FR') : '0';
+  };
+  const formatBytes = size => {
+    if (!Number.isFinite(size) || size <= 0) return '0 o';
+    const units = ['o','Ko','Mo','Go'];
+    let idx = 0;
+    let val = size;
+    while (val >= 1024 && idx < units.length - 1) {
+      val /= 1024;
+      idx++;
+    }
+    return `${val.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+  };
+
+  function createBadge({ text, className = '', href = null, title = '' }) {
+    const tag = href ? 'a' : 'span';
+    const el = document.createElement(tag);
+    const classes = ['badge'];
+    if (className && className.trim()) {
+      classes.push(className.trim());
+    }
+    el.className = classes.join(' ');
+    el.textContent = text;
+    if (title) {
+      el.title = title;
+    }
+    if (href) {
+      el.href = href;
+      el.target = '_blank';
+      el.rel = 'noopener';
+    }
+    return el;
+  }
+
+  function buildPagerStatusText(progress) {
+    const fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n : 0;
+    if (!progress || !progress.status) {
+        return 'Pagination : aucune exécution enregistrée';
+    }
+    const status = progress.status;
+    const updated = formatTimestamp(progress.updated_at);
+    const suffix = updated ? ` (maj ${updated})` : '';
+
+    if (status === 'queued') {
+        return `🕒 En file d'attente…${suffix}`;
+    }
+
+    if (status === 'running') {
+        const source = progress.source || {};
+        const target = progress.target || {};
+        const total = progress.entries_total || 0;
+        const processedRaw = Math.max(fmt(source.processed), fmt(target.processed));
+        const processed = total ? Math.min(processedRaw, total) : processedRaw;
+        const inserted = fmt(source.inserted) + fmt(target.inserted);
+        const missed   = fmt(source.missed) + fmt(target.missed);
+        const segments = [];
+        segments.push(`source : ${fmt(source.inserted)} ins · ${fmt(source.missed)} ratés`);
+        if ((target.comparisons ?? 0) > 0) {
+            segments.push(`cible : ${fmt(target.inserted)} ins · ${fmt(target.missed)} ratés`);
+        }
+        return `⏳ Progression : ${processed}/${total || '—'} — ${segments.join(' · ')} · total insérés : ${inserted}, manqués : ${missed}${suffix}`;
+    }
+
+    if (status === 'failed') {
+        const error = progress.error || 'opération interrompue';
+        return `❌ Échec : ${error}${suffix}`;
+    }
+
+    if (status === 'done') {
+        const summary = progress.summary || {};
+        const source = summary.source || progress.source || {};
+        const target = summary.target || progress.target || {};
+        const totalInserted = fmt(source.inserted) + fmt(target.inserted);
+        const totalMissed   = fmt(source.missed) + fmt(target.missed);
+        return `✅ Terminé — insérés : ${totalInserted}, manqués : ${totalMissed}${suffix}`;
+    }
+
+    return `ℹ️ Statut : ${status}${suffix}`;
+  }
+
+  function registerPaginationStatus(versionId, element, initialProgress, label = '') {
+    if (!versionId || !element) return;
+    const message = buildPagerStatusText(initialProgress || null);
+    element.dataset.paginationLabel = label;
+    element.textContent = label ? `${label} — ${message}` : message;
+    let entry = paginationObservers.get(versionId);
+    if (!entry) {
+      entry = { elements: new Set(), timer: null };
+      paginationObservers.set(versionId, entry);
+    }
+    entry.elements.add(element);
+
+    if (initialProgress && ['running', 'queued'].includes(initialProgress.status)) {
+      startPaginationPolling(versionId);
+    }
+  }
+
+  function startPaginationPolling(versionId) {
+    const entry = paginationObservers.get(versionId);
+    if (!entry || entry.timer) return;
+
+    const tick = async () => {
+      const currentEntry = paginationObservers.get(versionId);
+      if (!currentEntry) return;
+
+      // Remove detached elements
+      for (const el of Array.from(currentEntry.elements)) {
+        if (!document.body.contains(el)) {
+          currentEntry.elements.delete(el);
+        }
+      }
+      if (currentEntry.elements.size === 0) {
+        if (currentEntry.timer) {
+          clearInterval(currentEntry.timer);
+        }
+        paginationObservers.delete(versionId);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/versions/${versionId}/page-markers/progress?ts=${Date.now()}`, {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        });
+        if (!res.ok) return;
+        const progress = await res.json();
+        const message = buildPagerStatusText(progress);
+        currentEntry.elements.forEach(el => {
+          const label = el.dataset.paginationLabel || '';
+          el.textContent = label ? `${label} — ${message}` : message;
+        });
+
+        if (!progress || ['done', 'failed', 'idle'].includes(progress.status)) {
+          if (currentEntry.timer) {
+            clearInterval(currentEntry.timer);
+            currentEntry.timer = null;
+          }
+        }
+      } catch (err) {
+        console.error('Erreur de suivi de pagination', err);
+        currentEntry.elements.forEach(el => {
+          const label = el.dataset.paginationLabel || '';
+          const text = '⚠️ Erreur de suivi de pagination';
+          el.textContent = label ? `${label} — ${text}` : text;
+        });
+      }
+    };
+
+    entry.timer = setInterval(tick, 1500);
+    tick();
+  }
+
+  function renderComparisonPagination(comp) {
+    const container = document.createElement('div');
+    container.className = 'small text-start';
+
+    const roles = [
+      { key: 'source', label: 'Source', versionId: comp.source_id },
+      { key: 'target', label: 'Cible',  versionId: comp.target_id }
+    ];
+
+    const roleSummaries = [];
+
+    roles.forEach(({ key, label, versionId }, index) => {
+      const data = (comp.pagination && comp.pagination[key]) || {};
+      const block = document.createElement('div');
+      if (index > 0) {
+        block.className = 'mt-2';
+      }
+
+      const badges = document.createElement('div');
+      const labelEl = document.createElement('strong');
+      labelEl.textContent = label;
+      badges.appendChild(labelEl);
+      badges.appendChild(document.createTextNode(' · '));
+      badges.appendChild(createBadge({
+        text: `${formatNumber(data.markers ?? 0)} tags`,
+        className: 'bg-secondary'
+      }));
+
+      const lignesBadge = (data.lignes_available ?? false)
+        ? createBadge({
+            text: '_lignes',
+            className: 'bg-success ms-1',
+            title: 'Fichier _lignes disponible'
+          })
+        : createBadge({
+            text: '_lignes manquant',
+            className: 'bg-warning text-dark ms-1',
+            title: 'Associez un fichier _lignes à cette version'
+          });
+      badges.appendChild(document.createTextNode(' '));
+      badges.appendChild(lignesBadge);
+
+      const manifestInfo = (comp.manifests && comp.manifests[key]) || {};
+      badges.appendChild(document.createTextNode(' '));
+      if (manifestInfo.exists) {
+        const rawCount = Number(manifestInfo.count ?? 0);
+        const countValue = Number.isFinite(rawCount) ? rawCount : 0;
+        const displayCount = formatNumber(countValue);
+        badges.appendChild(createBadge({
+          text: `JSON ${displayCount} x2`,
+          className: 'bg-info text-dark ms-1',
+          href: manifestInfo.api_url || manifestInfo.url || null,
+          title: manifestInfo.file
+            ? `${manifestInfo.file} — ${displayCount} fac-similé${countValue === 1 ? '' : 's'} + miniature${countValue === 1 ? '' : 's'}`
+            : 'Manifeste JSON — fac-similés et miniatures'
+        }));
+      } else {
+        badges.appendChild(createBadge({
+          text: 'manifeste absent',
+          className: 'bg-light text-muted ms-1',
+          title: 'Aucun manifeste JSON détecté'
+        }));
+      }
+      block.appendChild(badges);
+
+      if (data.lignes && (data.lignes.updated_at || data.lignes.size)) {
+        const hint = document.createElement('div');
+        hint.className = 'text-muted small';
+        const updated = data.lignes.updated_at ? formatTimestamp(data.lignes.updated_at) : '—';
+        const size = data.lignes.size ? formatBytes(data.lignes.size) : '0 o';
+        hint.textContent = `Fichier : ${updated} · ${size}`;
+        block.appendChild(hint);
+      }
+
+      const statusEl = document.createElement('div');
+      statusEl.className = 'text-muted small mt-1';
+      block.appendChild(statusEl);
+      if (versionId) {
+        registerPaginationStatus(versionId, statusEl, data.progress || null, label);
+      } else {
+        statusEl.textContent = `${label} — version indisponible`;
+      }
+
+      container.appendChild(block);
+
+      roleSummaries.push({ versionId, statusEl, label });
+    });
+
+    const clearId = `cmp-clear-${comp.id}`;
+    const replaceId = `cmp-replace-${comp.id}`;
+    const options = document.createElement('div');
+    options.className = 'mt-2';
+    options.innerHTML = `
+        <div class="form-check form-check-sm">
+            <input class="form-check-input" type="checkbox" id="${clearId}" checked>
+            <label class="form-check-label small" for="${clearId}">
+                Supprimer tous les marqueurs existants
+            </label>
+        </div>
+        <div class="form-check form-check-sm">
+            <input class="form-check-input" type="checkbox" id="${replaceId}" checked>
+            <label class="form-check-label small" for="${replaceId}">
+                Remplacer les marqueurs existants du même fac-similé
+            </label>
+        </div>`;
+    container.appendChild(options);
+
+    const clearToggle = options.querySelector(`#${clearId}`);
+    const replaceToggle = options.querySelector(`#${replaceId}`);
+    if (clearToggle && replaceToggle) {
+      replaceToggle.disabled = clearToggle.checked;
+      clearToggle.addEventListener('change', () => {
+        replaceToggle.disabled = clearToggle.checked;
+        if (clearToggle.checked) {
+          replaceToggle.checked = true;
+        }
+      });
+    }
+
+    const feedback = document.createElement('div');
+    feedback.className = 'small text-muted mt-1';
+    container.appendChild(feedback);
+
+    const runBtn = document.createElement('button');
+    runBtn.type = 'button';
+    runBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
+    runBtn.textContent = 'Lancer la pagination';
+
+    const lignesReady = (comp.pagination?.source?.lignes_available ?? false) &&
+                        (comp.pagination?.target?.lignes_available ?? false);
+    if (!lignesReady) {
+      runBtn.disabled = true;
+      feedback.textContent = 'Associez un fichier _lignes aux deux versions.';
+    }
+
+    runBtn.addEventListener('click', () => {
+      const clearExisting = clearToggle ? clearToggle.checked : true;
+      const replaceExisting = replaceToggle ? replaceToggle.checked : true;
+      triggerComparisonPagination(comp, {
+        clearExisting,
+        replaceExisting,
+        button: runBtn,
+        feedback,
+        roles: roleSummaries
+      });
+    });
+
+    container.appendChild(runBtn);
+
+    return container;
+  }
+
+  async function triggerComparisonPagination(comp, { clearExisting, replaceExisting, button, feedback, roles }) {
+    if (paginationLocks.has(comp.id)) return;
+    paginationLocks.add(comp.id);
+
+    const originalLabel = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+    if (feedback) {
+      feedback.textContent = 'Démarrage de la pagination…';
+    }
+
+    try {
+      const res = await fetch(`/api/comparisons/${comp.id}/page-markers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+        },
+        body: JSON.stringify({
+          clear_existing: clearExisting ? 1 : 0,
+          replace_existing: replaceExisting ? 1 : 0
+        })
+      });
+
+      const text = await res.text();
+      let payload = {};
+      try { payload = JSON.parse(text); } catch { payload = { raw: text }; }
+
+      if (!res.ok || payload.status !== 'queued') {
+        const message = payload.message || payload.error || payload.raw || `HTTP ${res.status}`;
+        throw new Error(message);
+      }
+
+      if (feedback) {
+        feedback.textContent = payload.message || 'Pagination en file d\'attente…';
+      }
+
+      roles.forEach(({ versionId, statusEl, label }) => {
+        if (!versionId) return;
+        if (statusEl) {
+          const text = 'Pagination : initialisation en cours…';
+          statusEl.textContent = label ? `${label} — ${text}` : text;
+        }
+        if (statusEl) {
+          statusEl.dataset.paginationLabel = label || '';
+        }
+        startPaginationPolling(versionId);
+      });
+
+      if (currentWorkId) {
+        loadComparisons(currentWorkId);
+      }
+    } catch (err) {
+      console.error('Erreur pagination comparaison', err);
+      if (feedback) {
+        feedback.textContent = 'Échec du lancement de la pagination.';
+      }
+      alert("Impossible de lancer la pagination : " + (err?.message || 'erreur inconnue'));
+    } finally {
+      paginationLocks.delete(comp.id);
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel || 'Lancer la pagination';
+      }
+      if (feedback) {
+        setTimeout(() => { feedback.textContent = ''; }, 5000);
+      }
+    }
+  }
 
   function isValidWorkId(id) {
     const s = String(id ?? '').trim();
@@ -121,7 +508,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${comp.ratio ?? ''}</td>
           <td>${comp.lg_pivot ?? ''}</td>
           <td>${caseSensitive ? 'yes' : 'no'}</td>
-         <td class="text-center components-status">${statusHtml}</td>
+          <td class="text-center components-status">${statusHtml}</td>
+          <td class="pagination-cell align-top"></td>
           <td class="text-center published-status">${published ? `<span class="text-success" title="${publishedTitle}">✔</span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
           <td class="text-center">
             <input type="checkbox" class="form-check-input publish-toggle"
@@ -139,6 +527,10 @@ document.addEventListener('DOMContentLoaded', () => {
           </td>
         `;
         tbody.appendChild(tr);
+        const paginationCell = tr.querySelector('.pagination-cell');
+        if (paginationCell) {
+          paginationCell.appendChild(renderComparisonPagination(comp));
+        }
       });
     } catch (err) {
       console.error('Erreur lors du chargement des comparaisons:', err);
