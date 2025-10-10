@@ -2,7 +2,7 @@
 
 @section('content')
 <div class="container mt-4 editor">
-    <h1>Edition de la comparaison <b>{{ $version->name }}</b></h1>
+    <h1>Edition de la version <b>{{ $version->name }}</b> pour la comparaison <b>#{{ $comparison->id }}</b></h1>
     
     <ul class="nav nav-tabs mt-3">
         <li class="nav-item">
