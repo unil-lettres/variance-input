@@ -96,7 +96,7 @@
                         alt="Aperçu du facsimilé" 
                         style="max-width: 100%; display: none; border: 1px solid #ccc; padding: 5px;"
                       >
-                      <p id="no-preview" class="text-muted">Cliquez sur un bouton "Insérer..." pour activer l'insertion</p>
+                      <p id="no-preview" class="text-muted"></p>
                     </div>
                 </div>
             </div>
@@ -111,29 +111,86 @@
             const comparisonId = {{ $comparison->id }};
             const fileType = '{{ $isSource ? 'source' : 'target' }}';
             const canEdit = {{ $canEdit ? 'true' : 'false' }};
-            const isPublished = {{ $isPublished ? 'true' : 'false' }};
-            const imagesData = @json($imagesData ?? null); // TODO not used yet
 
+            // DOM Elements
+            const elements = {
+                toggleBtn: document.getElementById('toggle-readonly'),
+                toggleTagsBtn: document.getElementById('toggle-tags'),
+                previewImg: document.getElementById('facsimile-preview'),
+                noPreviewText: document.getElementById('no-preview'),
+                loadingSpinner: document.getElementById('loading-spinner'),
+                editorContainer: document.getElementById('editor-container')
+            };
+
+            // Constants
+            const MESSAGES = {
+                DEFAULT: 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion',
+                ERROR: 'Erreur lors du chargement de l\'image'
+            };
+
+            const BUTTON_STATES = {
+                INACTIVE: { add: 'btn-primary', remove: 'btn-warning' },
+                ACTIVE: { add: 'btn-warning', remove: ['btn-primary', 'btn-success'] },
+                INSERTED: { add: 'btn-success', remove: 'btn-primary' }
+            };
+
+            // State
+            let activeButton = null;
+
+            // Initialize editor
             window.initEditor(xmlContent, comparisonId, fileType);
-
             if (!canEdit && window.editor) {
                 window.editor.setReadOnly(true);
             }
 
-            // Handle toggle readonly button
-            const toggleBtn = document.getElementById('toggle-readonly');
-            const toggleTagsBtn = document.getElementById('toggle-tags');
-
-            const setTagInserted = (button) => {
-                button.classList.remove('btn-primary');
-                button.classList.add('btn-success');
-                button.setAttribute('data-inserted', 'true');
+            // Utility functions
+            const setButtonState = (button, state) => {
+                if (Array.isArray(state.remove)) {
+                    button.classList.remove(...state.remove);
+                } else {
+                    button.classList.remove(state.remove);
+                }
+                button.classList.add(state.add);
             };
 
-            const setTagNotInserted = (button) => {
-                button.classList.remove('btn-success');
-                button.classList.add('btn-primary');
-                button.removeAttribute('data-inserted');
+            const showMessage = (message) => {
+                if (elements.noPreviewText) {
+                    elements.noPreviewText.textContent = message;
+                    elements.noPreviewText.style.display = 'block';
+                }
+            };
+            showMessage(MESSAGES.DEFAULT);
+
+            const hidePreview = () => {
+                elements.previewImg.style.display = 'none';
+                showMessage(MESSAGES.DEFAULT);
+            };
+
+            const deactivateInsertMode = () => {
+                if (activeButton) {
+                    setButtonState(activeButton, BUTTON_STATES.INACTIVE);
+                    activeButton = null;
+                    hidePreview();
+                }
+            };
+
+            const loadImage = (imgSrc) => {
+                if (!imgSrc) return;
+                
+                if (elements.noPreviewText) elements.noPreviewText.style.display = 'none';
+                elements.loadingSpinner.style.display = 'block';
+                
+                const img = new Image();
+                img.onload = () => {
+                    elements.loadingSpinner.style.display = 'none';
+                    elements.previewImg.src = imgSrc;
+                    elements.previewImg.style.display = 'block';
+                };
+                img.onerror = () => {
+                    elements.loadingSpinner.style.display = 'none';
+                    showMessage(MESSAGES.ERROR);
+                };
+                img.src = imgSrc;
             };
 
             const updateTagCountBadges = () => {
@@ -155,22 +212,26 @@
             const refreshButtonStates = () => {
                 document.querySelectorAll('.editor [data-tag]').forEach(button => {
                     const tagName = button.getAttribute('data-tag');
-                    if (window.editor && window.editor.isTagInserted(tagName)) {
-                        setTagInserted(button);
+                    const state = (window.editor && window.editor.isTagInserted(tagName)) 
+                        ? BUTTON_STATES.INSERTED 
+                        : BUTTON_STATES.INACTIVE;
+                    setButtonState(button, state);
+                    if (state === BUTTON_STATES.INSERTED) {
+                        button.setAttribute('data-inserted', 'true');
                     } else {
-                        setTagNotInserted(button);
+                        button.removeAttribute('data-inserted');
                     }
                 });
                 updateTagCountBadges();
             };
 
-            toggleBtn.addEventListener('click', () => {
+            // Event handlers
+            elements.toggleBtn.addEventListener('click', () => {
                 const isReadOnly = window.editor.toggleReadOnly();
-                toggleBtn.textContent = isReadOnly ? 'Activer le mode édition' : 'Activer le mode lecture seule';
-                toggleBtn.classList.toggle('btn-warning');
-                toggleBtn.classList.toggle('btn-info');
+                elements.toggleBtn.textContent = isReadOnly ? 'Activer le mode édition' : 'Activer le mode lecture seule';
+                elements.toggleBtn.classList.toggle('btn-warning');
+                elements.toggleBtn.classList.toggle('btn-info');
 
-                // Disable/enable buttons with data-enable-when-readonly attribute
                 document.querySelectorAll('[data-enable-when-readonly]').forEach(btn => {
                     btn.disabled = !isReadOnly;
                 });
@@ -178,113 +239,51 @@
                 if (isReadOnly) {
                     refreshButtonStates();
                 } else {
-                    // Désactiver le mode d'insertion quand on active le mode édition
-                    if (activeButton) {
-                        activeButton.classList.remove('btn-warning');
-                        activeButton.classList.add('btn-primary');
-                        activeButton = null;
-                        
-                        // Masquer l'image
-                        previewImg.style.display = 'none';
-                        if (noPreviewText) {
-                            noPreviewText.textContent = 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion';
-                            noPreviewText.style.display = 'block';
-                        }
-                    }
+                    deactivateInsertMode();
                 }
             });
 
-            // Handle toggle tags visibility button
-            toggleTagsBtn.addEventListener('click', () => {
+            elements.toggleTagsBtn.addEventListener('click', () => {
                 const tagsHidden = window.editor.toggleTagVisibility();
-                toggleTagsBtn.textContent = tagsHidden ? 'Afficher les balises' : 'Masquer les balises';
-                toggleTagsBtn.classList.toggle('btn-secondary');
-                toggleTagsBtn.classList.toggle('btn-info');
+                elements.toggleTagsBtn.textContent = tagsHidden ? 'Afficher les balises' : 'Masquer les balises';
+                elements.toggleTagsBtn.classList.toggle('btn-secondary');
+                elements.toggleTagsBtn.classList.toggle('btn-info');
             });
 
-            // Handle insert buttons - toggle mode
-            let activeButton = null;
-
+            // Insert buttons
             document.querySelectorAll('.editor [data-tag]').forEach(button => {
-                const tagName = button.getAttribute('data-tag');
-                const imgSrc = button.getAttribute('data-img-src');
-
                 button.addEventListener('click', () => {
-                    // Si le bouton est déjà actif, on le désactive
+                    const tagName = button.getAttribute('data-tag');
+                    const imgSrc = button.getAttribute('data-img-src');
+
                     if (activeButton === button) {
-                        button.classList.remove('btn-warning');
-                        button.classList.add('btn-primary');
-                        activeButton = null;
-                        
-                        // Masquer l'image
-                        previewImg.style.display = 'none';
-                        if (noPreviewText) {
-                            noPreviewText.textContent = 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion';
-                            noPreviewText.style.display = 'block';
-                        }
+                        deactivateInsertMode();
                         return;
                     }
 
-                    // Désactiver le bouton précédent s'il existe
                     if (activeButton) {
-                        activeButton.classList.remove('btn-warning');
-                        activeButton.classList.add('btn-primary');
+                        setButtonState(activeButton, BUTTON_STATES.INACTIVE);
                     }
 
-                    // Activer le bouton actuel
-                    button.classList.remove('btn-primary', 'btn-success');
-                    button.classList.add('btn-warning');
+                    setButtonState(button, BUTTON_STATES.ACTIVE);
                     activeButton = button;
-
-                    // Afficher l'image
-                    if (imgSrc) {
-                        if (noPreviewText) noPreviewText.style.display = 'none';
-                        loadingSpinner.style.display = 'block';
-                        
-                        const img = new Image();
-                        img.onload = () => {
-                            loadingSpinner.style.display = 'none';
-                            previewImg.src = imgSrc;
-                            previewImg.style.display = 'block';
-                        };
-                        img.onerror = () => {
-                            loadingSpinner.style.display = 'none';
-                            if (noPreviewText) {
-                                noPreviewText.textContent = 'Erreur lors du chargement de l\'image';
-                                noPreviewText.style.display = 'block';
-                            }
-                        };
-                        img.src = imgSrc;
-                    }
+                    loadImage(imgSrc);
                 });
             });
 
-            // Gérer le clic dans l'éditeur pour insérer le tag
-            const editorContainer = document.getElementById('editor-container');
-            if (editorContainer) {
-                editorContainer.addEventListener('click', () => {
+            // Editor click to insert tag
+            if (elements.editorContainer) {
+                elements.editorContainer.addEventListener('click', () => {
                     if (activeButton && window.editor) {
                         const tagName = activeButton.getAttribute('data-tag');
                         window.editor.insertAtCursor(tagName);
-                        
-                        // Désactiver le bouton
-                        activeButton.classList.remove('btn-warning');
-                        activeButton.classList.add('btn-primary');
-                        activeButton = null;
-                        
-                        // Masquer l'image
-                        previewImg.style.display = 'none';
-                        if (noPreviewText) {
-                            noPreviewText.textContent = 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion';
-                            noPreviewText.style.display = 'block';
-                        }
-                        
+                        deactivateInsertMode();
                         refreshButtonStates();
                     }
                 });
             }
 
-            // Handle remove buttons
+            // Remove buttons
             document.querySelectorAll('.editor [data-tag-remove]').forEach(removeBtn => {
                 removeBtn.addEventListener('click', async () => {
                     const tagName = removeBtn.getAttribute('data-tag-remove');
@@ -299,11 +298,6 @@
             });
 
             refreshButtonStates();
-
-            // Handle image preview on hover (removed - now handled by button click)
-            const previewImg = document.getElementById('facsimile-preview');
-            const noPreviewText = document.getElementById('no-preview');
-            const loadingSpinner = document.getElementById('loading-spinner');
         });
     </script>
 @endpush
