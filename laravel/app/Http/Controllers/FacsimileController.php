@@ -15,9 +15,14 @@ use Intervention\Image\Encoders\JpegEncoder;
 use Intervention\Image\ImageManager;
 
 use App\Models\Version;
+use App\Services\PageMarkerService;
 
 class FacsimileController extends Controller
 {
+    public function __construct(private PageMarkerService $pageMarkerService)
+    {
+    }
+
     /**
      * POST /api/upload_facsimiles
      */
@@ -105,6 +110,10 @@ class FacsimileController extends Controller
         }
 
 
+        if ($added) {
+            $this->refreshComparisonMarkers($version);
+        }
+
         return response()->json([
             'status'      => $added ? 'ok' : 'error',
             'stored_in'   => $dirRel,
@@ -113,47 +122,60 @@ class FacsimileController extends Controller
         ]);
     }
 
-   /**
- * GET /api/facsimiles?version_id=…
- */
-public function index(Request $request)
-{
-    $request->validate(['version_id' => 'required|exists:versions,id']);
+    private function refreshComparisonMarkers(Version $version): void
+    {
+        $version->loadMissing('comparisonsAsSource', 'comparisonsAsTarget');
 
-    $version = Version::with('work.author')->findOrFail($request->version_id);
-    $work    = $version->work;
-    $author  = $work->author;
+        foreach ($version->comparisonsAsSource as $comparison) {
+            $this->pageMarkerService->ensureDefaultMarkers($comparison);
+        }
 
-    // Dossier relatif (dans storage/app/public)
-    $dirRel = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
-    $disk   = Storage::disk('public');
-
-    if (! $disk->exists($dirRel)) {
-        return response()->json([]);          // aucun fichier
+        foreach ($version->comparisonsAsTarget as $comparison) {
+            $this->pageMarkerService->ensureDefaultMarkers($comparison);
+        }
     }
 
-    // Liste des fichiers
-    $all = collect($disk->files($dirRel));
+    /**
+     * GET /api/facsimiles?version_id=…
+     */
+    public function index(Request $request)
+    {
+        $request->validate(['version_id' => 'required|exists:versions,id']);
 
-    $images = $all
-        ->filter(fn ($p) => preg_match('/\.(jpe?g|png)$/i', $p) && ! str_contains($p, '_thumb'))
-        ->values()
-        ->map(function ($p) use ($disk) {
+        $version = Version::with('work.author')->findOrFail($request->version_id);
+        $work    = $version->work;
+        $author  = $work->author;
 
-            // chemin miniature : img_*_thumb.jpg
-            $thumbPath  = preg_replace('/(\.\w+)$/', '_thumb$1', $p);
-            $thumbExist = $disk->exists($thumbPath);
+        // Dossier relatif (dans storage/app/public)
+        $dirRel = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
+        $disk   = Storage::disk('public');
 
-            return [
-                'name'      => basename($p),
-                'big'       => '/storage/'.$p,                    // ✅ URL publique
-                'thumb'     => $thumbExist ? '/storage/'.$thumbPath : null,
-                'hasThumb'  => $thumbExist,
-            ];
-        });
+        if (! $disk->exists($dirRel)) {
+            return response()->json([]);          // aucun fichier
+        }
 
-    return response()->json($images);
-}
+        // Liste des fichiers
+        $all = collect($disk->files($dirRel));
+
+        $images = $all
+            ->filter(fn ($p) => preg_match('/\.(jpe?g|png)$/i', $p) && ! str_contains($p, '_thumb'))
+            ->values()
+            ->map(function ($p) use ($disk) {
+
+                // chemin miniature : img_*_thumb.jpg
+                $thumbPath  = preg_replace('/(\.\w+)$/', '_thumb$1', $p);
+                $thumbExist = $disk->exists($thumbPath);
+
+                return [
+                    'name'      => basename($p),
+                    'big'       => '/storage/'.$p,                    // ✅ URL publique
+                    'thumb'     => $thumbExist ? '/storage/'.$thumbPath : null,
+                    'hasThumb'  => $thumbExist,
+                ];
+            });
+
+        return response()->json($images);
+    }
 
 
 }
