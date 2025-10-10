@@ -75,6 +75,7 @@
                                   data-tag-remove="{{ $loop->iteration }}"
                                   data-enable-when-readonly
                                   {{ !$canEdit ? 'disabled' : '' }}
+                                  style="display: none;"
                               >✖️</button>
                               <span
                                   class="badge bg-secondary ms-1"
@@ -129,9 +130,9 @@
             };
 
             const BUTTON_STATES = {
-                INACTIVE: { add: 'btn-primary', remove: 'btn-warning' },
+                INACTIVE: { add: 'btn-primary', remove: ['btn-warning', 'btn-success'] },
                 ACTIVE: { add: 'btn-warning', remove: ['btn-primary', 'btn-success'] },
-                INSERTED: { add: 'btn-success', remove: 'btn-primary' }
+                INSERTED: { add: 'btn-success', remove: ['btn-primary', 'btn-warning'] }
             };
 
             // State
@@ -223,14 +224,21 @@
             const refreshButtonStates = () => {
                 document.querySelectorAll('.editor [data-tag]').forEach(button => {
                     const imageName = button.getAttribute('data-tag');
-                    const state = (window.editor && window.editor.isPageMarkerInserted(imageName)) 
-                        ? BUTTON_STATES.INSERTED 
-                        : BUTTON_STATES.INACTIVE;
+                    const isInserted = window.editor && window.editor.isPageMarkerInserted(imageName);
+                    const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
+                    
                     setButtonState(button, state);
-                    if (state === BUTTON_STATES.INSERTED) {
+                    
+                    if (isInserted) {
                         button.setAttribute('data-inserted', 'true');
                     } else {
                         button.removeAttribute('data-inserted');
+                    }
+                    
+                    // Update visibility of corresponding remove button
+                    const removeButton = document.querySelector(`[data-tag-remove="${imageName}"]`);
+                    if (removeButton) {
+                        removeButton.style.display = isInserted ? 'inline-block' : 'none';
                     }
                 });
                 updateTagCountBadges();
