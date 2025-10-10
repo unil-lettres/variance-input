@@ -4,10 +4,11 @@
 <div class="container mt-4 editor">
     <h2>XML Editor for: {{ $version->name }}</h2>
     <p>File: {{ $isSource ? 'Source' : 'Cible' }}</p>
+    <h2>Edition de la comparaison: {{ $version->name }}</h2>
 
-    <button id="save-xml" class="btn btn-success mb-2">Save</button>
-    <button id="toggle-readonly" class="btn btn-warning mb-2">Enable Edit Mode</button>
-    <button id="toggle-tags" class="btn btn-secondary mb-2">Show Tags</button>
+    <button id="save-xml" class="btn btn-success mb-2">Enregistrer</button>
+    <button id="toggle-readonly" class="btn btn-warning mb-2">Activer le mode édition</button>
+    <button id="toggle-tags" class="btn btn-secondary mb-2">Afficher les balises</button>
 
     <div class="flex gap-2">
       <div class="row">
@@ -17,14 +18,14 @@
         <div class="col col-4">
           <div class="d-flex flex-column gap-2">
             <div class="col">
-              <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly>Italic</button>
-              <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly>Remove</button>
+              <button class="btn btn-primary btn-sm mb-1" data-tag="i" data-tag-text="<i></i>" data-enable-when-readonly>Italique</button>
+              <button class="btn btn-danger btn-sm mb-1" data-tag-remove="i" data-enable-when-readonly>❌</button>
             </div>
             
             <div class="col">
               @foreach ($version->getFacsimiles() ?? [] as $facsimile)
-                <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Insert &lt;tag{{ $facsimile['name'] }}&gt;</button>
-                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Remove</button>
+                <button class="btn btn-primary btn-sm mb-1" data-tag="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>Insérer &lt;tag{{ $facsimile['name'] }}&gt;</button>
+                <button class="btn btn-danger btn-sm mb-1" data-tag-remove="<tag{{ $facsimile['name'] }}/>" data-enable-when-readonly>❌</button>
                 <span class="badge bg-secondary ms-1" data-tag-count="<tag{{ $facsimile['name'] }}/>" style="display: none;"></span>
               @endforeach
             </div>
