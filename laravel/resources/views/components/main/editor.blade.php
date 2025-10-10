@@ -195,9 +195,9 @@
 
             const updateTagCountBadges = () => {
                 document.querySelectorAll('[data-tag-count]').forEach(badge => {
-                    const tagName = badge.getAttribute('data-tag-count');
+                    const imageName = badge.getAttribute('data-tag-count');
                     if (window.editor) {
-                        const count = window.editor.countTagOccurrences(tagName);
+                        const count = window.editor.countPageMarkerOccurrences(imageName);
                         if (count > 1) {
                             badge.textContent = `×${count}`;
                             badge.style.display = 'inline';
@@ -211,8 +211,8 @@
 
             const refreshButtonStates = () => {
                 document.querySelectorAll('.editor [data-tag]').forEach(button => {
-                    const tagName = button.getAttribute('data-tag');
-                    const state = (window.editor && window.editor.isTagInserted(tagName)) 
+                    const imageName = button.getAttribute('data-tag');
+                    const state = (window.editor && window.editor.isPageMarkerInserted(imageName)) 
                         ? BUTTON_STATES.INSERTED 
                         : BUTTON_STATES.INACTIVE;
                     setButtonState(button, state);
@@ -253,9 +253,16 @@
             // Insert buttons
             document.querySelectorAll('.editor [data-tag]').forEach(button => {
                 button.addEventListener('click', () => {
-                    const tagName = button.getAttribute('data-tag');
+                    const imageName = button.getAttribute('data-tag');
                     const imgSrc = button.getAttribute('data-img-src');
 
+                    // Si le tag est déjà inséré, scroll vers celui-ci
+                    if (window.editor && window.editor.isPageMarkerInserted(imageName)) {
+                        window.editor.scrollToPageMarker(imageName);
+                        return;
+                    }
+
+                    // Si le bouton est déjà actif, on le désactive
                     if (activeButton === button) {
                         deactivateInsertMode();
                         return;
@@ -287,13 +294,13 @@
             // Remove buttons
             document.querySelectorAll('.editor [data-tag-remove]').forEach(removeBtn => {
                 removeBtn.addEventListener('click', async () => {
-                    const tagName = removeBtn.getAttribute('data-tag-remove');
-                    const removed = await window.editor.removeTag(tagName);
+                    const imageName = removeBtn.getAttribute('data-tag-remove');
+                    const removed = await window.editor.removePageMarker(imageName);
 
                     if (removed) {
                         refreshButtonStates();
                     } else {
-                        console.error(`Balise "${tagName}" introuvable dans l'éditeur`);
+                        console.error(`Balise pour l'image "${imageName}" introuvable dans l'éditeur`);
                     }
                 });
             });

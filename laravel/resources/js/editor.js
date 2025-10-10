@@ -119,6 +119,7 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       view.focus();
       return isReadOnly;
     },
+
     setReadOnly(value) {
       isReadOnly = value;
       view.dispatch({
@@ -128,31 +129,13 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
         ]
       });
     },
+
     toggleTagVisibility() {
       const currentState = view.state.field(hideTagsField);
       view.dispatch({
         effects: toggleTagVisibility.of(!currentState)
       });
       return !currentState;
-    },
-    insertAtCursor(text) {
-      const { head } = view.state.selection.main;
-      const line = view.state.doc.lineAt(head);
-      const lineStart = line.from;
-      const lineText = line.text;
-
-      // Extract indentation from current line
-      const indentMatch = lineText.match(/^(\s*)/);
-      const indent = indentMatch ? indentMatch[1] : '';
-
-      // Insert indented text + new line before current line
-      const insertText = indent + text + '\n';
-
-      view.dispatch({
-        changes: { from: lineStart, insert: insertText },
-        selection: { anchor: lineStart }
-      });
-      view.focus();
     },
 
     insertPageMarker(imageName, pageNumber = '001') {
@@ -169,72 +152,53 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
       view.focus();
     },
 
-    findTagPosition(tagName) {
+    getPageMarkerTag(imageName) {
       const content = view.state.doc.toString();
-      return content.indexOf(tagName);
+      const regex = new RegExp(
+        `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">.*?</span><img[^>]*></span>`,
+        'i'
+      );
+      const match = content.match(regex);
+      return match ? { tag: match[0], pos: content.indexOf(match[0]) } : null;
     },
 
-    scrollToTag(tagName) {
-      const pos = this.findTagPosition(tagName);
-      if (pos !== -1) {
+    scrollToPageMarker(imageName) {
+      const result = this.getPageMarkerTag(imageName);
+      if (result) {
         view.dispatch({
-          selection: { anchor: pos, head: pos + tagName.length },
-          effects: EditorView.scrollIntoView(pos, { y: "center" })
+          selection: { anchor: result.pos, head: result.pos + result.tag.length },
+          effects: EditorView.scrollIntoView(result.pos, { y: "center" })
         });
         view.focus();
       }
     },
 
-    isTagInserted(tagName) {
-      return this.findTagPosition(tagName) !== -1;
+    isPageMarkerInserted(imageName) {
+      return this.getPageMarkerTag(imageName) !== null;
     },
 
-    countTagOccurrences(tagName) {
+    countPageMarkerOccurrences(imageName) {
       const content = view.state.doc.toString();
-      let count = 0;
-      let pos = 0;
-      while ((pos = content.indexOf(tagName, pos)) !== -1) {
-        count++;
-        pos += tagName.length;
-      }
-      return count;
+      const regex = new RegExp(`data-image-name="${imageName}"`, 'g');
+      const matches = content.match(regex);
+      return matches ? matches.length : 0;
     },
 
-    removeTag(tagName) {
+    removePageMarker(imageName) {
       return new Promise((resolve) => {
-        const content = view.state.doc.toString();
-        const tagPos = content.indexOf(tagName);
+        const result = this.getPageMarkerTag(imageName);
 
-        if (tagPos !== -1) {
-          // Find the line containing the tag
-          const line = view.state.doc.lineAt(tagPos);
-          const lineStart = line.from;
-          const lineEnd = line.to;
-          const lineText = line.text;
+        if (result) {
+          const tagPos = result.pos;
+          const tagEnd = tagPos + result.tag.length;
 
-          // Check if the tag is alone on the line (only whitespace around it)
-          const lineWithoutTag = lineText.replace(tagName, '');
-          const isTagAlone = lineWithoutTag.trim() === '';
+          this.scrollToPageMarker(imageName);
 
-          this.scrollToTag(tagName);
-
-          // Wait before removing the line to allow user to see the line being targeted
+          // Wait before removing to allow user to see the tag being targeted
           setTimeout(() => {
-            if (isTagAlone) {
-              // Remove the entire line including the newline character
-              const hasNextLine = lineEnd < view.state.doc.length;
-              const deleteEnd = hasNextLine ? lineEnd + 1 : lineEnd;
-
-              view.dispatch({
-                changes: { from: lineStart, to: deleteEnd, insert: '' }
-              });
-            } else {
-              // Remove only the tag
-              const tagEnd = tagPos + tagName.length;
-              view.dispatch({
-                changes: { from: tagPos, to: tagEnd, insert: '' }
-              });
-            }
+            view.dispatch({
+              changes: { from: tagPos, to: tagEnd, insert: '' }
+            });
             resolve(true);
           }, 200);
         } else {
