@@ -7,6 +7,7 @@
 
     <button id="save-xml" class="btn btn-success mb-2">Save</button>
     <button id="toggle-readonly" class="btn btn-warning mb-2">Enable Edit Mode</button>
+    <button id="toggle-tags" class="btn btn-secondary mb-2">Show Tags</button>
 
     <div class="flex gap-2">
       <div class="row">
@@ -45,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle toggle readonly button
     const toggleBtn = document.getElementById('toggle-readonly');
+    const toggleTagsBtn = document.getElementById('toggle-tags');
     
     const setTagInserted = (button) => {
         button.classList.remove('btn-primary');
@@ -100,6 +102,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isReadOnly) {
             refreshButtonStates();
         }
+    });
+
+    // Handle toggle tags visibility button
+    toggleTagsBtn.addEventListener('click', () => {
+        const tagsHidden = window.editor.toggleTagVisibility();
+        toggleTagsBtn.textContent = tagsHidden ? 'Show Tags' : 'Hide Tags';
+        toggleTagsBtn.classList.toggle('btn-secondary');
+        toggleTagsBtn.classList.toggle('btn-info');
     });
 
     // Handle insert buttons
