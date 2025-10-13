@@ -60,23 +60,27 @@
                     class="overflow-scroll"
                 ></div>
             </div>
-            <div class="col-md-2 col-12 h-100 row row-cols-4 g-1">
-                @foreach ($imagesData ?? [] as $facsimile)
-                    <button
-                        class="btn btn-primary btn-sm mb-1 position-relative"
-                        data-tag="{{ $loop->iteration }}"
-                        data-img-src="{{ Storage::url($facsimile['big']) }}"
-                        data-enable-when-readonly
-                        {{ !$canEdit ? 'disabled' : '' }}
-                    >
-                        <span>{{ $loop->iteration }}</span>
-                        <span
-                            class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-danger"
-                            data-tag-count="{{ $loop->iteration }}"
-                            style="display: none; font-size: 0.65rem;"
-                        ></span>
-                    </button>
-                @endforeach
+            <div class="col-md-2 col-12">
+                <div class="row row-cols-4 g-1 align-items-start">
+                    @foreach ($imagesData ?? [] as $facsimile)
+                        <div class="col">
+                            <button
+                                class="h-100 w-100 btn btn-primary btn-sm position-relative"
+                                data-tag="{{ $loop->iteration }}"
+                                data-img-src="{{ Storage::url($facsimile['big']) }}"
+                                data-enable-when-readonly
+                                {{ !$canEdit ? 'disabled' : '' }}
+                            >
+                                <span>{{ $loop->iteration }}</span>
+                                <span
+                                    class="position-absolute top-0 start-75 translate-middle badge rounded-pill bg-danger"
+                                    data-tag-count="{{ $loop->iteration }}"
+                                    style="display: none; font-size: 0.65rem;"
+                                ></span>
+                            </button>
+                        </div>
+                    @endforeach
+                </div>
             </div>
             <div class="col-md-4 col-12 h-100 d-flex flex-column align-items-center">
                 <p id="image-name" class="text-muted fw-bold mb-2" style="display: none;"></p>
