@@ -60,22 +60,22 @@
                     class="overflow-scroll"
                 ></div>
             </div>
-            <div class="col-md-2 col-12 h-100 d-flex flex-wrap gap-1 align-content-start justify-content-left">
+            <div class="col-md-2 col-12 h-100 row row-cols-4 g-1">
                 @foreach ($imagesData ?? [] as $facsimile)
-                    <div class="d-flex gap-2 align-items-center">
-                        <button
-                            class="btn btn-primary btn-sm mb-1"
-                            data-tag="{{ $loop->iteration }}"
-                            data-img-src="{{ Storage::url($facsimile['big']) }}"
-                            data-enable-when-readonly
-                            {{ !$canEdit ? 'disabled' : '' }}
-                        >Insérer {{ $loop->iteration }}</button>
+                    <button
+                        class="btn btn-primary btn-sm mb-1 position-relative"
+                        data-tag="{{ $loop->iteration }}"
+                        data-img-src="{{ Storage::url($facsimile['big']) }}"
+                        data-enable-when-readonly
+                        {{ !$canEdit ? 'disabled' : '' }}
+                    >
+                        <span>{{ $loop->iteration }}</span>
                         <span
-                            class="badge bg-secondary ms-1"
+                            class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-danger"
                             data-tag-count="{{ $loop->iteration }}"
-                            style="display: none;"
+                            style="display: none; font-size: 0.65rem;"
                         ></span>
-                    </div>
+                    </button>
                 @endforeach
             </div>
             <div class="col-md-4 col-12 h-100 d-flex flex-column align-items-center">
@@ -175,11 +175,10 @@
                     // Reset to appropriate state
                     if (isInserted) {
                         setButtonState(activeButton, BUTTON_STATES.INSERTED);
-                        activeButton.textContent = `Insérer ${imageName}`;
                     } else {
                         setButtonState(activeButton, BUTTON_STATES.INACTIVE);
-                        activeButton.textContent = `Insérer ${imageName}`;
                     }
+                    activeButton.querySelector('span').textContent = imageName;
                     
                     activeButton = null;
                     isDeleteMode = false;
@@ -233,6 +232,7 @@
                     const imageName = badge.getAttribute('data-tag-count');
                     if (window.editor) {
                         const count = window.editor.countPageMarkerOccurrences(imageName);
+                        console.log(imageName, count);
                         if (count > 1) {
                             badge.textContent = `×${count}`;
                             badge.style.display = 'inline';
@@ -255,7 +255,7 @@
                     const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
                     setButtonState(button, state);
                     
-                    button.textContent = `Insérer ${imageName}`;
+                    button.querySelector('span').textContent = imageName;
                     
                     if (isInserted) {
                         button.setAttribute('data-inserted', 'true');
@@ -323,13 +323,13 @@
                     if (isInserted) {
                         isDeleteMode = true;
                         setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
-                        button.textContent = `Supprimer ${imageName}`;
+                        button.querySelector('span').textContent = '🗑️';
                         window.editor.scrollToPageMarker(imageName);
                         elements.editorContainer.style.cursor = 'default';
                     } else {
                         isDeleteMode = false;
                         setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
-                        button.textContent = `Insérer ${imageName}`;
+                        button.querySelector('span').textContent = imageName;
                         elements.editorContainer.style.cursor = 'crosshair';
                     }
                 });
