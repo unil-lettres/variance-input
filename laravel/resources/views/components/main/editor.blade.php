@@ -183,6 +183,7 @@
                     
                     activeButton = null;
                     isDeleteMode = false;
+                    elements.editorContainer.style.cursor = 'default';
                 }
             };
 
@@ -324,10 +325,12 @@
                         setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
                         button.textContent = `Supprimer ${imageName}`;
                         window.editor.scrollToPageMarker(imageName);
+                        elements.editorContainer.style.cursor = 'default';
                     } else {
                         isDeleteMode = false;
                         setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
                         button.textContent = `Insérer ${imageName}`;
+                        elements.editorContainer.style.cursor = 'crosshair';
                     }
                 });
 
