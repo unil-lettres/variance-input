@@ -121,9 +121,38 @@ public function index(Request $request)
     $request->validate(['version_id' => 'required|exists:versions,id']);
 
     $version = Version::with('work.author')->findOrFail($request->version_id);
-    $facsimiles = $version->getFacsimiles() ?? [];
+    $work    = $version->work;
+    $author  = $work->author;
 
-    return response()->json($facsimiles);
+    // Dossier relatif (dans storage/app/public)
+    $dirRel = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
+    $disk   = Storage::disk('public');
+
+    if (! $disk->exists($dirRel)) {
+        return response()->json([]);          // aucun fichier
+    }
+
+    // Liste des fichiers
+    $all = collect($disk->files($dirRel));
+
+    $images = $all
+        ->filter(fn ($p) => preg_match('/\.(jpe?g|png)$/i', $p) && ! str_contains($p, '_thumb'))
+        ->values()
+        ->map(function ($p) use ($disk) {
+
+            // chemin miniature : img_*_thumb.jpg
+            $thumbPath  = preg_replace('/(\.\w+)$/', '_thumb$1', $p);
+            $thumbExist = $disk->exists($thumbPath);
+
+            return [
+                'name'      => basename($p),
+                'big'       => '/storage/'.$p,                    // ✅ URL publique
+                'thumb'     => $thumbExist ? '/storage/'.$thumbPath : null,
+                'hasThumb'  => $thumbExist,
+            ];
+        });
+
+    return response()->json($images);
 }
 
 
