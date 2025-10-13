@@ -91,6 +91,7 @@
                           <span class="visually-hidden">Chargement...</span>
                         </div>
                       </div>
+                      <p id="image-name" class="text-muted fw-bold mb-2" style="display: none;"></p>
                       <img 
                         id="facsimile-preview" 
                         src="" 
@@ -120,7 +121,8 @@
                 previewImg: document.getElementById('facsimile-preview'),
                 noPreviewText: document.getElementById('no-preview'),
                 loadingSpinner: document.getElementById('loading-spinner'),
-                editorContainer: document.getElementById('editor-container')
+                editorContainer: document.getElementById('editor-container'),
+                imageName: document.getElementById('image-name')
             };
 
             // Constants
@@ -167,6 +169,7 @@
                 // Only hide if no image has been displayed yet
                 if (!lastImageSrc) {
                     elements.previewImg.style.display = 'none';
+                    if (elements.imageName) elements.imageName.style.display = 'none';
                     showMessage(MESSAGES.DEFAULT);
                 }
             };
@@ -184,6 +187,9 @@
                 lastImageSrc = imgSrc;
                 if (elements.noPreviewText) elements.noPreviewText.style.display = 'none';
                 
+                // Extract filename from URL
+                const filename = imgSrc.split('/').pop();
+                
                 // Set a timeout to show spinner only if loading takes more than 500ms
                 let spinnerTimeout = setTimeout(() => {
                     elements.previewImg.style.display = 'none';
@@ -196,11 +202,22 @@
                     elements.loadingSpinner.style.display = 'none';
                     elements.previewImg.src = imgSrc;
                     elements.previewImg.style.display = 'block';
+                    
+                    // Show filename
+                    if (elements.imageName) {
+                        elements.imageName.textContent = filename;
+                        elements.imageName.style.display = 'block';
+                    }
                 };
                 img.onerror = () => {
                     clearTimeout(spinnerTimeout);
                     elements.loadingSpinner.style.display = 'none';
                     showMessage(MESSAGES.ERROR);
+                    
+                    // Hide filename on error
+                    if (elements.imageName) {
+                        elements.imageName.style.display = 'none';
+                    }
                 };
                 img.src = imgSrc;
             };
