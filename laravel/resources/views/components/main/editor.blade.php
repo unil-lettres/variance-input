@@ -61,9 +61,9 @@
                 ></div>
             </div>
             <div class="col-md-2 col-12">
-                <div class="row row-cols-4 g-1 align-items-start">
+                <div id="buttons-container" class="row row-cols-4 g-1 align-items-start">
                     @foreach ($imagesData ?? [] as $facsimile)
-                        <div class="col">
+                        <div class="col button-item" style="display: none;">
                             <button
                                 class="h-100 w-100 btn btn-primary btn-sm position-relative"
                                 data-tag="{{ $loop->iteration }}"
@@ -81,6 +81,9 @@
                         </div>
                     @endforeach
                 </div>
+                <nav aria-label="Page navigation" class="mt-2 overflow-auto">
+                    <ul id="pagination" class="pagination pagination-sm mb-0 flex-wrap justify-content-center"></ul>
+                </nav>
             </div>
             <div class="col-md-4 col-12 h-100 d-flex flex-column align-items-center">
                 <p id="image-name" class="text-muted fw-bold mb-2" style="display: none;"></p>
@@ -118,7 +121,8 @@
                 noPreviewText: document.getElementById('no-preview'),
                 loadingSpinner: document.getElementById('loading-spinner'),
                 editorContainer: document.getElementById('editor-container'),
-                imageName: document.getElementById('image-name')
+                imageName: document.getElementById('image-name'),
+                pagination: document.getElementById('pagination'),
             };
 
             // Constants
@@ -138,11 +142,70 @@
             let activeButton = null;
             let isDeleteMode = false; // true = delete mode, false = insert mode
             let lastImageSrc = null; // Track the last image displayed
+            let currentPage = 1;
+            const itemsPerPage = 40;
 
             window.initEditor(xmlContent, comparisonId, fileType);
             if (!canEdit && window.editor) {
                 window.editor.setReadOnly(true);
             }
+
+            // Pagination functions
+            const initPagination = () => {
+                const allButtons = document.querySelectorAll('.button-item');
+                const totalPages = Math.ceil(allButtons.length / itemsPerPage);
+                
+                allButtons.forEach((item, index) => {
+                    const itemPage = Math.ceil((index + 1) / itemsPerPage);
+                    item.setAttribute('data-page', itemPage);
+                });
+                
+                if (totalPages <= 1) {
+                    elements.pagination.parentElement.style.display = 'none';
+                    showPage(1);
+                    return;
+                }
+                
+                elements.pagination.innerHTML = '';
+                
+                for (let i = 1; i <= totalPages; i++) {
+                    const li = document.createElement('li');
+                    li.className = 'page-item';
+                    
+                    const link = document.createElement('a');
+                    link.className = 'page-link';
+                    link.href = '#';
+                    link.textContent = i;
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        showPage(i);
+                    });
+                    
+                    li.appendChild(link);
+                    elements.pagination.appendChild(li);
+                }
+                
+                showPage(1);
+            };
+
+            const showPage = (page) => {
+                currentPage = page;
+                
+                const allButtons = document.querySelectorAll('.button-item');
+                allButtons.forEach((item) => {
+                    const itemPage = parseInt(item.getAttribute('data-page'));
+                    item.style.display = itemPage === page ? '' : 'none';
+                });
+                
+                // Update pagination active state
+                document.querySelectorAll('#pagination .page-item').forEach((item, index) => {
+                    if (index + 1 === page) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+            };
 
             // Utility functions
             const setButtonState = (button, state) => {
@@ -236,7 +299,6 @@
                     const imageName = badge.getAttribute('data-tag-count');
                     if (window.editor) {
                         const count = window.editor.countPageMarkerOccurrences(imageName);
-                        console.log(imageName, count);
                         if (count > 1) {
                             badge.textContent = `×${count}`;
                             badge.style.display = 'inline';
@@ -347,7 +409,10 @@
 
                 // On mouse leave, restore active button image if there is one
                 button.addEventListener('mouseleave', () => {
-                    if (activeButton && activeButton !== button) {
+                    // If leaving the active button in delete mode, deactivate it
+                    if (activeButton === button && isDeleteMode) {
+                        deactivateActiveButton();
+                    } else if (activeButton && activeButton !== button) {
                         const activeImgSrc = activeButton.getAttribute('data-img-src');
                         loadImage(activeImgSrc);
                     }
@@ -367,10 +432,8 @@
                 });
             }
 
-            // Initialize button states after editor is ready
-            setTimeout(() => {
-                refreshButtonStates();
-            }, 100);
+            initPagination();
+            refreshButtonStates();
         });
     </script>
 @endpush
