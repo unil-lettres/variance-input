@@ -234,26 +234,17 @@ window.initEditor = (initialXml, comparisonId, fileType = 'source') => {
     },
 
     removePageMarker(imageName) {
-      return new Promise((resolve) => {
-        const result = this.getPageMarkerTag(imageName);
+      const result = this.getPageMarkerTag(imageName);
 
-        if (result) {
-          const tagPos = result.pos;
-          const tagEnd = tagPos + result.tag.length;
+      if (result) {
+        const tagPos = result.pos;
+        const tagEnd = tagPos + result.tag.length;
 
-          this.scrollToPageMarker(imageName);
-
-          // Wait before removing to allow user to see the tag being targeted
-          setTimeout(() => {
-            view.dispatch({
-              changes: { from: tagPos, to: tagEnd, insert: '' }
-            });
-            resolve(true);
-          }, 200);
-        } else {
-          resolve(false);
-        }
-      });
+        // Remove immediately
+        view.dispatch({
+          changes: { from: tagPos, to: tagEnd, insert: '' }
+        });
+      }
     },
   };
 

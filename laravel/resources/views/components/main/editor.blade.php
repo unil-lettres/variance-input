@@ -70,13 +70,6 @@
                             data-enable-when-readonly
                             {{ !$canEdit ? 'disabled' : '' }}
                         >Insérer {{ $loop->iteration }}</button>
-                        <button
-                            class="btn btn-danger btn-sm mb-1"
-                            data-tag-remove="{{ $loop->iteration }}"
-                            data-enable-when-readonly
-                            {{ !$canEdit ? 'disabled' : '' }}
-                            style="display: none;"
-                        >✖️</button>
                         <span
                             class="badge bg-secondary ms-1"
                             data-tag-count="{{ $loop->iteration }}"
@@ -131,16 +124,17 @@
             };
 
             const BUTTON_STATES = {
-                INACTIVE: { add: 'btn-primary', remove: ['btn-warning', 'btn-success'] },
-                ACTIVE: { add: 'btn-warning', remove: ['btn-primary', 'btn-success'] },
-                INSERTED: { add: 'btn-success', remove: ['btn-primary', 'btn-warning'] }
+                INACTIVE: { add: 'btn-primary', remove: ['btn-warning', 'btn-success', 'btn-danger'] },
+                ACTIVE_INSERT: { add: 'btn-warning', remove: ['btn-primary', 'btn-success', 'btn-danger'] },
+                INSERTED: { add: 'btn-success', remove: ['btn-primary', 'btn-warning', 'btn-danger'] },
+                ACTIVE_DELETE: { add: 'btn-danger', remove: ['btn-primary', 'btn-warning', 'btn-success'] }
             };
 
-            // State
+            // State - only one active button at a time, either in insert or delete mode
             let activeButton = null;
+            let isDeleteMode = false; // true = delete mode, false = insert mode
             let lastImageSrc = null; // Track the last image displayed
 
-            // Initialize editor
             window.initEditor(xmlContent, comparisonId, fileType);
             if (!canEdit && window.editor) {
                 window.editor.setReadOnly(true);
@@ -173,10 +167,22 @@
                 }
             };
 
-            const deactivateInsertMode = () => {
+            const deactivateActiveButton = () => {
                 if (activeButton) {
-                    setButtonState(activeButton, BUTTON_STATES.INACTIVE);
+                    const imageName = activeButton.getAttribute('data-tag');
+                    const isInserted = window.editor && window.editor.isPageMarkerInserted(imageName);
+                    
+                    // Reset to appropriate state
+                    if (isInserted) {
+                        setButtonState(activeButton, BUTTON_STATES.INSERTED);
+                        activeButton.textContent = `Insérer ${imageName}`;
+                    } else {
+                        setButtonState(activeButton, BUTTON_STATES.INACTIVE);
+                        activeButton.textContent = `Insérer ${imageName}`;
+                    }
+                    
                     activeButton = null;
+                    isDeleteMode = false;
                 }
             };
 
@@ -238,23 +244,22 @@
             };
 
             const refreshButtonStates = () => {
+                deactivateActiveButton();
+                
+                // Update all buttons to their proper state
                 document.querySelectorAll('.editor [data-tag]').forEach(button => {
                     const imageName = button.getAttribute('data-tag');
-                    const isInserted = window.editor && window.editor.isPageMarkerInserted(imageName);
-                    const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
+                    const isInserted = window.editor.isPageMarkerInserted(imageName);
                     
+                    const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
                     setButtonState(button, state);
+                    
+                    button.textContent = `Insérer ${imageName}`;
                     
                     if (isInserted) {
                         button.setAttribute('data-inserted', 'true');
                     } else {
                         button.removeAttribute('data-inserted');
-                    }
-                    
-                    // Update visibility of corresponding remove button
-                    const removeButton = document.querySelector(`[data-tag-remove="${imageName}"]`);
-                    if (removeButton) {
-                        removeButton.style.display = isInserted ? 'inline-block' : 'none';
                     }
                 });
                 updateTagCountBadges();
@@ -274,7 +279,7 @@
                 if (isReadOnly) {
                     refreshButtonStates();
                 } else {
-                    deactivateInsertMode();
+                    deactivateActiveButton();
                 }
             });
 
@@ -288,29 +293,42 @@
             // Insert buttons
             document.querySelectorAll('.editor [data-tag]').forEach(button => {
                 const imgSrc = button.getAttribute('data-img-src');
+                const imageName = button.getAttribute('data-tag');
 
                 button.addEventListener('click', () => {
-                    const imageName = button.getAttribute('data-tag');
-
-                    // Si le tag est déjà inséré, scroll vers celui-ci
-                    if (window.editor && window.editor.isPageMarkerInserted(imageName)) {
-                        window.editor.scrollToPageMarker(imageName);
+                    if (!window.editor) {
                         return;
                     }
-
-                    // Si le bouton est déjà actif, on le désactive
+                    
+                    const isInserted = window.editor.isPageMarkerInserted(imageName);
+                    
                     if (activeButton === button) {
-                        deactivateInsertMode();
+                        if (isDeleteMode) {
+                            window.editor.removePageMarker(imageName);
+                            refreshButtonStates();
+                        } else {
+                            deactivateActiveButton();
+                        }
                         return;
                     }
-
+                    
                     if (activeButton) {
-                        setButtonState(activeButton, BUTTON_STATES.INACTIVE);
+                        deactivateActiveButton();
                     }
-
-                    setButtonState(button, BUTTON_STATES.ACTIVE);
+                    
                     activeButton = button;
                     loadImage(imgSrc);
+                    
+                    if (isInserted) {
+                        isDeleteMode = true;
+                        setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
+                        button.textContent = `Supprimer ${imageName}`;
+                        window.editor.scrollToPageMarker(imageName);
+                    } else {
+                        isDeleteMode = false;
+                        setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
+                        button.textContent = `Insérer ${imageName}`;
+                    }
                 });
 
                 // Hover to show image preview
@@ -320,45 +338,32 @@
                     }
                 });
 
-                // On mouse leave, restore active button image or keep last image
+                // On mouse leave, restore active button image if there is one
                 button.addEventListener('mouseleave', () => {
                     if (activeButton && activeButton !== button) {
-                        // Restore active button image
                         const activeImgSrc = activeButton.getAttribute('data-img-src');
                         loadImage(activeImgSrc);
                     }
-                    // If no active button, keep the last image displayed (no hiding)
                 });
             });
 
             // Editor click to insert tag
             if (elements.editorContainer) {
                 elements.editorContainer.addEventListener('click', () => {
-                    if (activeButton && window.editor) {
+                    // Only insert if we have an active button in insert mode
+                    if (activeButton && !isDeleteMode && window.editor) {
                         const imageName = activeButton.getAttribute('data-tag');
                         const pageNumber = '001'; // Hard coded for now
                         window.editor.insertPageMarker(imageName, pageNumber);
-                        deactivateInsertMode();
                         refreshButtonStates();
                     }
                 });
             }
 
-            // Remove buttons
-            document.querySelectorAll('.editor [data-tag-remove]').forEach(removeBtn => {
-                removeBtn.addEventListener('click', async () => {
-                    const imageName = removeBtn.getAttribute('data-tag-remove');
-                    const removed = await window.editor.removePageMarker(imageName);
-
-                    if (removed) {
-                        refreshButtonStates();
-                    } else {
-                        console.error(`Balise pour l'image "${imageName}" introuvable dans l'éditeur`);
-                    }
-                });
-            });
-
-            refreshButtonStates();
+            // Initialize button states after editor is ready
+            setTimeout(() => {
+                refreshButtonStates();
+            }, 100);
         });
     </script>
 @endpush
