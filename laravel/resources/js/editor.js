@@ -32,8 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // State - only one active button at a time, either in insert or delete mode
     let activeButton = null;
     let isDeleteMode = false; // true = delete mode, false = insert mode
-    let lastImageSrc = null; // Track the last image displayed
-    const itemsPerPage = 3;
+    const itemsPerPage = 40;
 
     const editor = initEditor(document.getElementById('editor-container'), xmlContent);
 

@@ -60,7 +60,7 @@
                     class="overflow-scroll"
                 ></div>
             </div>
-            <div class="col-md-2 col-12">
+            <div class="col-md-2 col-12 h-100 overflow-auto">
                 <div id="buttons-container" class="row row-cols-4 g-1 align-items-start">
                     @foreach ($imagesData ?? [] as $facsimile)
                         <div class="col button-item" style="display: none;">
