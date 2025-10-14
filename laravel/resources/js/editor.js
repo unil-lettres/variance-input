@@ -32,7 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // State - only one active button at a time, either in insert or delete mode
     let activeButton = null;
     let isDeleteMode = false; // true = delete mode, false = insert mode
+
     const itemsPerPage = 40;
+    let tagsWereHiddenBeforeEdit = true;
 
     const editor = initEditor(document.getElementById('editor-container'), xmlContent);
 
@@ -225,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateTagCountBadges = () => {
         const { markerCounts } = editor.getAllMarkers();
-        
+
         document.querySelectorAll('[data-tag-count]').forEach(badge => {
             const imageName = badge.getAttribute('data-tag-count');
             const count = markerCounts.get(imageName) || 0;
@@ -243,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deactivateActiveButton();
 
         const { insertedMarkers } = editor.getAllMarkers();
-        
+
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
             const imageName = button.getAttribute('data-tag');
             const isInserted = insertedMarkers.has(imageName);
@@ -263,6 +265,17 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePaginationColors();
     };
 
+    const updateTagsButtonUI = (tagsHidden) => {
+        elements.toggleTagsBtn.textContent = tagsHidden ? 'Afficher les balises' : 'Masquer les balises';
+        if (tagsHidden) {
+            elements.toggleTagsBtn.classList.remove('btn-info');
+            elements.toggleTagsBtn.classList.add('btn-secondary');
+        } else {
+            elements.toggleTagsBtn.classList.remove('btn-secondary');
+            elements.toggleTagsBtn.classList.add('btn-info');
+        }
+    };
+
     // Event handlers
     elements.toggleBtn.addEventListener('click', () => {
         const isReadOnly = editor.toggleReadOnly();
@@ -274,18 +287,30 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.disabled = !isReadOnly;
         });
 
+        elements.toggleTagsBtn.disabled = !isReadOnly;
+
         if (isReadOnly) {
             refreshButtonStates();
+            if (tagsWereHiddenBeforeEdit) {
+                if (!editor.getTagVisibility()) {
+                    editor.toggleTagVisibility();
+                    updateTagsButtonUI(true);
+                }
+            }
         } else {
+            tagsWereHiddenBeforeEdit = editor.getTagVisibility();
             deactivateActiveButton();
+
+            if (tagsWereHiddenBeforeEdit) {
+                editor.toggleTagVisibility();
+                updateTagsButtonUI(false);
+            }
         }
     });
 
     elements.toggleTagsBtn.addEventListener('click', () => {
         const tagsHidden = editor.toggleTagVisibility();
-        elements.toggleTagsBtn.textContent = tagsHidden ? 'Afficher les balises' : 'Masquer les balises';
-        elements.toggleTagsBtn.classList.toggle('btn-secondary');
-        elements.toggleTagsBtn.classList.toggle('btn-info');
+        updateTagsButtonUI(tagsHidden);
     });
 
     // Insert buttons

@@ -235,6 +235,10 @@ export default function (container, initialXml) {
       return !currentState;
     },
 
+    getTagVisibility() {
+      return view.state.field(hideTagsField);
+    },
+
     insertPageMarker(imageName, pageNumber = '001') {
       const { head } = view.state.selection.main;
 
