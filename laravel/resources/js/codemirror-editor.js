@@ -113,6 +113,49 @@ export default function (container, initialXml) {
   const readOnlyCompartment = new Compartment();
   const editableCompartment = new Compartment();
 
+  let markerCache = {
+    content: null,
+    insertedMarkers: new Set(),
+    markerCounts: new Map(),
+    markerPositions: new Map()
+  };
+
+  const invalidateCache = () => {
+    markerCache.content = null;
+  };
+
+  const ensureCacheUpdated = () => {
+    const content = view.state.doc.toString();
+
+    if (markerCache.content === content) {
+      return;
+    }
+
+    markerCache.content = content;
+    markerCache.insertedMarkers.clear();
+    markerCache.markerCounts.clear();
+    markerCache.markerPositions.clear();
+
+    const regex = /<span class="page-marker" data-image-name="([^"]+)"><span class="page-number">.*?<\/span><img[^>]*><\/span>/g;
+    let match;
+
+    while ((match = regex.exec(content)) !== null) {
+      const imageName = match[1];
+      const tag = match[0];
+      const pos = match.index;
+
+      markerCache.insertedMarkers.add(imageName);
+      markerCache.markerCounts.set(
+        imageName,
+        (markerCache.markerCounts.get(imageName) || 0) + 1
+      );
+
+      if (!markerCache.markerPositions.has(imageName)) {
+        markerCache.markerPositions.set(imageName, { tag, pos });
+      }
+    }
+  };
+
   const startState = EditorState.create({
     doc: initialXml,
     extensions: [
@@ -200,17 +243,15 @@ export default function (container, initialXml) {
         changes: { from: head, insert: pageMarkerTag },
         selection: { anchor: head + pageMarkerTag.length }
       });
+
+      invalidateCache();
+
       view.focus();
     },
 
     getPageMarkerTag(imageName) {
-      const content = view.state.doc.toString();
-      const regex = new RegExp(
-        `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">.*?</span><img[^>]*></span>`,
-        'i'
-      );
-      const match = content.match(regex);
-      return match ? { tag: match[0], pos: content.indexOf(match[0]) } : null;
+      ensureCacheUpdated();
+      return markerCache.markerPositions.get(imageName) || null;
     },
 
     scrollToPageMarker(imageName) {
@@ -225,14 +266,21 @@ export default function (container, initialXml) {
     },
 
     isPageMarkerInserted(imageName) {
-      return this.getPageMarkerTag(imageName) !== null;
+      ensureCacheUpdated();
+      return markerCache.insertedMarkers.has(imageName);
     },
 
     countPageMarkerOccurrences(imageName) {
-      const content = view.state.doc.toString();
-      const regex = new RegExp(`data-image-name="${imageName}"`, 'g');
-      const matches = content.match(regex);
-      return matches ? matches.length : 0;
+      ensureCacheUpdated();
+      return markerCache.markerCounts.get(imageName) || 0;
+    },
+
+    getAllMarkers() {
+      ensureCacheUpdated();
+      return {
+        insertedMarkers: new Set(markerCache.insertedMarkers),
+        markerCounts: new Map(markerCache.markerCounts)
+      };
     },
 
     removePageMarker(imageName) {
@@ -242,10 +290,11 @@ export default function (container, initialXml) {
         const tagPos = result.pos;
         const tagEnd = tagPos + result.tag.length;
 
-        // Remove immediately
         view.dispatch({
           changes: { from: tagPos, to: tagEnd, insert: '' }
         });
+
+        invalidateCache();
       }
     },
   };

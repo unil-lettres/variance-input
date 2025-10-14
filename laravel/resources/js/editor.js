@@ -45,10 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
         if (pageButtons.length === 0) return false;
 
+        const { insertedMarkers } = editor.getAllMarkers();
         let allInserted = true;
         pageButtons.forEach(button => {
             const imageName = button.getAttribute('data-tag');
-            if (!editor.isPageMarkerInserted(imageName)) {
+            if (!insertedMarkers.has(imageName)) {
                 allInserted = false;
             }
         });
@@ -59,9 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkIfPageHasDuplicates = (pageNumber) => {
         const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
 
+        const { markerCounts } = editor.getAllMarkers();
         for (let button of pageButtons) {
             const imageName = button.getAttribute('data-tag');
-            const count = editor.countPageMarkerOccurrences(imageName);
+            const count = markerCounts.get(imageName) || 0;
             if (count > 1) {
                 return true;
             }
@@ -222,9 +224,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateTagCountBadges = () => {
+        const { markerCounts } = editor.getAllMarkers();
+        
         document.querySelectorAll('[data-tag-count]').forEach(badge => {
             const imageName = badge.getAttribute('data-tag-count');
-            const count = editor.countPageMarkerOccurrences(imageName);
+            const count = markerCounts.get(imageName) || 0;
             if (count > 1) {
                 badge.textContent = `×${count}`;
                 badge.style.display = 'inline';
@@ -238,10 +242,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshButtonStates = () => {
         deactivateActiveButton();
 
-        // Update all buttons to their proper state
+        const { insertedMarkers } = editor.getAllMarkers();
+        
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
             const imageName = button.getAttribute('data-tag');
-            const isInserted = editor.isPageMarkerInserted(imageName);
+            const isInserted = insertedMarkers.has(imageName);
 
             const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
             setButtonState(button, state);
