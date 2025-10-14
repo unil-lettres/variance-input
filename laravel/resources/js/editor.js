@@ -336,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     elements.saveBtn.addEventListener('click', async () => {
-        const updatedXml = view.state.doc.toString();
+        const updatedXml = editor.view.state.doc.toString();
         const response = await fetch(`/comparison/${comparisonId}/editor?type=${fileType}`, {
             method: 'PUT',
             headers: {
