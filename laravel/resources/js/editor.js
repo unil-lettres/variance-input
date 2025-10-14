@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkIfPageFullyInserted = (pageNumber) => {
         const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
         if (pageButtons.length === 0) return false;
-        
+
         let allInserted = true;
         pageButtons.forEach(button => {
             const imageName = button.getAttribute('data-tag');
@@ -52,20 +52,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 allInserted = false;
             }
         });
-        
+
         return allInserted;
+    };
+
+    const checkIfPageHasDuplicates = (pageNumber) => {
+        const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
+
+        for (let button of pageButtons) {
+            const imageName = button.getAttribute('data-tag');
+            const count = editor.countPageMarkerOccurrences(imageName);
+            if (count > 1) {
+                return true;
+            }
+        }
+
+        return false;
     };
 
     const updatePaginationColors = () => {
         document.querySelectorAll('#pagination .page-item').forEach((item, index) => {
             const pageNumber = index + 1;
             const link = item.querySelector('.page-link');
+            const hasDuplicates = checkIfPageHasDuplicates(pageNumber);
             const isFullyInserted = checkIfPageFullyInserted(pageNumber);
-            
-            if (isFullyInserted) {
+
+            if (hasDuplicates) {
+                link.classList.add('page-has-duplicates');
+                link.classList.remove('page-fully-inserted');
+            } else if (isFullyInserted) {
                 link.classList.add('page-fully-inserted');
+                link.classList.remove('page-has-duplicates');
             } else {
                 link.classList.remove('page-fully-inserted');
+                link.classList.remove('page-has-duplicates');
             }
         });
     };
@@ -73,24 +93,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const initPagination = () => {
         const allButtons = document.querySelectorAll('.button-item');
         const totalPages = Math.ceil(allButtons.length / itemsPerPage);
-        
+
         allButtons.forEach((item, index) => {
             const itemPage = Math.ceil((index + 1) / itemsPerPage);
             item.setAttribute('data-page', itemPage);
         });
-        
+
         if (totalPages <= 1) {
             elements.pagination.parentElement.style.display = 'none';
             showPage(1);
             return;
         }
-        
+
         elements.pagination.innerHTML = '';
-        
+
         for (let i = 1; i <= totalPages; i++) {
             const li = document.createElement('li');
             li.className = 'page-item';
-            
+
             const link = document.createElement('a');
             link.className = 'page-link shadow-none';
             link.href = '#';
@@ -99,11 +119,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 showPage(i);
             });
-            
+
             li.appendChild(link);
             elements.pagination.appendChild(li);
         }
-        
+
         showPage(1);
     };
 
@@ -113,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const itemPage = parseInt(item.getAttribute('data-page'));
             item.style.display = itemPage === page ? '' : 'none';
         });
-        
+
         // Update pagination active state
         document.querySelectorAll('#pagination .page-item').forEach((item, index) => {
             if (index + 1 === page) {
@@ -146,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeButton) {
             const imageName = activeButton.getAttribute('data-tag');
             const isInserted = editor.isPageMarkerInserted(imageName);
-            
+
             // Reset to appropriate state
             if (isInserted) {
                 setButtonState(activeButton, BUTTON_STATES.INSERTED);
@@ -154,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setButtonState(activeButton, BUTTON_STATES.INACTIVE);
             }
             activeButton.querySelector('span').textContent = imageName;
-            
+
             activeButton = null;
             isDeleteMode = false;
             elements.editorContainer.style.cursor = 'default';
@@ -163,26 +183,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loadImage = (imgSrc) => {
         if (!imgSrc) return;
-        
-        lastImageSrc = imgSrc;
+
         if (elements.noPreviewText) elements.noPreviewText.style.display = 'none';
-        
+
         // Extract filename from URL
         const filename = imgSrc.split('/').pop();
-        
+
         // Set a timeout to show spinner only if loading takes more than 500ms
         let spinnerTimeout = setTimeout(() => {
             elements.previewImg.style.display = 'none';
             elements.loadingSpinner.style.display = 'block';
         }, 500);
-        
+
         const img = new Image();
         img.onload = () => {
             clearTimeout(spinnerTimeout);
             elements.loadingSpinner.style.display = 'none';
             elements.previewImg.src = imgSrc;
             elements.previewImg.style.display = 'block';
-            
+
             // Show filename
             if (elements.imageName) {
                 elements.imageName.textContent = filename;
@@ -193,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(spinnerTimeout);
             elements.loadingSpinner.style.display = 'none';
             showMessage(MESSAGES.ERROR);
-            
+
             // Hide filename on error
             if (elements.imageName) {
                 elements.imageName.style.display = 'none';
@@ -218,17 +237,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const refreshButtonStates = () => {
         deactivateActiveButton();
-        
+
         // Update all buttons to their proper state
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
             const imageName = button.getAttribute('data-tag');
             const isInserted = editor.isPageMarkerInserted(imageName);
-            
+
             const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
             setButtonState(button, state);
-            
+
             button.querySelector('span').textContent = imageName;
-            
+
             if (isInserted) {
                 button.setAttribute('data-inserted', 'true');
             } else {
@@ -271,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         button.addEventListener('click', () => {
             const isInserted = editor.isPageMarkerInserted(imageName);
-            
+
             if (activeButton === button) {
                 if (isDeleteMode) {
                     editor.removePageMarker(imageName);
@@ -281,14 +300,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 return;
             }
-            
+
             if (activeButton) {
                 deactivateActiveButton();
             }
-            
+
             activeButton = button;
             loadImage(imgSrc);
-            
+
             if (isInserted) {
                 isDeleteMode = true;
                 setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
