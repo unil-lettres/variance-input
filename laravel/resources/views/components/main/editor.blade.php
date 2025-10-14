@@ -143,7 +143,7 @@
             let isDeleteMode = false; // true = delete mode, false = insert mode
             let lastImageSrc = null; // Track the last image displayed
             let currentPage = 1;
-            const itemsPerPage = 40;
+            const itemsPerPage = 3;
 
             window.initEditor(xmlContent, comparisonId, fileType);
             if (!canEdit && window.editor) {
@@ -151,6 +151,35 @@
             }
 
             // Pagination functions
+            const checkIfPageFullyInserted = (pageNumber) => {
+                const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
+                if (pageButtons.length === 0) return false;
+                
+                let allInserted = true;
+                pageButtons.forEach(button => {
+                    const imageName = button.getAttribute('data-tag');
+                    if (window.editor && !window.editor.isPageMarkerInserted(imageName)) {
+                        allInserted = false;
+                    }
+                });
+                
+                return allInserted;
+            };
+
+            const updatePaginationColors = () => {
+                document.querySelectorAll('#pagination .page-item').forEach((item, index) => {
+                    const pageNumber = index + 1;
+                    const link = item.querySelector('.page-link');
+                    const isFullyInserted = checkIfPageFullyInserted(pageNumber);
+                    
+                    if (isFullyInserted) {
+                        link.classList.add('page-fully-inserted');
+                    } else {
+                        link.classList.remove('page-fully-inserted');
+                    }
+                });
+            };
+
             const initPagination = () => {
                 const allButtons = document.querySelectorAll('.button-item');
                 const totalPages = Math.ceil(allButtons.length / itemsPerPage);
@@ -173,7 +202,7 @@
                     li.className = 'page-item';
                     
                     const link = document.createElement('a');
-                    link.className = 'page-link';
+                    link.className = 'page-link shadow-none';
                     link.href = '#';
                     link.textContent = i;
                     link.addEventListener('click', (e) => {
@@ -330,6 +359,7 @@
                     }
                 });
                 updateTagCountBadges();
+                updatePaginationColors();
             };
 
             // Event handlers
