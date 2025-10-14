@@ -74,13 +74,16 @@ function createPageNumberDecorations(state) {
   const decorations = [];
   const text = state.doc.toString();
 
-  // Regex to match page number content: <span class="page-number">XXX</span>
-  const pageNumberRegex = /<span class="page-number">([^<]*)<\/span>/g;
+  const pageNumberRegex = /<span class="page-marker" data-image-name="[^"]+"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
   let match;
 
   while ((match = pageNumberRegex.exec(text)) !== null) {
-    const contentStart = match.index + '<span class="page-number">'.length;
-    const contentEnd = contentStart + match[1].length;
+    const fullMatch = match[0];
+    const pageNumberContent = match[1];
+    const matchStart = match.index;
+    const pageNumberTagStart = fullMatch.indexOf('<span class="page-number">');
+    const contentStart = matchStart + pageNumberTagStart + '<span class="page-number">'.length;
+    const contentEnd = contentStart + pageNumberContent.length;
 
     decorations.push(
       Decoration.mark({
