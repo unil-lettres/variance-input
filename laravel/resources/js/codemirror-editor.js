@@ -1,0 +1,252 @@
+import { EditorState, Compartment, StateField, StateEffect } from "@codemirror/state";
+import { EditorView, lineNumbers, drawSelection, Decoration, WidgetType } from "@codemirror/view";
+import { foldGutter } from "@codemirror/language";
+import { xml } from "@codemirror/lang-xml";
+import { oneDark } from "@codemirror/theme-one-dark";
+
+// Widget to replace tags with invisible content
+class InvisibleTagWidget extends WidgetType {
+  constructor(tag) {
+    super();
+    this.tag = tag;
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.style.display = "none";
+    span.textContent = this.tag;
+    return span;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+// Effect to toggle tag visibility
+const toggleTagVisibility = StateEffect.define();
+
+// State field to track whether tags should be hidden
+const hideTagsField = StateField.define({
+  create() {
+    return true; // Start with tags hidden
+  },
+  update(value, tr) {
+    for (let effect of tr.effects) {
+      if (effect.is(toggleTagVisibility)) {
+        value = effect.value;
+      }
+    }
+    return value;
+  },
+  provide: f => EditorView.decorations.from(f, hideTags => {
+    if (!hideTags) return Decoration.none;
+
+    return view => {
+      const widgets = [];
+      const doc = view.state.doc;
+      const text = doc.toString();
+
+      // Regex to match XML tags: <tag...> or </tag> or <tag/>
+      const tagRegex = /<\/?[a-zA-Z][^>]*\/?>/g;
+      let match;
+
+      while ((match = tagRegex.exec(text)) !== null) {
+        const from = match.index;
+        const to = from + match[0].length;
+
+        widgets.push(
+          Decoration.replace({
+            widget: new InvisibleTagWidget(match[0]),
+            inclusive: true,
+            block: false
+          }).range(from, to)
+        );
+      }
+
+      return Decoration.set(widgets);
+    };
+  })
+});
+
+// Helper function to create page number decorations
+function createPageNumberDecorations(state) {
+  const decorations = [];
+  const text = state.doc.toString();
+
+  // Regex to match page number content: <span class="page-number">XXX</span>
+  const pageNumberRegex = /<span class="page-number">([^<]*)<\/span>/g;
+  let match;
+
+  while ((match = pageNumberRegex.exec(text)) !== null) {
+    const contentStart = match.index + '<span class="page-number">'.length;
+    const contentEnd = contentStart + match[1].length;
+
+    decorations.push(
+      Decoration.mark({
+        class: "cm-page-number"
+      }).range(contentStart, contentEnd)
+    );
+  }
+
+  return Decoration.set(decorations);
+}
+
+// State field to highlight page numbers
+const pageNumberHighlight = StateField.define({
+  create(state) {
+    return createPageNumberDecorations(state);
+  },
+  update(decorations, tr) {
+    // Only recalculate if the document has changed
+    if (tr.docChanged) {
+      return createPageNumberDecorations(tr.state);
+    }
+    return decorations;
+  },
+  provide: f => EditorView.decorations.from(f)
+});
+
+export default function (container, initialXml) {
+
+  // Create compartments for dynamic reconfiguration
+  const readOnlyCompartment = new Compartment();
+  const editableCompartment = new Compartment();
+
+  const startState = EditorState.create({
+    doc: initialXml,
+    extensions: [
+      xml(),
+      lineNumbers(),
+      foldGutter(),
+      oneDark,
+      EditorView.lineWrapping,
+      drawSelection(),
+      hideTagsField, // Add the tag hiding field
+      pageNumberHighlight, // Add the page number highlighting field
+      readOnlyCompartment.of(EditorState.readOnly.of(true)),
+      editableCompartment.of(EditorView.editable.of(false)),
+      EditorView.theme({
+        ".cm-cursor": {
+          borderLeftColor: "#528bff !important",
+          borderLeftWidth: "2px !important",
+          display: "block !important",
+          visibility: "visible !important"
+        },
+        ".cm-selectionBackground": {
+          backgroundColor: "#2e4862ff !important"
+        },
+        ".cm-page-number": {
+          backgroundColor: "#ff6b35 !important",
+          color: "#ffffff !important",
+          fontWeight: "bold !important",
+          padding: "2px 6px !important",
+          borderRadius: "3px !important",
+          border: "2px solid #ff4500 !important",
+          display: "inline-block !important",
+          fontSize: "1.1em !important"
+        },
+      }),
+    ]
+  });
+
+  const view = new EditorView({ state: startState, parent: container });
+
+  let isReadOnly = true;
+
+  return {
+    get view() {
+      return view;
+    },
+
+    toggleReadOnly() {
+      isReadOnly = !isReadOnly;
+      view.dispatch({
+        effects: [
+          readOnlyCompartment.reconfigure(EditorState.readOnly.of(isReadOnly)),
+          editableCompartment.reconfigure(EditorView.editable.of(!isReadOnly))
+        ]
+      });
+      view.focus();
+      return isReadOnly;
+    },
+
+    setReadOnly(value) {
+      isReadOnly = value;
+      view.dispatch({
+        effects: [
+          readOnlyCompartment.reconfigure(EditorState.readOnly.of(isReadOnly)),
+          editableCompartment.reconfigure(EditorView.editable.of(!isReadOnly))
+        ]
+      });
+    },
+
+    toggleTagVisibility() {
+      const currentState = view.state.field(hideTagsField);
+      view.dispatch({
+        effects: toggleTagVisibility.of(!currentState)
+      });
+      return !currentState;
+    },
+
+    insertPageMarker(imageName, pageNumber = '001') {
+      const { head } = view.state.selection.main;
+
+      // Build the page marker tag
+      const pageMarkerTag = `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">${pageNumber}</span><img src="/img/settings/page_right.svg" /></span>`;
+
+      // Insert at cursor position
+      view.dispatch({
+        changes: { from: head, insert: pageMarkerTag },
+        selection: { anchor: head + pageMarkerTag.length }
+      });
+      view.focus();
+    },
+
+    getPageMarkerTag(imageName) {
+      const content = view.state.doc.toString();
+      const regex = new RegExp(
+        `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">.*?</span><img[^>]*></span>`,
+        'i'
+      );
+      const match = content.match(regex);
+      return match ? { tag: match[0], pos: content.indexOf(match[0]) } : null;
+    },
+
+    scrollToPageMarker(imageName) {
+      const result = this.getPageMarkerTag(imageName);
+      if (result) {
+        view.dispatch({
+          selection: { anchor: result.pos, head: result.pos + result.tag.length },
+          effects: EditorView.scrollIntoView(result.pos, { y: "center" })
+        });
+        view.focus();
+      }
+    },
+
+    isPageMarkerInserted(imageName) {
+      return this.getPageMarkerTag(imageName) !== null;
+    },
+
+    countPageMarkerOccurrences(imageName) {
+      const content = view.state.doc.toString();
+      const regex = new RegExp(`data-image-name="${imageName}"`, 'g');
+      const matches = content.match(regex);
+      return matches ? matches.length : 0;
+    },
+
+    removePageMarker(imageName) {
+      const result = this.getPageMarkerTag(imageName);
+
+      if (result) {
+        const tagPos = result.pos;
+        const tagEnd = tagPos + result.tag.length;
+
+        // Remove immediately
+        view.dispatch({
+          changes: { from: tagPos, to: tagEnd, insert: '' }
+        });
+      }
+    },
+  };
+};

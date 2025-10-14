@@ -1,0 +1,11 @@
+.page-link.page-fully-inserted {
+    background-color: #d1e7dd !important;
+    border-color: #a3cfbb !important;
+    color: #0f5132 !important;
+}
+
+.page-item.active .page-link.page-fully-inserted {
+    background-color: #198754 !important;
+    border-color: #198754 !important;
+    color: #fff !important;
+}
