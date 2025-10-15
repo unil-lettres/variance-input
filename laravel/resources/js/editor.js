@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Set a timeout to show spinner only if loading takes more than 500ms
         let spinnerTimeout = setTimeout(() => {
-            elements.previewImg.style.display = 'none';
+            elements.previewImg.parentElement.style.display = 'none';
             elements.loadingSpinner.style.display = 'block';
         }, 500);
 
@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(spinnerTimeout);
             elements.loadingSpinner.style.display = 'none';
             elements.previewImg.src = imgSrc;
-            elements.previewImg.style.display = 'block';
+            elements.previewImg.parentElement.style.display = 'block';
 
             // Show filename
             if (elements.imageName) {
@@ -406,6 +406,25 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(data.error || 'Une erreur est survenue lors de la sauvegarde.');
         }
     });
+
+    // Image zoom on mouse hover
+    if (elements.previewImg) {
+        elements.previewImg.addEventListener('mousemove', (e) => {
+            const rect = elements.previewImg.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            elements.previewImg.style.transformOrigin = `${x}% ${y}%`;
+            elements.previewImg.style.transform = 'scale(3)';
+            elements.previewImg.style.cursor = 'zoom-in';
+        });
+
+        elements.previewImg.addEventListener('mouseleave', () => {
+            elements.previewImg.style.transform = 'scale(1)';
+            elements.previewImg.style.transformOrigin = 'center center';
+            elements.previewImg.style.cursor = 'default';
+        });
+    }
 
     initPagination();
     refreshButtonStates();

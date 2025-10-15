@@ -92,13 +92,17 @@
                         <span class="visually-hidden">Chargement...</span>
                     </div>
                 </div>
-                <img 
-                    id="facsimile-preview" 
-                    src="" 
-                    alt="Aperçu du facsimilé" 
-                    style="display: none; min-height: 0;"
-                    class="w-100 object-fit-contain"
+                <div
+                      style="display: none; min-height: 0;"
+                      class="w-100 overflow-hidden position-relative"
                 >
+                    <img 
+                        id="facsimile-preview" 
+                        src="" 
+                        alt="Aperçu du facsimilé" 
+                        class="w-100 h-100 object-fit-contain"
+                    >
+                </div>
                 <p id="no-preview" class="text-muted"></p>
             </div>
         </div>
