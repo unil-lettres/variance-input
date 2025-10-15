@@ -120,7 +120,8 @@ export default function (container, initialXml) {
     content: null,
     insertedMarkers: new Set(),
     markerCounts: new Map(),
-    markerPositions: new Map()
+    markerPositions: new Map(),
+    pageNumbers: new Map() // Store page numbers for each marker
   };
 
   const invalidateCache = () => {
@@ -138,12 +139,14 @@ export default function (container, initialXml) {
     markerCache.insertedMarkers.clear();
     markerCache.markerCounts.clear();
     markerCache.markerPositions.clear();
+    markerCache.pageNumbers.clear();
 
-    const regex = /<span class="page-marker" data-image-name="([^"]+)"><span class="page-number">.*?<\/span><img[^>]*><\/span>/g;
+    const regex = /<span class="page-marker" data-image-name="([^"]+)"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
     let match;
 
     while ((match = regex.exec(content)) !== null) {
       const imageName = match[1];
+      const pageNumber = match[2];
       const tag = match[0];
       const pos = match.index;
 
@@ -155,6 +158,7 @@ export default function (container, initialXml) {
 
       if (!markerCache.markerPositions.has(imageName)) {
         markerCache.markerPositions.set(imageName, { tag, pos });
+        markerCache.pageNumbers.set(imageName, pageNumber);
       }
     }
   };
@@ -288,6 +292,11 @@ export default function (container, initialXml) {
         insertedMarkers: new Set(markerCache.insertedMarkers),
         markerCounts: new Map(markerCache.markerCounts)
       };
+    },
+
+    getPageNumber(imageName) {
+      ensureCacheUpdated();
+      return markerCache.pageNumbers.get(imageName) || null;
     },
 
     removePageMarker(imageName) {

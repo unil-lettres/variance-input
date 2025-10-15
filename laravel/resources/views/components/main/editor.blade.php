@@ -71,7 +71,7 @@
                                 data-enable-when-readonly
                                 {{ !$canEdit ? 'disabled' : '' }}
                             >
-                                <span>{{ $loop->iteration }}</span>
+                                <span>?</span>
                                 <span
                                     class="position-absolute top-0 start-75 translate-middle badge rounded-pill bg-danger"
                                     data-tag-count="{{ $loop->iteration }}"

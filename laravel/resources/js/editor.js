@@ -177,7 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 setButtonState(activeButton, BUTTON_STATES.INACTIVE);
             }
-            activeButton.querySelector('span').textContent = imageName;
+
+            const pageNumber = editor.getPageNumber(imageName);
+            activeButton.querySelector('span').textContent = pageNumber || '?';
 
             activeButton = null;
             isDeleteMode = false;
@@ -255,7 +257,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
             setButtonState(button, state);
 
-            button.querySelector('span').textContent = imageName;
+            const pageNumber = editor.getPageNumber(imageName);
+            button.querySelector('span').textContent = pageNumber || '?';
 
             if (isInserted) {
                 button.setAttribute('data-inserted', 'true');
@@ -349,7 +352,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 isDeleteMode = false;
                 setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
-                button.querySelector('span').textContent = imageName;
+                // Show "?" for buttons not yet inserted
+                button.querySelector('span').textContent = '?';
                 elements.editorContainer.style.cursor = 'crosshair';
             }
         });
@@ -415,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const rect = elements.previewImg.getBoundingClientRect();
             const x = ((e.clientX - rect.left) / rect.width) * 100;
             const y = ((e.clientY - rect.top) / rect.height) * 100;
-            
+
             elements.previewImg.style.transformOrigin = `${x}% ${y}%`;
             elements.previewImg.style.transform = 'scale(3)';
             elements.previewImg.style.cursor = 'zoom-in';
