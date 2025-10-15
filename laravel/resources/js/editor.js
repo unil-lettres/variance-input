@@ -425,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const y = ((e.clientY - rect.top) / rect.height) * 100;
 
             elements.previewImg.style.transformOrigin = `${x}% ${y}%`;
-            elements.previewImg.style.transform = 'scale(3)';
+            elements.previewImg.style.transform = 'scale(4)';
             elements.previewImg.style.cursor = 'zoom-in';
         });
 
