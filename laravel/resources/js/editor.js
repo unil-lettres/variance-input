@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Constants
     const MESSAGES = {
-        DEFAULT: 'Cliquez sur un bouton "Insérer..." pour activer l\'insertion',
+        DEFAULT: 'Aperçu de la page sélectionnée',
         ERROR: 'Erreur lors du chargement de l\'image'
     };
 
