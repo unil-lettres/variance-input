@@ -26,3 +26,20 @@
     transition: transform 0.2s ease-out;
     will-change: transform;
 }
+
+.cm-page-number-widget {
+    cursor: pointer;
+    background-color: #ff6b35;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 2px solid #ff4500;
+    display: inline-block;
+    font-size: 1.1em;
+}
+
+.cm-page-number-widget:hover {
+    background-color: #ff8c5a;
+    border-color: #ff6633;
+}

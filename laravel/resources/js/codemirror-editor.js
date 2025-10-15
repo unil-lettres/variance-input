@@ -1,5 +1,5 @@
 import { EditorState, Compartment, StateField, StateEffect } from "@codemirror/state";
-import { EditorView, lineNumbers, drawSelection, Decoration, WidgetType } from "@codemirror/view";
+import { EditorView, lineNumbers, drawSelection, Decoration, WidgetType, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -15,6 +15,48 @@ class InvisibleTagWidget extends WidgetType {
     const span = document.createElement("span");
     span.style.display = "none";
     span.textContent = this.tag;
+    return span;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+// Widget for clickable page numbers
+class PageNumberWidget extends WidgetType {
+  constructor(pageNumber, markerStart, markerEnd, view, onUpdate) {
+    super();
+    this.pageNumber = pageNumber;
+    this.markerStart = markerStart;
+    this.markerEnd = markerEnd;
+    this.view = view;
+    this.onUpdate = onUpdate;
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-page-number-widget";
+    span.textContent = this.pageNumber;
+    
+    span.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const newPageNumber = prompt("Entrez le nouveau numéro de page:", this.pageNumber);
+      if (newPageNumber !== null && newPageNumber !== this.pageNumber) {
+        // Update the page number in the document
+        this.view.dispatch({
+          changes: { from: this.markerStart, to: this.markerEnd, insert: newPageNumber }
+        });
+        
+        // Notify that an update occurred
+        if (this.onUpdate) {
+          this.onUpdate();
+        }
+      }
+    });
+    
     return span;
   }
 
@@ -70,9 +112,9 @@ const hideTagsField = StateField.define({
 });
 
 // Helper function to create page number decorations
-function createPageNumberDecorations(state) {
+function createPageNumberDecorations(view, onUpdate) {
   const decorations = [];
-  const text = state.doc.toString();
+  const text = view.state.doc.toString();
 
   const pageNumberRegex = /<span class="page-marker" data-image-name="[^"]+"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
   let match;
@@ -86,8 +128,10 @@ function createPageNumberDecorations(state) {
     const contentEnd = contentStart + pageNumberContent.length;
 
     decorations.push(
-      Decoration.mark({
-        class: "cm-page-number"
+      Decoration.replace({
+        widget: new PageNumberWidget(pageNumberContent, contentStart, contentEnd, view, onUpdate),
+        inclusive: false,
+        block: false
       }).range(contentStart, contentEnd)
     );
   }
@@ -95,19 +139,25 @@ function createPageNumberDecorations(state) {
   return Decoration.set(decorations);
 }
 
-// State field to highlight page numbers
-const pageNumberHighlight = StateField.define({
-  create(state) {
-    return createPageNumberDecorations(state);
-  },
-  update(decorations, tr) {
-    // Only recalculate if the document has changed
-    if (tr.docChanged) {
-      return createPageNumberDecorations(tr.state);
+// ViewPlugin to manage page number decorations
+const createPageNumberPlugin = (getCallback) => ViewPlugin.fromClass(class {
+  constructor(view) {
+    this.decorations = createPageNumberDecorations(view, () => {
+      const callback = getCallback();
+      if (callback) callback();
+    });
+  }
+
+  update(update) {
+    if (update.docChanged) {
+      this.decorations = createPageNumberDecorations(update.view, () => {
+        const callback = getCallback();
+        if (callback) callback();
+      });
     }
-    return decorations;
-  },
-  provide: f => EditorView.decorations.from(f)
+  }
+}, {
+  decorations: v => v.decorations
 });
 
 export default function (container, initialXml) {
@@ -115,6 +165,8 @@ export default function (container, initialXml) {
   // Create compartments for dynamic reconfiguration
   const readOnlyCompartment = new Compartment();
   const editableCompartment = new Compartment();
+
+  let onPageNumberUpdateCallback = null;
 
   let markerCache = {
     content: null,
@@ -173,7 +225,7 @@ export default function (container, initialXml) {
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField, // Add the tag hiding field
-      pageNumberHighlight, // Add the page number highlighting field
+      createPageNumberPlugin(() => onPageNumberUpdateCallback), // Add the page number plugin with callback
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
@@ -297,6 +349,10 @@ export default function (container, initialXml) {
     getPageNumber(imageName) {
       ensureCacheUpdated();
       return markerCache.pageNumbers.get(imageName) || null;
+    },
+
+    onPageNumberUpdate(callback) {
+      onPageNumberUpdateCallback = callback;
     },
 
     removePageMarker(imageName) {

@@ -42,6 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
         editor.setReadOnly(true);
     }
 
+    editor.onPageNumberUpdate(() => {
+        refreshButtonStates();
+    });
+
     // Pagination functions
     const checkIfPageFullyInserted = (pageNumber) => {
         const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
