@@ -209,6 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show filename
             if (elements.imageName) {
                 elements.imageName.textContent = filename;
+                elements.imageName.href = imgSrc;
                 elements.imageName.style.display = 'block';
             }
         };
@@ -220,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Hide filename on error
             if (elements.imageName) {
                 elements.imageName.style.display = 'none';
+                elements.imageName.href = '#';
             }
         };
         img.src = imgSrc;

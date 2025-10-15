@@ -86,7 +86,7 @@
                 </nav>
             </div>
             <div class="col-md-4 col-12 h-100 d-flex flex-column align-items-center">
-                <p id="image-name" class="text-muted fw-bold mb-2" style="display: none;"></p>
+                <a id="image-name" class="btn btn-link mb-2" style="display: none;" href="#" target="_blank"></a>
                 <div id="loading-spinner" style="display: none;">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Chargement...</span>
