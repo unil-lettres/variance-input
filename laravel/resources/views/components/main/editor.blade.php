@@ -53,6 +53,12 @@
                             id="toggle-tags"
                             class="btn btn-secondary mb-2"
                         >Afficher les balises</button>
+                        <button
+                            id="generate-page-numbers"
+                            class="btn btn-info mb-2"
+                            data-enable-when-readonly
+                            {{ !$canEdit ? 'disabled' : '' }}
+                        >Générer les numéros de page</button>
                     </div>
                 <div
                     id="editor-container"

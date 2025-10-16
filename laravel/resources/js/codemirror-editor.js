@@ -224,8 +224,8 @@ export default function (container, initialXml) {
       oneDark,
       EditorView.lineWrapping,
       drawSelection(),
-      hideTagsField, // Add the tag hiding field
-      createPageNumberPlugin(() => onPageNumberUpdateCallback), // Add the page number plugin with callback
+      hideTagsField,
+      createPageNumberPlugin(() => onPageNumberUpdateCallback),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({

@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveBtn: document.getElementById('save-xml'),
         toggleBtn: document.getElementById('toggle-readonly'),
         toggleTagsBtn: document.getElementById('toggle-tags'),
+        generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
         previewImg: document.getElementById('facsimile-preview'),
         noPreviewText: document.getElementById('no-preview'),
         loadingSpinner: document.getElementById('loading-spinner'),
@@ -170,6 +171,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     showMessage(MESSAGES.DEFAULT);
 
+    const refreshButtonName = (button) => {
+        const imageName = button.getAttribute('data-tag');
+        const insertedPageNumber = editor.getPageNumber(imageName);
+
+        if (insertedPageNumber) {
+            button.setAttribute('data-tag-page-number', insertedPageNumber);
+        }
+
+        const pageNumber = button.getAttribute('data-tag-page-number');
+        button.querySelector('span').textContent = pageNumber || '?';
+    }
+
     const deactivateActiveButton = () => {
         if (activeButton) {
             const imageName = activeButton.getAttribute('data-tag');
@@ -182,8 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setButtonState(activeButton, BUTTON_STATES.INACTIVE);
             }
 
-            const pageNumber = editor.getPageNumber(imageName);
-            activeButton.querySelector('span').textContent = pageNumber || '?';
+            refreshButtonName(activeButton);
 
             activeButton = null;
             isDeleteMode = false;
@@ -261,8 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
             setButtonState(button, state);
 
-            const pageNumber = editor.getPageNumber(imageName);
-            button.querySelector('span').textContent = pageNumber || '?';
+            refreshButtonName(button);
 
             if (isInserted) {
                 button.setAttribute('data-inserted', 'true');
@@ -322,6 +333,52 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTagsButtonUI(tagsHidden);
     });
 
+    elements.generatePageNumbersBtn.addEventListener('click', () => {
+        const leadingZeros = prompt("Nombre de zéros de remplissage (ex: 3 pour 001):", "0");
+        if (leadingZeros === null) return;
+        
+        const leadingZerosNum = parseInt(leadingZeros);
+        if (isNaN(leadingZerosNum) || leadingZerosNum < 0 || leadingZerosNum > 4) {
+            alert("Veuillez entrer un nombre entre 0 et 4 pour les zéros de remplissage.");
+            return;
+        }
+
+        const startPageNumber = prompt("Nombre de pages avant le début de la numérotation:", "0");
+        if (startPageNumber === null) return;
+        
+        const startPageNum = parseInt(startPageNumber);
+        if (isNaN(startPageNum) || startPageNum < 0) {
+            alert("Veuillez entrer un nombre de pages valide.");
+            return;
+        }
+
+        // Apply page numbers to all non-inserted buttons
+        const { insertedMarkers } = editor.getAllMarkers();
+        let currentPageNum = 0;
+
+        document.querySelectorAll('.editor [data-tag]').forEach(button => {
+            currentPageNum++;
+
+            const imageName = button.getAttribute('data-tag');
+            const isInserted = insertedMarkers.has(imageName);
+
+            if (startPageNum >= currentPageNum) {
+              if (!isInserted) {
+                  button.setAttribute('data-tag-page-number', '?');
+              }
+            } else {
+
+              if (!isInserted) {
+                  const pageNumber = String(currentPageNum - startPageNum).padStart(leadingZerosNum, '0');
+                  button.setAttribute('data-tag-page-number', pageNumber);
+              }
+            }
+        });
+
+        // Refresh button states to update display
+        refreshButtonStates();
+    });
+
     // Insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
         const imgSrc = button.getAttribute('data-img-src');
@@ -356,8 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 isDeleteMode = false;
                 setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
-                // Show "?" for buttons not yet inserted
-                button.querySelector('span').textContent = '?';
+                refreshButtonName(button);
                 elements.editorContainer.style.cursor = 'crosshair';
             }
         });
@@ -387,7 +443,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Only insert if we have an active button in insert mode
             if (activeButton && !isDeleteMode) {
                 const imageName = activeButton.getAttribute('data-tag');
-                const pageNumber = '001'; // Hard coded for now
+                const generatedPageNumber = activeButton.getAttribute('data-tag-page-number');
+                const pageNumber = generatedPageNumber || '?';
                 editor.insertPageMarker(imageName, pageNumber);
                 refreshButtonStates();
             }
