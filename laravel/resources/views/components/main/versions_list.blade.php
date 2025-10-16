@@ -57,14 +57,28 @@
 window.vg = window.vg || { selectedWorkId:null, shortTitle:null, authorId:null };
 let versionToDelete = null;
 const publishLocks = new Set();
-const pagerLocks = new Set();
+const lignesLocks = new Set();
+
+const formatTimestamp = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { hour12: false }) : null;
+const formatBytes = size => {
+    if (!Number.isFinite(size) || size <= 0) return '0 o';
+    const units = ['o','Ko','Mo','Go'];
+    let idx = 0;
+    let val = size;
+    while (val >= 1024 && idx < units.length - 1) {
+        val /= 1024;
+        idx++;
+    }
+    return `${val.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+};
+
 /********************** RENDER ****************************/
 function buildVersionsTable(data){
     const table = document.createElement('table');
     table.className = 'table table-bordered table-hover table-sm version-table mb-0';
     table.innerHTML = `
         <thead class="table-light"><tr>
-            <th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th>Pagination</th>
+            <th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th>Fichier _lignes</th>
             <th class="text-end">Actions</th>
         </tr></thead><tbody></tbody>`;
     const tbody = table.querySelector('tbody');
@@ -74,9 +88,9 @@ function buildVersionsTable(data){
         const tdStatus = document.createElement('td');
         tdStatus.appendChild(renderFacsimileStatus(v));
         tr.appendChild(tdStatus);
-        const tdPaging = document.createElement('td');
-        tdPaging.appendChild(renderPageMarkerStatus(v));
-        tr.appendChild(tdPaging);
+        const tdLignes = document.createElement('td');
+        tdLignes.appendChild(renderLignesControls(v));
+        tr.appendChild(tdLignes);
         const tdA = document.createElement('td');
         tdA.className='text-end';
         tdA.innerHTML = `
@@ -98,37 +112,59 @@ function buildVersionsTable(data){
     return table;
 }
 
-function renderPageMarkerStatus(version){
-    const status = version.page_markers || {};
+function renderLignesControls(version){
     const wrap = document.createElement('div');
 
-    const total = status.total ?? 0;
-    const badge = document.createElement('div');
-    badge.innerHTML = `<span class="badge bg-secondary">${total} pages</span>`;
-    wrap.appendChild(badge);
+    const infoLine = document.createElement('div');
+    infoLine.className = 'text-muted small';
+    if (version.lignes && version.lignes.updated_at) {
+        const updated = formatTimestamp(version.lignes.updated_at);
+        const size = formatBytes(version.lignes.size ?? 0);
+        infoLine.textContent = `Dernier enregistrement : ${updated ?? '—'} (${size})`;
+    } else {
+        infoLine.textContent = 'Aucun fichier _lignes enregistré';
+    }
+    wrap.appendChild(infoLine);
+
+    const actions = document.createElement('div');
+    actions.className = 'mt-2 d-flex flex-wrap align-items-center gap-2';
+    if (version.lignes && version.lignes.url) {
+        const viewLink = document.createElement('a');
+        viewLink.href = version.lignes.url;
+        viewLink.target = '_blank';
+        viewLink.rel = 'noopener';
+        viewLink.className = 'btn btn-sm btn-outline-primary';
+        viewLink.textContent = 'Voir le fichier';
+        actions.appendChild(viewLink);
+    }
+    const feedback = document.createElement('div');
+    feedback.className = 'small text-muted mt-1';
 
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
-    uploadBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
-    uploadBtn.textContent = '_lignes → pages';
+    uploadBtn.className = 'btn btn-sm btn-outline-secondary';
+    uploadBtn.textContent = 'Associer un fichier _lignes';
+    uploadBtn.disabled = lignesLocks.has(version.id);
 
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.txt,.tsv,.csv';
     input.className = 'd-none';
-    input.addEventListener('change', (e) => {
+    input.addEventListener('change', () => {
         if (!input.files || !input.files.length) return;
-        uploadPageMarkers(version, input.files[0], uploadBtn);
+        uploadLignes(version, input.files[0], uploadBtn, feedback, infoLine);
         input.value = '';
     });
 
     uploadBtn.addEventListener('click', () => {
-        if (pagerLocks.has(version.id)) return;
+        if (lignesLocks.has(version.id)) return;
         input.click();
     });
 
+    actions.appendChild(uploadBtn);
+    wrap.appendChild(actions);
     wrap.appendChild(input);
-    wrap.appendChild(uploadBtn);
+    wrap.appendChild(feedback);
 
     return wrap;
 }
@@ -207,22 +243,27 @@ function publishFacsimiles(version, triggerButton){
     });
 }
 
-async function uploadPageMarkers(version, file, triggerButton){
-    if (pagerLocks.has(version.id)) return;
+async function uploadLignes(version, file, triggerButton, feedbackEl, infoLine){
+    if (lignesLocks.has(version.id)) {
+        return;
+    }
 
-    pagerLocks.add(version.id);
+    lignesLocks.add(version.id);
+
     const originalLabel = triggerButton ? triggerButton.textContent : '';
     if (triggerButton) {
         triggerButton.disabled = true;
         triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     }
+    if (feedbackEl) {
+        feedbackEl.textContent = 'Téléversement en cours…';
+    }
 
     const form = new FormData();
     form.append('lignes', file);
-    form.append('clear_existing', '1');
 
     try {
-        const res = await fetch(`/api/versions/${version.id}/page-markers`, {
+        const res = await fetch(`/api/versions/${version.id}/lignes`, {
             method: 'POST',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
@@ -230,26 +271,43 @@ async function uploadPageMarkers(version, file, triggerButton){
             body: form
         });
 
-        const payload = await res.json();
-        if (!res.ok) {
-            throw new Error(payload.message || `HTTP ${res.status}`);
+        const text = await res.text();
+        let payload = {};
+        try { payload = JSON.parse(text); } catch { payload = { raw: text }; }
+
+        if (!res.ok || payload.status !== 'ok') {
+            const message = payload.message || payload.error || payload.raw || `HTTP ${res.status}`;
+            throw new Error(message);
         }
 
-        const srcInserted = payload.summary?.source?.inserted ?? 0;
-        const tgtInserted = payload.summary?.target?.inserted ?? 0;
-        const srcMissed   = payload.summary?.source?.missed ?? 0;
-        const tgtMissed   = payload.summary?.target?.missed ?? 0;
+        if (infoLine) {
+            const updated = payload.lignes?.updated_at ? formatTimestamp(payload.lignes.updated_at) : '—';
+            const size = payload.lignes?.size ? formatBytes(payload.lignes.size) : '0 o';
+            infoLine.textContent = `Dernier enregistrement : ${updated} (${size})`;
+        }
+        if (feedbackEl) {
+            feedbackEl.textContent = 'Fichier enregistré avec succès.';
+        }
 
-        alert(`Page markers mis à jour — source : ${srcInserted} (miss: ${srcMissed}) · cible : ${tgtInserted} (miss: ${tgtMissed})`);
-        fetchVersions(vg.selectedWorkId);
+        alert('Fichier _lignes enregistré pour cette version.');
+        if (vg.selectedWorkId) {
+            fetchVersions(vg.selectedWorkId);
+            document.dispatchEvent(new CustomEvent('versionsUpdated', { detail: { workId: vg.selectedWorkId } }));
+        }
     } catch (err) {
         console.error(err);
-        alert("Impossible d'appliquer le fichier _lignes : " + err.message);
+        if (feedbackEl) {
+            feedbackEl.textContent = 'Échec du téléversement.';
+        }
+        alert("Impossible d'enregistrer le fichier _lignes : " + (err?.message || 'erreur inconnue'));
     } finally {
-        pagerLocks.delete(version.id);
+        lignesLocks.delete(version.id);
         if (triggerButton) {
             triggerButton.disabled = false;
-            triggerButton.textContent = originalLabel || '_lignes → pages';
+            triggerButton.textContent = originalLabel || 'Associer un fichier _lignes';
+        }
+        if (feedbackEl) {
+            setTimeout(() => { feedbackEl.textContent = ''; }, 4000);
         }
     }
 }

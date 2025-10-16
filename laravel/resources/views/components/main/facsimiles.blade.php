@@ -53,32 +53,61 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_BATCH_BYTES   = 7.5 * 1024 * 1024; // stay under default 8MB post_max_size
     const GALLERY_PAGE_SIZE = 12;
 
-    let galleryFiles = [];
-    let galleryPage  = 1;
+    let galleryFiles   = [];
+    let galleryPage    = 1;
+    let currentWorkId  = null;
 
     /* ----------------------------------------------------------
      * 1. Charger les versions quand un work est sélectionné
      * -------------------------------------------------------- */
-    document.addEventListener('workSelected', async e => {
-        const workId = e.detail.workId;
-        versionSelect.innerHTML =
-            '<option value="">Chargement…</option>';
+    async function populateVersionOptions(workId, { preserveSelection = false } = {}) {
+        if (!workId) {
+            versionSelect.innerHTML = '<option value="">— choisir —</option>';
+            toggleBtn();
+            return false;
+        }
+
+        const previousValue = preserveSelection ? versionSelect.value : '';
+        versionSelect.innerHTML = '<option value="">Chargement…</option>';
+
+        let selectionRestored = false;
+
         try {
             const res = await fetch(`/api/versions?work_id=${workId}`,
-                                    {headers:{Accept:'application/json'}});
+                                    { headers: { Accept: 'application/json' } });
             const versions = await res.json();
-            versionSelect.innerHTML =
-                '<option value="">— choisir —</option>' +
-                versions.map(v =>
-                    `<option value="${v.id}"
-                             data-folder="${v.folder}"
-                             >${v.name}</option>`).join('');
+            const options = Array.isArray(versions)
+                ? versions.map(v =>
+                    `<option value="${v.id}" data-folder="${v.folder}">${v.name}</option>`
+                  ).join('')
+                : '';
+
+            versionSelect.innerHTML = '<option value="">— choisir —</option>' + options;
+
+            if (preserveSelection && previousValue) {
+                const match = Array.from(versionSelect.options)
+                    .find(opt => opt.value === previousValue);
+                if (match) {
+                    versionSelect.value = previousValue;
+                    selectionRestored = true;
+                }
+            }
         } catch (err) {
             console.error(err);
             versionSelect.innerHTML =
                 '<option value="">(erreur de chargement)</option>';
         }
+
         toggleBtn();                 // ré-évalue l’état du bouton
+        return selectionRestored;
+    }
+
+    document.addEventListener('workSelected', async e => {
+        const workId = e.detail?.workId ?? null;
+        currentWorkId = (workId === undefined || workId === null || workId === '')
+            ? null
+            : Number(workId);
+        await populateVersionOptions(workId);
         resetGallery();
     });
 
@@ -365,6 +394,24 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    async function handleComparisonLifecycle(event) {
+        if (!currentWorkId) return;
+        const eventWorkId = event.detail?.workId;
+        if (!eventWorkId || Number(eventWorkId) !== currentWorkId) return;
+
+        const previousSelection = versionSelect.value;
+        const preserved = await populateVersionOptions(eventWorkId, { preserveSelection: true });
+
+        if (previousSelection && preserved) {
+            loadGallery(previousSelection);
+        } else if (previousSelection && !preserved) {
+            resetGallery();
+        }
+    }
+
+    document.addEventListener('comparisonCreated', handleComparisonLifecycle);
+    document.addEventListener('comparisonReady', handleComparisonLifecycle);
 
 });
 </script>

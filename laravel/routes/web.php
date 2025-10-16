@@ -71,6 +71,8 @@ Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
 Route::post('/api/facsimiles/publish', [VersionController::class, 'publishFacsimiles']);
 Route::post('/api/versions/{version}/page-markers', [VersionController::class, 'applyPageMarkers']);
+Route::post('/api/versions/{version}/lignes', [VersionController::class, 'uploadLignes']);
+Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])->name('versions.lignes.download');
 Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
 
 // Routes pour composant medite
@@ -78,6 +80,7 @@ Route::post('/api/run_medite', [MediteController::class, 'runMedite']);
 Route::get('/api/task_status/{taskId}', [MediteController::class, 'taskStatus']);
 Route::post('/api/comparisons', [MediteController::class, 'createComparison']);
 Route::post('/save_comparison', [MediteController::class, 'saveComparison']);
+Route::post('/api/comparisons/{comparison}/page-markers', [ComparisonController::class, 'applyPageMarkers']);
 
 // Comparisons
 Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);

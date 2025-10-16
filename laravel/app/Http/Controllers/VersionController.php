@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ApplyLignesJob;
 use App\Models\Work;
 use App\Models\Version;
 use App\Models\Comparison;
@@ -31,6 +32,10 @@ class VersionController extends Controller
             ->where('work_id', $workId)
             ->get()
             ->map(function (Version $version) {
+                $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
+                if ($lignesInfo) {
+                    $lignesInfo['url'] = route('versions.lignes.download', $version);
+                }
                 return [
                     'id'         => $version->id,
                     'name'       => $version->name,
@@ -38,6 +43,8 @@ class VersionController extends Controller
                     'work_id'    => $version->work_id,
                     'facsimiles' => $this->facsimileStatus($version),
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
+                    'page_marker_progress' => $this->pageMarkerService->getProgressSnapshot($version->id),
+                    'lignes' => $lignesInfo,
                 ];
             });
 
@@ -200,36 +207,93 @@ class VersionController extends Controller
         $validated = $request->validate([
             'lignes'         => 'required|file|max:4096',
             'clear_existing' => 'sometimes|boolean',
+            'replace_existing' => 'sometimes|boolean',
         ]);
 
-        $tempPath = $request->file('lignes')->store('tmp/lignes');
-        $absolute = storage_path('app/' . $tempPath);
+        $tempPath = $request->file('lignes')->store('tmp/lignes', 'local');
 
-        try {
-            $summary = $this->pageMarkerService->applyLignesToVersion(
-                $version->loadMissing('work.author'),
-                $absolute,
-                ['clear_existing' => $request->boolean('clear_existing', true)]
-            );
-        } catch (\Throwable $e) {
-            Storage::delete($tempPath);
-            return response()->json([
-                'status'  => 'error',
-                'message' => $e->getMessage(),
-            ], 422);
+        $progressFile = storage_path('app/tmp/pager/' . $version->id . '.json');
+        if (is_file($progressFile)) {
+            $payload = json_decode(@file_get_contents($progressFile), true);
+            $status = $payload['status'] ?? null;
+            if (in_array($status, ['queued', 'running'], true)) {
+                Storage::disk('local')->delete($tempPath);
+                return response()->json([
+                    'status'  => 'busy',
+                    'message' => 'Une importation _lignes est déjà en cours pour cette version.',
+                ], 409);
+            }
         }
 
-        Storage::delete($tempPath);
+        $this->pageMarkerService->markQueued($version->id);
 
-        $manifests = $this->publishManifestsForVersion($version);
-        $counts    = $this->pageMarkerService->countMarkers($version);
+        try {
+            ApplyLignesJob::dispatch(
+                $version->id,
+                $tempPath,
+                true,
+                $request->boolean('clear_existing', true),
+                $request->boolean('replace_existing', true),
+                null
+            );
+        } catch (\Throwable $e) {
+            Storage::disk('local')->delete($tempPath);
+            throw $e;
+        }
 
         return response()->json([
-            'status'        => 'ok',
-            'summary'       => $summary,
-            'manifests'     => $manifests,
-            'page_markers'  => $counts,
+            'status'      => 'queued',
+            'version_id'  => $version->id,
+        ], 202);
+    }
+
+    public function uploadLignes(Request $request, Version $version)
+    {
+        $request->validate([
+            'lignes' => 'required|file|max:4096',
         ]);
+
+        $relative = $this->pageMarkerService->lignesRelativePath($version->id);
+        Storage::disk('local')->putFileAs('private/lignes', $request->file('lignes'), $version->id . '.txt');
+        $info = $this->pageMarkerService->getLignesInfo($version->id);
+        if ($info) {
+            $info['url'] = route('versions.lignes.download', $version);
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'lignes' => $info,
+        ], 201);
+    }
+
+    public function pageMarkersProgress(Version $version)
+    {
+        $progressFile = storage_path('app/tmp/pager/' . $version->id . '.json');
+        if (!file_exists($progressFile)) {
+            return response()->json(['status' => 'idle'], 200);
+        }
+        // Retry a couple times to avoid reading mid-write
+        for ($i = 0; $i < 3; $i++) {
+            $json = @file_get_contents($progressFile) ?: '';
+            $payload = $json !== '' ? json_decode($json, true) : null;
+            if (is_array($payload)) {
+                return response()->json($payload, 200);
+            }
+            usleep(20000);
+        }
+        // If still invalid, signal running state so UI can keep polling
+        return response()->json(['status' => 'running', 'version_id' => $version->id], 200);
+    }
+
+    public function downloadLignes(Version $version)
+    {
+        $relative = $this->pageMarkerService->lignesRelativePath($version->id);
+        if (!Storage::disk('local')->exists($relative)) {
+            abort(404, 'Fichier _lignes introuvable.');
+        }
+
+        $filename = $version->folder . '_lignes.txt';
+        return Storage::disk('local')->download($relative, $filename);
     }
 
     /* ──────────────────────────── HELPERS ──────────────────────────── */
