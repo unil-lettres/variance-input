@@ -234,7 +234,7 @@ export default function (container, initialXml) {
 
     while ((match = regex.exec(content)) !== null) {
       const fullMatch = match[0];
-      const imageName = match[1];
+      const imageName = String(parseInt(match[1], 10));
       const pageNumber = match[2];
       const tag = match[0];
       const pos = match.index;
