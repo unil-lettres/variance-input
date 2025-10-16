@@ -44,7 +44,15 @@ class PageNumberWidget extends WidgetType {
       e.stopPropagation();
       
       const newPageNumber = prompt("Entrez le nouveau numéro de page:", this.pageNumber);
-      if (newPageNumber !== null && newPageNumber !== this.pageNumber) {
+
+      if (newPageNumber === null) return;
+
+      if (isNaN(newPageNumber) || newPageNumber < 0 || newPageNumber.length > 4) {
+          alert("Le numéro de page doit être un nombre supérieur à 0 et de 4 chiffres maximum.");
+          return;
+      }
+
+      if (newPageNumber !== this.pageNumber) {
         // Update the page number in the document
         this.view.dispatch({
           changes: { from: this.markerStart, to: this.markerEnd, insert: newPageNumber }
