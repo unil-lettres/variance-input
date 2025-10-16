@@ -135,13 +135,16 @@ function createPageNumberDecorations(view, onUpdate) {
     const contentStart = matchStart + pageNumberTagStart + '<span class="page-number">'.length;
     const contentEnd = contentStart + pageNumberContent.length;
 
-    decorations.push(
-      Decoration.replace({
-        widget: new PageNumberWidget(pageNumberContent, contentStart, contentEnd, view, onUpdate),
-        inclusive: false,
-        block: false
-      }).range(contentStart, contentEnd)
-    );
+    // Only create decoration if there's actual content and valid range
+    if (pageNumberContent.length > 0 && contentStart < contentEnd && contentEnd <= text.length) {
+      decorations.push(
+        Decoration.replace({
+          widget: new PageNumberWidget(pageNumberContent, contentStart, contentEnd, view, onUpdate),
+          inclusive: false,
+          block: false
+        }).range(contentStart, contentEnd)
+      );
+    }
   }
 
   return Decoration.set(decorations);
