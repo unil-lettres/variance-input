@@ -20,6 +20,7 @@ class RegisterController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
+            'full_name' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:4', 'confirmed'],
         ]);
@@ -32,12 +33,13 @@ class RegisterController extends Controller
 
         $user = User::create([
             'name' => $request->name,
+            'full_name' => $request->full_name ?: null,
             'email' => $request->email,
             'password' => Hash::make($request->password),
         ]);
 
         Auth::login($user);
 
-        return redirect('/');
+        return redirect()->to(admin_url());
     }
 }

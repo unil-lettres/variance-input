@@ -3,6 +3,14 @@ import { EditorView, basicSetup } from "codemirror"; // <- from new "codemirror"
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
 
+const buildUrl = (path) => {
+  if (typeof path !== 'string') return path;
+  if (typeof window.withBasePath === 'function') {
+    return window.withBasePath(path);
+  }
+  return path.startsWith('/') ? path : `/${path}`;
+};
+
 window.initEditor = (initialXml, versionId) => {
   const container = document.getElementById('editor-container');
   const saveBtn = document.getElementById('save-xml');
@@ -21,7 +29,7 @@ window.initEditor = (initialXml, versionId) => {
 
   saveBtn.addEventListener('click', async () => {
     const updatedXml = view.state.doc.toString();
-    const response = await fetch(`/versions/${versionId}/editor`, {
+    const response = await fetch(buildUrl(`/versions/${versionId}/editor`), {
       method: 'PUT',
       headers: {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),

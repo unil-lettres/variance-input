@@ -1,7 +1,25 @@
 <!-- resources/views/components/main/media.blade.php -->
 <div class="card mb-3" id="media-panel">
-  <div class="card-header fw-bold">Médias</div>
-  <div class="card-body">
+  <div class="card-header text-uppercase fw-semibold d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-2 media-toggle"
+         role="button"
+         data-bs-toggle="collapse"
+         data-bs-target="#mediaCollapse"
+         aria-expanded="true"
+         aria-controls="mediaCollapse">
+      <span class="collapse-chevron" aria-hidden="true"></span>
+      <span>Médias d'accompagnement</span>
+    </div>
+    <div class="d-flex align-items-center gap-2 small" id="media-status-pills">
+      <span id="media-status-vignette" class="badge bg-danger-subtle text-danger media-status-pill">VIGNETTE ✗</span>
+      <span id="media-status-pdf" class="badge bg-danger-subtle text-danger media-status-pill">PDF ✗</span>
+    </div>
+  </div>
+  <div id="mediaCollapse" class="collapse show">
+    <div class="card-body">
+    <p class="fst-italic text-muted small mb-3">
+      Téléversez ici une vignette qui illustrera l'œuvre dans la partie publique, ainsi qu'un PDF consultable et téléchargeable depuis la fiche œuvre et les pages de comparaison.
+    </p>
     <!-- ROW 1 : Dropzones -->
     <div class="row g-4 mb-3">
       <div class="col-md-6">
@@ -37,20 +55,21 @@
       </div>
       <div class="col-md-6 text-center">
         <div id="pdf-btn"></div>
-      </div>
     </div>
   </div>
+</div>
 </div>
 
 @push('styles')
 <style>
   :root {
-    --media-box-h: 220px;
-    --media-preview-w: 220px;
-    --media-preview-h: 300px;
+    --media-dropzone-height: 110px;
+    --media-preview-max-width: 240px;
+    --media-preview-max-height: 220px;
+    --media-preview-max-height-pdf: 250px;
   }
   .dropzone {
-    height: var(--media-box-h);
+    min-height: var(--media-dropzone-height);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -60,8 +79,8 @@
   .dropzone.hover { background: #f8f9fa; }
   .dropzone.disabled { cursor: not-allowed; opacity:.5; }
   .preview-box {
-    width: var(--media-preview-w);
-    height: var(--media-preview-h);
+    width: min(100%, var(--media-preview-max-width));
+    height: var(--media-preview-max-height);
     border: 1px solid #ced4da;
     display: flex;
     align-items: center;
@@ -80,6 +99,23 @@
     height: auto;
     object-fit: contain;
   }
+  .preview-box.pdf {
+    height: var(--media-preview-max-height-pdf);
+  }
+  .media-toggle .collapse-chevron::before {
+    content: "\25BC";
+    display: inline-block;
+    transition: transform .2s ease;
+  }
+  .media-toggle[aria-expanded="false"] .collapse-chevron::before {
+    transform: rotate(-90deg);
+  }
+  .media-status-pill {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    font-variant: small-caps;
+    letter-spacing: 0.03em;
+  }
 </style>
 @endpush
 
@@ -91,10 +127,42 @@
   let currentWorkId = null;
   let currentShortTitle = null;
 
+  const statusLabels = { vignette: 'VIGNETTE', pdf: 'PDF' };
+  const statusPills = {
+    vignette: document.getElementById('media-status-vignette'),
+    pdf: document.getElementById('media-status-pdf')
+  };
+
+  updateMediaStatus('vignette', false, true);
+  updateMediaStatus('pdf', false, true);
+
+  function updateMediaStatus(type, hasFile, hide = false) {
+    const pill = statusPills[type];
+    if (!pill) return;
+    const label = statusLabels[type] || type.toUpperCase();
+    if (hide) {
+      pill.style.display = 'none';
+      pill.title = '';
+      pill.textContent = '';
+      return;
+    }
+    pill.style.display = 'inline-block';
+    if (hasFile) {
+      pill.className = 'badge bg-success-subtle text-success media-status-pill';
+      pill.textContent = `${label} ✔`;
+      pill.title = `${label} disponible`;
+    } else {
+      pill.className = 'badge bg-danger-subtle text-danger media-status-pill';
+      pill.textContent = `${label} ✗`;
+      pill.title = `${label} manquant`;
+    }
+  }
+
   function clearMedia() {
     ['vignette','pdf'].forEach(type => {
       document.getElementById(`${type}-preview`).innerHTML = '';
       document.getElementById(`${type}-btn`).innerHTML = '';
+      updateMediaStatus(type, false);
     });
   }
 
@@ -103,6 +171,7 @@
     const btnHolder = document.getElementById(`${type}-btn`);
     preview.innerHTML = '';
     btnHolder.innerHTML = '';
+    updateMediaStatus(type, !!fileUrl);
     if (!fileUrl) return;
 
     if (type === 'vignette') {
@@ -138,12 +207,6 @@
         })
         .catch(() => { preview.textContent = 'Prévisualisation indisponible'; });
     }
-
-    const link = document.createElement('a');
-    link.href = fileUrl;
-    link.target = '_blank';
-    link.textContent = fileUrl.split('/').pop();
-    btnHolder.appendChild(link);
 
     const del = document.createElement('button');
     del.type = 'button';
@@ -194,7 +257,7 @@
     const max = field==='vignette'?2*1024*1024:10*1024*1024;
     if(file.size>max) return alert('Fichier trop volumineux');
     const fd = new FormData(); fd.append(field,file);
-    fetch(`/api/works/${currentWorkId}/media?short_title=${encodeURIComponent(currentShortTitle)}`,{
+    fetch(withBasePath(`/api/works/${currentWorkId}/media?short_title=${encodeURIComponent(currentShortTitle)}`),{
       method:'POST', headers:{ 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content }, credentials:'same-origin', body:fd
     })
     .then(res=>{ if(!res.ok) throw new Error(); return res.json(); })
@@ -203,7 +266,7 @@
 
   function deleteMedia(type) {
     if(!currentWorkId) return;
-    fetch(`/api/works/${currentWorkId}/media/${type}`,{
+    fetch(withBasePath(`/api/works/${currentWorkId}/media/${type}`),{
       method:'DELETE', headers:{ 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content }, credentials:'same-origin'
     })
     .then(res=>{ if(!res.ok) throw new Error(); return res.json(); })
@@ -211,8 +274,13 @@
   }
 
   function reload() {
-    if(!currentWorkId) { clearMedia(); return; }
-    fetch(`/works/${currentWorkId}/media`,{ credentials:'same-origin' })
+    if(!currentWorkId) {
+      clearMedia();
+      updateMediaStatus('vignette', false, true);
+      updateMediaStatus('pdf', false, true);
+      return;
+    }
+    fetch(withBasePath(`/works/${currentWorkId}/media`),{ credentials:'same-origin' })
       .then(res=>res.json())
       .then(d=>{ renderMedia('vignette', d.image_url); renderMedia('pdf', d.pdf_url); })
       .catch(console.error);
@@ -235,7 +303,12 @@
       currentWorkId=e.detail.workId;
       currentShortTitle=e.detail.short_title||null;
       updateDropzonesEnabled();
-      reload();
+      if(!currentWorkId){
+        updateMediaStatus('vignette', false, true);
+        updateMediaStatus('pdf', false, true);
+      } else {
+        reload();
+      }
     });
   });
 })();

@@ -17,6 +17,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'full_name',
         'email',
         'password',
     ];
@@ -148,6 +149,28 @@ class User extends Authenticatable
             $query->where('user_id', $this->id);
         });
     }
+
+    /**
+     * Preferred display name for header / UI.
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        $fullName = $this->attributes['full_name'] ?? null;
+
+        if (is_string($fullName) && trim($fullName) !== '') {
+            return $fullName;
+        }
+
+        if (! empty($this->name)) {
+            return $this->name;
+        }
+
+        $email = $this->attributes['email'] ?? '';
+
+        if (is_string($email) && str_contains($email, '@')) {
+            return substr($email, 0, strpos($email, '@'));
+        }
+
+        return 'Utilisateur';
+    }
 }
-
-

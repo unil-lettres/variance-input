@@ -305,6 +305,7 @@ class PageMarkerService
         );
 
         foreach ($existing as $path) {
+            File::ensureDirectoryExists(dirname($path));
             File::put($path, $result['html']);
         }
 
@@ -888,13 +889,15 @@ class PageMarkerService
     public function markQueued(int $versionId): void
     {
         $path = $this->progressFilePath($versionId);
+        $existing = $this->getProgressSnapshot($versionId);
         $payload = [
-            'status' => 'queued',
-            'version_id' => $versionId,
-            'entries_total' => 0,
-            'updated_at' => time(),
-            'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
-            'target' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'status'        => 'queued',
+            'version_id'    => $versionId,
+            'entries_total' => $existing['entries_total'] ?? 0,
+            'updated_at'    => time(),
+            'source'        => $existing['source'] ?? ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'target'        => $existing['target'] ?? ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'summary'       => null,
         ];
         $this->writeProgressPayload($path, $payload);
     }
@@ -934,6 +937,7 @@ class PageMarkerService
             'updated_at' => time(),
             'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
             'target' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'summary' => null,
         ];
         $this->writeProgress();
     }
@@ -950,6 +954,7 @@ class PageMarkerService
             if (isset($data['total'])) {
                 $this->progress['entries_total'] = max($this->progress['entries_total'] ?? 0, (int) $data['total']);
             }
+            $this->progress['status'] = 'running';
         } elseif ($event === 'progress') {
             $current = (int)($data['processed'] ?? 0);
             $limit   = $this->progress['entries_total'] ?? null;
@@ -968,6 +973,8 @@ class PageMarkerService
     {
         if (!$this->progressPath) return;
         $this->progress['status']  = 'done';
+        $this->progress['summary'] = $summary;
+        $this->progress['updated_at'] = time();
         $this->progress['summary'] = $summary;
         $this->progress['updated_at'] = time();
         $this->writeProgress();

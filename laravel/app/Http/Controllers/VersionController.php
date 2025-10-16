@@ -34,7 +34,7 @@ class VersionController extends Controller
             ->map(function (Version $version) {
                 $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
                 if ($lignesInfo) {
-                    $lignesInfo['url'] = route('versions.lignes.download', $version);
+                    $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
                 }
                 return [
                     'id'         => $version->id,
@@ -58,7 +58,7 @@ class VersionController extends Controller
         $validated = $request->validate([
             'work_id'     => 'required|exists:works,id',
             'name'        => 'required|string|max:100',
-            'versionFile' => 'required|file|mimetypes:text/plain|max:2048',
+            'versionFile' => 'required|file|mimetypes:text/plain|max:8192',
         ]);
 
         /* 2. Context */
@@ -257,7 +257,7 @@ class VersionController extends Controller
         Storage::disk('local')->putFileAs('private/lignes', $request->file('lignes'), $version->id . '.txt');
         $info = $this->pageMarkerService->getLignesInfo($version->id);
         if ($info) {
-            $info['url'] = route('versions.lignes.download', $version);
+            $info['url'] = admin_url("api/versions/{$version->id}/lignes");
         }
 
         return response()->json([
@@ -293,7 +293,21 @@ class VersionController extends Controller
         }
 
         $filename = $version->folder . '_lignes.txt';
-        return Storage::disk('local')->download($relative, $filename);
+        // Read via the Storage facade to avoid path resolution issues
+        $stream = Storage::disk('local')->readStream($relative);
+        if ($stream === false) {
+            abort(404, 'Fichier _lignes introuvable.');
+        }
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        ]);
     }
 
     /* ──────────────────────────── HELPERS ──────────────────────────── */

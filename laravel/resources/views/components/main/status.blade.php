@@ -1,14 +1,17 @@
 <div class="card mb-3" id="work-container" data-current-work-id="">
     <div class="row g-0">
         <div class="col-md-6">
-            <div class="card-header d-flex align-items-center">
-                <strong class="me-2">Statut:</strong>
+            <div class="card-header d-flex align-items-center fw-semibold">
+                <strong class="me-2 text-uppercase">Statut:</strong>
                 <span class="badge bg-warning text-dark me-2" style="border-radius: 0;">En cours d'élaboration</span>
                 <p id="edit-rights-message" class="mb-0" style="display: none; color: black;">
                     🔒 Lecture seule
                 </p>
             </div>
             <div class="card-body">
+                <p class="fst-italic text-muted small mb-3">
+                    Ces indicateurs synthétisent la préparation de l'œuvre pour publication. Activez les cases « Prêt publication » lorsqu'un contenu est validé.
+                </p>
                 <table class="table">
                     <thead>
                         <tr>
@@ -73,7 +76,7 @@
     if (!isValidWorkId(workId)) { resetStatusUI(); return; }
 
     try {
-      const res = await fetch(`/works/${workId}/status`, { headers: { 'Accept': 'application/json' } });
+      const res = await fetch(withBasePath(`/works/${workId}/status`), { headers: { 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
@@ -149,7 +152,7 @@
   function updateStatus(workId, body) {
     if (!isValidWorkId(workId)) return;
 
-    fetch(`/works/${workId}/status`, {
+    fetch(withBasePath(`/works/${workId}/status`), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

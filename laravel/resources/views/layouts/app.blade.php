@@ -14,27 +14,63 @@
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    @php
+        $basePath = $appBasePath ?? admin_base_prefix();
+        $baseUrl  = $appBaseUrl ?? rtrim(admin_url(), '/');
+    @endphp
+    <script>
+        window.APP_BASE_PATH = @json($basePath);
+        window.APP_BASE_URL = @json($baseUrl);
+        window.withBasePath = function (path) {
+            if (typeof path !== 'string') return path;
+            if (!path.startsWith('/')) {
+                path = '/' + path;
+            }
+            var base = window.APP_BASE_PATH || '';
+            if (!base) {
+                return path;
+            }
+            if (base.endsWith('/')) {
+                base = base.slice(0, -1);
+            }
+            return base + path;
+        };
+        window.withBaseUrl = function (path) {
+            var baseUrl = window.APP_BASE_URL || '';
+            if (!baseUrl) {
+                return window.withBasePath(path);
+            }
+            if (baseUrl.endsWith('/')) {
+                baseUrl = baseUrl.slice(0, -1);
+            }
+            return baseUrl + window.withBasePath(path);
+        };
+    </script>
+
     <!-- Vite Styles -->
     @vite(['resources/css/app.css'])
+    @stack('styles')
 </head>
 <body>
     <header class="bg-dark text-white shadow-sm mb-4">
         <div class="container py-3 d-flex justify-content-between align-items-center">
-            <a href="{{ url('/') }}">
-                <img src="{{ asset('images/full_logo_white.svg') }}" alt="Variance Logo" style="height: 48px;">
+            <a href="{{ admin_path() }}">
+                <img src="{{ admin_asset('images/full_logo_white.svg') }}" alt="Variance Logo" style="height: 48px;">
             </a>
 
             @auth
                 <div class="d-flex align-items-center">
-                    <span class="me-3">{{ Auth::user()->name }}</span>
+                    <span class="me-3">{{ Auth::user()->display_name }}</span>
                     
                     @if(Auth::user()->is_admin)
                         <span class="badge bg-success me-3">Admin</span>
                     @endif
 
-                    <form action="{{ route('logout') }}" method="POST" style="display: inline;">
+                    <a href="{{ legacy_url() }}" class="btn btn-outline-light btn-sm me-2">Aller au site public</a>
+
+                    <form action="{{ admin_path('logout') }}" method="POST" style="display: inline;">
                         @csrf
-                        <button type="submit" class="btn btn-outline-secondary btn-sm">Logout</button>
+                        <button type="submit" class="btn btn-outline-light btn-sm">Se déconnecter</button>
                     </form>
                 </div>
             @endauth

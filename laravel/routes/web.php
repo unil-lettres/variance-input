@@ -13,7 +13,9 @@ use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\EditorController;
 
 Route::get('/', function () {
-    return auth()->check() ? view('pages.main') : redirect('/login');
+    return auth()->check()
+        ? view('pages.main')
+        : redirect()->to(admin_path('login'));
 })->middleware('auth');
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');

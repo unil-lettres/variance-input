@@ -15,13 +15,21 @@
             </div>
 
             <div class="card-body p-4">
-                <form method="POST" action="{{ route('register') }}">
+                <form method="POST" action="{{ admin_path('register') }}">
                     @csrf
-                    <!-- Champ nom -->
+                    <!-- Champ identifiant -->
                     <div class="row align-items-center mb-3">
-                        <label for="name" class="col-sm-4 col-form-label">Nom:</label>
+                        <label for="name" class="col-sm-4 col-form-label">Identifiant:</label>
                         <div class="col-sm-8">
                             <input type="text" name="name" class="form-control" required autofocus>
+                        </div>
+                    </div>
+
+                    <!-- Champ nom complet (optionnel) -->
+                    <div class="row align-items-center mb-3">
+                        <label for="full_name" class="col-sm-4 col-form-label">Nom complet:</label>
+                        <div class="col-sm-8">
+                            <input type="text" name="full_name" class="form-control" placeholder="Optionnel">
                         </div>
                     </div>
 

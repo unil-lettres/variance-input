@@ -28,6 +28,8 @@ class FacsimileController extends Controller
      */
     public function store(Request $request)
     {
+        @ini_set('memory_limit', config('variance.facsimile_memory_limit', '512M'));
+        @set_time_limit(300);
         $validated = $request->validate([
             'version_id' => 'required|exists:versions,id',
             'images.*'   => 'required|image|max:12000',           // 12 Mo
@@ -75,7 +77,20 @@ class FacsimileController extends Controller
         $i       = $startIndex;
         $added   = 0;
         $errors  = [];
-        foreach ($validated['images'] as $file) {
+        // Assure deterministic processing order: original client filenames (natural, case‑insensitive)
+        $images = $validated['images'];
+        usort($images, function ($a, $b) {
+            return strnatcasecmp($a->getClientOriginalName(), $b->getClientOriginalName());
+        });
+
+        $manager      = app(ImageManager::class);
+        $maxLongEdge  = max(1, (int) config('variance.facsimile_max_long_edge', 2400));
+        $mainQuality  = max(10, min(100, (int) config('variance.facsimile_main_quality', 85)));
+        $thumbWidth   = max(1, (int) config('variance.facsimile_thumb_width', 200));
+        $thumbQuality = max(10, min(100, (int) config('variance.facsimile_thumb_quality', 80)));
+        $reports      = [];
+
+        foreach ($images as $file) {
             $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
             $basename = "img_{$version->folder}_{$index}";
             $ext      = 'jpg';
@@ -83,30 +98,59 @@ class FacsimileController extends Controller
             $mainPath  = "{$dirRel}/{$basename}.{$ext}";
             $thumbPath = "{$dirRel}/{$basename}_thumb.jpg";
 
-            // 1) Copie l’original (toujours)
-            $disk->putFileAs($dirRel, $file, basename($mainPath));
-            $added++;      // ← on compte tout de suite
-            $i++;
-
-            // 2) Essaie de faire la miniature – mais sans bloquer l’import
             try {
-                $manager = app(ImageManager::class);
+                $original = $manager->read($file->getRealPath());
 
-                $image = $manager->read($file->get());
+                $origWidth  = $original->width();
+                $origHeight = $original->height();
+                $origSize   = $file->getSize() ?? 0;
 
-                $thumbImg = $image
-                    ->scale(200)
-                    ->encode(new JpegEncoder(quality: 80));
+                $display = clone $original;
 
-                $disk->put($thumbPath, (string) $thumbImg);
+                $longEdge = max($origWidth, $origHeight);
+                $resized  = false;
+                if ($longEdge > $maxLongEdge) {
+                    $ratio   = $maxLongEdge / $longEdge;
+                    $targetW = max(1, (int) round($origWidth * $ratio));
+                    $targetH = max(1, (int) round($origHeight * $ratio));
+                    $display->scale($targetW, $targetH);
+                    $resized = true;
+                }
 
+                $mainEncoded = $display->encode(new JpegEncoder(quality: $mainQuality));
+                $disk->put($mainPath, (string) $mainEncoded);
+
+                $storedSize   = $disk->size($mainPath);
+                $storedWidth  = $display->width();
+                $storedHeight = $display->height();
+
+                $thumbImage = clone $original;
+                $thumbImage->scale($thumbWidth);
+                $thumbEncoded = $thumbImage->encode(new JpegEncoder(quality: $thumbQuality));
+                $disk->put($thumbPath, (string) $thumbEncoded);
+
+                unset($thumbImage, $thumbEncoded, $display, $mainEncoded, $original);
+                gc_collect_cycles();
+
+                $reports[] = [
+                    'name'             => basename($mainPath),
+                    'original_size'    => $origSize,
+                    'original_width'   => $origWidth,
+                    'original_height'  => $origHeight,
+                    'stored_size'      => $storedSize,
+                    'stored_width'     => $storedWidth,
+                    'stored_height'    => $storedHeight,
+                    'resized'          => $resized,
+                ];
+                $added++;
             } catch (\Throwable $e) {
-                Log::warning('Miniature fac-similé échouée', [
+                Log::warning('Facsimile processing failed', [
                     'file' => $file->getClientOriginalName(),
                     'err'  => $e->getMessage(),
                 ]);
                 $errors[] = "{$basename}.{$ext}";
             }
+            $i++;
         }
 
 
@@ -119,20 +163,19 @@ class FacsimileController extends Controller
             'stored_in'   => $dirRel,
             'files_added' => $added,
             'errors'      => $errors,
+            'files_report'=> $reports,
+            'limits'      => [
+                'max_long_edge' => $maxLongEdge,
+                'main_quality'  => $mainQuality,
+                'thumb_width'   => $thumbWidth,
+            ],
         ]);
     }
 
     private function refreshComparisonMarkers(Version $version): void
     {
-        $version->loadMissing('comparisonsAsSource', 'comparisonsAsTarget');
-
-        foreach ($version->comparisonsAsSource as $comparison) {
-            $this->pageMarkerService->ensureDefaultMarkers($comparison);
-        }
-
-        foreach ($version->comparisonsAsTarget as $comparison) {
-            $this->pageMarkerService->ensureDefaultMarkers($comparison);
-        }
+        // Default markers are no longer injected; comparisons will only show
+        // facsimiles when real pagination/_lignes exists and images are published.
     }
 
     /**
@@ -166,16 +209,49 @@ class FacsimileController extends Controller
                 $thumbPath  = preg_replace('/(\.\w+)$/', '_thumb$1', $p);
                 $thumbExist = $disk->exists($thumbPath);
 
+                $sizeBytes = $disk->size($p);
+                $width     = null;
+                $height    = null;
+                $absolute  = $disk->path($p);
+                if (is_file($absolute)) {
+                    $info = @getimagesize($absolute);
+                    if (is_array($info)) {
+                        $width  = $info[0] ?? null;
+                        $height = $info[1] ?? null;
+                    }
+                }
+
                 return [
-                    'name'      => basename($p),
-                    'big'       => '/storage/'.$p,                    // ✅ URL publique
-                    'thumb'     => $thumbExist ? '/storage/'.$thumbPath : null,
-                    'hasThumb'  => $thumbExist,
+                    'name'       => basename($p),
+                    'big'        => admin_url('storage/'.ltrim($p, '/')),
+                    'thumb'      => $thumbExist ? admin_url('storage/'.ltrim($thumbPath, '/')) : null,
+                    'hasThumb'   => $thumbExist,
+                    'size_bytes' => $sizeBytes,
+                    'size_human' => $this->humanReadableSize($sizeBytes),
+                    'width'      => $width,
+                    'height'     => $height,
                 ];
             });
 
         return response()->json($images);
     }
 
+    private function humanReadableSize(int $bytes): string
+    {
+        if ($bytes <= 0) {
+            return '0 o';
+        }
 
+        $units = ['o', 'Ko', 'Mo', 'Go', 'To'];
+        $idx   = 0;
+        $value = (float) $bytes;
+
+        while ($value >= 1024 && $idx < count($units) - 1) {
+            $value /= 1024;
+            $idx++;
+        }
+
+        $precision = $idx === 0 ? 0 : 1;
+        return number_format($value, $precision, ',', ' ') . ' ' . $units[$idx];
+    }
 }

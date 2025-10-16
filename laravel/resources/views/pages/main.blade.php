@@ -25,10 +25,9 @@
         @include('components.main.media')
     </div>
 
-    {{-- Versions (upload + list)"--}}
+    {{-- Versions --}}
     <div id="zone-4" class="mb-4">
-        @include('components.main.versions_upload')
-        @include('components.main.versions_list')
+        @include('components.main.versions')
     </div>
 
     {{-- ▼ NOUVEAU : fac-similés (dépend d’une version) --}}

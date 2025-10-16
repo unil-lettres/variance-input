@@ -4,7 +4,8 @@ $pages = array(
 	'apropos.php' => 'A propos',
 	'tutoriel.php' => 'Tutoriel',
 	'partenaires.php' => 'Partenaires',
-	'direction-scientifique.php' => 'Direction scientifique'
+	'direction-scientifique.php' => 'Direction scientifique',
+	'admin/' => 'Admin'
 );
 $currentPage = basename($_SERVER['REQUEST_URI']) ;
 ?>

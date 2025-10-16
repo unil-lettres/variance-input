@@ -91,6 +91,19 @@ services:
     networks:
       - variance
 
+  variance-proxy:
+    image: nginx:1.27
+    container_name: variance-proxy
+    depends_on:
+      - variance-web
+      - laravel
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    networks:
+      - variance
+
   variance-web:
     image: httpd:2.4
     working_dir: /var/www

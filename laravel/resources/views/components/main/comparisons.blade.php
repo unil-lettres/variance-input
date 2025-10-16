@@ -1,7 +1,10 @@
 <div class="card mb-3">
-    <div class="card-header">Comparaisons</div>
+    <div class="card-header text-uppercase fw-semibold">Comparaisons générées</div>
 
     <div class="card-body">
+        <p class="fst-italic text-muted small mb-3">
+            Retrouvez ici toutes les comparaisons produites avec Medite pour l'œuvre sélectionnée. Vous pouvez suivre leur état, accéder aux résultats ou relancer la pagination si nécessaire.
+        </p>
         <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">
             <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -55,6 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const JSON_HEADERS = { 'Accept': 'application/json' };
   let currentWorkId = null;
+  let currentAuthorFolder = '';
+  let currentWorkFolder = '';
   const runningComparisons = window.__runningComparisons || new Set();
   window.__runningComparisons = runningComparisons;
   const paginationLocks = new Set();
@@ -187,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       try {
-        const res = await fetch(`/api/versions/${versionId}/page-markers/progress?ts=${Date.now()}`, {
+        const res = await fetch(withBasePath(`/api/versions/${versionId}/page-markers/progress?ts=${Date.now()}`), {
           headers: { 'Accept': 'application/json' },
           cache: 'no-store'
         });
@@ -385,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const res = await fetch(`/api/comparisons/${comp.id}/page-markers`, {
+      const res = await fetch(withBasePath(`/api/comparisons/${comp.id}/page-markers`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -411,16 +416,21 @@ document.addEventListener('DOMContentLoaded', () => {
         feedback.textContent = payload.message || 'Pagination en file d\'attente…';
       }
 
+      let firstRoleHandled = false;
       roles.forEach(({ versionId, statusEl, label }) => {
         if (!versionId) return;
         if (statusEl) {
-          const text = 'Pagination : initialisation en cours…';
-          statusEl.textContent = label ? `${label} — ${text}` : text;
-        }
-        if (statusEl) {
           statusEl.dataset.paginationLabel = label || '';
+          if (!firstRoleHandled) {
+            const text = 'Pagination : initialisation en cours…';
+            statusEl.textContent = label ? `${label} — ${text}` : text;
+          } else {
+            const text = 'En file d\'attente…';
+            statusEl.textContent = label ? `${label} — ${text}` : text;
+          }
         }
         startPaginationPolling(versionId);
+        firstRoleHandled = true;
       });
 
       if (currentWorkId) {
@@ -455,6 +465,12 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = '';
   }
 
+  // Track current author/work folders from the global selector
+  document.addEventListener('workSelected', e => {
+    currentAuthorFolder = e.detail?.author_folder || '';
+    currentWorkFolder   = e.detail?.work_folder || '';
+  });
+
   async function loadComparisons(workId) {
     if (!isValidWorkId(workId)) { resetUI(); return; }
     currentWorkId = workId;
@@ -464,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     noComparisons.style.display = 'none';
 
     try {
-      const res = await fetch(`/comparisons/by-work?work_id=${workId}`, { headers: JSON_HEADERS });
+      const res = await fetch(withBasePath(`/comparisons/by-work?work_id=${workId}`), { headers: JSON_HEADERS });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const comparisons = await res.json();
 
@@ -500,6 +516,13 @@ document.addEventListener('DOMContentLoaded', () => {
           statusHtml = `<span class="text-warning" title="${safeTitle}">⚠</span>`;
         }
 
+        const xmlUrl  = withBasePath(`/storage/uploads/comparisons/${comp.id}.xml`);
+        const legacyUrl = (function() {
+          if (!currentAuthorFolder || !currentWorkFolder || !comp.folder) return null;
+          const origin = window.location.origin;
+          return `${origin}/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.folder}`;
+        })();
+
         tr.innerHTML = `
           <td>${comp.id}</td>
           <td>${comp.source_version?.name ?? comp.source_id}</td>
@@ -521,8 +544,8 @@ document.addEventListener('DOMContentLoaded', () => {
           </td>
           <td>${comp.created_at ? new Date(comp.created_at).toLocaleString() : ''}</td>
           <td>
-            <a href="/storage/uploads/comparisons/${comp.id}.html" class="btn btn-sm btn-outline-primary" target="_blank">HTML</a>
-            <a href="/storage/uploads/comparisons/${comp.id}.xml"  class="btn btn-sm btn-outline-secondary" target="_blank">XML</a>
+            <a href="${xmlUrl}"  class="btn btn-sm btn-outline-primary" target="_blank">XML</a>
+            ${(legacyUrl && published) ? `<a href="${legacyUrl}" class="btn btn-sm btn-outline-success ms-1" target="_blank" title="Voir sur le site public">Public</a>` : ''}
             <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}">🗑️</button>
           </td>
         `;
@@ -609,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       if (shouldPublish) {
-        const res = await fetch('/api/publish_xhtml', {
+        const res = await fetch(withBasePath('/api/publish_xhtml'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -635,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
       } else {
-        const res = await fetch(`/api/publish_xhtml/${comparisonId}`, {
+        const res = await fetch(withBasePath(`/api/publish_xhtml/${comparisonId}`), {
           method: 'DELETE',
           headers: { 'Accept': 'application/json' }
         });
@@ -671,7 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm(`Voulez-vous vraiment supprimer la comparaison #${comparisonId} ?`)) return;
 
     try {
-      const response = await fetch(`/comparisons/${comparisonId}`, {
+      const response = await fetch(withBasePath(`/comparisons/${comparisonId}`), {
         method: 'DELETE',
         headers: {
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),

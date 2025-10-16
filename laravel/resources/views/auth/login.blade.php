@@ -36,7 +36,7 @@
                             </div>
                         @endif
                         
-                        <form action="{{ route('login') }}" method="POST">
+                        <form action="{{ admin_path('login') }}" method="POST">
                             @csrf
                             <div class="mb-3 row">
                                 <label for="email" class="col-sm-4 col-form-label">Email:</label>

@@ -18,6 +18,11 @@ class ApplyLignesJob implements ShouldQueue, ShouldBeUnique
 
     public int $timeout = 600;
     public int $tries = 1;
+    /**
+     * Safety: release the unique lock after N seconds in case a previous
+     * attempt never started, so new runs are not blocked indefinitely.
+     */
+    public int $uniqueFor = 600; // 10 minutes
 
     public function __construct(
         public int $versionId,
