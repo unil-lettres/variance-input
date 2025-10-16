@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editorContainer: document.getElementById('editor-container'),
         imageName: document.getElementById('image-name'),
         pagination: document.getElementById('pagination'),
+        generatePageNumbersModal: document.getElementById('generatePageNumbersModal'),
     };
 
     // Constants
@@ -333,20 +334,32 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTagsButtonUI(tagsHidden);
     });
 
-    elements.generatePageNumbersBtn.addEventListener('click', () => {
-        const leadingZeros = prompt("Nombre de zéros de remplissage (ex: 3 pour 001):", "0");
-        if (leadingZeros === null) return;
+    elements.generatePageNumbersModal.addEventListener('shown.bs.modal', () => {
+        document.getElementById('leadingZeros').focus();
+    });
+
+    // Handle Enter key in modal inputs
+    elements.generatePageNumbersModal.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('confirmGeneratePageNumbers').click();
+        }
+    });
+
+    // Handle modal confirmation
+    document.getElementById('confirmGeneratePageNumbers').addEventListener('click', () => {
+        const leadingZerosInput = document.getElementById('leadingZeros');
+        const startPageNumberInput = document.getElementById('startPageNumber');
         
-        const leadingZerosNum = parseInt(leadingZeros);
+        const leadingZerosNum = parseInt(leadingZerosInput.value);
+        const startPageNum = parseInt(startPageNumberInput.value);
+
+        // Validate inputs
         if (isNaN(leadingZerosNum) || leadingZerosNum < 0 || leadingZerosNum > 4) {
             alert("Veuillez entrer un nombre entre 0 et 4 pour les zéros de remplissage.");
             return;
         }
 
-        const startPageNumber = prompt("Nombre de pages avant le début de la numérotation:", "0");
-        if (startPageNumber === null) return;
-        
-        const startPageNum = parseInt(startPageNumber);
         if (isNaN(startPageNum) || startPageNum < 0) {
             alert("Veuillez entrer un nombre de pages valide.");
             return;
@@ -363,20 +376,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const isInserted = insertedMarkers.has(imageName);
 
             if (startPageNum >= currentPageNum) {
-              if (!isInserted) {
-                  button.setAttribute('data-tag-page-number', '?');
-              }
+                if (!isInserted) {
+                    button.setAttribute('data-tag-page-number', '?');
+                }
             } else {
-
-              if (!isInserted) {
-                  const pageNumber = String(currentPageNum - startPageNum).padStart(leadingZerosNum, '0');
-                  button.setAttribute('data-tag-page-number', pageNumber);
-              }
+                if (!isInserted) {
+                    const pageNumber = String(currentPageNum - startPageNum).padStart(leadingZerosNum, '0');
+                    button.setAttribute('data-tag-page-number', pageNumber);
+                }
             }
         });
 
         // Refresh button states to update display
         refreshButtonStates();
+
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('generatePageNumbersModal'));
+        modal.hide();
     });
 
     // Insert buttons
