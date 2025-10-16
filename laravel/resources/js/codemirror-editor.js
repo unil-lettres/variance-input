@@ -1,5 +1,5 @@
 import { EditorState, Compartment, StateField, StateEffect } from "@codemirror/state";
-import { EditorView, lineNumbers, drawSelection, Decoration, WidgetType, ViewPlugin, ViewUpdate } from "@codemirror/view";
+import { EditorView, lineNumbers, drawSelection, Decoration, WidgetType, ViewPlugin } from "@codemirror/view";
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -15,56 +15,6 @@ class InvisibleTagWidget extends WidgetType {
     const span = document.createElement("span");
     span.style.display = "none";
     span.textContent = this.tag;
-    return span;
-  }
-
-  ignoreEvent() {
-    return false;
-  }
-}
-
-// Widget for clickable page numbers
-class PageNumberWidget extends WidgetType {
-  constructor(pageNumber, markerStart, markerEnd, view, onUpdate) {
-    super();
-    this.pageNumber = pageNumber;
-    this.markerStart = markerStart;
-    this.markerEnd = markerEnd;
-    this.view = view;
-    this.onUpdate = onUpdate;
-  }
-
-  toDOM() {
-    const span = document.createElement("span");
-    span.className = "cm-page-number-widget";
-    span.textContent = this.pageNumber;
-    
-    span.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const newPageNumber = prompt("Entrez le nouveau numéro de page:", this.pageNumber);
-
-      if (newPageNumber === null) return;
-
-      if (isNaN(newPageNumber) || newPageNumber < 0 || newPageNumber.length > 4) {
-          alert("Le numéro de page doit être un nombre supérieur à 0 et de 4 chiffres maximum.");
-          return;
-      }
-
-      if (newPageNumber !== this.pageNumber) {
-        // Update the page number in the document
-        this.view.dispatch({
-          changes: { from: this.markerStart, to: this.markerEnd, insert: newPageNumber }
-        });
-        
-        // Notify that an update occurred
-        if (this.onUpdate) {
-          this.onUpdate();
-        }
-      }
-    });
-    
     return span;
   }
 
@@ -119,11 +69,10 @@ const hideTagsField = StateField.define({
   })
 });
 
-// Helper function to create page number decorations
-function createPageNumberDecorations(view, onUpdate) {
-  const decorations = [];
-  const text = view.state.doc.toString();
-
+// Helper functions to manage page number
+// Parse all page numbers in the document and return their positions
+function parsePageNumbers(text) {
+  const pageNumbers = [];
   const pageNumberRegex = /<span class="page-marker" data-image-name="[^"]+"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
   let match;
 
@@ -135,36 +84,94 @@ function createPageNumberDecorations(view, onUpdate) {
     const contentStart = matchStart + pageNumberTagStart + '<span class="page-number">'.length;
     const contentEnd = contentStart + pageNumberContent.length;
 
-    // Only create decoration if there's actual content and valid range
     if (pageNumberContent.length > 0 && contentStart < contentEnd && contentEnd <= text.length) {
-      decorations.push(
-        Decoration.replace({
-          widget: new PageNumberWidget(pageNumberContent, contentStart, contentEnd, view, onUpdate),
-          inclusive: false,
-          block: false
-        }).range(contentStart, contentEnd)
-      );
+      pageNumbers.push({
+        content: pageNumberContent,
+        start: contentStart,
+        end: contentEnd
+      });
     }
+  }
+
+  return pageNumbers;
+}
+
+function createPageNumberDecorations(view) {
+  const decorations = [];
+  const text = view.state.doc.toString();
+  const pageNumbers = parsePageNumbers(text);
+
+  for (const pageNumber of pageNumbers) {
+    decorations.push(
+      Decoration.mark({
+        class: "cm-page-number-mark"
+      }).range(pageNumber.start, pageNumber.end)
+    );
   }
 
   return Decoration.set(decorations);
 }
 
+function setupPageNumberClickHandler(view, onUpdate) {
+  const handleClick = (e) => {
+    const pos = view.posAtDOM(e.target);
+    if (pos === null) return;
+    
+    const text = view.state.doc.toString();
+    const pageNumbers = parsePageNumbers(text);
+
+    for (const pageNumber of pageNumbers) {
+      // Check if click position is within this page number
+      if (pos >= pageNumber.start && pos <= pageNumber.end) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const newPageNumber = prompt("Entrez le nouveau numéro de page:", pageNumber.content);
+
+        if (newPageNumber === null) return;
+
+        if (isNaN(newPageNumber) || newPageNumber < 0 || newPageNumber.length > 4) {
+            alert("Le numéro de page doit être un nombre supérieur à 0 et de 4 chiffres maximum.");
+            return;
+        }
+
+        if (newPageNumber !== pageNumber.content) {
+          view.dispatch({
+            changes: { from: pageNumber.start, to: pageNumber.end, insert: newPageNumber }
+          });
+          
+          if (onUpdate) {
+            onUpdate();
+          }
+        }
+        return;
+      }
+    }
+  };
+
+  view.dom.addEventListener('click', handleClick);
+}
+
 // ViewPlugin to manage page number decorations
 const createPageNumberPlugin = (getCallback) => ViewPlugin.fromClass(class {
   constructor(view) {
-    this.decorations = createPageNumberDecorations(view, () => {
-      const callback = getCallback();
-      if (callback) callback();
-    });
+    this.view = view;
+    this.decorations = createPageNumberDecorations(view);
+    
+    // Setup click handler once
+    this.clickHandlerSetup = false;
+    if (!this.clickHandlerSetup) {
+      setupPageNumberClickHandler(view, () => {
+        const callback = getCallback();
+        if (callback) callback();
+      });
+      this.clickHandlerSetup = true;
+    }
   }
 
   update(update) {
     if (update.docChanged) {
-      this.decorations = createPageNumberDecorations(update.view, () => {
-        const callback = getCallback();
-        if (callback) callback();
-      });
+      this.decorations = createPageNumberDecorations(update.view);
     }
   }
 }, {

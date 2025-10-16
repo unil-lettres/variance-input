@@ -27,7 +27,7 @@
     will-change: transform;
 }
 
-.cm-page-number-widget {
+.cm-page-number-mark {
     cursor: pointer;
     background-color: #ff6b35;
     color: #ffffff;
@@ -35,11 +35,11 @@
     padding: 2px 6px;
     border-radius: 3px;
     border: 2px solid #ff4500;
-    display: inline-block;
+    display: inline;
     font-size: 1.1em;
 }
 
-.cm-page-number-widget:hover {
+.cm-page-number-mark:hover {
     background-color: #ff8c5a;
     border-color: #ff6633;
 }
