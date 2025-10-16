@@ -125,7 +125,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info" role="alert">
-                        Cette fonction génère uniquement les numéros pour les pages qui ne sont pas encore insérées dans le XML. Les numéros générés seront perdus si vous rechargez la page sans les avoir insérés.
+                        Cette fonction génère des numéros pour les pages qui ne sont pas encore insérées dans le XML (en bleu) en fonction des paramètres choisis. Elle ne modifie pas le fichier XML.
                     </div>
                     <div class="mb-3">
                         <label for="leadingZeros" class="form-label">Nombre de zéros de remplissage (ex: 3 pour 001)</label>
