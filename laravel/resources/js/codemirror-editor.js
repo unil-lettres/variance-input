@@ -70,37 +70,31 @@ const hideTagsField = StateField.define({
 });
 
 // Helper functions to manage page number
-// Parse all page numbers in the document and return their positions
-function parsePageNumbers(text) {
+function parsePageNumbers(view, getCacheFunction) {
+  const cache = getCacheFunction(view);
+  
+  // Convert cache data to the format expected by decorations
   const pageNumbers = [];
-  const pageNumberRegex = /<span class="page-marker" data-image-name="[^"]+"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
-  let match;
-
-  while ((match = pageNumberRegex.exec(text)) !== null) {
-    const fullMatch = match[0];
-    const pageNumberContent = match[1];
-    const matchStart = match.index;
-    const pageNumberTagStart = fullMatch.indexOf('<span class="page-number">');
-    const contentStart = matchStart + pageNumberTagStart + '<span class="page-number">'.length;
-    const contentEnd = contentStart + pageNumberContent.length;
-
-    if (pageNumberContent.length > 0 && contentStart < contentEnd && contentEnd <= text.length) {
-      pageNumbers.push({
-        content: pageNumberContent,
-        start: contentStart,
-        end: contentEnd
-      });
-    }
-  }
-
+  cache.pageNumberPositions.forEach((data, imageName) => {
+    pageNumbers.push({
+      imageName: imageName,
+      content: data.content,
+      start: data.start,
+      end: data.end
+    });
+  });
+  
   return pageNumbers;
 }
 
-function createPageNumberDecorations(view, getIsReadOnly) {
+function createPageNumberDecorations(view, getIsReadOnly, onPageNumbersChanged, getCacheFunction) {
   const decorations = [];
-  const text = view.state.doc.toString();
-  const pageNumbers = parsePageNumbers(text);
+  const pageNumbers = parsePageNumbers(view, getCacheFunction);
   const isReadOnly = getIsReadOnly();
+
+  if (onPageNumbersChanged) {
+    onPageNumbersChanged(pageNumbers);
+  }
 
   for (const pageNumber of pageNumbers) {
     decorations.push(
@@ -113,7 +107,7 @@ function createPageNumberDecorations(view, getIsReadOnly) {
   return Decoration.set(decorations);
 }
 
-function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly) {
+function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly, getCacheFunction) {
   const handleClick = (e) => {
     if (!getIsReadOnly()) {
       return;
@@ -122,8 +116,7 @@ function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly) {
     const pos = view.posAtDOM(e.target);
     if (pos === null) return;
     
-    const text = view.state.doc.toString();
-    const pageNumbers = parsePageNumbers(text);
+    const pageNumbers = parsePageNumbers(view, getCacheFunction);
 
     for (const pageNumber of pageNumbers) {
       // Check if click position is within this page number
@@ -158,20 +151,25 @@ function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly) {
 }
 
 // ViewPlugin to manage page number decorations
-const createPageNumberPlugin = (getCallback, getIsReadOnly) => ViewPlugin.fromClass(class {
+const createPageNumberPlugin = (getClickedCallback, getIsReadOnly, getPageNumbersChangedCallback, getCacheFunction) => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
     this.getIsReadOnly = getIsReadOnly;
-    this.decorations = createPageNumberDecorations(view, getIsReadOnly);
+    this.getPageNumbersChangedCallback = getPageNumbersChangedCallback;
+    this.getCacheFunction = getCacheFunction;
+    this.decorations = createPageNumberDecorations(view, getIsReadOnly, (pageNumbers) => {
+      const cb = getPageNumbersChangedCallback();
+      if (cb) cb(pageNumbers);
+    }, getCacheFunction);
     this.lastReadOnlyState = getIsReadOnly();
     
     // Setup click handler once
     this.clickHandlerSetup = false;
     if (!this.clickHandlerSetup) {
       setupPageNumberClickHandler(view, () => {
-        const callback = getCallback();
+        const callback = getClickedCallback();
         if (callback) callback();
-      }, getIsReadOnly);
+      }, getIsReadOnly, getCacheFunction);
       this.clickHandlerSetup = true;
     }
   }
@@ -181,7 +179,10 @@ const createPageNumberPlugin = (getCallback, getIsReadOnly) => ViewPlugin.fromCl
     const readOnlyChanged = currentReadOnlyState !== this.lastReadOnlyState;
     
     if (update.docChanged || readOnlyChanged) {
-      this.decorations = createPageNumberDecorations(update.view, this.getIsReadOnly);
+      this.decorations = createPageNumberDecorations(update.view, this.getIsReadOnly, (pageNumbers) => {
+        const cb = this.getPageNumbersChangedCallback();
+        if (cb) cb(pageNumbers);
+      }, this.getCacheFunction);
       this.lastReadOnlyState = currentReadOnlyState;
     }
   }
@@ -195,7 +196,8 @@ export default function (container, initialXml) {
   const readOnlyCompartment = new Compartment();
   const editableCompartment = new Compartment();
 
-  let onPageNumberUpdateCallback = null;
+  let onPageNumberClickedCallback = null;
+  let onPageNumbersChangedCallback = null;
   let isReadOnly = true;
 
   let markerCache = {
@@ -203,15 +205,18 @@ export default function (container, initialXml) {
     insertedMarkers: new Set(),
     markerCounts: new Map(),
     markerPositions: new Map(),
-    pageNumbers: new Map() // Store page numbers for each marker
+    pageNumbers: new Map(),
+    pageNumberPositions: new Map(),
   };
 
   const invalidateCache = () => {
     markerCache.content = null;
   };
 
-  const ensureCacheUpdated = () => {
-    const content = view.state.doc.toString();
+  const ensureCacheUpdated = (viewInstance) => {
+    if (!viewInstance) return;
+    
+    const content = viewInstance.state.doc.toString();
 
     if (markerCache.content === content) {
       return;
@@ -222,11 +227,13 @@ export default function (container, initialXml) {
     markerCache.markerCounts.clear();
     markerCache.markerPositions.clear();
     markerCache.pageNumbers.clear();
+    markerCache.pageNumberPositions.clear();
 
     const regex = /<span class="page-marker" data-image-name="([^"]+)"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
     let match;
 
     while ((match = regex.exec(content)) !== null) {
+      const fullMatch = match[0];
       const imageName = match[1];
       const pageNumber = match[2];
       const tag = match[0];
@@ -241,8 +248,25 @@ export default function (container, initialXml) {
       if (!markerCache.markerPositions.has(imageName)) {
         markerCache.markerPositions.set(imageName, { tag, pos });
         markerCache.pageNumbers.set(imageName, pageNumber);
+        
+        const pageNumberTagStart = fullMatch.indexOf('<span class="page-number">');
+        const contentStart = pos + pageNumberTagStart + '<span class="page-number">'.length;
+        const contentEnd = contentStart + pageNumber.length;
+        
+        if (pageNumber.length > 0 && contentStart < contentEnd && contentEnd <= content.length) {
+          markerCache.pageNumberPositions.set(imageName, {
+            content: pageNumber,
+            start: contentStart,
+            end: contentEnd
+          });
+        }
       }
     }
+  };
+  
+  const getCache = (viewInstance) => {
+    ensureCacheUpdated(viewInstance);
+    return markerCache;
   };
 
   const startState = EditorState.create({
@@ -255,7 +279,12 @@ export default function (container, initialXml) {
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField,
-      createPageNumberPlugin(() => onPageNumberUpdateCallback, () => isReadOnly),
+      createPageNumberPlugin(
+        () => onPageNumberClickedCallback,
+        () => isReadOnly,
+        () => onPageNumbersChangedCallback,
+        getCache,
+      ),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
@@ -341,7 +370,7 @@ export default function (container, initialXml) {
     },
 
     getPageMarkerTag(imageName) {
-      ensureCacheUpdated();
+      ensureCacheUpdated(view);
       return markerCache.markerPositions.get(imageName) || null;
     },
 
@@ -357,17 +386,17 @@ export default function (container, initialXml) {
     },
 
     isPageMarkerInserted(imageName) {
-      ensureCacheUpdated();
+      ensureCacheUpdated(view);
       return markerCache.insertedMarkers.has(imageName);
     },
 
     countPageMarkerOccurrences(imageName) {
-      ensureCacheUpdated();
+      ensureCacheUpdated(view);
       return markerCache.markerCounts.get(imageName) || 0;
     },
 
     getAllMarkers() {
-      ensureCacheUpdated();
+      ensureCacheUpdated(view);
       return {
         insertedMarkers: new Set(markerCache.insertedMarkers),
         markerCounts: new Map(markerCache.markerCounts)
@@ -375,12 +404,16 @@ export default function (container, initialXml) {
     },
 
     getPageNumber(imageName) {
-      ensureCacheUpdated();
+      ensureCacheUpdated(view);
       return markerCache.pageNumbers.get(imageName) || null;
     },
 
-    onPageNumberUpdate(callback) {
-      onPageNumberUpdateCallback = callback;
+    onPageNumberClicked(callback) {
+      onPageNumberClickedCallback = callback;
+    },
+
+    onPageNumbersChanged(callback) {
+      onPageNumbersChangedCallback = callback;
     },
 
     removePageMarker(imageName) {

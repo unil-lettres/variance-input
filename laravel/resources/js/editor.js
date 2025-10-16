@@ -44,8 +44,20 @@ document.addEventListener('DOMContentLoaded', () => {
         editor.setReadOnly(true);
     }
 
-    editor.onPageNumberUpdate(() => {
+    editor.onPageNumberClicked(() => {
         refreshButtonStates();
+    });
+
+    editor.onPageNumbersChanged((pageNumbers) => {
+        pageNumbers.forEach(({ imageName, content }) => {
+            const button = document.querySelector(`button[data-tag="${imageName}"]`);
+            if (button) {
+                button.setAttribute('data-tag-page-number', content);
+                button.querySelector('span').textContent = content;
+            }
+        });
+
+        updatePaginationColors();
     });
 
     // Pagination functions
@@ -304,10 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.toggleBtn.classList.toggle('btn-warning');
         elements.toggleBtn.classList.toggle('btn-info');
 
-        document.querySelectorAll('[data-enable-when-readonly]').forEach(btn => {
-            btn.disabled = !isReadOnly;
-        });
-
         elements.toggleTagsBtn.disabled = !isReadOnly;
 
         if (isReadOnly) {
@@ -350,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('confirmGeneratePageNumbers').addEventListener('click', () => {
         const leadingZerosInput = document.getElementById('leadingZeros');
         const startPageNumberInput = document.getElementById('startPageNumber');
-        
+
         const leadingZerosNum = parseInt(leadingZerosInput.value);
         const startPageNum = parseInt(startPageNumberInput.value);
 

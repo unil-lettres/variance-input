@@ -56,7 +56,6 @@
                         <button
                             id="generate-page-numbers"
                             class="btn btn-info mb-2"
-                            data-enable-when-readonly
                             data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
                             {{ !$canEdit ? 'disabled' : '' }}
                         >Générer les numéros de page</button>
@@ -75,7 +74,6 @@
                                 class="h-100 w-100 btn btn-primary btn-sm position-relative"
                                 data-tag="{{ $loop->iteration }}"
                                 data-img-src="{{ Storage::url(ltrim($facsimile['big'], '/')) }}"
-                                data-enable-when-readonly
                                 {{ !$canEdit ? 'disabled' : '' }}
                             >
                                 <span>?</span>
