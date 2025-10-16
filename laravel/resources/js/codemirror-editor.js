@@ -96,15 +96,16 @@ function parsePageNumbers(text) {
   return pageNumbers;
 }
 
-function createPageNumberDecorations(view) {
+function createPageNumberDecorations(view, getIsReadOnly) {
   const decorations = [];
   const text = view.state.doc.toString();
   const pageNumbers = parsePageNumbers(text);
+  const isReadOnly = getIsReadOnly();
 
   for (const pageNumber of pageNumbers) {
     decorations.push(
       Decoration.mark({
-        class: "cm-page-number-mark"
+        class: isReadOnly ? "cm-page-number-mark" : "cm-page-number-mark readonly"
       }).range(pageNumber.start, pageNumber.end)
     );
   }
@@ -112,8 +113,12 @@ function createPageNumberDecorations(view) {
   return Decoration.set(decorations);
 }
 
-function setupPageNumberClickHandler(view, onUpdate) {
+function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly) {
   const handleClick = (e) => {
+    if (!getIsReadOnly()) {
+      return;
+    }
+    
     const pos = view.posAtDOM(e.target);
     if (pos === null) return;
     
@@ -153,10 +158,12 @@ function setupPageNumberClickHandler(view, onUpdate) {
 }
 
 // ViewPlugin to manage page number decorations
-const createPageNumberPlugin = (getCallback) => ViewPlugin.fromClass(class {
+const createPageNumberPlugin = (getCallback, getIsReadOnly) => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
-    this.decorations = createPageNumberDecorations(view);
+    this.getIsReadOnly = getIsReadOnly;
+    this.decorations = createPageNumberDecorations(view, getIsReadOnly);
+    this.lastReadOnlyState = getIsReadOnly();
     
     // Setup click handler once
     this.clickHandlerSetup = false;
@@ -164,14 +171,18 @@ const createPageNumberPlugin = (getCallback) => ViewPlugin.fromClass(class {
       setupPageNumberClickHandler(view, () => {
         const callback = getCallback();
         if (callback) callback();
-      });
+      }, getIsReadOnly);
       this.clickHandlerSetup = true;
     }
   }
 
   update(update) {
-    if (update.docChanged) {
-      this.decorations = createPageNumberDecorations(update.view);
+    const currentReadOnlyState = this.getIsReadOnly();
+    const readOnlyChanged = currentReadOnlyState !== this.lastReadOnlyState;
+    
+    if (update.docChanged || readOnlyChanged) {
+      this.decorations = createPageNumberDecorations(update.view, this.getIsReadOnly);
+      this.lastReadOnlyState = currentReadOnlyState;
     }
   }
 }, {
@@ -185,6 +196,7 @@ export default function (container, initialXml) {
   const editableCompartment = new Compartment();
 
   let onPageNumberUpdateCallback = null;
+  let isReadOnly = true;
 
   let markerCache = {
     content: null,
@@ -243,7 +255,7 @@ export default function (container, initialXml) {
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField,
-      createPageNumberPlugin(() => onPageNumberUpdateCallback),
+      createPageNumberPlugin(() => onPageNumberUpdateCallback, () => isReadOnly),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
@@ -271,8 +283,6 @@ export default function (container, initialXml) {
   });
 
   const view = new EditorView({ state: startState, parent: container });
-
-  let isReadOnly = true;
 
   return {
     get view() {

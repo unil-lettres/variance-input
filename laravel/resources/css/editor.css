@@ -28,7 +28,6 @@
 }
 
 .cm-page-number-mark {
-    cursor: pointer;
     background-color: #ff6b35;
     color: #ffffff;
     font-weight: bold;
@@ -37,9 +36,14 @@
     border: 2px solid #ff4500;
     display: inline;
     font-size: 1.1em;
+    cursor: pointer;
 }
 
-.cm-page-number-mark:hover {
+.cm-page-number-mark.readonly {
+    cursor: text;
+}
+
+.cm-page-number-mark:not(.readonly):hover {
     background-color: #ff8c5a;
     border-color: #ff6633;
 }
