@@ -128,8 +128,8 @@ function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly, getCacheFunc
 
         if (newPageNumber === null) return;
 
-        if (isNaN(newPageNumber) || newPageNumber < 0 || newPageNumber.length > 4) {
-            alert("Le numéro de page doit être un nombre supérieur à 0 et de 4 chiffres maximum.");
+        if (newPageNumber.length > 6) {
+            alert("Le numéro de page ne peut pas faire plus de 6 caractères.");
             return;
         }
 
