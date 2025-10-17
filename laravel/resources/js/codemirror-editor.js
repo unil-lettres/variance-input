@@ -29,7 +29,7 @@ const toggleTagVisibility = StateEffect.define();
 // State field to track whether tags should be hidden
 const hideTagsField = StateField.define({
   create() {
-    return true; // Start with tags hidden
+    return false; // Start with tags VISIBLE for performance reasons
   },
   update(value, tr) {
     for (let effect of tr.effects) {
@@ -198,7 +198,9 @@ export default function (container, initialXml) {
 
   let onPageNumberClickedCallback = null;
   let onPageNumbersChangedCallback = null;
+  let onEditorReadyCallback = null;
   let isReadOnly = true;
+  let editorReady = false;
 
   let markerCache = {
     content: null,
@@ -285,6 +287,18 @@ export default function (container, initialXml) {
         () => onPageNumbersChangedCallback,
         getCache,
       ),
+      EditorView.updateListener.of((update) => {
+        // Fire the ready callback only once, after the first update
+        if (!editorReady && update.view.state.doc.length > 0) {
+          editorReady = true;
+          // Use requestAnimationFrame to ensure the DOM is fully rendered
+          requestAnimationFrame(() => {
+            if (onEditorReadyCallback) {
+              onEditorReadyCallback();
+            }
+          });
+        }
+      }),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
@@ -414,6 +428,10 @@ export default function (container, initialXml) {
 
     onPageNumbersChanged(callback) {
       onPageNumbersChangedCallback = callback;
+    },
+
+    onEditorReady(callback) {
+      onEditorReadyCallback = callback;
     },
 
     removePageMarker(imageName) {

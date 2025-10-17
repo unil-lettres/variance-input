@@ -519,4 +519,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initPagination();
     refreshButtonStates();
+
+    // Use CodeMirror's ready event to hide tags after initial render
+    // This fixes Firefox's slow rendering when tags are hidden from the start
+    editor.onEditorReady(() => {
+        if (editor.getTagVisibility() === false) {
+            editor.toggleTagVisibility();
+            updateTagsButtonUI(true);
+        }
+    });
 });
