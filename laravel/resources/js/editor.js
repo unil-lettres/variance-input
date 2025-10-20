@@ -300,23 +300,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateTagsButtonUI = (tagsHidden) => {
-        elements.toggleTagsBtn.textContent = tagsHidden ? 'Afficher les balises' : 'Masquer les balises';
-        if (tagsHidden) {
-            elements.toggleTagsBtn.classList.remove('btn-info');
-            elements.toggleTagsBtn.classList.add('btn-secondary');
-        } else {
-            elements.toggleTagsBtn.classList.remove('btn-secondary');
-            elements.toggleTagsBtn.classList.add('btn-info');
-        }
+        elements.toggleTagsBtn.classList.toggle('active', !tagsHidden);
     };
 
     // Event handlers
     elements.toggleBtn.addEventListener('click', () => {
         const isReadOnly = editor.toggleReadOnly();
-        elements.toggleBtn.textContent = isReadOnly ? 'Activer le mode édition' : 'Activer le mode lecture seule';
-        elements.toggleBtn.classList.toggle('btn-warning');
-        elements.toggleBtn.classList.toggle('btn-info');
-
+        elements.toggleBtn.classList.toggle('active', !isReadOnly);
         elements.toggleTagsBtn.disabled = !isReadOnly;
 
         if (isReadOnly) {
@@ -344,7 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.searchBtn.addEventListener('click', () => {
-        editor.openSearch();
+        const isOpen = editor.toggleSearch();
+        elements.searchBtn.classList.toggle('active', isOpen);
     });
 
     elements.generatePageNumbersModal.addEventListener('shown.bs.modal', () => {

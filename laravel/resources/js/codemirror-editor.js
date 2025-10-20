@@ -3,7 +3,7 @@ import { EditorView, drawSelection, Decoration, WidgetType, ViewPlugin } from "@
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { search, openSearchPanel, SearchQuery, setSearchQuery } from "@codemirror/search";
+import { search, openSearchPanel, closeSearchPanel } from "@codemirror/search";
 
 // Widget to replace tags with invisible content
 class InvisibleTagWidget extends WidgetType {
@@ -249,6 +249,7 @@ export default function (container, initialXml) {
   let onEditorReadyCallback = null;
   let isReadOnly = true;
   let editorReady = false;
+  let searchPanelOpen = false;
 
   let markerCache = {
     content: null,
@@ -497,9 +498,17 @@ export default function (container, initialXml) {
       }
     },
 
-    openSearch() {
-      openSearchPanel(view);
-      view.focus();
+    toggleSearch() {
+      if (searchPanelOpen) {
+        closeSearchPanel(view);
+        searchPanelOpen = false;
+        return false;
+      } else {
+        openSearchPanel(view);
+        searchPanelOpen = true;
+        view.focus();
+        return true;
+      }
     },
   };
 };

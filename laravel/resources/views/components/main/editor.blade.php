@@ -9,7 +9,7 @@
                 class="alert alert-warning mt-3"
                 role="alert"
             >
-                <strong>⚠️ Attention :</strong> Les modifications ne sont pas autorisées.
+                <strong><i class="bi bi-exclamation-triangle-fill"></i> Attention :</strong> Les modifications ne sont pas autorisées.
                 @if ($isPublished)
                     Cette comparaison est actuellement publiée.
                 @elseif(!$imagesData)
@@ -43,25 +43,36 @@
                             id="save-xml"
                             class="btn btn-success mb-2"
                             {{ !$canEdit ? 'disabled' : '' }}
-                        >Enregistrer</button>
-                        <button
-                            id="toggle-readonly"
-                            class="btn btn-warning mb-2"
-                            {{ !$canEdit ? 'disabled' : '' }}
-                        >Activer le mode édition</button>
-                        <button
-                            id="toggle-tags"
-                            class="btn btn-secondary mb-2"
-                        >Afficher les balises</button>
+                            title="Sauvegarder les modifications"
+                        ><i class="bi bi-floppy-fill"></i></button>
+                        <div class="btn-group" role="group" aria-label="Editor utility buttons">
+                            <button
+                                id="toggle-readonly"
+                                class="btn btn-outline-primary mb-2"
+                                {{ !$canEdit ? 'disabled' : '' }}
+                                data-bs-toggle="button"
+                                title="Activer/Désactiver le mode édition"
+                            ><i class="bi bi-pencil-square"></i></button>
+                            <button
+                                id="toggle-tags"
+                                data-bs-toggle="button"
+                                class="btn btn-outline-primary mb-2"
+                                title="Afficher/Masquer les balises"
+                            ><i class="bi bi-code-square"></i></button>
+                            <button
+                                id="search-btn"
+                                class="btn btn-outline-primary mb-2"
+                                data-bs-toggle="button"
+                                title="Rechercher du texte"
+                            ><i class="bi bi-search"></i></button>
+                        </div>
                         <button
                             id="generate-page-numbers"
-                            class="btn btn-info mb-2"
+                            class="btn btn-outline-primary mb-2"
                             data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
                             {{ !$canEdit ? 'disabled' : '' }}
-                        >Générer les numéros de page</button>
-                        <button id="search-btn" class="btn btn-secondary mb-2">
-                            Rechercher
-                        </button>
+                            title="Générer les numéros de page"
+                        ><i class="bi bi-123"></i></button>
                     </div>
                 <div
                     id="editor-container"
