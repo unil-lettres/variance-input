@@ -1,5 +1,5 @@
 import { EditorState, Compartment, StateField, StateEffect } from "@codemirror/state";
-import { EditorView, lineNumbers, drawSelection, Decoration, WidgetType, ViewPlugin } from "@codemirror/view";
+import { EditorView, drawSelection, Decoration, WidgetType, ViewPlugin } from "@codemirror/view";
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -16,6 +16,23 @@ class InvisibleTagWidget extends WidgetType {
     span.style.display = "none";
     span.textContent = this.tag;
     return span;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+// Widget to replace <br> tags with line breaks
+class LineBreakWidget extends WidgetType {
+  constructor(tag) {
+    super();
+    this.tag = tag;
+  }
+
+  toDOM() {
+    const br = document.createElement("br");
+    return br;
   }
 
   ignoreEvent() {
@@ -54,14 +71,40 @@ const hideTagsField = StateField.define({
       while ((match = tagRegex.exec(text)) !== null) {
         const from = match.index;
         const to = from + match[0].length;
+        const tag = match[0].toLowerCase();
 
-        widgets.push(
-          Decoration.replace({
-            widget: new InvisibleTagWidget(match[0]),
-            inclusive: true,
-            block: false
-          }).range(from, to)
-        );
+        // Handle <br> tags - replace with line break widget
+        if (tag === '<br>' || tag === '<br/>' || tag === '<br />') {
+          // Check if there's a <lb> tag immediately before this <br>
+          const beforeText = text.substring(Math.max(0, from - 7), from);
+          const hasLbBefore = /<lb\s*\/?>/.test(beforeText);
+
+          if (hasLbBefore) {
+            // Ignore the <br> if it follows a <lb>
+            widgets.push(
+              Decoration.replace({
+                widget: new InvisibleTagWidget(match[0]),
+                inclusive: true
+              }).range(from, to)
+            );
+          } else {
+            // Show as line break widget
+            widgets.push(
+              Decoration.replace({
+                widget: new LineBreakWidget(match[0]),
+                inclusive: true
+              }).range(from, to)
+            );
+          }
+        } else {
+          // Handle other tags - make them invisible
+          widgets.push(
+            Decoration.replace({
+              widget: new InvisibleTagWidget(match[0]),
+              inclusive: true
+            }).range(from, to)
+          );
+        }
       }
 
       return Decoration.set(widgets);
@@ -275,7 +318,6 @@ export default function (container, initialXml) {
     doc: initialXml,
     extensions: [
       xml(),
-      lineNumbers(),
       foldGutter(),
       oneDark,
       EditorView.lineWrapping,
