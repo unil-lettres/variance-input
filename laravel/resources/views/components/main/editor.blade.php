@@ -59,6 +59,9 @@
                             data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
                             {{ !$canEdit ? 'disabled' : '' }}
                         >Générer les numéros de page</button>
+                        <button id="search-btn" class="btn btn-secondary mb-2">
+                            Rechercher
+                        </button>
                     </div>
                 <div
                     id="editor-container"

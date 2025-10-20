@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtn: document.getElementById('toggle-readonly'),
         toggleTagsBtn: document.getElementById('toggle-tags'),
         generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
+        searchBtn: document.getElementById('search-btn'),
         previewImg: document.getElementById('facsimile-preview'),
         noPreviewText: document.getElementById('no-preview'),
         loadingSpinner: document.getElementById('loading-spinner'),
@@ -340,6 +341,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.toggleTagsBtn.addEventListener('click', () => {
         const tagsHidden = editor.toggleTagVisibility();
         updateTagsButtonUI(tagsHidden);
+    });
+
+    elements.searchBtn.addEventListener('click', () => {
+        editor.openSearch();
     });
 
     elements.generatePageNumbersModal.addEventListener('shown.bs.modal', () => {

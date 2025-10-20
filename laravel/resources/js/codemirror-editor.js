@@ -3,6 +3,7 @@ import { EditorView, drawSelection, Decoration, WidgetType, ViewPlugin } from "@
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { search, openSearchPanel, SearchQuery, setSearchQuery } from "@codemirror/search";
 
 // Widget to replace tags with invisible content
 class InvisibleTagWidget extends WidgetType {
@@ -156,37 +157,41 @@ function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly, getCacheFunc
       return;
     }
     
-    const pos = view.posAtDOM(e.target);
-    if (pos === null) return;
-    
-    const pageNumbers = parsePageNumbers(view, getCacheFunction);
+    try {
+      const pos = view.posAtDOM(e.target);
+      if (pos === null) return;
+      
+      const pageNumbers = parsePageNumbers(view, getCacheFunction);
 
-    for (const pageNumber of pageNumbers) {
-      // Check if click position is within this page number
-      if (pos >= pageNumber.start && pos <= pageNumber.end) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const newPageNumber = prompt("Entrez le nouveau numéro de page:", pageNumber.content);
-
-        if (newPageNumber === null) return;
-
-        if (newPageNumber.length > 6) {
-            alert("Le numéro de page ne peut pas faire plus de 6 caractères.");
-            return;
-        }
-
-        if (newPageNumber !== pageNumber.content) {
-          view.dispatch({
-            changes: { from: pageNumber.start, to: pageNumber.end, insert: newPageNumber }
-          });
+      for (const pageNumber of pageNumbers) {
+        // Check if click position is within this page number
+        if (pos >= pageNumber.start && pos <= pageNumber.end) {
+          e.preventDefault();
+          e.stopPropagation();
           
-          if (onUpdate) {
-            onUpdate();
+          const newPageNumber = prompt("Entrez le nouveau numéro de page:", pageNumber.content);
+
+          if (newPageNumber === null) return;
+
+          if (newPageNumber.length > 6) {
+              alert("Le numéro de page ne peut pas faire plus de 6 caractères.");
+              return;
           }
+
+          if (newPageNumber !== pageNumber.content) {
+            view.dispatch({
+              changes: { from: pageNumber.start, to: pageNumber.end, insert: newPageNumber }
+            });
+            
+            if (onUpdate) {
+              onUpdate();
+            }
+          }
+          return;
         }
-        return;
       }
+    } catch (err) {
+      // Ignore DOM position errors that can occur with decorations
     }
   };
 
@@ -318,6 +323,7 @@ export default function (container, initialXml) {
     doc: initialXml,
     extensions: [
       xml(),
+      search(),
       foldGutter(),
       oneDark,
       EditorView.lineWrapping,
@@ -489,6 +495,11 @@ export default function (container, initialXml) {
 
         invalidateCache();
       }
+    },
+
+    openSearch() {
+      openSearchPanel(view);
+      view.focus();
     },
   };
 };
