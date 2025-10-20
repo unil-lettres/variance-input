@@ -69,8 +69,8 @@
                     class="overflow-scroll"
                 ></div>
             </div>
-            <div class="col-md-3 col-12 h-100 overflow-auto py-2">
-                <div id="buttons-container" class="row row-cols-4 g-1 align-items-start">
+            <div class="col-md-2 col-12 h-100 overflow-auto py-2">
+                <div id="buttons-container" class="row row-cols-3 g-1 align-items-start">
                     @foreach ($imagesData ?? [] as $facsimile)
                         <div class="col button-item" style="display: none;">
                             <button
@@ -93,7 +93,7 @@
                     <ul id="pagination" class="pagination pagination-sm mb-0 flex-wrap justify-content-center"></ul>
                 </nav>
             </div>
-            <div class="col-md-3 col-12 h-100 d-flex flex-column align-items-center">
+            <div class="col-md-4 col-12 h-100 d-flex flex-column align-items-center">
                 <a id="image-name" class="btn btn-link mb-2" style="display: none;" href="#" target="_blank"></a>
                 <div id="loading-spinner" style="display: none;">
                     <div class="spinner-border text-primary" role="status">
