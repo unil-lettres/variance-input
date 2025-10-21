@@ -571,7 +571,8 @@ export default function (container, initialXml) {
         effects: [
           readOnlyCompartment.reconfigure(EditorState.readOnly.of(isReadOnly)),
           editableCompartment.reconfigure(EditorView.editable.of(!isReadOnly))
-        ]
+        ],
+        selection: { anchor: view.state.selection.main.head }
       });
       container.classList.toggle('cm-readonly', isReadOnly);
     },

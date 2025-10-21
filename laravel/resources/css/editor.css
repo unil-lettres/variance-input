@@ -66,6 +66,10 @@
     cursor: default;
 }
 
+.cm-readonly .cm-selectionLayer {
+    display: none !important;
+}
+
 .cm-italic-tag:hover {
     background-color: #ffffff;
     color: #9b59b6;
