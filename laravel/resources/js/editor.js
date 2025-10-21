@@ -560,6 +560,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Close insert mode when clicking anywhere on the page (except on buttons or editor)
+    document.addEventListener('click', (e) => {
+        if (activeButton && !isDeleteMode) {
+            const isClickOnEditor = elements.editorContainer.contains(e.target);
+            const isClickOnButton = e.target.closest('[data-tag]');
+            const isClickOnImageUrl = e.target.id === 'image-name';
+
+            if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl) {
+                deactivateActiveButton();
+            }
+        }
+    });
+
     elements.saveBtn.addEventListener('click', async () => {
         const updatedXml = editor.view.state.doc.toString();
         const response = await fetch(`/comparison/${comparisonId}/editor?type=${fileType}`, {
