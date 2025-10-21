@@ -1,3 +1,26 @@
+#editor-container {
+    position: relative;
+    background-color: #282c34;
+}
+
+#editor-container.insert-page::before {
+    content: "Cliquez dans le texte pour ajouter le numéro de page";
+    position: sticky;
+    top: 0;
+    left: 0;
+    background-color: #59b6aa;
+    color: #ffffff;
+    padding: 3px 8px;
+    border-bottom-right-radius: 4px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.btn-insert {
+    background-color: #59b6aa !important;
+    color: #ffffff !important;
+}
+
 .page-link.page-fully-inserted {
     background-color: #d1e7dd !important;
     border-color: #a3cfbb !important;

@@ -31,10 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const BUTTON_STATES = {
-        INACTIVE: { add: 'btn-primary', remove: ['btn-warning', 'btn-success', 'btn-danger'] },
-        ACTIVE_INSERT: { add: 'btn-warning', remove: ['btn-primary', 'btn-success', 'btn-danger'] },
-        INSERTED: { add: 'btn-success', remove: ['btn-primary', 'btn-warning', 'btn-danger'] },
-        ACTIVE_DELETE: { add: 'btn-danger', remove: ['btn-primary', 'btn-warning', 'btn-success'] }
+        INACTIVE: { add: 'btn-primary', remove: ['btn-insert', 'btn-success', 'btn-danger'] },
+        ACTIVE_INSERT: { add: 'btn-insert', remove: ['btn-primary', 'btn-success', 'btn-danger'] },
+        INSERTED: { add: 'btn-success', remove: ['btn-primary', 'btn-insert', 'btn-danger'] },
+        ACTIVE_DELETE: { add: 'btn-danger', remove: ['btn-primary', 'btn-insert', 'btn-success'] }
     };
 
     // State - only one active button at a time, either in insert or delete mode
