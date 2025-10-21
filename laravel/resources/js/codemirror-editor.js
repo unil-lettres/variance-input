@@ -596,7 +596,7 @@ export default function (container, initialXml) {
 
       if (!this.canInsertAtPosition(head)) {
         alert("Impossible de placer le marqueur de page dans une balise XML.");
-        return;
+        return false;
       }
 
       // Insert at cursor position
@@ -608,6 +608,7 @@ export default function (container, initialXml) {
       invalidateCache();
 
       view.focus();
+      return true;
     },
 
     canInsertAtPosition(pos) {

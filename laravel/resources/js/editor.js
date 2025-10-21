@@ -548,18 +548,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Editor click to insert tag
-    if (elements.editorContainer) {
-        elements.editorContainer.addEventListener('click', (e) => {
-            // Only insert page marker if we have an active button in insert mode
-            if (activeButton && !isDeleteMode) {
-                const imageName = activeButton.getAttribute('data-tag');
-                const pageNumber = activeButton.getAttribute('data-tag-page-number') || '001';
-                editor.insertPageMarker(imageName, pageNumber);
+    elements.editorContainer.addEventListener('click', (e) => {
+        // Only insert page marker if we have an active button in insert mode
+        if (activeButton && !isDeleteMode) {
+            const imageName = activeButton.getAttribute('data-tag');
+            const pageNumber = activeButton.getAttribute('data-tag-page-number') || '001';
+            if (editor.insertPageMarker(imageName, pageNumber) === true) {
                 refreshButtonStates();
                 deactivateActiveButton();
             }
-        });
-    }
+        }
+    });
 
     elements.saveBtn.addEventListener('click', async () => {
         const updatedXml = editor.view.state.doc.toString();
