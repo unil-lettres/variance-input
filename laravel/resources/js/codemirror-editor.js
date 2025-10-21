@@ -606,6 +606,11 @@ export default function (container, initialXml) {
       // Build the page marker tag
       const pageMarkerTag = `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">${pageNumber}</span><img src="/img/settings/page_right.svg" /></span>`;
 
+      if (!this.canInsertAtPosition(head)) {
+        alert("Impossible de placer le marqueur de page dans une balise XML.");
+        return;
+      }
+
       // Insert at cursor position
       view.dispatch({
         changes: { from: head, insert: pageMarkerTag },
@@ -615,6 +620,17 @@ export default function (container, initialXml) {
       invalidateCache();
 
       view.focus();
+    },
+
+    canInsertAtPosition(pos) {
+      const content = view.state.doc.toString();
+      const beforePosition = content.substring(0, pos);
+      
+      // Check if position is inside a tag (between < and >)
+      const lastOpenBracket = beforePosition.lastIndexOf('<');
+      const lastCloseBracket = beforePosition.lastIndexOf('>');
+      
+      return lastOpenBracket <= lastCloseBracket;
     },
 
     getPageMarkerTag(imageName) {
