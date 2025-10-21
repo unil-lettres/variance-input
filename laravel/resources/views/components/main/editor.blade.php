@@ -95,7 +95,7 @@
             <div class="col-md-2 col-12 h-100 d-flex flex-column gap-2">
                 <button
                     id="generate-page-numbers"
-                    class="btn btn-outline-primary"
+                    class="btn btn-outline-primary align-self-start"
                     data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
                     {{ !$canEdit ? 'disabled' : '' }}
                     title="Générer les numéros de page"
