@@ -28,15 +28,16 @@
 }
 
 .cm-page-number-mark {
-    background-color: #ff6b35;
+    background-color: #59b6aa;
     color: #ffffff;
     font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 3px;
-    border: 2px solid #ff4500;
-    display: inline;
-    font-size: 1.1em;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 0.85em;
+    font-family: monospace;
     cursor: pointer;
+    display: inline-block;
+    margin: 0 1px;
 }
 
 .cm-page-number-mark.readonly {
@@ -44,6 +45,24 @@
 }
 
 .cm-page-number-mark:not(.readonly):hover {
-    background-color: #ff8c5a;
-    border-color: #ff6633;
+    background-color: #ffffff;
+    color: #59b6aa;
+}
+
+.cm-italic-tag {
+    background-color: #9b59b6;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 0.85em;
+    font-family: monospace;
+    cursor: pointer;
+    display: inline-block;
+    margin: 0 1px;
+}
+
+.cm-italic-tag:hover {
+    background-color: #ffffff;
+    color: #9b59b6;
 }

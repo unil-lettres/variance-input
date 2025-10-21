@@ -54,18 +54,6 @@ class ItalicTagWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = "cm-italic-tag";
     span.textContent = this.isOpening ? "⟨i⟩" : "⟨/i⟩";
-    span.style.cssText = `
-      background-color: #9b59b6;
-      color: #ffffff;
-      font-weight: bold;
-      padding: 1px 4px;
-      border-radius: 2px;
-      font-size: 0.85em;
-      font-family: monospace;
-      cursor: pointer;
-      display: inline-block;
-      margin: 0 1px;
-    `;
     span.title = `Cliquer pour supprimer`;
     return span;
   }
