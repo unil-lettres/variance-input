@@ -41,6 +41,43 @@ class LineBreakWidget extends WidgetType {
   }
 }
 
+// Widget to style italic tags visibly
+class ItalicTagWidget extends WidgetType {
+  constructor(tag, isOpening) {
+    super();
+    this.tag = tag;
+    this.isOpening = isOpening;
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-italic-tag";
+    span.textContent = this.isOpening ? "⟨i⟩" : "⟨/i⟩";
+    span.style.cssText = `
+      background-color: #9b59b6;
+      color: #ffffff;
+      font-weight: bold;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-size: 0.85em;
+      font-family: monospace;
+      cursor: default;
+      display: inline-block;
+      margin: 0 1px;
+    `;
+    span.title = this.tag;
+    return span;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+
+  eq(other) {
+    return other.tag === this.tag && other.isOpening === this.isOpening;
+  }
+}
+
 // Effect to toggle tag visibility
 const toggleTagVisibility = StateEffect.define();
 
@@ -73,6 +110,12 @@ const hideTagsField = StateField.define({
         const from = match.index;
         const to = from + match[0].length;
         const tag = match[0].toLowerCase();
+
+        // Skip italic tags - they have their own decoration plugin
+        const originalTag = match[0];
+        if (originalTag.match(/<hi\s+rend=["']italic["']/i) || originalTag === '</hi>') {
+          continue;
+        }
 
         // Handle <br> tags - replace with line break widget
         if (tag === '<br>' || tag === '<br/>' || tag === '<br />') {
@@ -197,6 +240,82 @@ function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly, getCacheFunc
 
   view.dom.addEventListener('click', handleClick);
 }
+
+// ViewPlugin to decorate italic tags
+const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
+  constructor(view) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  update(update) {
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = this.buildDecorations(update.view);
+    }
+  }
+
+  buildDecorations(view) {
+    const doc = view.state.doc;
+    const text = doc.toString();
+
+    // Collect all italic tags with their positions
+    const tags = [];
+
+    // Find opening tags
+    const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
+    let match;
+
+    openTagRegex.lastIndex = 0;
+    while ((match = openTagRegex.exec(text)) !== null) {
+      tags.push({
+        from: match.index,
+        to: match.index + match[0].length,
+        tag: match[0],
+        isOpening: true
+      });
+    }
+
+    // Find closing tags
+    const closeTagRegex = /<\/hi\s*>/gi;
+    closeTagRegex.lastIndex = 0;
+    while ((match = closeTagRegex.exec(text)) !== null) {
+      const from = match.index;
+      
+      // Verify this closing tag corresponds to an italic opening tag
+      const beforeTag = text.substring(0, from);
+      const lastOpenMatch = beforeTag.match(/<hi\s+rend=["']italic["']\s*>/gi);
+      const closingTagsBefore = (beforeTag.match(/<\/hi\s*>/gi) || []).length;
+      const openingTagsBefore = (lastOpenMatch || []).length;
+      
+      // Only decorate if this closing tag matches an italic opening tag
+      if (openingTagsBefore > closingTagsBefore) {
+        tags.push({
+          from: match.index,
+          to: match.index + match[0].length,
+          tag: match[0],
+          isOpening: false
+        });
+      }
+    }
+
+    // Sort tags by position (from lowest to highest)
+    tags.sort((a, b) => a.from - b.from);
+
+    // Create decorations from sorted tags
+    const widgets = [];
+    for (const tagInfo of tags) {
+      widgets.push(
+        Decoration.replace({
+          widget: new ItalicTagWidget(tagInfo.tag, tagInfo.isOpening),
+          inclusive: false
+        }).range(tagInfo.from, tagInfo.to)
+      );
+    }
+
+    return Decoration.set(widgets);
+  }
+}, {
+  decorations: v => v.decorations
+});
 
 // ViewPlugin to manage page number decorations
 const createPageNumberPlugin = (getClickedCallback, getIsReadOnly, getPageNumbersChangedCallback, getCacheFunction) => ViewPlugin.fromClass(class {
@@ -332,6 +451,7 @@ export default function (container, initialXml) {
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField,
+      createItalicTagPlugin(),
       createPageNumberPlugin(
         () => onPageNumberClickedCallback,
         () => isReadOnly,
@@ -529,6 +649,115 @@ export default function (container, initialXml) {
         openSearchPanel(view);
         view.focus();
       }
+    },
+
+    insertItalicOpenTag() {
+      const { head } = view.state.selection.main;
+      const doc = view.state.doc;
+      const content = doc.toString();
+      const beforeCursor = content.substring(0, head);
+      
+      // Find the last tag before cursor (any tag)
+      const allTagsRegex = /<\/?[^>]+>/g;
+      let lastTag = null;
+      let match;
+      
+      while ((match = allTagsRegex.exec(beforeCursor)) !== null) {
+        lastTag = match[0];
+      }
+      
+      // Check 1: The last tag before must be </hi> or nothing (not <hi rend="italic">)
+      if (lastTag && /<hi\s+rend=["']italic["']\s*>/i.test(lastTag)) {
+        alert("Vous êtes déjà dans un tag italique. Veuillez insérer un tag de fermeture avant d'en ouvrir un nouveau.");
+        return false;
+      }
+      
+      // Check 2: We cannot insert INSIDE a tag (between < and >)
+      // Find the last < and > positions
+      const lastOpenBracket = beforeCursor.lastIndexOf('<');
+      const lastCloseBracket = beforeCursor.lastIndexOf('>');
+      
+      // If the last < comes after the last >, we're inside a tag
+      if (lastOpenBracket > lastCloseBracket) {
+        alert("Vous ne pouvez pas insérer un tag italique à l'intérieur d'une balise XML.");
+        return false;
+      }
+      
+      // Insert opening tag
+      const openingTag = '<hi rend="italic">';
+      view.dispatch({
+        changes: { from: head, insert: openingTag },
+        selection: { anchor: head + openingTag.length }
+      });
+      
+      invalidateCache();
+      view.focus();
+      return true;
+    },
+
+    insertItalicCloseTag() {
+      const { head } = view.state.selection.main;
+      const doc = view.state.doc;
+      const content = doc.toString();
+      const beforeCursor = content.substring(0, head);
+      const afterCursor = content.substring(head);
+      
+      // Check 0: We cannot insert INSIDE a tag (between < and >)
+      const lastOpenBracket = beforeCursor.lastIndexOf('<');
+      const lastCloseBracket = beforeCursor.lastIndexOf('>');
+      
+      if (lastOpenBracket > lastCloseBracket) {
+        alert("Vous ne pouvez pas insérer un tag italique à l'intérieur d'une balise XML.");
+        return false;
+      }
+      
+      // Find the last tag before cursor
+      const allTagsRegex = /<\/?[^>]+>/g;
+      let lastTagMatch = null;
+      let match;
+      
+      while ((match = allTagsRegex.exec(beforeCursor)) !== null) {
+        lastTagMatch = match;
+      }
+      
+      // Check 1: The last tag MUST be <hi rend="italic">
+      if (!lastTagMatch || !/<hi\s+rend=["']italic["']\s*>/i.test(lastTagMatch[0])) {
+        alert("Aucun tag italique d'ouverture valide détecté pour l'associer.");
+        return false;
+      }
+      
+      // Check 2: There must be text between <hi> and cursor (not just tags or whitespace)
+      const afterLastTag = beforeCursor.substring(lastTagMatch.index + lastTagMatch[0].length);
+      const textOnly = afterLastTag.replace(/<[^>]+>/g, '').trim();
+      
+      if (textOnly.length === 0) {
+        alert("Il doit y avoir du texte entre la balise d'ouverture et de fermeture.");
+        return false;
+      }
+      
+      // Check 3: There must be no other tags between <hi> and cursor (only text)
+      if (/<[^>]+>/g.test(afterLastTag)) {
+        alert("Vous ne pouvez pas englober d'autres balises dans un tag italique, seulement du texte.");
+        return false;
+      }
+      
+      // Check 4: The next tag after cursor should not be </hi> (no empty insertion)
+      const nextTagMatch = /<\/?[^>]+>/i.exec(afterCursor);
+      if (nextTagMatch && /<\/hi\s*>/i.test(nextTagMatch[0])) {
+        alert("Ce tag italique d'ouverture a déjà un tag de fermeture.");
+        return false;
+      }
+      
+      // Insert closing tag
+      const closingTag = '</hi>';
+      view.dispatch({
+        changes: { from: head, insert: closingTag },
+        selection: { anchor: head + closingTag.length }
+      });
+      
+      invalidateCache();
+      view.focus();
+      return true;
     },
   };
 };

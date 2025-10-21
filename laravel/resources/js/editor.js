@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleTagsBtn: document.getElementById('toggle-tags'),
         generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
         searchBtn: document.getElementById('search-btn'),
+        italicOpenBtn: document.getElementById('italic-open-btn'),
+        italicCloseBtn: document.getElementById('italic-close-btn'),
         previewImg: document.getElementById('facsimile-preview'),
         noPreviewText: document.getElementById('no-preview'),
         loadingSpinner: document.getElementById('loading-spinner'),
@@ -358,6 +360,15 @@ document.addEventListener('DOMContentLoaded', () => {
         editor.toggleSearch();
     });
 
+    // Italic buttons handlers
+    elements.italicOpenBtn.addEventListener('click', () => {
+        editor.insertItalicOpenTag();
+    });
+
+    elements.italicCloseBtn.addEventListener('click', () => {
+        editor.insertItalicCloseTag();
+    });
+
     elements.generatePageNumbersModal.addEventListener('shown.bs.modal', () => {
         document.getElementById('leadingZeros').focus();
     });
@@ -479,14 +490,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Editor click to insert tag
     if (elements.editorContainer) {
-        elements.editorContainer.addEventListener('click', () => {
-            // Only insert if we have an active button in insert mode
+        elements.editorContainer.addEventListener('click', (e) => {
+            // Only insert page marker if we have an active button in insert mode
             if (activeButton && !isDeleteMode) {
                 const imageName = activeButton.getAttribute('data-tag');
-                const generatedPageNumber = activeButton.getAttribute('data-tag-page-number');
-                const pageNumber = generatedPageNumber || '?';
+                const pageNumber = activeButton.getAttribute('data-tag-page-number') || '001';
                 editor.insertPageMarker(imageName, pageNumber);
                 refreshButtonStates();
+                deactivateActiveButton();
             }
         });
     }

@@ -60,12 +60,18 @@
                             title="Afficher/Masquer les balises"
                         ><i class="bi bi-code-square"></i></button>
                     </div>
-                    <button
-                        id="italic-btn"
-                        class="btn btn-outline-primary mb-2"
-                        data-bs-toggle="button"
-                        title="Mettre en italique"
-                    ><i class="bi bi-type-italic"></i></button>
+                    <div class="btn-group" role="group" aria-label="Editor italic buttons">
+                        <button
+                            id="italic-open-btn"
+                            class="btn btn-outline-primary mb-2"
+                            title="Insérer balise italique ouvrante"
+                        ><i class="bi bi-code"></i><i class="bi bi-type-italic"></i></button>
+                        <button
+                            id="italic-close-btn"
+                            class="btn btn-outline-primary mb-2"
+                            title="Insérer balise italique fermante"
+                        ><i class="bi bi-code-slash"></i><i class="bi bi-type-italic"></i></button>
+                    </div>
                     <button
                         id="search-btn"
                         class="btn btn-outline-primary mb-2"
