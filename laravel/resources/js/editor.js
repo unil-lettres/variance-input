@@ -61,6 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePaginationColors();
     });
 
+    editor.onSearchPanelStateChanged((isOpen) => {
+        elements.searchBtn.classList.toggle('active', isOpen);
+    });
+
     // Pagination functions
     const checkIfPageFullyInserted = (pageNumber) => {
         const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
@@ -334,8 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.searchBtn.addEventListener('click', () => {
-        const isOpen = editor.toggleSearch();
-        elements.searchBtn.classList.toggle('active', isOpen);
+        editor.toggleSearch();
     });
 
     elements.generatePageNumbersModal.addEventListener('shown.bs.modal', () => {

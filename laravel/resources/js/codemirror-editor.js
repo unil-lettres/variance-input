@@ -3,7 +3,7 @@ import { EditorView, drawSelection, Decoration, WidgetType, ViewPlugin } from "@
 import { foldGutter } from "@codemirror/language";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { search, openSearchPanel, closeSearchPanel } from "@codemirror/search";
+import { search, openSearchPanel, closeSearchPanel, searchPanelOpen as getSearchPanelState } from "@codemirror/search";
 
 // Widget to replace tags with invisible content
 class InvisibleTagWidget extends WidgetType {
@@ -247,6 +247,7 @@ export default function (container, initialXml) {
   let onPageNumberClickedCallback = null;
   let onPageNumbersChangedCallback = null;
   let onEditorReadyCallback = null;
+  let onSearchPanelStateChangedCallback = null;
   let isReadOnly = true;
   let editorReady = false;
   let searchPanelOpen = false;
@@ -346,6 +347,15 @@ export default function (container, initialXml) {
               onEditorReadyCallback();
             }
           });
+        }
+
+        // Track search panel state changes
+        const newSearchPanelState = getSearchPanelState(update.state);
+        if (newSearchPanelState !== searchPanelOpen) {
+          searchPanelOpen = newSearchPanelState;
+          if (onSearchPanelStateChangedCallback) {
+            onSearchPanelStateChangedCallback(searchPanelOpen);
+          }
         }
       }),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
@@ -483,6 +493,10 @@ export default function (container, initialXml) {
       onEditorReadyCallback = callback;
     },
 
+    onSearchPanelStateChanged(callback) {
+      onSearchPanelStateChangedCallback = callback;
+    },
+
     removePageMarker(imageName) {
       const result = this.getPageMarkerTag(imageName);
 
@@ -501,13 +515,9 @@ export default function (container, initialXml) {
     toggleSearch() {
       if (searchPanelOpen) {
         closeSearchPanel(view);
-        searchPanelOpen = false;
-        return false;
       } else {
         openSearchPanel(view);
-        searchPanelOpen = true;
         view.focus();
-        return true;
       }
     },
   };
