@@ -38,69 +38,77 @@
         </ul>
         <div class="border border-top-0 p-3 row m-0 overflow-auto" style="height: calc(100vh - 200px);">
             <div class="col-md-6 col-12 order-last order-md-first h-100 d-flex flex-column">
-                    <div>
+                <div>
+                    <button
+                        id="save-xml"
+                        class="btn btn-success mb-2"
+                        {{ !$canEdit ? 'disabled' : '' }}
+                        title="Sauvegarder les modifications"
+                    ><i class="bi bi-floppy-fill"></i></button>
+                    <div class="btn-group" role="group" aria-label="Editor utility buttons">
                         <button
-                            id="save-xml"
-                            class="btn btn-success mb-2"
-                            {{ !$canEdit ? 'disabled' : '' }}
-                            title="Sauvegarder les modifications"
-                        ><i class="bi bi-floppy-fill"></i></button>
-                        <div class="btn-group" role="group" aria-label="Editor utility buttons">
-                            <button
-                                id="toggle-readonly"
-                                class="btn btn-outline-primary mb-2"
-                                {{ !$canEdit ? 'disabled' : '' }}
-                                data-bs-toggle="button"
-                                title="Activer/Désactiver le mode édition"
-                            ><i class="bi bi-pencil-square"></i></button>
-                            <button
-                                id="toggle-tags"
-                                data-bs-toggle="button"
-                                class="btn btn-outline-primary mb-2"
-                                title="Afficher/Masquer les balises"
-                            ><i class="bi bi-code-square"></i></button>
-                            <button
-                                id="search-btn"
-                                class="btn btn-outline-primary mb-2"
-                                data-bs-toggle="button"
-                                title="Rechercher du texte"
-                            ><i class="bi bi-search"></i></button>
-                        </div>
-                        <button
-                            id="generate-page-numbers"
+                            id="toggle-readonly"
                             class="btn btn-outline-primary mb-2"
-                            data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
                             {{ !$canEdit ? 'disabled' : '' }}
-                            title="Générer les numéros de page"
-                        ><i class="bi bi-123"></i></button>
+                            data-bs-toggle="button"
+                            title="Activer/Désactiver le mode édition"
+                        ><i class="bi bi-pencil-square"></i></button>
+                        <button
+                            id="toggle-tags"
+                            data-bs-toggle="button"
+                            class="btn btn-outline-primary mb-2"
+                            title="Afficher/Masquer les balises"
+                        ><i class="bi bi-code-square"></i></button>
                     </div>
+                    <button
+                        id="italic-btn"
+                        class="btn btn-outline-primary mb-2"
+                        data-bs-toggle="button"
+                        title="Mettre en italique"
+                    ><i class="bi bi-type-italic"></i></button>
+                    <button
+                        id="search-btn"
+                        class="btn btn-outline-primary mb-2"
+                        data-bs-toggle="button"
+                        title="Rechercher du texte"
+                    ><i class="bi bi-search"></i></button>
+                </div>
                 <div
                     id="editor-container"
                     style="border:1px solid #ccc;"
                     class="overflow-scroll"
                 ></div>
             </div>
-            <div class="col-md-2 col-12 h-100 overflow-auto py-2">
-                <div id="buttons-container" class="row row-cols-3 g-1 align-items-start">
-                    @foreach ($imagesData ?? [] as $facsimile)
-                        <div class="col button-item" style="display: none;">
-                            <button
-                                class="h-100 w-100 btn btn-primary btn-sm position-relative"
-                                data-tag="{{ $loop->iteration }}"
-                                data-img-src="{{ Storage::url(ltrim($facsimile['big'], '/')) }}"
-                                {{ !$canEdit ? 'disabled' : '' }}
-                            >
-                                <span>?</span>
-                                <span
-                                    class="position-absolute top-0 start-75 translate-middle badge rounded-pill bg-danger"
-                                    data-tag-count="{{ $loop->iteration }}"
-                                    style="display: none; font-size: 0.65rem;"
-                                ></span>
-                            </button>
-                        </div>
-                    @endforeach
+            <div class="col-md-2 col-12 h-100 d-flex flex-column gap-2">
+                <button
+                    id="generate-page-numbers"
+                    class="btn btn-outline-primary"
+                    data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
+                    {{ !$canEdit ? 'disabled' : '' }}
+                    title="Générer les numéros de page"
+                ><i class="bi bi-123"></i></button>
+                <div class="overflow-auto">
+                    <div id="buttons-container" class="row row-cols-3 g-1 align-items-start w-100">
+                        @foreach ($imagesData ?? [] as $facsimile)
+                            <div class="col button-item" style="display: none;">
+                                <button
+                                    class="h-100 w-100 btn btn-primary btn-sm position-relative"
+                                    data-tag="{{ $loop->iteration }}"
+                                    data-img-src="{{ Storage::url(ltrim($facsimile['big'], '/')) }}"
+                                    {{ !$canEdit ? 'disabled' : '' }}
+                                >
+                                    <span>?</span>
+                                    <span
+                                        class="position-absolute top-0 start-75 translate-middle badge rounded-pill bg-danger"
+                                        data-tag-count="{{ $loop->iteration }}"
+                                        style="display: none; font-size: 0.65rem;"
+                                    ></span>
+                                </button>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
-                <nav aria-label="Page navigation" class="mt-2 overflow-auto">
+                <nav aria-label="Page navigation">
                     <ul id="pagination" class="pagination pagination-sm mb-0 flex-wrap justify-content-center"></ul>
                 </nav>
             </div>
