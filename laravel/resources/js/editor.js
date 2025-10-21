@@ -518,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isInserted) {
                 isDeleteMode = true;
                 setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
-                button.querySelector('span').textContent = '🗑️';
+                button.querySelector('span').innerHTML = '<i class="bi bi-trash3"></i>';
                 editor.scrollToPageMarker(imageName);
                 elements.editorContainer.style.cursor = 'default';
             } else {
