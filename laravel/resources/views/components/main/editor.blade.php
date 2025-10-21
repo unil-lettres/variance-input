@@ -71,6 +71,13 @@
                             class="btn btn-outline-primary mb-2"
                             title="Insérer balise italique fermante"
                         ><i class="bi bi-code-slash"></i><i class="bi bi-type-italic"></i></button>
+                        <button
+                            id="italic-report-btn"
+                            class="btn btn-outline-primary mb-2"
+                            data-bs-toggle="modal" 
+                            data-bs-target="#italicErrorsModal"
+                            title="Rapport d'erreurs des tags italiques"
+                        ><i class="bi bi-exclamation-triangle-fill"></i></button>
                     </div>
                     <button
                         id="search-btn"
@@ -167,6 +174,26 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="button" class="btn btn-primary" id="confirmGeneratePageNumbers">Générer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for italic tag errors -->
+    <div class="modal fade" id="italicErrorsModal" tabindex="-1" aria-labelledby="italicErrorsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="italicErrorsModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Rapport d'erreurs - Tags italiques
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="italic-errors-list"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
                 </div>
             </div>
         </div>

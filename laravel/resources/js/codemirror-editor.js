@@ -113,7 +113,7 @@ const hideTagsField = StateField.define({
 
         // Skip italic tags - they have their own decoration plugin
         const originalTag = match[0];
-        if (originalTag.match(/<hi\s+rend=["']italic["']/i) || originalTag === '</hi>') {
+        if (originalTag.match(/<hi\s+rend=["']italic["']/i) || originalTag.match(/<\/hi\s*>/i)) {
           continue;
         }
 
@@ -260,7 +260,7 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
     // Collect all italic tags with their positions
     const tags = [];
 
-    // Find opening tags
+    // Find all opening tags
     const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
     let match;
 
@@ -274,27 +274,17 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
       });
     }
 
-    // Find closing tags
+    // Find ALL closing tags
     const closeTagRegex = /<\/hi\s*>/gi;
     closeTagRegex.lastIndex = 0;
+    
     while ((match = closeTagRegex.exec(text)) !== null) {
-      const from = match.index;
-      
-      // Verify this closing tag corresponds to an italic opening tag
-      const beforeTag = text.substring(0, from);
-      const lastOpenMatch = beforeTag.match(/<hi\s+rend=["']italic["']\s*>/gi);
-      const closingTagsBefore = (beforeTag.match(/<\/hi\s*>/gi) || []).length;
-      const openingTagsBefore = (lastOpenMatch || []).length;
-      
-      // Only decorate if this closing tag matches an italic opening tag
-      if (openingTagsBefore > closingTagsBefore) {
-        tags.push({
-          from: match.index,
-          to: match.index + match[0].length,
-          tag: match[0],
-          isOpening: false
-        });
-      }
+      tags.push({
+        from: match.index,
+        to: match.index + match[0].length,
+        tag: match[0],
+        isOpening: false
+      });
     }
 
     // Sort tags by position (from lowest to highest)
@@ -653,38 +643,8 @@ export default function (container, initialXml) {
 
     insertItalicOpenTag() {
       const { head } = view.state.selection.main;
-      const doc = view.state.doc;
-      const content = doc.toString();
-      const beforeCursor = content.substring(0, head);
-      
-      // Find the last tag before cursor (any tag)
-      const allTagsRegex = /<\/?[^>]+>/g;
-      let lastTag = null;
-      let match;
-      
-      while ((match = allTagsRegex.exec(beforeCursor)) !== null) {
-        lastTag = match[0];
-      }
-      
-      // Check 1: The last tag before must be </hi> or nothing (not <hi rend="italic">)
-      if (lastTag && /<hi\s+rend=["']italic["']\s*>/i.test(lastTag)) {
-        alert("Vous êtes déjà dans un tag italique. Veuillez insérer un tag de fermeture avant d'en ouvrir un nouveau.");
-        return false;
-      }
-      
-      // Check 2: We cannot insert INSIDE a tag (between < and >)
-      // Find the last < and > positions
-      const lastOpenBracket = beforeCursor.lastIndexOf('<');
-      const lastCloseBracket = beforeCursor.lastIndexOf('>');
-      
-      // If the last < comes after the last >, we're inside a tag
-      if (lastOpenBracket > lastCloseBracket) {
-        alert("Vous ne pouvez pas insérer un tag italique à l'intérieur d'une balise XML.");
-        return false;
-      }
-      
-      // Insert opening tag
       const openingTag = '<hi rend="italic">';
+      
       view.dispatch({
         changes: { from: head, insert: openingTag },
         selection: { anchor: head + openingTag.length }
@@ -692,64 +652,12 @@ export default function (container, initialXml) {
       
       invalidateCache();
       view.focus();
-      return true;
     },
 
     insertItalicCloseTag() {
       const { head } = view.state.selection.main;
-      const doc = view.state.doc;
-      const content = doc.toString();
-      const beforeCursor = content.substring(0, head);
-      const afterCursor = content.substring(head);
-      
-      // Check 0: We cannot insert INSIDE a tag (between < and >)
-      const lastOpenBracket = beforeCursor.lastIndexOf('<');
-      const lastCloseBracket = beforeCursor.lastIndexOf('>');
-      
-      if (lastOpenBracket > lastCloseBracket) {
-        alert("Vous ne pouvez pas insérer un tag italique à l'intérieur d'une balise XML.");
-        return false;
-      }
-      
-      // Find the last tag before cursor
-      const allTagsRegex = /<\/?[^>]+>/g;
-      let lastTagMatch = null;
-      let match;
-      
-      while ((match = allTagsRegex.exec(beforeCursor)) !== null) {
-        lastTagMatch = match;
-      }
-      
-      // Check 1: The last tag MUST be <hi rend="italic">
-      if (!lastTagMatch || !/<hi\s+rend=["']italic["']\s*>/i.test(lastTagMatch[0])) {
-        alert("Aucun tag italique d'ouverture valide détecté pour l'associer.");
-        return false;
-      }
-      
-      // Check 2: There must be text between <hi> and cursor (not just tags or whitespace)
-      const afterLastTag = beforeCursor.substring(lastTagMatch.index + lastTagMatch[0].length);
-      const textOnly = afterLastTag.replace(/<[^>]+>/g, '').trim();
-      
-      if (textOnly.length === 0) {
-        alert("Il doit y avoir du texte entre la balise d'ouverture et de fermeture.");
-        return false;
-      }
-      
-      // Check 3: There must be no other tags between <hi> and cursor (only text)
-      if (/<[^>]+>/g.test(afterLastTag)) {
-        alert("Vous ne pouvez pas englober d'autres balises dans un tag italique, seulement du texte.");
-        return false;
-      }
-      
-      // Check 4: The next tag after cursor should not be </hi> (no empty insertion)
-      const nextTagMatch = /<\/?[^>]+>/i.exec(afterCursor);
-      if (nextTagMatch && /<\/hi\s*>/i.test(nextTagMatch[0])) {
-        alert("Ce tag italique d'ouverture a déjà un tag de fermeture.");
-        return false;
-      }
-      
-      // Insert closing tag
       const closingTag = '</hi>';
+      
       view.dispatch({
         changes: { from: head, insert: closingTag },
         selection: { anchor: head + closingTag.length }
@@ -757,7 +665,139 @@ export default function (container, initialXml) {
       
       invalidateCache();
       view.focus();
-      return true;
+    },
+
+    validateItalicTags() {
+      const content = view.state.doc.toString();
+      const errors = [];
+      const processedPositions = new Set(); // Track positions that already have an error
+
+      // Find all italic opening and all closing tags
+      const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
+      const closeTagRegex = /<\/hi\s*>/gi;
+      
+      const openTags = [];
+      const closeTags = [];
+      
+      let match;
+      
+      openTagRegex.lastIndex = 0;
+      while ((match = openTagRegex.exec(content)) !== null) {
+        openTags.push({
+          pos: match.index,
+          end: match.index + match[0].length,
+          tag: match[0]
+        });
+      }
+      
+      closeTagRegex.lastIndex = 0;
+      while ((match = closeTagRegex.exec(content)) !== null) {
+        closeTags.push({
+          pos: match.index,
+          end: match.index + match[0].length,
+          tag: match[0]
+        });
+      }
+
+      // Helper function to add error only if position not already processed
+      const addError = (pos, type, message) => {
+        if (!processedPositions.has(pos)) {
+          processedPositions.add(pos);
+          errors.push({
+            type: type,
+            message: message,
+            pos: pos,
+            lineNumber: view.state.doc.lineAt(pos).number
+          });
+          return true;
+        }
+        return false;
+      };
+
+      // Process each opening tag with priority checks
+      for (let i = 0; i < openTags.length; i++) {
+        const openTag = openTags[i];
+        
+        // Check 1 (priority): Tag inside XML tag
+        const beforeTag = content.substring(0, openTag.pos);
+        const lastOpenBracket = beforeTag.lastIndexOf('<');
+        const lastCloseBracket = beforeTag.lastIndexOf('>');
+        
+        if (lastOpenBracket > lastCloseBracket) {
+          if (addError(openTag.pos, 'inside_tag', 'Balise italique d\'ouverture à l\'intérieur d\'une balise XML')) {
+            continue; // Skip other checks for this tag
+          }
+        }
+        
+        // Check 2: Nested tags
+        if (i < openTags.length - 1) {
+          const nextOpen = openTags[i + 1];
+          const currentClose = closeTags[i];
+          
+          if (currentClose && nextOpen.pos < currentClose.pos) {
+            if (addError(nextOpen.pos, 'nested', 'Balises italiques imbriquées détectées')) {
+              continue;
+            }
+          }
+        }
+        
+        // Check 3: Missing closing tag
+        if (!closeTags[i]) {
+          if (addError(openTag.pos, 'missing_close', 'Balise italique d\'ouverture sans balise de fermeture correspondante')) {
+            continue;
+          }
+        }
+        
+        // If we have a closing tag, check content
+        if (closeTags[i]) {
+          const closeTag = closeTags[i];
+          const betweenTags = content.substring(openTag.end, closeTag.pos);
+          
+          // Check 4: Contains other tags
+          if (/<[^>]+>/g.test(betweenTags)) {
+            if (addError(openTag.pos, 'contains_tags', 'Balise italique contient d\'autres balises (seul du texte est autorisé)')) {
+              continue;
+            }
+          }
+          
+          // Check 5: Empty tag
+          const textOnly = betweenTags.replace(/<[^>]+>/g, '').trim();
+          if (textOnly.length === 0) {
+            addError(openTag.pos, 'empty', 'Balise italique vide (pas de texte entre ouverture et fermeture)');
+          }
+        }
+      }
+
+      // Process orphan closing tags
+      if (closeTags.length > openTags.length) {
+        for (let i = openTags.length; i < closeTags.length; i++) {
+          const closeTag = closeTags[i];
+          
+          // Check if inside XML tag
+          const beforeTag = content.substring(0, closeTag.pos);
+          const lastOpenBracket = beforeTag.lastIndexOf('<');
+          const lastCloseBracket = beforeTag.lastIndexOf('>');
+          
+          if (lastOpenBracket > lastCloseBracket) {
+            addError(closeTag.pos, 'inside_tag', 'Balise italique de fermeture à l\'intérieur d\'une balise XML');
+          } else {
+            addError(closeTag.pos, 'missing_open', 'Balise italique de fermeture sans balise d\'ouverture correspondante');
+          }
+        }
+      }
+
+      // Sort errors by position
+      errors.sort((a, b) => a.pos - b.pos);
+
+      return errors;
+    },
+
+    scrollToPosition(pos) {
+      view.dispatch({
+        selection: { anchor: pos, head: pos },
+        effects: EditorView.scrollIntoView(pos, { y: "center" })
+      });
+      view.focus();
     },
   };
 };

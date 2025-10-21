@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchBtn: document.getElementById('search-btn'),
         italicOpenBtn: document.getElementById('italic-open-btn'),
         italicCloseBtn: document.getElementById('italic-close-btn'),
+        italicReportBtn: document.getElementById('italic-report-btn'),
         previewImg: document.getElementById('facsimile-preview'),
         noPreviewText: document.getElementById('no-preview'),
         loadingSpinner: document.getElementById('loading-spinner'),
@@ -19,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
         imageName: document.getElementById('image-name'),
         pagination: document.getElementById('pagination'),
         generatePageNumbersModal: document.getElementById('generatePageNumbersModal'),
+        italicErrorsModal: document.getElementById('italicErrorsModal'),
+        italicErrorsList: document.getElementById('italic-errors-list'),
     };
 
     // Constants
@@ -367,6 +370,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.italicCloseBtn.addEventListener('click', () => {
         editor.insertItalicCloseTag();
+    });
+
+    // Italic errors report handler
+    elements.italicErrorsModal.addEventListener('show.bs.modal', () => {
+        const errors = editor.validateItalicTags();
+        
+        if (errors.length === 0) {
+            elements.italicErrorsList.innerHTML = `
+                <div class="alert alert-success" role="alert">
+                    <i class="bi bi-check-circle-fill"></i> Aucune erreur détectée ! Tous les tags italiques sont valides.
+                </div>
+            `;
+        } else {
+            let html = `
+                <div class="alert alert-warning" role="alert">
+                    <strong>${errors.length} erreur(s) détectée(s)</strong>
+                </div>
+                <div class="list-group">
+            `;
+            
+            errors.forEach((error, index) => {
+                html += `
+                    <button 
+                        type="button" 
+                        class="list-group-item list-group-item-action error-item" 
+                        data-error-pos="${error.pos}"
+                    >
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">
+                                <i class="bi bi-x-circle text-danger"></i> 
+                                Erreur ${index + 1}
+                            </h6>
+                            <small class="text-muted">Ligne ${error.lineNumber}</small>
+                        </div>
+                        <p class="mb-1">${error.message}</p>
+                        <small class="text-muted">Cliquez pour localiser dans l'éditeur</small>
+                    </button>
+                `;
+            });
+            
+            html += '</div>';
+            elements.italicErrorsList.innerHTML = html;
+            
+            // Add click handlers to error items
+            document.querySelectorAll('.error-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const pos = parseInt(item.getAttribute('data-error-pos'));
+                    
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(elements.italicErrorsModal);
+                    modal.hide();
+                    
+                    // Navigate to error position
+                    editor.scrollToPosition(pos);
+                });
+            });
+        }
     });
 
     elements.generatePageNumbersModal.addEventListener('shown.bs.modal', () => {
