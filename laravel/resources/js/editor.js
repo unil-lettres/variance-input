@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeButton = null;
     let isDeleteMode = false; // true = delete mode, false = insert mode
 
-    const itemsPerPage = 40;
+    const itemsPerPage = 39;
     let tagsWereHiddenBeforeEdit = true;
     let hasUnsavedChanges = false;
     let initialXmlContent = xmlContent;
