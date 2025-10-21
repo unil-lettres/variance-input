@@ -43,10 +43,11 @@ class LineBreakWidget extends WidgetType {
 
 // Widget to style italic tags visibly
 class ItalicTagWidget extends WidgetType {
-  constructor(tag, isOpening) {
+  constructor(tag, isOpening, view) {
     super();
     this.tag = tag;
     this.isOpening = isOpening;
+    this.view = view;
   }
 
   toDOM() {
@@ -61,16 +62,16 @@ class ItalicTagWidget extends WidgetType {
       border-radius: 2px;
       font-size: 0.85em;
       font-family: monospace;
-      cursor: default;
+      cursor: pointer;
       display: inline-block;
       margin: 0 1px;
     `;
-    span.title = this.tag;
+    span.title = `Cliquer pour supprimer`;
     return span;
   }
 
-  ignoreEvent() {
-    return false;
+  ignoreEvent(event) {
+    return event.type !== 'mousedown';
   }
 
   eq(other) {
@@ -244,7 +245,65 @@ function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly, getCacheFunc
 // ViewPlugin to decorate italic tags
 const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
   constructor(view) {
+    this.view = view;
     this.decorations = this.buildDecorations(view);
+    this.setupClickHandler();
+  }
+
+  setupClickHandler() {
+    this.view.dom.addEventListener('mousedown', (e) => {
+      const target = e.target;
+      if (target.classList.contains('cm-italic-tag')) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        try {
+          // Get the position of the clicked element
+          const pos = this.view.posAtDOM(target);
+          if (pos === null) return;
+          
+          const doc = this.view.state.doc;
+          const content = doc.toString();
+          
+          // Find the tag at this position
+          const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
+          const closeTagRegex = /<\/hi\s*>/gi;
+          
+          let tagToDelete = null;
+          let match;
+          
+          // Check opening tags
+          openTagRegex.lastIndex = 0;
+          while ((match = openTagRegex.exec(content)) !== null) {
+            if (match.index <= pos && pos <= match.index + match[0].length) {
+              tagToDelete = { from: match.index, to: match.index + match[0].length };
+              break;
+            }
+          }
+          
+          // Check closing tags if not found
+          if (!tagToDelete) {
+            closeTagRegex.lastIndex = 0;
+            while ((match = closeTagRegex.exec(content)) !== null) {
+              if (match.index <= pos && pos <= match.index + match[0].length) {
+                tagToDelete = { from: match.index, to: match.index + match[0].length };
+                break;
+              }
+            }
+          }
+          
+          // Delete the tag
+          if (tagToDelete) {
+            this.view.dispatch({
+              changes: { from: tagToDelete.from, to: tagToDelete.to, insert: '' }
+            });
+            this.view.focus();
+          }
+        } catch (err) {
+          console.error('Error deleting italic tag:', err);
+        }
+      }
+    });
   }
 
   update(update) {
@@ -260,7 +319,7 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
     // Collect all italic tags with their positions
     const tags = [];
 
-    // Find all opening tags
+    // Find ALL opening tags
     const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
     let match;
 
@@ -274,7 +333,7 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
       });
     }
 
-    // Find ALL closing tags
+    // Find ALL closing tags </hi> - decorate them all as italic closing tags
     const closeTagRegex = /<\/hi\s*>/gi;
     closeTagRegex.lastIndex = 0;
     
@@ -295,7 +354,7 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
     for (const tagInfo of tags) {
       widgets.push(
         Decoration.replace({
-          widget: new ItalicTagWidget(tagInfo.tag, tagInfo.isOpening),
+          widget: new ItalicTagWidget(tagInfo.tag, tagInfo.isOpening, view),
           inclusive: false
         }).range(tagInfo.from, tagInfo.to)
       );
