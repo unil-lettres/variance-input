@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             activeButton = null;
             isDeleteMode = false;
-            elements.editorContainer.style.cursor = 'default';
+            elements.editorContainer.classList.remove('insert-page');
         }
     };
 
@@ -520,12 +520,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
                 button.querySelector('span').innerHTML = '<i class="bi bi-trash3"></i>';
                 editor.scrollToPageMarker(imageName);
-                elements.editorContainer.style.cursor = 'default';
             } else {
                 isDeleteMode = false;
                 setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
                 refreshButtonName(button);
-                elements.editorContainer.style.cursor = 'crosshair';
+                elements.editorContainer.classList.add('insert-page');
             }
         });
 

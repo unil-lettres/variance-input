@@ -549,19 +549,18 @@ export default function (container, initialXml) {
 
   const view = new EditorView({ state: startState, parent: container });
 
+  // Initialize readonly class on container
+  if (isReadOnly) {
+    container.classList.add('cm-readonly');
+  }
+
   return {
     get view() {
       return view;
     },
 
     toggleReadOnly() {
-      isReadOnly = !isReadOnly;
-      view.dispatch({
-        effects: [
-          readOnlyCompartment.reconfigure(EditorState.readOnly.of(isReadOnly)),
-          editableCompartment.reconfigure(EditorView.editable.of(!isReadOnly))
-        ]
-      });
+      this.setReadOnly(!isReadOnly);
       view.focus();
       return isReadOnly;
     },
@@ -574,6 +573,7 @@ export default function (container, initialXml) {
           editableCompartment.reconfigure(EditorView.editable.of(!isReadOnly))
         ]
       });
+      container.classList.toggle('cm-readonly', isReadOnly);
     },
 
     toggleTagVisibility() {

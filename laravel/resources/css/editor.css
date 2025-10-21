@@ -62,6 +62,10 @@
     margin: 0 1px;
 }
 
+.cm-readonly:not(.insert-page) {
+    cursor: default;
+}
+
 .cm-italic-tag:hover {
     background-color: #ffffff;
     color: #9b59b6;
