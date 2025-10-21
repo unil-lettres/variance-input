@@ -58,6 +58,12 @@ class DiffTexts(object):
         self.texte_original = self.texte1 + self.texte2
         self.texte1_original = self.texte1
         self.texte2_original = self.texte2
+        self._suffix_tree_translation_table = self._build_suffix_tree_translation_table(
+            [self.texte1, self.texte2]
+        )
+        if self._suffix_tree_translation_table:
+            self.texte1 = self.texte1.translate(self._suffix_tree_translation_table)
+            self.texte2 = self.texte2.translate(self._suffix_tree_translation_table)
 
         def s2ord(x):
             return [ord(k) for k in x]
@@ -272,3 +278,31 @@ class DiffTexts(object):
         bbl.evaluation()
         self.bbl = bbl
         return res
+
+    @staticmethod
+    def _build_suffix_tree_translation_table(sequences):
+        """Replace characters not supported by the suffix tree implementation."""
+        forbidden_chars = {"$"}
+        forbidden_chars.update(chr(i + 1) for i in range(len(sequences)))
+        combined = "".join(sequences)
+        if not any(char in combined for char in forbidden_chars):
+            return None
+        # Use private-use code points that should not appear in the source texts.
+        replacement_pool = [chr(codepoint) for codepoint in range(0xE000, 0xF8FF + 1)]
+        next_candidate_index = 0
+        replacements = {}
+        for char in forbidden_chars:
+            if char not in combined:
+                continue
+            replacement = None
+            while next_candidate_index < len(replacement_pool):
+                candidate = replacement_pool[next_candidate_index]
+                next_candidate_index += 1
+                if candidate not in combined and candidate not in replacements.values():
+                    replacement = candidate
+                    break
+            if replacement is None:
+                raise RuntimeError("Unable to find a safe replacement character for suffix tree input.")
+            replacements[char] = replacement
+            combined += replacement
+        return str.maketrans(replacements)

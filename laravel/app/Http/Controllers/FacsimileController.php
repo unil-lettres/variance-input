@@ -3,19 +3,13 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
-
-use Intervention\Image\Drivers\Gd\Driver;
-use Intervention\Image\Encoders\JpegEncoder;
-use Intervention\Image\ImageManager;
-
+use App\Jobs\ProcessFacsimileImage;
 use App\Models\Version;
 use App\Services\PageMarkerService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class FacsimileController extends Controller
 {
@@ -58,6 +52,14 @@ class FacsimileController extends Controller
         }
         $disk->makeDirectory($dirRel);
 
+        $queueDiskName = 'local';
+        $queueDisk     = Storage::disk($queueDiskName);
+        $queueDir      = "facsimile_queue/{$author->folder}/{$work->folder}/{$version->folder}";
+        if ($request->boolean('reset')) {
+            $queueDisk->deleteDirectory($queueDir);
+        }
+        $queueDisk->makeDirectory($queueDir);
+
         // Point de départ : numéro suivant en se basant sur les fichiers déjà présents
         $existingIndexes = collect($disk->files($dirRel))
             ->map(fn ($path) => basename($path))
@@ -69,101 +71,84 @@ class FacsimileController extends Controller
             })
             ->filter();
 
+        $queuedIndexes = collect($queueDisk->files($queueDir))
+            ->map(fn ($path) => basename($path))
+            ->map(function ($name) use ($version) {
+                if (preg_match('/^img_' . preg_quote($version->folder, '/') . '_(\d+)\./i', $name, $m)) {
+                    return (int) $m[1];
+                }
+                return null;
+            })
+            ->filter();
+
+        $existingIndexes = $existingIndexes
+            ->merge($queuedIndexes)
+            ->unique()
+            ->values();
+
         $startIndex = ($existingIndexes->max() ?? 0) + 1;
 
         // -----------------------------------------------------------------
         // 2. Boucle de traitement
         // -----------------------------------------------------------------
         $i       = $startIndex;
-        $added   = 0;
+        $queued  = 0;
         $errors  = [];
         // Assure deterministic processing order: original client filenames (natural, case‑insensitive)
-        $images = $validated['images'];
+        $images = $validated['images'] ?? [];
         usort($images, function ($a, $b) {
             return strnatcasecmp($a->getClientOriginalName(), $b->getClientOriginalName());
         });
 
-        $manager      = app(ImageManager::class);
         $maxLongEdge  = max(1, (int) config('variance.facsimile_max_long_edge', 2400));
         $mainQuality  = max(10, min(100, (int) config('variance.facsimile_main_quality', 85)));
         $thumbWidth   = max(1, (int) config('variance.facsimile_thumb_width', 200));
         $thumbQuality = max(10, min(100, (int) config('variance.facsimile_thumb_quality', 80)));
-        $reports      = [];
 
         foreach ($images as $file) {
             $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
             $basename = "img_{$version->folder}_{$index}";
-            $ext      = 'jpg';
+            $ext      = strtolower($file->getClientOriginalExtension() ?: $file->guessClientExtension() ?: 'upload');
+            $ext      = preg_replace('/[^a-z0-9]/', '', $ext) ?: 'upload';
 
-            $mainPath  = "{$dirRel}/{$basename}.{$ext}";
-            $thumbPath = "{$dirRel}/{$basename}_thumb.jpg";
+            $queuedFilename = "{$basename}.{$ext}";
+            $queuedPath     = trim($queueDir . '/' . $queuedFilename, '/');
 
             try {
-                $original = $manager->read($file->getRealPath());
+                $queueDisk->delete($queuedPath);
+                $queueDisk->putFileAs($queueDir, $file, $queuedFilename);
 
-                $origWidth  = $original->width();
-                $origHeight = $original->height();
-                $origSize   = $file->getSize() ?? 0;
+                ProcessFacsimileImage::dispatch(
+                    versionId: $version->id,
+                    basename: $basename,
+                    queuedDisk: $queueDiskName,
+                    queuedPath: $queuedPath,
+                    outputDir: $dirRel,
+                    maxLongEdge: $maxLongEdge,
+                    mainQuality: $mainQuality,
+                    thumbWidth: $thumbWidth,
+                    thumbQuality: $thumbQuality,
+                );
 
-                $display = clone $original;
-
-                $longEdge = max($origWidth, $origHeight);
-                $resized  = false;
-                if ($longEdge > $maxLongEdge) {
-                    $ratio   = $maxLongEdge / $longEdge;
-                    $targetW = max(1, (int) round($origWidth * $ratio));
-                    $targetH = max(1, (int) round($origHeight * $ratio));
-                    $display->scale($targetW, $targetH);
-                    $resized = true;
-                }
-
-                $mainEncoded = $display->encode(new JpegEncoder(quality: $mainQuality));
-                $disk->put($mainPath, (string) $mainEncoded);
-
-                $storedSize   = $disk->size($mainPath);
-                $storedWidth  = $display->width();
-                $storedHeight = $display->height();
-
-                $thumbImage = clone $original;
-                $thumbImage->scale($thumbWidth);
-                $thumbEncoded = $thumbImage->encode(new JpegEncoder(quality: $thumbQuality));
-                $disk->put($thumbPath, (string) $thumbEncoded);
-
-                unset($thumbImage, $thumbEncoded, $display, $mainEncoded, $original);
-                gc_collect_cycles();
-
-                $reports[] = [
-                    'name'             => basename($mainPath),
-                    'original_size'    => $origSize,
-                    'original_width'   => $origWidth,
-                    'original_height'  => $origHeight,
-                    'stored_size'      => $storedSize,
-                    'stored_width'     => $storedWidth,
-                    'stored_height'    => $storedHeight,
-                    'resized'          => $resized,
-                ];
-                $added++;
+                $queued++;
             } catch (\Throwable $e) {
-                Log::warning('Facsimile processing failed', [
+                Log::warning('Facsimile enqueue failed', [
                     'file' => $file->getClientOriginalName(),
                     'err'  => $e->getMessage(),
                 ]);
-                $errors[] = "{$basename}.{$ext}";
+                $errors[] = "{$basename}.jpg";
+                $queueDisk->delete($queuedPath);
             }
             $i++;
         }
 
-
-        if ($added) {
-            $this->refreshComparisonMarkers($version);
-        }
-
         return response()->json([
-            'status'      => $added ? 'ok' : 'error',
+            'status'      => $queued ? 'queued' : 'error',
             'stored_in'   => $dirRel,
-            'files_added' => $added,
+            'files_added' => $queued,
             'errors'      => $errors,
-            'files_report'=> $reports,
+            'files_report'=> [],
+            'processing'  => (bool) $queued,
             'limits'      => [
                 'max_long_edge' => $maxLongEdge,
                 'main_quality'  => $mainQuality,

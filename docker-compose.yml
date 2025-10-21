@@ -40,7 +40,7 @@ services:
     working_dir: /var/www/html
     environment:
       - PHP_MEMORY_LIMIT=512M
-    command: php artisan queue:work --queue=page-markers --sleep=2 --timeout=600 --tries=1
+    command: php artisan queue:work --queue=facsimiles,page-markers --sleep=2 --timeout=600 --tries=1
     depends_on:
       - mariadb
     restart: unless-stopped

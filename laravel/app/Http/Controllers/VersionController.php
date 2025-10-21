@@ -6,10 +6,12 @@ use App\Jobs\ApplyLignesJob;
 use App\Models\Work;
 use App\Models\Version;
 use App\Models\Comparison;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Services\PageMarkerService;
 
 class VersionController extends Controller
@@ -117,7 +119,7 @@ class VersionController extends Controller
     /** Delete version; tolerate missing files */
     public function destroy($id)
     {
-        $version = Version::findOrFail($id);
+        $version = Version::with('work.author')->findOrFail($id);
 
         // Prevent deletion if used in a comparison
         $inUse = Comparison::where('source_id', $version->id)
@@ -143,6 +145,22 @@ class VersionController extends Controller
             }
         }
 
+        $facsimilesRemoved = $this->purgeFacsimileStorage($version, includePublished: true);
+        $lignesRemoved    = false;
+        $lignesPath       = null;
+        try {
+            $lignesPath = $this->pageMarkerService->lignesRelativePath($version->id);
+            if (Storage::disk('local')->exists($lignesPath)) {
+                $lignesRemoved = Storage::disk('local')->delete($lignesPath);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Unable to delete _lignes file during version removal', [
+                'version_id' => $version->id,
+                'path'       => $lignesPath ?? null,
+                'error'      => $e->getMessage(),
+            ]);
+        }
+
         // Remove DB record regardless of file presence
         $version->delete();
 
@@ -150,8 +168,48 @@ class VersionController extends Controller
         if ($missing) {
             $message .= ' — fichiers introuvables : ' . implode(', ', $missing);
         }
+        if ($facsimilesRemoved) {
+            $message .= ' — fac-similés supprimés.';
+        }
+        if ($lignesRemoved) {
+            $message .= ' — fichier _lignes supprimé.';
+        }
 
         return response()->json(['message' => $message]);
+    }
+
+    public function cancelFacsimiles(Version $version): JsonResponse
+    {
+        $version->loadMissing('work.author');
+        $removed    = $this->purgeFacsimileStorage($version, includePublished: true);
+        $facsimiles = $this->facsimileStatus($version);
+
+        return response()->json([
+            'status'     => $removed ? 'reset' : 'noop',
+            'message'    => $removed
+                ? 'Traitement fac-similé interrompu et fichiers supprimés.'
+                : 'Aucun traitement en cours ou fichier à supprimer.',
+            'facsimiles' => $facsimiles,
+        ]);
+    }
+
+    public function cancelLignes(Version $version): JsonResponse
+    {
+        $version->loadMissing('work.author');
+        $this->pageMarkerService->markCancelled($version->id, 'Annulé par l’utilisateur');
+
+        $info = $this->pageMarkerService->getLignesInfo($version->id);
+        if ($info) {
+            $info['url'] = admin_url("api/versions/{$version->id}/lignes");
+        }
+        $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
+
+        return response()->json([
+            'status'   => 'cancelled',
+            'message'  => 'Traitement des balises de pagination annulé.',
+            'lignes'   => $info,
+            'progress' => $progress,
+        ]);
     }
 
     /** Serve TEI */
@@ -253,17 +311,33 @@ class VersionController extends Controller
             'lignes' => 'required|file|max:4096',
         ]);
 
+        $file     = $request->file('lignes');
         $relative = $this->pageMarkerService->lignesRelativePath($version->id);
-        Storage::disk('local')->putFileAs('private/lignes', $request->file('lignes'), $version->id . '.txt');
+        Storage::disk('local')->putFileAs('private/lignes', $file, $version->id . '.txt');
+
+        $this->pageMarkerService->markQueued($version->id);
+
+        ApplyLignesJob::dispatch(
+            versionId: $version->id,
+            storagePath: $relative,
+            deleteAfter: false,
+            clearExisting: true,
+            replaceExisting: true,
+            comparisonId: null
+        );
+
         $info = $this->pageMarkerService->getLignesInfo($version->id);
         if ($info) {
             $info['url'] = admin_url("api/versions/{$version->id}/lignes");
         }
+        $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
 
         return response()->json([
-            'status' => 'ok',
-            'lignes' => $info,
-        ], 201);
+            'status'   => 'queued',
+            'message'  => 'Import du fichier _lignes en cours…',
+            'lignes'   => $info,
+            'progress' => $progress,
+        ], 202);
     }
 
     public function pageMarkersProgress(Version $version)
@@ -367,14 +441,34 @@ class VersionController extends Controller
                 ->count()
             : 0;
 
+        $queueDisk   = Storage::disk('local');
+        $queuePrefix = $this->queuePrefix($version);
+        $queuedCount = $queueDisk->exists($queuePrefix)
+            ? collect($queueDisk->files($queuePrefix))
+                ->filter(fn ($path) => preg_match('/\.(jpe?g|png)$/i', basename($path)))
+                ->count()
+            : 0;
+
+        $totalExpected = $sourceCount + $queuedCount;
+
         return [
             'source_count'    => $sourceCount,
             'published_count' => $publishedCount,
+            'queue_count'     => $queuedCount,
+            'total_expected'  => $totalExpected,
+            'processing'      => $queuedCount > 0,
             'can_publish'     => $sourceCount > 0,
             'in_sync'         => $sourceCount > 0 && $sourceCount === $publishedCount,
             'source_dir'      => $paths['source_prefix'],
             'dest_dir'        => $paths['dest_dir'],
+            'queue_dir'       => $queuePrefix,
         ];
+    }
+
+    public function facsimilesProgress(Version $version): JsonResponse
+    {
+        $version->loadMissing('work.author');
+        return response()->json($this->facsimileStatus($version));
     }
 
     private function facsimilePaths(Version $version): array
@@ -402,6 +496,52 @@ class VersionController extends Controller
             'source_files'  => $files,
             'dest_dir'      => $destDir,
         ];
+    }
+
+    private function purgeFacsimileStorage(Version $version, bool $includePublished = true): bool
+    {
+        $version->loadMissing('work.author');
+        $removed = false;
+        $paths   = $this->facsimilePaths($version);
+        $disk    = Storage::disk('public');
+
+        if ($disk->deleteDirectory($paths['source_prefix'])) {
+            $removed = true;
+        }
+
+        $legacySourceDir = base_path('../variance/' . $paths['source_prefix']);
+        if (is_dir($legacySourceDir)) {
+            File::deleteDirectory($legacySourceDir);
+            $removed = true;
+        }
+
+        if ($includePublished && !empty($paths['dest_dir']) && File::isDirectory($paths['dest_dir'])) {
+            File::deleteDirectory($paths['dest_dir']);
+            $removed = true;
+        }
+
+        $queuePrefix = $this->queuePrefix($version);
+        $queueDisk   = Storage::disk('local');
+        if ($queueDisk->deleteDirectory($queuePrefix)) {
+            $removed = true;
+        } else {
+            $queueAbsolute = storage_path('app/' . trim($queuePrefix, '/'));
+            if (is_dir($queueAbsolute)) {
+                File::deleteDirectory($queueAbsolute);
+                $removed = true;
+            }
+        }
+
+        return $removed;
+    }
+
+    private function queuePrefix(Version $version): string
+    {
+        $authorFolder  = $version->work->author->folder ?? '';
+        $workFolder    = $version->work->folder ?? '';
+        $versionFolder = $version->folder ?? '';
+
+        return trim(sprintf('facsimile_queue/%s/%s/%s', $authorFolder, $workFolder, $versionFolder), '/');
     }
 
     private function publishManifestsForVersion(Version $version): array

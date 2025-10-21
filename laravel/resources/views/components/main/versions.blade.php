@@ -65,13 +65,16 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="deleteVersionConfirmLabel">Confirm Deletion</h5>
+                <h5 class="modal-title" id="deleteVersionConfirmLabel">Confirmer la suppression</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">Are you sure you want to delete this version&nbsp;?</div>
+            <div class="modal-body">
+                <p class="mb-2">Voulez-vous vraiment supprimer cette version&nbsp;?</p>
+                <p class="text-danger small mb-0">Tous les fac-similés (originaux, miniatures, manifestes) et le fichier <code>_lignes</code> associé seront définitivement supprimés.</p>
+            </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="confirm-delete-version">Delete</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-version">Supprimer</button>
             </div>
         </div>
     </div>
@@ -189,6 +192,9 @@ let authorId         = null;
 let versionToDelete  = null;
 let detectedEncoding = 'Unknown';
 let versionsCache    = new Map();
+const facsimileRowState = new Map();
+const facsimilePollers  = new Map();
+const lignesPollers     = new Map();
 let facModalEl       = null;
 let facModalTitle    = null;
 let facModalInfo     = null;
@@ -220,6 +226,14 @@ const formatBytes = (size) => {
     const precision = idx === 0 ? 0 : 1;
     return `${current.toFixed(precision)} ${units[idx]}`;
 };
+const formatTimestamp = (seconds) => {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value <= 0) return 'Date inconnue';
+    const date = new Date(value * 1000);
+    const datePart = date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const timePart = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} ${timePart}`;
+};
 function detectEncodingBOM(file){
     return new Promise(resolve=>{
         const r = new FileReader();
@@ -237,6 +251,359 @@ function detectEncodingBOM(file){
     });
 }
 /*********************  MAIN LOGIC  *********************/
+
+function stopFacsimilePolling(versionId){
+    const id = Number(versionId);
+    const timer = facsimilePollers.get(id);
+    if (timer) {
+        clearInterval(timer);
+        facsimilePollers.delete(id);
+    }
+}
+
+async function requestFacsimileProgress(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/facsimiles/progress?ts=${Date.now()}`), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        const cached = versionsCache.get(id);
+        if (cached) {
+            cached.facsimiles = data;
+        }
+        renderFacsimileStatus(id, data);
+        if (!(data?.queue_count > 0)) {
+            stopFacsimilePolling(id);
+        }
+    } catch (err) {
+        console.error('Could not refresh fac-similé progress', err);
+    }
+}
+
+function ensureFacsimilePolling(versionId, { immediate = false } = {}){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    if (!facsimilePollers.has(id)) {
+        const timer = setInterval(() => requestFacsimileProgress(id), 4000);
+        facsimilePollers.set(id, timer);
+    }
+    if (immediate) {
+        requestFacsimileProgress(id);
+    }
+}
+
+function stopLignesPolling(versionId){
+    const id = Number(versionId);
+    const timer = lignesPollers.get(id);
+    if (timer) {
+        clearInterval(timer);
+        lignesPollers.delete(id);
+    }
+}
+
+async function requestLignesProgress(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/page-markers/progress?ts=${Date.now()}`), {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        if (!res.ok) {
+            if (res.status === 404) {
+                stopLignesPolling(id);
+            }
+            return;
+        }
+        const data = await res.json();
+        const cached = versionsCache.get(id) ?? {};
+        cached.page_marker_progress = data;
+        versionsCache.set(id, cached);
+        const lignesInfo = cached.lignes ?? null;
+        renderLignesStatus(id, lignesInfo, data);
+        const status = data?.status || 'idle';
+        if (['idle', 'done', 'failed'].includes(status)) {
+            stopLignesPolling(id);
+        }
+    } catch (err) {
+        console.error('Could not refresh _lignes progress', err);
+    }
+}
+
+function ensureLignesPolling(versionId, { immediate = false } = {}){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    if (!lignesPollers.has(id)) {
+        const timer = setInterval(() => requestLignesProgress(id), 4000);
+        lignesPollers.set(id, timer);
+    }
+    if (immediate) {
+        requestLignesProgress(id);
+    }
+}
+
+function renderFacsimileStatus(versionId, facsimileData){
+    const id = Number(versionId);
+    const state = facsimileRowState.get(id);
+    if (!state) return;
+
+    const ready = Math.max(0, Number(facsimileData?.source_count ?? 0));
+    const published = Math.max(0, Number(facsimileData?.published_count ?? 0));
+    const queued = Math.max(0, Number(facsimileData?.queue_count ?? 0));
+    const total = Math.max(0, Number(facsimileData?.total_expected ?? (ready + queued)));
+    const expected = total || (ready + queued);
+    const totalImages = expected > 0 ? expected : (ready + queued);
+    const outstanding = Math.max(0, ready - published);
+
+    if (state.viewBadge) state.viewBadge.textContent = ready;
+    if (state.viewBtn) {
+        const disableView = queued > 0 || ready === 0;
+        state.viewBtn.disabled = disableView;
+        state.viewBtn.title = disableView
+            ? (queued > 0 ? 'Traitement en cours — affichage indisponible' : 'Aucune image à afficher')
+            : 'Afficher la galerie de fac-similés';
+    }
+
+    if (state.publishBadge) state.publishBadge.textContent = published;
+    if (state.publishBtn) {
+        const disablePublish = queued > 0 || ready === 0;
+        state.publishBtn.disabled = disablePublish;
+        if (disablePublish && queued > 0) {
+            state.publishBtn.title = 'Traitement en cours — publication indisponible';
+        } else if (ready === 0) {
+            state.publishBtn.title = 'Aucune image à publier';
+        } else if (outstanding > 0) {
+            state.publishBtn.title = `${outstanding} image(s) en attente de publication`;
+        } else {
+            state.publishBtn.title = 'Toutes les images sont publiées';
+        }
+    }
+
+    if (state.uploadBtn) {
+        state.uploadBtn.disabled = queued > 0;
+        state.uploadBtn.title = queued > 0
+            ? 'Traitement en cours — veuillez patienter avant de téléverser'
+            : 'Importer de nouveaux fac-similés';
+    }
+
+    if (state.statusNote && state.statusText) {
+        const baseClass = 'small mt-2 d-flex align-items-center gap-2 flex-wrap';
+        if (ready === 0 && queued === 0) {
+            state.statusText.textContent = 'Aucun fac-similé importé.';
+            state.statusNote.className = `${baseClass} text-muted`;
+            if (state.cancelBtn) state.cancelBtn.hidden = true;
+        } else if (queued > 0) {
+            const totalForProgress = totalImages > 0 ? totalImages : ready + queued;
+            state.statusText.textContent = `🛠️ Traitement en cours : ${ready}/${totalForProgress} image(s) prêtes (${queued} en attente).`;
+            state.statusNote.className = `${baseClass} text-info`;
+            if (state.cancelBtn) {
+                state.cancelBtn.hidden = false;
+                state.cancelBtn.disabled = false;
+            }
+            if (state.progressWrap && state.progressBar) {
+                state.progressWrap.hidden = false;
+                let safePercent = 0;
+                if (totalForProgress > 0) {
+                    safePercent = Math.floor((ready / totalForProgress) * 100);
+                }
+                if (queued > 0) {
+                    if (safePercent >= 100) safePercent = 99;
+                    if (safePercent <= 0) {
+                        safePercent = ready > 0 ? 5 : 3;
+                    }
+                }
+                state.progressBar.style.width = `${safePercent}%`;
+                state.progressBar.setAttribute('aria-valuenow', ready.toString());
+                state.progressBar.setAttribute('aria-valuemax', totalForProgress.toString());
+                state.progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+            }
+        } else if (outstanding > 0) {
+            state.statusText.textContent = `📦 ${ready} image(s) prêtes — ${outstanding} en attente de publication.`;
+            state.statusNote.className = `${baseClass} text-warning`;
+            if (state.cancelBtn) state.cancelBtn.hidden = true;
+            if (state.progressWrap && state.progressBar) {
+                state.progressWrap.hidden = true;
+                state.progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            }
+        } else {
+            state.statusText.textContent = `✅ ${ready} fac-similé(s) prêt(s) et publiés.`;
+            state.statusNote.className = `${baseClass} text-success`;
+            if (state.cancelBtn) state.cancelBtn.hidden = true;
+            if (state.progressWrap && state.progressBar) {
+                state.progressWrap.hidden = true;
+                state.progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            }
+        }
+    }
+
+    if (queued === 0 && state.progressWrap && state.progressBar) {
+        state.progressWrap.hidden = true;
+        state.progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+    }
+
+    if (versionsCache.has(id)) {
+        const cached = versionsCache.get(id);
+        cached.facsimiles = { ...(cached.facsimiles ?? {}), ...(facsimileData ?? {}) };
+        versionsCache.set(id, cached);
+    }
+}
+
+function renderLignesStatus(versionId, lignesInfo, progress){
+    const id = Number(versionId);
+    const state = facsimileRowState.get(id);
+    if (!state) return;
+
+    const hasFile = lignesInfo && typeof lignesInfo === 'object';
+    const progressData = progress ?? null;
+    const status = progressData?.status ?? null;
+    const stage = progressData?.stage ?? null;
+    const baseClass = 'small mt-2 d-flex align-items-center gap-2 flex-wrap';
+    const totalEntries = Number(progressData?.entries_total ?? 0);
+    const srcProcessed = Number(progressData?.source?.processed ?? 0);
+    const tgtProcessed = Number(progressData?.target?.processed ?? 0);
+    const processedTotal = Number(progressData?.processed_total ?? (srcProcessed + tgtProcessed));
+    const processed = Math.max(processedTotal, srcProcessed, tgtProcessed);
+    const comparisonTotal = Number(progressData?.comparison_total ?? 0);
+    const comparisonCurrent = Number(progressData?.comparison_current ?? 0);
+    let message = '';
+    let cssClass = 'small text-muted';
+
+    if (stage === 'queued' || status === 'queued') {
+        message = '🕓 Pagination en attente de traitement…';
+        cssClass = `${baseClass} text-info`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+    } else if (stage === 'preparing') {
+        if (comparisonTotal > 0) {
+            const currentComparisons = Math.min(comparisonCurrent || 0, comparisonTotal);
+            message = `🔧 Préparation des comparaisons : ${currentComparisons}/${comparisonTotal}`;
+        } else {
+            message = '🔧 Préparation du fichier _lignes…';
+        }
+        cssClass = `${baseClass} text-info`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+    } else if (status === 'running') {
+        if (processed <= 0) {
+            message = '🛠️ Préparation du fichier _lignes…';
+        } else if (totalEntries > 0) {
+            message = `🛠️ Pagination en cours : ${Math.min(processed, totalEntries)}/${totalEntries} entrée(s) traitée(s).`;
+        } else {
+            message = '🛠️ Pagination en cours…';
+        }
+        cssClass = `${baseClass} text-info`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+    } else if (status === 'failed') {
+        const error = String(progressData?.error || 'Erreur inconnue');
+        message = `❌ Échec du traitement : ${error}`;
+        cssClass = `${baseClass} text-danger`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+    } else if (status === 'cancelled') {
+        message = '🚫 Traitement annulé.';
+        cssClass = `${baseClass} text-warning`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+    } else if (status === 'done') {
+        const summaryTotal = Number(progressData?.summary?.total ?? 0);
+        const summaryMissed = Number(progressData?.missed_total ?? 0);
+        const summaryPart = Number.isFinite(summaryTotal) && summaryTotal > 0
+            ? `${summaryTotal} marqueur(s)`
+            : null;
+        if (hasFile) {
+            const size = formatBytes(lignesInfo.size);
+            const updated = formatTimestamp(lignesInfo.updated_at);
+            const missedPart = summaryMissed > 0 ? ` (${summaryMissed} entrée(s) non trouvée(s))` : '';
+            message = `✅ Pagination appliquée${summaryPart ? ` — ${summaryPart}` : ''}${missedPart}. Fichier de ${size} mis à jour le ${updated}.`;
+        } else {
+            const missedPart = summaryMissed > 0 ? ` (${summaryMissed} entrée(s) non trouvée(s))` : '';
+            message = `✅ Pagination appliquée${summaryPart ? ` — ${summaryPart}` : ''}${missedPart}.`;
+        }
+        cssClass = `${baseClass} text-success`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+    } else if (hasFile) {
+        const size = formatBytes(lignesInfo.size);
+        const updated = formatTimestamp(lignesInfo.updated_at);
+        message = `✅ ${size} — mis à jour le ${updated}`;
+        cssClass = `${baseClass} text-success`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+    } else {
+        message = 'Aucun fichier _lignes importé.';
+        cssClass = `${baseClass} text-muted`;
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+    }
+
+    if (state.lignesStatusText) {
+        state.lignesStatusText.textContent = message;
+    }
+    if (state.lignesStatus) {
+        state.lignesStatus.className = cssClass;
+    }
+
+    if (state.lignesCancelBtn) {
+        if (status && ['queued', 'running'].includes(status)) {
+            state.lignesCancelBtn.hidden = false;
+            state.lignesCancelBtn.disabled = false;
+        } else {
+            state.lignesCancelBtn.hidden = true;
+        }
+    }
+
+    if (state.lignesProgressWrap && state.lignesProgressBar) {
+        if (status && ['queued', 'running'].includes(status)) {
+            state.lignesProgressWrap.hidden = false;
+            let percent = 0;
+            let ariaNow = processed;
+            let ariaMax = totalEntries || processed || 1;
+
+            if (stage === 'preparing') {
+                if (comparisonTotal > 0) {
+                    percent = Math.floor((comparisonCurrent / comparisonTotal) * 100);
+                    ariaNow = comparisonCurrent;
+                    ariaMax = comparisonTotal;
+                }
+                if (percent <= 0) {
+                    percent = 5;
+                }
+            } else if (status === 'running' && totalEntries > 0) {
+                percent = Math.floor((processed / totalEntries) * 100);
+            }
+
+            if (percent <= 0) {
+                percent = status === 'queued' ? 3 : (processed > 0 ? 10 : 5);
+            }
+            percent = Math.max(Math.min(percent, 99), 3);
+            state.lignesProgressBar.style.width = `${percent}%`;
+            state.lignesProgressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+            state.lignesProgressBar.setAttribute('aria-valuenow', String(ariaNow));
+            state.lignesProgressBar.setAttribute('aria-valuemax', String(ariaMax));
+        } else {
+            state.lignesProgressWrap.hidden = true;
+            state.lignesProgressBar.style.width = '0%';
+            state.lignesProgressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        }
+    }
+
+    if (state.lignesDownloadBtn) {
+        const disableDownload = !hasFile || (status && ['queued', 'running'].includes(status));
+        state.lignesDownloadBtn.disabled = disableDownload;
+    }
+    if (state.lignesUploadBtn) {
+        state.lignesUploadBtn.disabled = !!(status && ['queued', 'running'].includes(status));
+        state.lignesUploadBtn.title = state.lignesUploadBtn.disabled
+            ? 'Traitement en cours — veuillez patienter'
+            : 'Importer un fichier _lignes';
+    }
+
+    if (versionsCache.has(id)) {
+        const cached = versionsCache.get(id) ?? {};
+        cached.lignes = lignesInfo ?? null;
+        cached.page_marker_progress = progressData ?? null;
+        versionsCache.set(id, cached);
+    }
+}
+
 window.addEventListener('DOMContentLoaded',()=>{
     const openUploadBtn   = document.getElementById('open-upload-version-modal');
     const submitUploadBtn = document.getElementById('submit-upload-form');
@@ -391,6 +758,7 @@ window.addEventListener('DOMContentLoaded',()=>{
             const perFileReport = [];
             let overallMaxLongEdge = null;
             let lastStoredDir = null;
+            let processingQueued = false;
 
             let cursor = 0;
             let batchIndex = 0;
@@ -454,6 +822,9 @@ window.addEventListener('DOMContentLoaded',()=>{
                     if (payload?.limits?.max_long_edge) {
                         overallMaxLongEdge = payload.limits.max_long_edge;
                     }
+                    if (payload?.processing) {
+                        processingQueued = true;
+                    }
                 } catch (err) {
                     console.error(err);
                     batchErrors.push({
@@ -477,6 +848,9 @@ window.addEventListener('DOMContentLoaded',()=>{
             if (facSummary) {
                 facSummary.className = 'small text-success';
                 facSummary.textContent = `✅ ${uploadedCount} fichier(s) importé(s)` + (lastStoredDir ? ` dans ${lastStoredDir}` : '');
+                if (processingQueued) {
+                    facSummary.textContent += '\n🕓 Les redimensionnements et miniatures se poursuivent en arrière-plan.';
+                }
             }
             document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
                 detail: { versionId: facVersionId }
@@ -498,6 +872,9 @@ window.addEventListener('DOMContentLoaded',()=>{
         }
         if (overallMaxLongEdge) {
             messages.push(`↘️ Redimensionnement appliqué : bord long limité à ${overallMaxLongEdge}px.`);
+        }
+        if (processingQueued) {
+            messages.push('🕓 Les redimensionnements et miniatures se poursuivent en arrière-plan.');
         }
         if (perFileReport.length) {
             messages.push(...perFileReport.map(report => {
@@ -545,6 +922,12 @@ window.addEventListener('DOMContentLoaded',()=>{
             return;
         }
         openFacsimileUploadModal(version);
+    });
+
+    document.addEventListener('facsimilesUploaded', e => {
+        const versionId = Number(e.detail?.versionId);
+        if (!Number.isFinite(versionId)) return;
+        ensureFacsimilePolling(versionId, { immediate: true });
     });
 
     /* ——— Custom events from parent blades ——— */
@@ -698,7 +1081,30 @@ async function readJsonResponse(res) {
     try {
         const json = JSON.parse(text);
         if (!res.ok) {
-            throw new Error(json.message ?? `HTTP ${res.status}`);
+            let serverMessage = null;
+            if (typeof json.message === 'string' && json.message.trim()) {
+                serverMessage = json.message.trim();
+            } else if (typeof json.error === 'string' && json.error.trim()) {
+                serverMessage = json.error.trim();
+            } else if (json.error && typeof json.error === 'object') {
+                const parts = Object.values(json.error)
+                    .flat()
+                    .map(item => String(item).trim())
+                    .filter(Boolean);
+                if (parts.length) {
+                    serverMessage = parts.join('\n');
+                }
+            } else if (json.errors && typeof json.errors === 'object') {
+                const parts = Object.values(json.errors)
+                    .flat()
+                    .map(item => String(item).trim())
+                    .filter(Boolean);
+                if (parts.length) {
+                    serverMessage = parts.join('\n');
+                }
+            }
+
+            throw new Error(serverMessage ?? `HTTP ${res.status}`);
         }
         return json;
     } catch (parseErr) {
@@ -733,12 +1139,143 @@ async function publishFacsimiles(version) {
     }
 }
 
+async function cancelFacsimileProcessing(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    const version = versionsCache.get(id);
+    const label = version?.name ? `« ${version.name} »` : `ID ${id}`;
+    if (!confirm(`Interrompre le traitement des fac-similés pour ${label} ?\nLes images déjà importées seront supprimées.`)) {
+        return;
+    }
+
+    const state = facsimileRowState.get(id);
+    if (state?.cancelBtn) {
+        state.cancelBtn.disabled = true;
+    }
+
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/facsimiles`), {
+            method : 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        const payload = await readJsonResponse(res);
+        if (payload?.message) {
+            alert(payload.message);
+        }
+        stopFacsimilePolling(id);
+        await requestFacsimileProgress(id);
+        if (Number.isFinite(selectedWorkId)) {
+            fetchVersions(selectedWorkId);
+        }
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Impossible d’annuler le traitement des fac-similés.');
+    } finally {
+        if (state?.cancelBtn) {
+            state.cancelBtn.disabled = false;
+        }
+    }
+}
+
+async function uploadLignesFile(versionId, file){
+    const id = Number(versionId);
+    if (!Number.isFinite(id) || !file) return;
+
+    const state = facsimileRowState.get(id);
+    if (state?.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+    if (state?.lignesUploadBtn) state.lignesUploadBtn.disabled = true;
+    if (state?.lignesDownloadBtn) state.lignesDownloadBtn.disabled = true;
+
+    try{
+        const form = new FormData();
+        form.append('lignes', file);
+        const res = await fetch(withBasePath(`/api/versions/${id}/lignes`), {
+            method : 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body   : form
+        });
+        const payload = await readJsonResponse(res);
+        const progress = payload?.progress ?? null;
+        renderLignesStatus(id, payload.lignes ?? null, progress);
+        if (versionsCache.has(id)) {
+            const cached = versionsCache.get(id);
+            cached.lignes = payload.lignes ?? cached.lignes ?? null;
+            cached.page_marker_progress = progress;
+            versionsCache.set(id, cached);
+        }
+        if (progress?.status && ['queued', 'running'].includes(progress.status)) {
+            ensureLignesPolling(id, { immediate: true });
+        } else if (progress?.status) {
+            stopLignesPolling(id);
+        } else {
+            // Progress file may not be immediately available; poll once to confirm state.
+            ensureLignesPolling(id, { immediate: true });
+        }
+    }catch(err){
+        console.error(err);
+        alert(err.message || 'Échec de l’import du fichier _lignes.');
+    }finally{
+        if (state?.lignesUploadBtn) state.lignesUploadBtn.disabled = false;
+        if (state?.lignesDownloadBtn) {
+            const cache = versionsCache.get(id);
+            const hasFile = !!(cache?.lignes);
+            const progressStatus = cache?.page_marker_progress?.status;
+            state.lignesDownloadBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+        }
+    }
+}
+
+async function cancelLignesProcessing(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    if (!confirm('Annuler le traitement des balises de pagination pour cette version ?')) return;
+
+    const state = facsimileRowState.get(id);
+    if (state?.lignesCancelBtn) state.lignesCancelBtn.disabled = true;
+
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/lignes`), {
+            method : 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        const payload = await readJsonResponse(res);
+        const progress = payload?.progress ?? null;
+        renderLignesStatus(id, payload.lignes ?? (versionsCache.get(id)?.lignes ?? null), progress);
+        if (versionsCache.has(id)) {
+            const cached = versionsCache.get(id);
+            cached.page_marker_progress = progress;
+            versionsCache.set(id, cached);
+        }
+        stopLignesPolling(id);
+        if (payload?.message) {
+            alert(payload.message);
+        }
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Impossible d’annuler le traitement _lignes.');
+    } finally {
+        if (state?.lignesCancelBtn) state.lignesCancelBtn.disabled = false;
+    }
+}
+
 async function fetchVersions(workId){
     const list = document.getElementById('versions-list');
     if (!workId) {
         list.innerHTML = '<li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>';
         updateVersionsCount(null);
         versionsCache = new Map();
+        facsimileRowState.clear();
+        facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
+        lignesPollers.forEach((_, id) => stopLignesPolling(id));
         return;
     }
     list.innerHTML='<div class="text-muted p-2">Loading versions…</div>';
@@ -749,9 +1286,12 @@ async function fetchVersions(workId){
         list.innerHTML='';
         const versions = Array.isArray(data) ? data : [];
         versionsCache = new Map(versions.map(v => [Number(v.id), v]));
+        facsimileRowState.clear();
         if(versions.length===0) {
             updateVersionsCount(0);
             list.innerHTML='<div class="text-muted p-2">No versions available</div>';
+            facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
+            lignesPollers.forEach((_, id) => stopLignesPolling(id));
             return;
         }
 
@@ -759,18 +1299,47 @@ async function fetchVersions(workId){
 
         const table = document.createElement('table');
         table.className='table table-bordered table-hover table-sm version-table';
-        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th class="text-end">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th>Fichier _lignes</th><th class="text-end">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
+        const activeFacsimileIds = new Set();
+        const activeLignesIds = new Set();
         versions.forEach(v=>{
             const tr = document.createElement('tr');
             const shortFolder = (v.folder || '').split('/').pop();
-            tr.innerHTML=`<td>${v.id}</td><td>${v.name}</td><td>${shortFolder}</td>`;
 
-                        const tdFac = document.createElement('td');
+            const tdId = document.createElement('td');
+            tdId.textContent = v.id;
+            tr.appendChild(tdId);
+
+            const tdName = document.createElement('td');
+            const viewUrl = withBasePath(`/view-version/${v.id}`);
+            const link = document.createElement('a');
+            link.href = viewUrl;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = v.name;
+            tdName.appendChild(link);
+
+            const editTrigger = document.createElement('button');
+            editTrigger.type = 'button';
+            editTrigger.className = 'btn btn-link btn-sm text-muted ms-2 p-0 align-baseline';
+            editTrigger.innerHTML = '&#9998;'; // pencil
+            editTrigger.title = 'Modifier la désignation';
+            editTrigger.addEventListener('click', () => openEditModal(v));
+            tdName.appendChild(editTrigger);
+
+            tr.appendChild(tdName);
+
+            const folderCell = document.createElement('td');
+            folderCell.textContent = shortFolder;
+            tr.appendChild(folderCell);
+
+            const tdFac = document.createElement('td');
             tdFac.className = 'align-middle';
             const sourceCount = Number(v.facsimiles?.source_count ?? 0);
             const publishedCount = Number(v.facsimiles?.published_count ?? 0);
-            const missingCount = Math.max(0, sourceCount - publishedCount);
+            const queueCount = Number(v.facsimiles?.queue_count ?? 0);
+            const totalExpected = Number(v.facsimiles?.total_expected ?? (sourceCount + queueCount));
 
             const facButtons = document.createElement('div');
             facButtons.className = 'btn-group btn-group-sm';
@@ -778,7 +1347,11 @@ async function fetchVersions(workId){
             const btnFacView = document.createElement('button');
             btnFacView.type = 'button';
             btnFacView.className = 'btn btn-outline-secondary d-inline-flex align-items-center gap-1';
-            btnFacView.innerHTML = `<span class=\'badge bg-light text-muted border\'>${sourceCount}</span> Voir`;
+            const viewBadge = document.createElement('span');
+            viewBadge.className = 'badge bg-light text-muted border';
+            viewBadge.textContent = sourceCount;
+            btnFacView.appendChild(viewBadge);
+            btnFacView.appendChild(document.createTextNode(' Voir'));
             btnFacView.disabled = sourceCount === 0;
             btnFacView.title = sourceCount === 0 ? 'Aucune image à afficher' : 'Afficher la galerie de fac-similés';
             btnFacView.addEventListener('click', () => {
@@ -801,26 +1374,175 @@ async function fetchVersions(workId){
             const btnFacPublish = document.createElement('button');
             btnFacPublish.type = 'button';
             btnFacPublish.className = 'btn btn-outline-success d-inline-flex align-items-center gap-1';
-            btnFacPublish.innerHTML = `<span class=\'badge bg-light text-muted border\'>${publishedCount}</span> Publier`;
+            const publishBadge = document.createElement('span');
+            publishBadge.className = 'badge bg-light text-muted border';
+            publishBadge.textContent = publishedCount;
+            btnFacPublish.appendChild(publishBadge);
+            btnFacPublish.appendChild(document.createTextNode(' Publier'));
             btnFacPublish.disabled = sourceCount === 0;
-            btnFacPublish.title = sourceCount === 0 ? 'Aucune image à publier' : (missingCount > 0 ? `${missingCount} image(s) en attente` : 'Toutes les images sont publiées');
+            btnFacPublish.title = sourceCount === 0 ? 'Aucune image à publier' : (sourceCount > publishedCount ? `${sourceCount - publishedCount} image(s) en attente` : 'Toutes les images sont publiées');
             btnFacPublish.addEventListener('click', () => { publishFacsimiles(v); });
             facButtons.appendChild(btnFacPublish);
 
+            const progressWrap = document.createElement('div');
+            progressWrap.className = 'progress mt-1';
+            progressWrap.style.height = '4px';
+            progressWrap.hidden = true;
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar bg-info';
+            progressBar.style.width = '0%';
+            progressBar.setAttribute('role', 'progressbar');
+            progressWrap.appendChild(progressBar);
+
+            const statusNote = document.createElement('div');
+            statusNote.className = 'small text-muted mt-2 d-flex align-items-center gap-2 flex-wrap';
+            const statusText = document.createElement('span');
+            statusText.textContent = '';
+            statusNote.appendChild(statusText);
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'btn btn-link btn-sm text-danger p-0 ms-1';
+            cancelBtn.innerHTML = '&times;';
+            cancelBtn.hidden = true;
+            cancelBtn.title = 'Annuler le traitement et supprimer les fac-similés importés';
+            cancelBtn.setAttribute('aria-label', 'Annuler le traitement des fac-similés');
+            cancelBtn.addEventListener('click', () => cancelFacsimileProcessing(v.id));
+            statusNote.appendChild(cancelBtn);
+
             tdFac.appendChild(facButtons);
+            tdFac.appendChild(progressWrap);
+            tdFac.appendChild(statusNote);
+
+            const rowState = {
+                viewBtn: btnFacView,
+                viewBadge,
+                publishBtn: btnFacPublish,
+                publishBadge,
+                uploadBtn: btnFacUpload,
+                statusNote,
+                statusText,
+                cancelBtn,
+                progressWrap,
+                progressBar,
+            };
+
+            facsimileRowState.set(Number(v.id), rowState);
+
             tr.appendChild(tdFac);
-const tdActions = document.createElement('td');
+
+            const tdLignes = document.createElement('td');
+            tdLignes.className = 'align-middle';
+
+            const lignesBtnGroup = document.createElement('div');
+            lignesBtnGroup.className = 'btn-group btn-group-sm';
+
+            const lignesDownloadBtn = document.createElement('button');
+            lignesDownloadBtn.type = 'button';
+            lignesDownloadBtn.className = 'btn btn-outline-secondary px-2 py-1';
+            lignesDownloadBtn.textContent = 'Télécharger';
+            lignesDownloadBtn.disabled = true;
+            lignesDownloadBtn.addEventListener('click', () => {
+                const cache = versionsCache.get(Number(v.id));
+                const hasUrl = cache?.lignes?.url;
+                const targetUrl = hasUrl ? cache.lignes.url : withBasePath(`/api/versions/${v.id}/lignes`);
+                window.open(targetUrl, '_blank', 'noopener');
+            });
+            lignesBtnGroup.appendChild(lignesDownloadBtn);
+
+            const lignesUploadBtn = document.createElement('button');
+            lignesUploadBtn.type = 'button';
+            lignesUploadBtn.className = 'btn btn-outline-primary px-2 py-1';
+            lignesUploadBtn.textContent = 'Importer';
+            lignesBtnGroup.appendChild(lignesUploadBtn);
+
+            const lignesFileInput = document.createElement('input');
+            lignesFileInput.type = 'file';
+            lignesFileInput.accept = '.txt,text/plain';
+            lignesFileInput.className = 'd-none';
+            lignesFileInput.addEventListener('change', async (event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                await uploadLignesFile(v.id, file);
+                lignesFileInput.value = '';
+            });
+            tdLignes.appendChild(lignesFileInput);
+
+            lignesUploadBtn.addEventListener('click', () => {
+                lignesFileInput.click();
+            });
+
+            const lignesStatus = document.createElement('div');
+            lignesStatus.className = 'small text-muted mt-2 d-flex align-items-center gap-2 flex-wrap';
+            const lignesStatusText = document.createElement('span');
+            lignesStatus.appendChild(lignesStatusText);
+
+            const lignesSpinner = document.createElement('div');
+            lignesSpinner.className = 'spinner-border spinner-border-sm text-primary ms-2';
+            lignesSpinner.setAttribute('role', 'status');
+            lignesSpinner.style.display = 'none';
+            lignesStatus.appendChild(lignesSpinner);
+
+            const lignesCancelBtn = document.createElement('button');
+            lignesCancelBtn.type = 'button';
+            lignesCancelBtn.className = 'btn btn-link btn-sm text-danger p-0 ms-1';
+            lignesCancelBtn.innerHTML = '&times;';
+            lignesCancelBtn.hidden = true;
+            lignesCancelBtn.title = 'Annuler le traitement des balises de pagination';
+            lignesCancelBtn.addEventListener('click', () => cancelLignesProcessing(v.id));
+            lignesStatus.appendChild(lignesCancelBtn);
+
+            tdLignes.appendChild(lignesBtnGroup);
+            const lignesProgressWrap = document.createElement('div');
+            lignesProgressWrap.className = 'progress mt-1';
+            lignesProgressWrap.style.height = '4px';
+            lignesProgressWrap.hidden = true;
+            const lignesProgressBar = document.createElement('div');
+            lignesProgressBar.className = 'progress-bar bg-info';
+            lignesProgressBar.style.width = '0%';
+            lignesProgressBar.setAttribute('role', 'progressbar');
+            lignesProgressWrap.appendChild(lignesProgressBar);
+            tdLignes.appendChild(lignesProgressWrap);
+            tdLignes.appendChild(lignesStatus);
+
+            rowState.lignesStatus = lignesStatus;
+            rowState.lignesStatusText = lignesStatusText;
+            rowState.lignesSpinner = lignesSpinner;
+            rowState.lignesDownloadBtn = lignesDownloadBtn;
+            rowState.lignesUploadBtn = lignesUploadBtn;
+            rowState.lignesFileInput = lignesFileInput;
+            rowState.lignesProgressWrap = lignesProgressWrap;
+            rowState.lignesProgressBar = lignesProgressBar;
+            rowState.lignesCancelBtn = lignesCancelBtn;
+
+            renderFacsimileStatus(v.id, v.facsimiles ?? {
+                source_count: sourceCount,
+                published_count: publishedCount,
+                queue_count: queueCount,
+                total_expected: totalExpected,
+                processing: queueCount > 0
+            });
+            const lignesProgress = v.page_marker_progress ?? null;
+            renderLignesStatus(v.id, v.lignes ?? null, lignesProgress);
+
+            if (queueCount > 0) {
+                ensureFacsimilePolling(v.id);
+            } else {
+                stopFacsimilePolling(v.id);
+            }
+
+            if (lignesProgress?.status && ['queued', 'running'].includes(lignesProgress.status)) {
+                ensureLignesPolling(v.id);
+            } else {
+                stopLignesPolling(v.id);
+            }
+
+            activeFacsimileIds.add(Number(v.id));
+            activeLignesIds.add(Number(v.id));
+
+            tr.appendChild(tdLignes);
+            const tdActions = document.createElement('td');
             tdActions.className='text-end align-middle';
-
-            const viewUrl = withBasePath(`/view-version/${v.id}`);
             const editorUrl = withBasePath(`/versions/${v.id}/editor`);
-
-            const btnView = document.createElement('a');
-            btnView.href = viewUrl;
-            btnView.target = '_blank';
-            btnView.className = 'btn btn-sm btn-secondary me-1';
-            btnView.textContent = 'View';
-            tdActions.appendChild(btnView);
 
             const btnEditor = document.createElement('a');
             btnEditor.href = editorUrl;
@@ -828,12 +1550,6 @@ const tdActions = document.createElement('td');
             btnEditor.className = 'btn btn-sm btn-info me-1';
             btnEditor.textContent = 'Editor';
             tdActions.appendChild(btnEditor);
-
-            const btnEdit = document.createElement('button');
-            btnEdit.className='btn btn-sm btn-primary me-1';
-            btnEdit.textContent='Edit';
-            btnEdit.addEventListener('click',()=>openEditModal(v));
-            tdActions.appendChild(btnEdit);
 
             const btnDel = document.createElement('button');
             btnDel.className='btn btn-sm btn-danger';
@@ -845,11 +1561,23 @@ const tdActions = document.createElement('td');
             tbody.appendChild(tr);
         });
         list.appendChild(table);
+        facsimilePollers.forEach((_, id) => {
+            if (!activeFacsimileIds.has(id)) {
+                stopFacsimilePolling(id);
+            }
+        });
+        lignesPollers.forEach((_, id) => {
+            if (!activeLignesIds.has(id)) {
+                stopLignesPolling(id);
+            }
+        });
     }catch(err){
         console.error(err);
         versionsCache = new Map();
         updateVersionsCount(null);
         list.innerHTML='<div class="text-danger p-2">Failed to load versions</div>';
+        facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
+        lignesPollers.forEach((_, id) => stopLignesPolling(id));
     }
 }
 function openEditModal(v){
@@ -884,19 +1612,31 @@ function confirmDeleteVersion(v){
 }
 async function doDeleteVersion(){
     if(!versionToDelete) return;
+    const modalEl = document.getElementById('deleteVersionConfirm');
     try{
         const res = await fetch(withBasePath(`/api/versions/${versionToDelete}`),{
             method:'DELETE',
-            headers:{'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content}
+            headers:{
+                'Accept':'application/json',
+                'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content
+            }
         });
-        if(!res.ok) throw new Error(await res.text());
-        await res.json();
-        bootstrap.Modal.getInstance(document.getElementById('deleteVersionConfirm')).hide();
+        const payload = await readJsonResponse(res);
+        if (modalEl) {
+            const instance = bootstrap.Modal.getInstance(modalEl);
+            if (instance) instance.hide();
+        }
+        versionToDelete = null;
         fetchVersions(selectedWorkId);
         document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
+        if (payload?.message) {
+            alert(payload.message);
+        }
     }catch(err){
         console.error(err);
-        alert('Could not delete version.');
+        alert(err.message || 'Impossible de supprimer la version.');
+    }finally{
+        versionToDelete = null;
     }
 }
 </script>

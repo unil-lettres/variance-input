@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\PaginationCancelledException;
 use App\Models\Version;
 use App\Services\PageMarkerService;
 use Illuminate\Bus\Queueable;
@@ -75,7 +76,12 @@ class ApplyLignesJob implements ShouldQueue, ShouldBeUnique
 
         $absolute = $disk->path($storagePath);
 
-        $this->performPagination($pageMarkerService, $absolute);
+        try {
+            $this->performPagination($pageMarkerService, $absolute);
+        } catch (PaginationCancelledException $e) {
+            $pageMarkerService->markCancelled($this->versionId, $e->getMessage());
+            return;
+        }
     }
 
     private function performPagination(PageMarkerService $pageMarkerService, string $absolute): void
@@ -97,6 +103,9 @@ class ApplyLignesJob implements ShouldQueue, ShouldBeUnique
                 $absolute,
                 $options
             );
+        } catch (PaginationCancelledException $e) {
+            $this->deleteAfter = false;
+            throw $e;
         } finally {
             if ($this->deleteAfter && $this->storagePath && $disk->exists($this->storagePath)) {
                 $disk->delete($this->storagePath);

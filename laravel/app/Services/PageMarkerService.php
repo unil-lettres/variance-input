@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\PaginationCancelledException;
 use App\Models\Comparison;
 use App\Models\Version;
 use Illuminate\Support\Arr;
@@ -13,6 +14,7 @@ class PageMarkerService
     private const MARKER_TEMPLATE = '<span class="page-marker" data-image-name="%s"><span class="page-number">%s</span><img src="%s" /></span>';
     private ?string $progressPath = null;
     private array $progress = [];
+    private ?int $progressVersionId = null;
 
     /**
      * Apply a _lignes file to every comparison that involves the given version.
@@ -31,51 +33,43 @@ class PageMarkerService
 
         $clear = Arr::get($options, 'clear_existing', true);
         $replaceExisting = Arr::get($options, 'replace_existing', true);
-        $limitComparisons = Arr::get($options, 'comparisons');
-        if ($limitComparisons) {
-            $limitComparisons = collect($limitComparisons)
-                ->map(fn ($id) => (int) $id)
-                ->filter(fn ($id) => $id > 0)
-                ->values();
-        }
 
         $version->loadMissing('work.author');
-        $authorFolder = $version->work->author->folder ?? null;
-        $workFolder   = $version->work->folder ?? null;
-
-        if (!$authorFolder || !$workFolder) {
+        if (!$version->work || !$version->work->author) {
             throw new \RuntimeException('Version incomplète : dossier auteur/œuvre introuvable.');
         }
 
-        $this->initProgress($version->id, count($entries));
+        $this->initProgress($version->id, count($entries), 1);
+
+        if ($this->isCancelled($version->id)) {
+            throw new PaginationCancelledException('Annulé par l’utilisateur');
+        }
+
+        $result = $this->applyToVersionDocument(
+            $entries,
+            $version,
+            $clear,
+            $replaceExisting
+        );
 
         $summary = [
-            'source' => ['comparisons' => 0, 'processed' => 0, 'inserted' => 0, 'missed' => 0, 'skipped' => 0, 'details' => []],
+            'total'  => $result['inserted'],
+            'source' => [
+                'comparisons' => 1,
+                'processed'   => $result['processed'],
+                'inserted'    => $result['inserted'],
+                'missed'      => count($result['misses']),
+                'skipped'     => 0,
+                'details'     => [[
+                    'status'   => 'ok',
+                    'comparison_id' => $version->id,
+                    'paths'    => $result['paths'],
+                    'inserted' => $result['inserted'],
+                    'misses'   => $result['misses'],
+                ]],
+            ],
             'target' => ['comparisons' => 0, 'processed' => 0, 'inserted' => 0, 'missed' => 0, 'skipped' => 0, 'details' => []],
         ];
-
-        $comparisonsQuery = Comparison::where('source_id', $version->id)
-            ->orWhere('target_id', $version->id);
-
-        if ($limitComparisons && $limitComparisons->isNotEmpty()) {
-            $comparisonsQuery->whereIn('id', $limitComparisons->all());
-        }
-
-        $comparisons = $comparisonsQuery->get();
-
-        foreach ($comparisons as $comparison) {
-            if ($comparison->source_id === $version->id) {
-                $summary['source']['comparisons']++;
-                $result = $this->applyToComparison($entries, $authorFolder, $workFolder, $comparison, 'source', $clear, $replaceExisting);
-                $this->mergeDetail($summary['source'], $result);
-            }
-
-            if ($comparison->target_id === $version->id) {
-                $summary['target']['comparisons']++;
-                $result = $this->applyToComparison($entries, $authorFolder, $workFolder, $comparison, 'target', $clear, $replaceExisting);
-                $this->mergeDetail($summary['target'], $result);
-            }
-        }
 
         $this->finishProgress($summary);
         return $summary;
@@ -84,45 +78,13 @@ class PageMarkerService
     /** Count page markers currently present for a version across all comparisons. */
     public function countMarkers(Version $version): array
     {
-        $version->loadMissing('work.author');
-        $authorFolder = $version->work->author->folder ?? null;
-        $workFolder   = $version->work->folder ?? null;
+        $teiMarkers = $this->countMarkersInVersion($version);
 
-        if (!$authorFolder || !$workFolder) {
-            return [
-                'total'  => 0,
-                'source' => ['comparisons' => 0, 'markers' => 0],
-                'target' => ['comparisons' => 0, 'markers' => 0],
-            ];
-        }
-
-        $summary = [
-            'total'  => 0,
-            'source' => ['comparisons' => 0, 'markers' => 0],
+        return [
+            'total'  => $teiMarkers,
+            'source' => ['comparisons' => 1, 'markers' => $teiMarkers],
             'target' => ['comparisons' => 0, 'markers' => 0],
         ];
-
-        $comparisons = Comparison::where('source_id', $version->id)
-            ->orWhere('target_id', $version->id)
-            ->get();
-
-        foreach ($comparisons as $comparison) {
-            if ($comparison->source_id === $version->id) {
-                $summary['source']['comparisons']++;
-                $markers = $this->countMarkersForRole($authorFolder, $workFolder, $comparison, 'source');
-                $summary['source']['markers'] = max($summary['source']['markers'], $markers);
-                $summary['total'] = max($summary['total'], $markers);
-            }
-
-            if ($comparison->target_id === $version->id) {
-                $summary['target']['comparisons']++;
-                $markers = $this->countMarkersForRole($authorFolder, $workFolder, $comparison, 'target');
-                $summary['target']['markers'] = max($summary['target']['markers'], $markers);
-                $summary['total'] = max($summary['total'], $markers);
-            }
-        }
-
-        return $summary;
     }
 
     /**
@@ -268,6 +230,60 @@ class PageMarkerService
         $bucket['missed']   += count($result['misses']);
     }
 
+    private function applyToVersionDocument(array $entries, Version $version, bool $clearExisting, bool $replaceExisting): array
+    {
+        $teiPath = storage_path("app/public/uploads/versions/{$version->folder}.xml");
+        if (!is_file($teiPath)) {
+            throw new \RuntimeException("Fichier version introuvable : {$teiPath}");
+        }
+
+        $this->progressTick('source', 'prepare', ['total' => count($entries)]);
+
+        $html = file_get_contents($teiPath);
+        if ($html === false) {
+            throw new \RuntimeException("Impossible de lire {$teiPath}");
+        }
+
+        if ($clearExisting) {
+            $html = $this->clearExistingMarkers($html);
+        }
+
+        $result = $this->insertMarkers(
+            $html,
+            $entries,
+            'left',
+            function (string $event, array $data = []) {
+                $this->progressTick('source', $event, $data);
+            },
+            $replaceExisting,
+            $clearExisting
+        );
+
+        File::ensureDirectoryExists(dirname($teiPath));
+        File::put($teiPath, $result['html']);
+
+        $mirrors = [
+            public_path("uploads/versions/{$version->folder}.xml"),
+            base_path("../variance/uploads/versions/{$version->folder}.xml"),
+        ];
+
+        foreach ($mirrors as $mirror) {
+            if ($mirror === null) {
+                continue;
+            }
+            File::ensureDirectoryExists(dirname($mirror));
+            @file_put_contents($mirror, $result['html']);
+        }
+
+        return [
+            'status'    => 'ok',
+            'paths'     => [$teiPath],
+            'inserted'  => $result['inserted'],
+            'misses'    => $result['misses'],
+            'processed' => count($entries),
+        ];
+    }
+
     private function applyToComparison(array $entries, string $authorFolder, string $workFolder, Comparison $comparison, string $role, bool $clearExisting, bool $replaceExisting): array
     {
         $fileName = $role === 'source' ? 'source.xhtml' : 'target.xhtml';
@@ -331,6 +347,32 @@ class PageMarkerService
             preg_match_all('/<span\s+class="page-marker"/i', $content, $matches);
             if (!empty($matches[0])) {
                 return count($matches[0]);
+            }
+        }
+
+        return 0;
+    }
+
+    private function countMarkersInVersion(Version $version): int
+    {
+        $candidates = [
+            storage_path("app/public/uploads/versions/{$version->folder}.xml"),
+            public_path("uploads/versions/{$version->folder}.xml"),
+            base_path("../variance/uploads/versions/{$version->folder}.xml"),
+        ];
+
+        foreach ($candidates as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $contents = @file_get_contents($path);
+            if ($contents === false || $contents === '') {
+                continue;
+            }
+
+            $count = preg_match_all('/<span\s+class="page-marker"/i', $contents, $matches);
+            if ($count > 0) {
+                return $count;
             }
         }
 
@@ -486,6 +528,10 @@ class PageMarkerService
 
     private function insertMarkers(string $html, array $entries, string $orientation, ?callable $progressCb = null, bool $replaceExisting = true, bool $clearExisting = true): array
     {
+        if ($progressCb) {
+            $progressCb('prepare', ['total' => count($entries)]);
+        }
+
         [$shadow, $map, $fold] = $this->buildIndexedPlaintext($html);
         $posShadow = 0;
         $inserted  = 0;
@@ -889,17 +935,25 @@ class PageMarkerService
     public function markQueued(int $versionId): void
     {
         $path = $this->progressFilePath($versionId);
+        $this->clearCancellation($versionId);
         $existing = $this->getProgressSnapshot($versionId);
         $payload = [
-            'status'        => 'queued',
-            'version_id'    => $versionId,
-            'entries_total' => $existing['entries_total'] ?? 0,
-            'updated_at'    => time(),
-            'source'        => $existing['source'] ?? ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
-            'target'        => $existing['target'] ?? ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
-            'summary'       => null,
+            'status'             => 'queued',
+            'stage'              => 'queued',
+            'version_id'         => $versionId,
+            'entries_total'      => $existing['entries_total'] ?? 0,
+            'processed_total'    => $existing['processed_total'] ?? 0,
+            'inserted_total'     => $existing['inserted_total'] ?? 0,
+            'missed_total'       => $existing['missed_total'] ?? 0,
+            'comparison_total'   => $existing['comparison_total'] ?? 0,
+            'comparison_current' => $existing['comparison_current'] ?? 0,
+            'updated_at'         => time(),
+            'source'             => $existing['source'] ?? ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'target'             => $existing['target'] ?? ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'summary'            => $existing['summary'] ?? null,
         ];
         $this->writeProgressPayload($path, $payload);
+        $this->progressVersionId = $versionId;
     }
 
     public function markFailed(int $versionId, string $message): void
@@ -910,13 +964,20 @@ class PageMarkerService
         if ($this->progressPath === $path && !empty($this->progress)) {
             $data = $this->progress;
             $data['status'] = 'failed';
+            $data['stage'] = 'failed';
             $data['error'] = $error;
             $data['updated_at'] = time();
         } else {
             $data = [
                 'status' => 'failed',
+                'stage'  => 'failed',
                 'version_id' => $versionId,
                 'entries_total' => $this->progress['entries_total'] ?? 0,
+                'processed_total' => $this->progress['processed_total'] ?? 0,
+                'inserted_total'  => $this->progress['inserted_total'] ?? 0,
+                'missed_total'    => $this->progress['missed_total'] ?? 0,
+                'comparison_total'   => $this->progress['comparison_total'] ?? 0,
+                'comparison_current' => $this->progress['comparison_current'] ?? 0,
                 'updated_at' => time(),
                 'error' => $error,
                 'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
@@ -925,16 +986,63 @@ class PageMarkerService
         }
 
         $this->writeProgressPayload($path, $data);
+        $this->clearCancellation($versionId);
     }
 
-    private function initProgress(int $versionId, int $totalEntries): void
+    public function markCancelled(int $versionId, string $reason = 'Annulé par l’utilisateur'): void
+    {
+        $path = $this->progressFilePath($versionId);
+        $snapshot = $this->getProgressSnapshot($versionId) ?? [
+            'entries_total'      => 0,
+            'processed_total'    => 0,
+            'inserted_total'     => 0,
+            'missed_total'       => 0,
+            'comparison_total'   => 0,
+            'comparison_current' => 0,
+            'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+            'target' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
+        ];
+
+        $payload = array_merge($snapshot, [
+            'status'     => 'cancelled',
+            'stage'      => 'cancelled',
+            'version_id' => $versionId,
+            'updated_at' => time(),
+            'error'      => $reason,
+        ]);
+
+        $this->writeProgressPayload($path, $payload);
+        File::put($this->cancelFlagPath($versionId), '1');
+    }
+
+    public function clearCancellation(int $versionId): void
+    {
+        $flag = $this->cancelFlagPath($versionId);
+        if (is_file($flag)) {
+            @unlink($flag);
+        }
+    }
+
+    public function isCancelled(int $versionId): bool
+    {
+        return is_file($this->cancelFlagPath($versionId));
+    }
+
+    private function initProgress(int $versionId, int $totalEntries, int $comparisonCount): void
     {
         $this->progressPath = $this->progressFilePath($versionId);
+        $this->progressVersionId = $versionId;
         $this->progress = [
             'status' => 'running',
+            'stage' => 'preparing',
             'version_id' => $versionId,
             'entries_total' => $totalEntries,
             'updated_at' => time(),
+            'processed_total' => 0,
+            'inserted_total'  => 0,
+            'missed_total'    => 0,
+            'comparison_total' => $comparisonCount,
+            'comparison_current' => 0,
             'source' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
             'target' => ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0],
             'summary' => null,
@@ -945,6 +1053,17 @@ class PageMarkerService
     private function progressTick(string $role, string $event, array $data = []): void
     {
         if (!$this->progressPath) return;
+        if ($event === 'prepare') {
+            if (isset($data['total'])) {
+                $this->progress['entries_total'] = max($this->progress['entries_total'] ?? 0, (int) $data['total']);
+            }
+            $this->progress['status'] = 'running';
+            $this->progress['stage']  = 'preparing';
+            $this->progress['updated_at'] = time();
+            $this->writeProgress();
+            return;
+        }
+
         if (!isset($this->progress[$role])) {
             $this->progress[$role] = ['processed' => 0, 'inserted' => 0, 'missed' => 0, 'comparisons' => 0];
         }
@@ -955,6 +1074,13 @@ class PageMarkerService
                 $this->progress['entries_total'] = max($this->progress['entries_total'] ?? 0, (int) $data['total']);
             }
             $this->progress['status'] = 'running';
+            $this->progress['stage'] = 'preparing';
+            $totalComparisons = (int) ($this->progress['comparison_total'] ?? 0);
+            $current = ($this->progress['comparison_current'] ?? 0) + 1;
+            if ($totalComparisons > 0) {
+                $current = min($current, $totalComparisons);
+            }
+            $this->progress['comparison_current'] = $current;
         } elseif ($event === 'progress') {
             $current = (int)($data['processed'] ?? 0);
             $limit   = $this->progress['entries_total'] ?? null;
@@ -964,6 +1090,17 @@ class PageMarkerService
             $p['processed'] = max($p['processed'] ?? 0, $current);
             $p['inserted']  = max($p['inserted'] ?? 0,  (int)($data['inserted'] ?? 0));
             $p['missed']    = max($p['missed'] ?? 0,    (int)($data['missed'] ?? 0));
+            if ($current > 0) {
+                $this->progress['stage'] = 'running';
+            }
+        }
+        $sourceProcessed = (int)($this->progress['source']['processed'] ?? 0);
+        $targetProcessed = (int)($this->progress['target']['processed'] ?? 0);
+        $this->progress['processed_total'] = $sourceProcessed + $targetProcessed;
+        $this->progress['inserted_total'] = (int)($this->progress['source']['inserted'] ?? 0) + (int)($this->progress['target']['inserted'] ?? 0);
+        $this->progress['missed_total'] = (int)($this->progress['source']['missed'] ?? 0) + (int)($this->progress['target']['missed'] ?? 0);
+        if ($this->progressVersionId && $this->isCancelled($this->progressVersionId)) {
+            throw new PaginationCancelledException('Annulé par l’utilisateur');
         }
         $this->progress['updated_at'] = time();
         $this->writeProgress();
@@ -973,11 +1110,16 @@ class PageMarkerService
     {
         if (!$this->progressPath) return;
         $this->progress['status']  = 'done';
+        $this->progress['stage']   = 'done';
         $this->progress['summary'] = $summary;
+        $this->progress['comparison_current'] = $this->progress['comparison_total'] ?? $this->progress['comparison_current'] ?? 0;
         $this->progress['updated_at'] = time();
         $this->progress['summary'] = $summary;
         $this->progress['updated_at'] = time();
         $this->writeProgress();
+        if ($this->progressVersionId) {
+            $this->clearCancellation($this->progressVersionId);
+        }
     }
 
     private function writeProgress(): void
@@ -991,6 +1133,13 @@ class PageMarkerService
         $dir = storage_path('app/tmp/pager');
         File::ensureDirectoryExists($dir);
         return $dir . '/' . $versionId . '.json';
+    }
+
+    private function cancelFlagPath(int $versionId): string
+    {
+        $dir = storage_path('app/tmp/pager');
+        File::ensureDirectoryExists($dir);
+        return $dir . '/' . $versionId . '.cancel';
     }
 
     private function writeProgressPayload(string $path, array $payload): void
@@ -1100,8 +1249,14 @@ class PageMarkerService
 
         return [
             'status'        => $data['status'] ?? null,
+            'stage'         => $data['stage'] ?? null,
             'updated_at'    => $data['updated_at'] ?? null,
             'entries_total' => $data['entries_total'] ?? null,
+            'processed_total' => $data['processed_total'] ?? null,
+            'inserted_total'  => $data['inserted_total'] ?? null,
+            'missed_total'    => $data['missed_total'] ?? null,
+            'comparison_total'   => $data['comparison_total'] ?? null,
+            'comparison_current' => $data['comparison_current'] ?? null,
             'source'        => $data['source'] ?? null,
             'target'        => $data['target'] ?? null,
             'summary'       => $data['summary'] ?? null,
