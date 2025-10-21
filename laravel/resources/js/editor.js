@@ -38,12 +38,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const itemsPerPage = 40;
     let tagsWereHiddenBeforeEdit = true;
+    let hasUnsavedChanges = false;
+    let initialXmlContent = xmlContent;
 
     const editor = initEditor(document.getElementById('editor-container'), xmlContent);
 
     if (!canEdit) {
         editor.setReadOnly(true);
     }
+
+    // Track changes in the editor
+    editor.onContentChanged(() => {
+        const currentContent = editor.view.state.doc.toString();
+        hasUnsavedChanges = currentContent !== initialXmlContent;
+        
+        // Update save button appearance
+        if (hasUnsavedChanges) {
+            elements.saveBtn.classList.remove('btn-success');
+            elements.saveBtn.classList.add('btn-danger');
+        } else {
+            elements.saveBtn.classList.remove('btn-danger');
+            elements.saveBtn.classList.add('btn-success');
+        }
+    });
 
     editor.onPageNumberClicked(() => {
         refreshButtonStates();
@@ -492,8 +509,21 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(data.error || 'Modification non autorisée : cette comparaison est publiée.');
         } else if (response.ok) {
             alert(data.message || 'Fichier sauvegardé avec succès !');
+            hasUnsavedChanges = false;
+            initialXmlContent = updatedXml;
+            
+            // Reset button to success state
+            elements.saveBtn.classList.remove('btn-danger');
+            elements.saveBtn.classList.add('btn-success');
         } else {
             alert(data.error || 'Une erreur est survenue lors de la sauvegarde.');
+        }
+    });
+
+    // Warn user before leaving page if there are unsaved changes
+    window.addEventListener('beforeunload', (e) => {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
         }
     });
 

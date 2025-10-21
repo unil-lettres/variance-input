@@ -248,6 +248,7 @@ export default function (container, initialXml) {
   let onPageNumbersChangedCallback = null;
   let onEditorReadyCallback = null;
   let onSearchPanelStateChangedCallback = null;
+  let onContentChangedCallback = null;
   let isReadOnly = true;
   let editorReady = false;
   let searchPanelOpen = false;
@@ -356,6 +357,11 @@ export default function (container, initialXml) {
           if (onSearchPanelStateChangedCallback) {
             onSearchPanelStateChangedCallback(searchPanelOpen);
           }
+        }
+
+        // Track content changes
+        if (update.docChanged && onContentChangedCallback) {
+          onContentChangedCallback();
         }
       }),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
@@ -495,6 +501,10 @@ export default function (container, initialXml) {
 
     onSearchPanelStateChanged(callback) {
       onSearchPanelStateChangedCallback = callback;
+    },
+
+    onContentChanged(callback) {
+      onContentChangedCallback = callback;
     },
 
     removePageMarker(imageName) {
