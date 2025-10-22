@@ -106,75 +106,73 @@ document.addEventListener('DOMContentLoaded', () => {
     return el;
   }
 
-  function buildPagerStatusText(progress) {
+  function buildComparisonStatusText(progress, role) {
     const fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n : 0;
-    if (!progress || !progress.status) {
-        return 'Pagination : aucune exécution enregistrée';
+    if (!progress) {
+      return 'Pagination : aucune exécution enregistrée';
     }
-    const status = progress.status;
-    const updated = formatTimestamp(progress.updated_at);
+    const updated = progress.updated_at ? formatTimestamp(progress.updated_at) : null;
     const suffix = updated ? ` (maj ${updated})` : '';
+    const globalStatus = progress.status || 'idle';
+    const roleData = progress.roles?.[role] || {};
+    const status = roleData.status || globalStatus;
 
     if (status === 'queued') {
-        return `🕒 En file d'attente…${suffix}`;
+      return `🕒 En file d'attente…${suffix}`;
     }
-
+    if (status === 'skipped') {
+      const reason = roleData.reason ? ` — ${roleData.reason}` : '';
+      return `⚪ Pagination ignorée${reason}${suffix}`;
+    }
     if (status === 'running') {
-        const source = progress.source || {};
-        const target = progress.target || {};
-        const total = progress.entries_total || 0;
-        const processedRaw = Math.max(fmt(source.processed), fmt(target.processed));
-        const processed = total ? Math.min(processedRaw, total) : processedRaw;
-        const inserted = fmt(source.inserted) + fmt(target.inserted);
-        const missed   = fmt(source.missed) + fmt(target.missed);
-        const segments = [];
-        segments.push(`source : ${fmt(source.inserted)} ins · ${fmt(source.missed)} ratés`);
-        if ((target.comparisons ?? 0) > 0) {
-            segments.push(`cible : ${fmt(target.inserted)} ins · ${fmt(target.missed)} ratés`);
-        }
-        return `⏳ Progression : ${processed}/${total || '—'} — ${segments.join(' · ')} · total insérés : ${inserted}, manqués : ${missed}${suffix}`;
+      const total = roleData.total ?? 0;
+      const inserted = fmt(roleData.inserted);
+      const missed = fmt(roleData.missed);
+      const processed = inserted;
+      return `⏳ Progression : ${processed}/${total || '—'} — insérés : ${inserted}, manqués : ${missed}${suffix}`;
     }
-
     if (status === 'failed') {
-        const error = progress.error || 'opération interrompue';
-        return `❌ Échec : ${error}${suffix}`;
+      const error = roleData.error || progress.error || 'opération interrompue';
+      return `❌ Échec : ${error}${suffix}`;
     }
-
-    if (status === 'done') {
-        const summary = progress.summary || {};
-        const source = summary.source || progress.source || {};
-        const target = summary.target || progress.target || {};
-        const totalInserted = fmt(source.inserted) + fmt(target.inserted);
-        const totalMissed   = fmt(source.missed) + fmt(target.missed);
-        return `✅ Terminé — insérés : ${totalInserted}, manqués : ${totalMissed}${suffix}`;
+    if (status === 'done' || status === 'ok') {
+      const total = roleData.total ?? 0;
+      const inserted = fmt(roleData.inserted);
+      const missed = fmt(roleData.missed);
+      return `✅ Terminé — insérés : ${inserted}/${total || '—'}, manqués : ${missed}${suffix}`;
     }
-
+    if (status === 'idle') {
+      return `Pagination : aucune exécution enregistrée${suffix}`;
+    }
     return `ℹ️ Statut : ${status}${suffix}`;
   }
 
-  function registerPaginationStatus(versionId, element, initialProgress, label = '') {
-    if (!versionId || !element) return;
-    const message = buildPagerStatusText(initialProgress || null);
+  function registerPaginationStatus(comparisonId, element, initialProgress, label = '', role = '') {
+    if (!comparisonId || !element) return;
+    const message = buildComparisonStatusText(initialProgress || null, role || '');
     element.dataset.paginationLabel = label;
+    element.dataset.paginationRole = role || '';
+    element.dataset.comparisonId = String(comparisonId);
     element.textContent = label ? `${label} — ${message}` : message;
-    let entry = paginationObservers.get(versionId);
+    let entry = paginationObservers.get(comparisonId);
     if (!entry) {
-      entry = { elements: new Set(), timer: null };
-      paginationObservers.set(versionId, entry);
+      entry = { elements: new Set(), timer: null, completed: false };
+      paginationObservers.set(comparisonId, entry);
     }
     entry.elements.add(element);
-
-    if (initialProgress && ['running', 'queued'].includes(initialProgress.status)) {
-      startPaginationPolling(versionId);
+    const initStatus = initialProgress?.status ?? null;
+    if (initStatus && !['done', 'failed', 'idle'].includes(initStatus)) {
+      entry.completed = false;
+      startComparisonPolling(comparisonId);
     }
   }
 
-  function startPaginationPolling(versionId) {
-    const entry = paginationObservers.get(versionId);
+  function startComparisonPolling(comparisonId) {
+    const entry = paginationObservers.get(comparisonId);
     if (!entry || entry.timer) return;
 
     const tick = async () => {
-      const currentEntry = paginationObservers.get(versionId);
+      const currentEntry = paginationObservers.get(comparisonId);
       if (!currentEntry) return;
 
       // Remove detached elements
@@ -187,28 +185,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentEntry.timer) {
           clearInterval(currentEntry.timer);
         }
-        paginationObservers.delete(versionId);
+        paginationObservers.delete(comparisonId);
         return;
       }
 
       try {
-        const res = await fetch(withBasePath(`/api/versions/${versionId}/page-markers/progress?ts=${Date.now()}`), {
+        const res = await fetch(withBasePath(`/api/comparisons/${comparisonId}/page-markers/progress?ts=${Date.now()}`), {
           headers: { 'Accept': 'application/json' },
           cache: 'no-store'
         });
         if (!res.ok) return;
         const progress = await res.json();
-        const message = buildPagerStatusText(progress);
         currentEntry.elements.forEach(el => {
           const label = el.dataset.paginationLabel || '';
+          const role = el.dataset.paginationRole || '';
+          const message = buildComparisonStatusText(progress, role);
           el.textContent = label ? `${label} — ${message}` : message;
         });
 
         if (!progress || ['done', 'failed', 'idle'].includes(progress.status)) {
+          if (!currentEntry.completed) {
+            currentEntry.completed = true;
+            if (typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
+              loadComparisons(currentWorkId);
+            }
+          }
           if (currentEntry.timer) {
             clearInterval(currentEntry.timer);
             currentEntry.timer = null;
           }
+          paginationObservers.delete(comparisonId);
         }
       } catch (err) {
         console.error('Erreur de suivi de pagination', err);
@@ -301,15 +307,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const statusEl = document.createElement('div');
       statusEl.className = 'text-muted small mt-1';
       block.appendChild(statusEl);
+      container.appendChild(block);
+
       if (versionId) {
-        registerPaginationStatus(versionId, statusEl, data.progress || null, label);
+        const progressSnapshot = comp.comparison_progress || null;
+        statusEl.dataset.comparisonId = String(comp.id);
+        statusEl.dataset.paginationRole = key;
+        registerPaginationStatus(comp.id, statusEl, progressSnapshot, label, key);
+        roleSummaries.push({ role: key, statusEl, label });
       } else {
         statusEl.textContent = `${label} — version indisponible`;
       }
-
-      container.appendChild(block);
-
-      roleSummaries.push({ versionId, statusEl, label });
     });
 
     const clearId = `cmp-clear-${comp.id}`;
@@ -350,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const runBtn = document.createElement('button');
     runBtn.type = 'button';
     runBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
-    runBtn.textContent = 'Lancer la pagination';
+    runBtn.textContent = 'Injecter la pagination';
 
     const lignesReady = (comp.pagination?.source?.lignes_available ?? false) &&
                         (comp.pagination?.target?.lignes_available ?? false);
@@ -386,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
       button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     }
     if (feedback) {
-      feedback.textContent = 'Démarrage de la pagination…';
+      feedback.textContent = 'Préparation de l’injection de pagination…';
     }
 
     try {
@@ -413,29 +421,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (feedback) {
-        feedback.textContent = payload.message || 'Pagination en file d\'attente…';
+        feedback.textContent = payload.message || 'Injection en file d\'attente…';
       }
 
       let firstRoleHandled = false;
-      roles.forEach(({ versionId, statusEl, label }) => {
-        if (!versionId) return;
-        if (statusEl) {
-          statusEl.dataset.paginationLabel = label || '';
-          if (!firstRoleHandled) {
-            const text = 'Pagination : initialisation en cours…';
-            statusEl.textContent = label ? `${label} — ${text}` : text;
-          } else {
-            const text = 'En file d\'attente…';
-            statusEl.textContent = label ? `${label} — ${text}` : text;
-          }
-        }
-        startPaginationPolling(versionId);
+      roles.forEach(({ role, statusEl, label }) => {
+        if (!statusEl) return;
+        statusEl.dataset.paginationLabel = label || '';
+        statusEl.dataset.paginationRole = role || '';
+        const text = firstRoleHandled
+          ? 'En file d\'attente…'
+          : 'Pagination : initialisation en cours…';
+        statusEl.textContent = label ? `${label} — ${text}` : text;
         firstRoleHandled = true;
       });
-
-      if (currentWorkId) {
-        loadComparisons(currentWorkId);
+      const observerEntry = paginationObservers.get(comp.id);
+      if (observerEntry) {
+        observerEntry.completed = false;
       }
+      startComparisonPolling(comp.id);
     } catch (err) {
       console.error('Erreur pagination comparaison', err);
       if (feedback) {
@@ -446,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
       paginationLocks.delete(comp.id);
       if (button) {
         button.disabled = false;
-        button.textContent = originalLabel || 'Lancer la pagination';
+        button.textContent = originalLabel || 'Injecter la pagination';
       }
       if (feedback) {
         setTimeout(() => { feedback.textContent = ''; }, 5000);

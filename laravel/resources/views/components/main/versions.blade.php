@@ -478,22 +478,11 @@ function renderLignesStatus(versionId, lignesInfo, progress){
         cssClass = `${baseClass} text-info`;
         if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
     } else if (stage === 'preparing') {
-        if (comparisonTotal > 0) {
-            const currentComparisons = Math.min(comparisonCurrent || 0, comparisonTotal);
-            message = `🔧 Préparation des comparaisons : ${currentComparisons}/${comparisonTotal}`;
-        } else {
-            message = '🔧 Préparation du fichier _lignes…';
-        }
+        message = '🔧 Création du sidecar pagination…';
         cssClass = `${baseClass} text-info`;
         if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
     } else if (status === 'running') {
-        if (processed <= 0) {
-            message = '🛠️ Préparation du fichier _lignes…';
-        } else if (totalEntries > 0) {
-            message = `🛠️ Pagination en cours : ${Math.min(processed, totalEntries)}/${totalEntries} entrée(s) traitée(s).`;
-        } else {
-            message = '🛠️ Pagination en cours…';
-        }
+        message = '🛠️ Analyse des marqueurs…';
         cssClass = `${baseClass} text-info`;
         if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
     } else if (status === 'failed') {
@@ -506,20 +495,29 @@ function renderLignesStatus(versionId, lignesInfo, progress){
         cssClass = `${baseClass} text-warning`;
         if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
     } else if (status === 'done') {
-        const summaryTotal = Number(progressData?.summary?.total ?? 0);
-        const summaryMissed = Number(progressData?.missed_total ?? 0);
-        const summaryPart = Number.isFinite(summaryTotal) && summaryTotal > 0
+        const summaryTotal = Number(progressData?.summary?.total ?? progressData?.sidecar?.marker_count ?? 0);
+        const summaryMissed = Number(progressData?.missed_total ?? progressData?.sidecar?.missed_count ?? 0);
+        const markerPart = Number.isFinite(summaryTotal) && summaryTotal > 0
             ? `${summaryTotal} marqueur(s)`
             : null;
-        if (hasFile) {
-            const size = formatBytes(lignesInfo.size);
-            const updated = formatTimestamp(lignesInfo.updated_at);
-            const missedPart = summaryMissed > 0 ? ` (${summaryMissed} entrée(s) non trouvée(s))` : '';
-            message = `✅ Pagination appliquée${summaryPart ? ` — ${summaryPart}` : ''}${missedPart}. Fichier de ${size} mis à jour le ${updated}.`;
-        } else {
-            const missedPart = summaryMissed > 0 ? ` (${summaryMissed} entrée(s) non trouvée(s))` : '';
-            message = `✅ Pagination appliquée${summaryPart ? ` — ${summaryPart}` : ''}${missedPart}.`;
+
+        const sidecarSize = Number(progressData?.sidecar?.size ?? progressData?.sidecar_size ?? 0);
+        const sidecarUpdated = Number(progressData?.sidecar?.updated_at ?? progressData?.sidecar_updated_at ?? 0);
+
+        const sizeLabel = sidecarSize > 0 ? formatBytes(sidecarSize) : null;
+        const dateLabel = sidecarUpdated > 0 ? formatTimestamp(sidecarUpdated) : null;
+        const missedLabel = summaryMissed > 0 ? ` — ${summaryMissed} entrée(s) non trouvée(s)` : '';
+
+        let suffix = '';
+        if (sizeLabel && dateLabel) {
+            suffix = ` (${sizeLabel} · ${dateLabel})`;
+        } else if (sizeLabel) {
+            suffix = ` (${sizeLabel})`;
+        } else if (dateLabel) {
+            suffix = ` (${dateLabel})`;
         }
+
+        message = `✅ Sidecar pagination prêt${markerPart ? ` — ${markerPart}` : ''}${missedLabel}${suffix}`;
         cssClass = `${baseClass} text-success`;
         if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
     } else if (hasFile) {
@@ -1207,6 +1205,9 @@ async function uploadLignesFile(versionId, file){
             const cached = versionsCache.get(id);
             cached.lignes = payload.lignes ?? cached.lignes ?? null;
             cached.page_marker_progress = progress;
+            if (payload.pagination) {
+                cached.pagination = payload.pagination;
+            }
             versionsCache.set(id, cached);
         }
         if (progress?.status && ['queued', 'running'].includes(progress.status)) {

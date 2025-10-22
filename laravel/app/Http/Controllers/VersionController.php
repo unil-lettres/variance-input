@@ -38,6 +38,7 @@ class VersionController extends Controller
                 if ($lignesInfo) {
                     $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
                 }
+                $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
                 return [
                     'id'         => $version->id,
                     'name'       => $version->name,
@@ -47,6 +48,7 @@ class VersionController extends Controller
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
                     'page_marker_progress' => $this->pageMarkerService->getProgressSnapshot($version->id),
                     'lignes' => $lignesInfo,
+                    'pagination' => $paginationInfo,
                 ];
             });
 
@@ -146,17 +148,24 @@ class VersionController extends Controller
         }
 
         $facsimilesRemoved = $this->purgeFacsimileStorage($version, includePublished: true);
-        $lignesRemoved    = false;
-        $lignesPath       = null;
+        $lignesRemoved     = false;
+        $paginationRemoved = false;
+        $lignesPath        = null;
+        $paginationPath    = null;
         try {
             $lignesPath = $this->pageMarkerService->lignesRelativePath($version->id);
             if (Storage::disk('local')->exists($lignesPath)) {
                 $lignesRemoved = Storage::disk('local')->delete($lignesPath);
             }
+            $paginationPath = $this->pageMarkerService->paginationRelativePath($version->id);
+            if (Storage::disk('local')->exists($paginationPath)) {
+                $paginationRemoved = Storage::disk('local')->delete($paginationPath);
+            }
         } catch (\Throwable $e) {
             Log::warning('Unable to delete _lignes file during version removal', [
                 'version_id' => $version->id,
                 'path'       => $lignesPath ?? null,
+                'pagination_path' => $paginationPath ?? null,
                 'error'      => $e->getMessage(),
             ]);
         }
@@ -173,6 +182,9 @@ class VersionController extends Controller
         }
         if ($lignesRemoved) {
             $message .= ' — fichier _lignes supprimé.';
+        }
+        if ($paginationRemoved) {
+            $message .= ' — sidecar pagination supprimé.';
         }
 
         return response()->json(['message' => $message]);
@@ -314,29 +326,38 @@ class VersionController extends Controller
         $file     = $request->file('lignes');
         $relative = $this->pageMarkerService->lignesRelativePath($version->id);
         Storage::disk('local')->putFileAs('private/lignes', $file, $version->id . '.txt');
-
         $this->pageMarkerService->markQueued($version->id);
 
-        ApplyLignesJob::dispatch(
-            versionId: $version->id,
-            storagePath: $relative,
-            deleteAfter: false,
-            clearExisting: true,
-            replaceExisting: true,
-            comparisonId: null
-        );
+        try {
+            ApplyLignesJob::dispatch(
+                versionId: $version->id,
+                storagePath: $relative,
+                deleteAfter: false,
+                clearExisting: true,
+                replaceExisting: true,
+                comparisonId: null
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Impossible de lancer le traitement des balises de pagination.',
+            ], 500);
+        }
 
         $info = $this->pageMarkerService->getLignesInfo($version->id);
         if ($info) {
             $info['url'] = admin_url("api/versions/{$version->id}/lignes");
         }
+        $pagination = $this->pageMarkerService->getPaginationInfo($version->id);
         $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
 
         return response()->json([
-            'status'   => 'queued',
-            'message'  => 'Import du fichier _lignes en cours…',
-            'lignes'   => $info,
-            'progress' => $progress,
+            'status'     => 'queued',
+            'message'    => 'Import du fichier _lignes en cours…',
+            'lignes'     => $info,
+            'pagination' => $pagination,
+            'progress'   => $progress,
         ], 202);
     }
 

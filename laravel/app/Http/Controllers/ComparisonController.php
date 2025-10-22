@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Models\Comparison;
 use App\Http\Controllers\PublishController;
 use App\Services\PageMarkerService;
-use App\Jobs\ApplyLignesJob;
+use App\Jobs\InjectComparisonPaginationJob;
 
 class ComparisonController extends Controller
 {
@@ -106,6 +106,7 @@ class ComparisonController extends Controller
 
                 $cmp->pagination = $this->pageMarkerService->countMarkersForComparison($cmp);
                 $cmp->manifests  = $this->manifestStatusForComparison($cmp, $authorFolder, $workFolder);
+                $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id);
 
                 return $cmp;
             });
@@ -177,8 +178,8 @@ class ComparisonController extends Controller
                 $missing[] = "Version {$role} manquante";
                 continue;
             }
-            if (!$this->pageMarkerService->hasLignesFile($version->id)) {
-                $missing[] = "Aucun fichier _lignes associé à la version {$version->name}";
+            if (!$this->pageMarkerService->loadPaginationSidecar($version->id)) {
+                $missing[] = "Sidecar pagination manquant pour la version {$version->name}";
             }
         }
 
@@ -189,24 +190,14 @@ class ComparisonController extends Controller
             ], 422);
         }
 
-        foreach ($roles as $role => $version) {
-            if (!$version) {
-                continue;
-            }
+        $this->flushPendingPaginationJobs($comparison->id);
+        $this->pageMarkerService->markComparisonQueued($comparison->id);
 
-            $this->flushPendingPaginationJobs($version->id, $comparison->id);
-
-            $this->pageMarkerService->markQueued($version->id);
-            $relative = $this->pageMarkerService->lignesRelativePath($version->id);
-            ApplyLignesJob::dispatch(
-                $version->id,
-                $relative,
-                false,
-                (bool) $clear,
-                (bool) $replace,
-                $comparison->id
-            );
-        }
+        InjectComparisonPaginationJob::dispatch(
+            comparisonId: $comparison->id,
+            clearExisting: (bool) $clear,
+            replaceExisting: (bool) $replace
+        );
 
         return response()->json([
             'status'  => 'queued',
@@ -214,35 +205,36 @@ class ComparisonController extends Controller
         ], 202);
     }
 
-    private function flushPendingPaginationJobs(int $versionId, int $comparisonId): void
+    public function pageMarkersProgress(Comparison $comparison)
     {
-        $keys = [
-            "apply-lignes-{$versionId}-all",
-            "apply-lignes-{$versionId}-{$comparisonId}",
-        ];
-
-        foreach ($keys as $key) {
-            Cache::forget('laravel_unique_job:' . $key);
+        $snapshot = $this->pageMarkerService->getComparisonProgressSnapshot($comparison->id);
+        if (!$snapshot) {
+            $snapshot = [
+                'status'        => 'idle',
+                'comparison_id' => $comparison->id,
+                'roles'         => [],
+                'updated_at'    => time(),
+            ];
         }
 
-        $versionFragment = '\"versionId\":' . $versionId;
-        $comparisonFragment = '\"comparisonId\":' . $comparisonId;
+        return response()->json($snapshot, 200);
+    }
 
+    private function flushPendingPaginationJobs(int $comparisonId): void
+    {
         $jobsQuery = DB::table('jobs')
             ->where('queue', 'page-markers')
-            ->where('payload', 'like', "%{$versionFragment}%");
-        if ($comparisonId) {
-            $jobsQuery->where('payload', 'like', "%{$comparisonFragment}%");
-        }
+            ->where('payload', 'like', '%inject-pagination%')
+            ->where('payload', 'like', '%"comparisonId":' . $comparisonId . '%');
         $jobsQuery->delete();
 
         $failedQuery = DB::table('failed_jobs')
             ->where('queue', 'page-markers')
-            ->where('payload', 'like', "%{$versionFragment}%");
-        if ($comparisonId) {
-            $failedQuery->where('payload', 'like', "%{$comparisonFragment}%");
-        }
+            ->where('payload', 'like', '%inject-pagination%')
+            ->where('payload', 'like', '%"comparisonId":' . $comparisonId . '%');
         $failedQuery->delete();
+
+        Cache::forget('laravel_unique_job:inject-pagination-' . $comparisonId);
     }
 
     private function resolvePublicationPaths(Comparison $comparison): array

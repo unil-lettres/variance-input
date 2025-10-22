@@ -12,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class ApplyLignesJob implements ShouldQueue, ShouldBeUnique
 {
@@ -90,19 +91,14 @@ class ApplyLignesJob implements ShouldQueue, ShouldBeUnique
 
         try {
             $version = Version::findOrFail($this->versionId);
-            $options = [
-                'clear_existing'   => $this->clearExisting,
-                'replace_existing' => $this->replaceExisting,
-            ];
-            if ($this->comparisonId) {
-                $options['comparisons'] = [$this->comparisonId];
+            if ($this->comparisonId !== null) {
+                Log::info('ApplyLignesJob invoked with comparisonId; pagination sidecar generation only.', [
+                    'version_id'    => $this->versionId,
+                    'comparison_id' => $this->comparisonId,
+                ]);
             }
 
-            $pageMarkerService->applyLignesToVersion(
-                $version,
-                $absolute,
-                $options
-            );
+            $pageMarkerService->generatePaginationSidecar($version, $absolute);
         } catch (PaginationCancelledException $e) {
             $this->deleteAfter = false;
             throw $e;
