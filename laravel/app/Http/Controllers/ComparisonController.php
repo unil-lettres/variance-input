@@ -120,7 +120,10 @@ class ComparisonController extends Controller
      */
     public function destroy(int $id)
     {
-        $comparison = Comparison::findOrFail($id);
+        $comparison = Comparison::with([
+            'sourceVersion.work.author',
+            'targetVersion.work.author',
+        ])->findOrFail($id);
 
         $destInfo = $this->resolvePublicationPaths($comparison);
 
@@ -146,6 +149,27 @@ class ComparisonController extends Controller
                 Storage::disk('public')->deleteDirectory($relative);
             } else {
                 File::deleteDirectory($destInfo['source_dir']);
+            }
+        }
+
+        $authorFolder = $comparison->sourceVersion?->work?->author?->folder
+            ?? $comparison->targetVersion?->work?->author?->folder;
+        $workFolder = $comparison->sourceVersion?->work?->folder
+            ?? $comparison->targetVersion?->work?->folder;
+
+        if ($authorFolder && $workFolder) {
+            $comparisonRelative = "uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}";
+            Storage::disk('public')->deleteDirectory($comparisonRelative);
+            $legacyComparisonDir = base_path('../variance/' . $comparisonRelative);
+            if (is_dir($legacyComparisonDir)) {
+                File::deleteDirectory($legacyComparisonDir);
+            }
+
+            $publishedRelative = "uploads/{$authorFolder}/{$workFolder}/{$comparison->folder}";
+            Storage::disk('public')->deleteDirectory($publishedRelative);
+            $legacyPublishedDir = base_path('../variance/' . $publishedRelative);
+            if (is_dir($legacyPublishedDir)) {
+                File::deleteDirectory($legacyPublishedDir);
             }
         }
 
