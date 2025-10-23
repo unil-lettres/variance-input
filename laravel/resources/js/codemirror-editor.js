@@ -587,7 +587,7 @@ export default function (container, initialXml) {
       return view.state.field(hideTagsField);
     },
 
-    insertPageMarker(imageName, pageNumber = '001') {
+    insertPageMarker(imageName, pageNumber = '?') {
       const { head } = view.state.selection.main;
 
       // Build the page marker tag
