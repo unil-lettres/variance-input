@@ -23,7 +23,6 @@
           <th>Pivot</th>
           <th>Sens. Casse</th>
           <th>Composants</th>
-          <th>Pagination</th>
           <th>Publié</th>
           <th>Publier</th>
           <th>Date</th>
@@ -236,100 +235,82 @@ document.addEventListener('DOMContentLoaded', () => {
     tick();
   }
 
-  function renderComparisonPagination(comp) {
+  function renderComparisonRole(comp, role, roleStatusRefs) {
+    const data = (comp.pagination && comp.pagination[role]) || {};
     const container = document.createElement('div');
-    container.className = 'small text-start';
+    container.className = 'small text-start d-flex flex-column gap-2';
 
-    const roles = [
-      { key: 'source', label: 'Source', versionId: comp.source_id },
-      { key: 'target', label: 'Cible',  versionId: comp.target_id }
-    ];
+    const versionName = role === 'source'
+      ? (comp.source_version?.name ?? `Version ${comp.source_id}`)
+      : (comp.target_version?.name ?? `Version ${comp.target_id}`);
+    const versionInfo = document.createElement('div');
+    versionInfo.innerHTML = `<strong>${versionName}</strong>`;
+    container.appendChild(versionInfo);
 
-    const roleSummaries = [];
-
-    roles.forEach(({ key, label, versionId }, index) => {
-      const data = (comp.pagination && comp.pagination[key]) || {};
-      const block = document.createElement('div');
-      if (index > 0) {
-        block.className = 'mt-2';
-      }
-
-      const badges = document.createElement('div');
-      const labelEl = document.createElement('strong');
-      labelEl.textContent = label;
-      badges.appendChild(labelEl);
-      badges.appendChild(document.createTextNode(' · '));
-      badges.appendChild(createBadge({
-        text: `${formatNumber(data.markers ?? 0)} tags`,
-        className: 'bg-secondary'
-      }));
-
-      const lignesBadge = (data.lignes_available ?? false)
-        ? createBadge({
-            text: '_lignes',
-            className: 'bg-success ms-1',
-            title: 'Fichier _lignes disponible'
-          })
-        : createBadge({
-            text: '_lignes manquant',
-            className: 'bg-warning text-dark ms-1',
-            title: 'Associez un fichier _lignes à cette version'
-          });
-      badges.appendChild(document.createTextNode(' '));
-      badges.appendChild(lignesBadge);
-
-      const manifestInfo = (comp.manifests && comp.manifests[key]) || {};
-      badges.appendChild(document.createTextNode(' '));
-      if (manifestInfo.exists) {
-        const rawCount = Number(manifestInfo.count ?? 0);
-        const countValue = Number.isFinite(rawCount) ? rawCount : 0;
-        const displayCount = formatNumber(countValue);
-        badges.appendChild(createBadge({
-          text: `JSON ${displayCount} x2`,
-          className: 'bg-info text-dark ms-1',
-          href: manifestInfo.api_url || manifestInfo.url || null,
-          title: manifestInfo.file
-            ? `${manifestInfo.file} — ${displayCount} fac-similé${countValue === 1 ? '' : 's'} + miniature${countValue === 1 ? '' : 's'}`
-            : 'Manifeste JSON — fac-similés et miniatures'
-        }));
-      } else {
-        badges.appendChild(createBadge({
-          text: 'manifeste absent',
-          className: 'bg-light text-muted ms-1',
-          title: 'Aucun manifeste JSON détecté'
-        }));
-      }
-      block.appendChild(badges);
-
-      if (data.lignes && (data.lignes.updated_at || data.lignes.size)) {
-        const hint = document.createElement('div');
-        hint.className = 'text-muted small';
-        const updated = data.lignes.updated_at ? formatTimestamp(data.lignes.updated_at) : '—';
-        const size = data.lignes.size ? formatBytes(data.lignes.size) : '0 o';
-        hint.textContent = `Fichier : ${updated} · ${size}`;
-        block.appendChild(hint);
-      }
-
-      const statusEl = document.createElement('div');
-      statusEl.className = 'text-muted small mt-1';
-      block.appendChild(statusEl);
-      container.appendChild(block);
-
-      if (versionId) {
-        const progressSnapshot = comp.comparison_progress || null;
-        statusEl.dataset.comparisonId = String(comp.id);
-        statusEl.dataset.paginationRole = key;
-        registerPaginationStatus(comp.id, statusEl, progressSnapshot, label, key);
-        roleSummaries.push({ role: key, statusEl, label });
-      } else {
-        statusEl.textContent = `${label} — version indisponible`;
-      }
+    const badges = document.createElement('div');
+    const markersBadge = createBadge({
+      text: `${formatNumber(data.markers ?? 0)} tags`,
+      className: 'bg-secondary'
     });
+    badges.appendChild(markersBadge);
 
-    const clearId = `cmp-clear-${comp.id}`;
-    const replaceId = `cmp-replace-${comp.id}`;
+    const lignesBadge = (data.lignes_available ?? false)
+      ? createBadge({
+          text: '_lignes',
+          className: 'bg-success ms-1',
+          title: 'Fichier _lignes disponible'
+        })
+      : createBadge({
+          text: '_lignes manquant',
+          className: 'bg-warning text-dark ms-1',
+          title: 'Associez un fichier _lignes à cette version'
+        });
+    badges.appendChild(lignesBadge);
+
+    const manifestInfo = (comp.manifests && comp.manifests[role]) || {};
+    if (manifestInfo.exists) {
+      const rawCount = Number(manifestInfo.count ?? 0);
+      const countValue = Number.isFinite(rawCount) ? rawCount : 0;
+      const displayCount = formatNumber(countValue);
+      badges.appendChild(createBadge({
+        text: `JSON ${displayCount} x2`,
+        className: 'bg-info text-dark ms-1',
+        href: manifestInfo.api_url || manifestInfo.url || null,
+        title: manifestInfo.file
+          ? `${manifestInfo.file} — ${displayCount} fac-similé${countValue === 1 ? '' : 's'} + miniature${countValue === 1 ? '' : 's'}`
+          : 'Manifeste JSON — fac-similés et miniatures'
+      }));
+    } else {
+      badges.appendChild(createBadge({
+        text: 'manifeste absent',
+        className: 'bg-light text-muted ms-1',
+        title: 'Aucun manifeste JSON détecté'
+      }));
+    }
+    container.appendChild(badges);
+
+    if (data.lignes && (data.lignes.updated_at || data.lignes.size)) {
+      const hint = document.createElement('div');
+      hint.className = 'text-muted small';
+      const updated = data.lignes.updated_at ? formatTimestamp(data.lignes.updated_at) : '—';
+      const size = data.lignes.size ? formatBytes(data.lignes.size) : '0 o';
+      hint.textContent = `Fichier _lignes : ${updated} · ${size}`;
+      container.appendChild(hint);
+    }
+
+    const statusEl = document.createElement('div');
+    statusEl.className = 'text-muted small';
+    container.appendChild(statusEl);
+    const progressSnapshot = comp.comparison_progress || null;
+    statusEl.dataset.comparisonId = String(comp.id);
+    statusEl.dataset.paginationRole = role;
+    registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
+    roleStatusRefs.push({ role, statusEl, label: versionName });
+
     const options = document.createElement('div');
     options.className = 'mt-2';
+    const clearId = `cmp-${comp.id}-${role}-clear`;
+    const replaceId = `cmp-${comp.id}-${role}-replace`;
     options.innerHTML = `
         <div class="form-check form-check-sm">
             <input class="form-check-input" type="checkbox" id="${clearId}" checked>
@@ -358,19 +339,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const feedback = document.createElement('div');
-    feedback.className = 'small text-muted mt-1';
+    feedback.className = 'small text-muted';
     container.appendChild(feedback);
+
+    const btnGroup = document.createElement('div');
+    btnGroup.className = 'd-flex gap-2 mt-2 flex-wrap';
+    container.appendChild(btnGroup);
 
     const runBtn = document.createElement('button');
     runBtn.type = 'button';
-    runBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
+    runBtn.className = 'btn btn-sm btn-outline-secondary';
     runBtn.textContent = 'Injecter la pagination';
+    btnGroup.appendChild(runBtn);
 
-    const lignesReady = (comp.pagination?.source?.lignes_available ?? false) &&
-                        (comp.pagination?.target?.lignes_available ?? false);
-    if (!lignesReady) {
+    const restoreBtn = document.createElement('button');
+    restoreBtn.type = 'button';
+    restoreBtn.className = 'btn btn-sm btn-outline-danger';
+    restoreBtn.textContent = 'Restaurer les originaux';
+    btnGroup.appendChild(restoreBtn);
+
+    const hasLignes = data.lignes_available ?? false;
+    if (!hasLignes) {
       runBtn.disabled = true;
-      feedback.textContent = 'Associez un fichier _lignes aux deux versions.';
+      feedback.textContent = 'Associez un fichier _lignes à cette version.';
     }
 
     runBtn.addEventListener('click', () => {
@@ -381,16 +372,10 @@ document.addEventListener('DOMContentLoaded', () => {
         replaceExisting,
         button: runBtn,
         feedback,
-        roles: roleSummaries
+        statusRefs: roleStatusRefs
       });
     });
 
-    container.appendChild(runBtn);
-
-    const restoreBtn = document.createElement('button');
-    restoreBtn.type = 'button';
-    restoreBtn.className = 'btn btn-sm btn-outline-danger mt-2 ms-2';
-    restoreBtn.textContent = 'Restaurer les originaux';
     restoreBtn.addEventListener('click', () => {
       if (!confirm('Les fichiers originaux de sortie Medite vont être restaurés; tous les marqueurs de pagination seront supprimés.')) {
         return;
@@ -400,12 +385,11 @@ document.addEventListener('DOMContentLoaded', () => {
         feedback,
       });
     });
-    container.appendChild(restoreBtn);
 
     return container;
   }
 
-  async function triggerComparisonPagination(comp, { clearExisting, replaceExisting, button, feedback, roles }) {
+  async function triggerComparisonPagination(comp, { clearExisting, replaceExisting, button, feedback, statusRefs }) {
     const lockKey = `inject-${comp.id}`;
     if (paginationLocks.has(lockKey)) return;
     paginationLocks.add(lockKey);
@@ -447,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       let firstRoleHandled = false;
-      roles.forEach(({ role, statusEl, label }) => {
+      (statusRefs || []).forEach(({ role, statusEl, label }) => {
         if (!statusEl) return;
         statusEl.dataset.paginationLabel = label || '';
         statusEl.dataset.paginationRole = role || '';
@@ -605,14 +589,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tr.innerHTML = `
           <td>${comp.id}</td>
-          <td>${comp.source_version?.name ?? comp.source_id}</td>
-          <td>${comp.target_version?.name ?? comp.target_id}</td>
+          <td class="align-top source-cell"></td>
+          <td class="align-top target-cell"></td>
           <td>${comp.folder ?? ''}</td>
           <td>${comp.ratio ?? ''}</td>
           <td>${comp.lg_pivot ?? ''}</td>
           <td>${caseSensitive ? 'yes' : 'no'}</td>
           <td class="text-center components-status">${statusHtml}</td>
-          <td class="pagination-cell align-top"></td>
           <td class="text-center published-status">${published ? `<span class="text-success" title="${publishedTitle}">✔</span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
           <td class="text-center">
             <input type="checkbox" class="form-check-input publish-toggle"
@@ -630,9 +613,14 @@ document.addEventListener('DOMContentLoaded', () => {
           </td>
         `;
         tbody.appendChild(tr);
-        const paginationCell = tr.querySelector('.pagination-cell');
-        if (paginationCell) {
-          paginationCell.appendChild(renderComparisonPagination(comp));
+        const roleStatusRefs = [];
+        const sourceCell = tr.querySelector('.source-cell');
+        if (sourceCell) {
+          sourceCell.appendChild(renderComparisonRole(comp, 'source', roleStatusRefs));
+        }
+        const targetCell = tr.querySelector('.target-cell');
+        if (targetCell) {
+          targetCell.appendChild(renderComparisonRole(comp, 'target', roleStatusRefs));
         }
       });
     } catch (err) {
