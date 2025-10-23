@@ -1040,7 +1040,7 @@ class PageMarkerService
         bool $replaceExisting
     ): array {
         $normalized = array_values(array_filter($markers, static function ($marker) {
-            return isset($marker['char_index']) && is_numeric($marker['char_index']) || !empty($marker['phrase']);
+            return (isset($marker['char_index']) && is_numeric($marker['char_index'])) || !empty($marker['phrase']);
         }));
 
         usort($normalized, static function ($a, $b) {
