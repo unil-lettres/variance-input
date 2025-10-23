@@ -101,7 +101,7 @@ const hideTagsField = StateField.define({
 
         // Skip italic tags - they have their own decoration plugin
         const originalTag = match[0];
-        if (originalTag.match(/<hi\s+rend=["']italic["']/i) || originalTag.match(/<\/hi\s*>/i)) {
+        if (originalTag.match(/<em\s*>/i) || originalTag.match(/<\/em\s*>/i)) {
           continue;
         }
 
@@ -253,8 +253,8 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
           const content = doc.toString();
           
           // Find the tag at this position
-          const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
-          const closeTagRegex = /<\/hi\s*>/gi;
+          const openTagRegex = /<em\s*>/gi;
+          const closeTagRegex = /<\/em\s*>/gi;
           
           let tagToDelete = null;
           let match;
@@ -307,7 +307,7 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
     const tags = [];
 
     // Find ALL opening tags
-    const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
+    const openTagRegex = /<em\s*>/gi;
     let match;
 
     openTagRegex.lastIndex = 0;
@@ -320,8 +320,8 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
       });
     }
 
-    // Find ALL closing tags </hi> - decorate them all as italic closing tags
-    const closeTagRegex = /<\/hi\s*>/gi;
+    // Find ALL closing tags </em> - decorate them all as italic closing tags
+    const closeTagRegex = /<\/em\s*>/gi;
     closeTagRegex.lastIndex = 0;
     
     while ((match = closeTagRegex.exec(text)) !== null) {
@@ -706,7 +706,7 @@ export default function (container, initialXml) {
 
     insertItalicOpenTag() {
       const { head } = view.state.selection.main;
-      const openingTag = '<hi rend="italic">';
+      const openingTag = '<em>';
       
       view.dispatch({
         changes: { from: head, insert: openingTag },
@@ -719,7 +719,7 @@ export default function (container, initialXml) {
 
     insertItalicCloseTag() {
       const { head } = view.state.selection.main;
-      const closingTag = '</hi>';
+      const closingTag = '</em>';
       
       view.dispatch({
         changes: { from: head, insert: closingTag },
@@ -736,8 +736,8 @@ export default function (container, initialXml) {
       const processedPositions = new Set(); // Track positions that already have an error
 
       // Find all italic opening and all closing tags
-      const openTagRegex = /<hi\s+rend=["']italic["']\s*>/gi;
-      const closeTagRegex = /<\/hi\s*>/gi;
+      const openTagRegex = /<em\s*>/gi;
+      const closeTagRegex = /<\/em\s*>/gi;
       
       const openTags = [];
       const closeTags = [];
