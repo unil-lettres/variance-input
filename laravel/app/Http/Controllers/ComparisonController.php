@@ -244,6 +244,31 @@ class ComparisonController extends Controller
         return response()->json($snapshot, 200);
     }
 
+    public function restorePageMarkers(Comparison $comparison)
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        try {
+            $result = $this->pageMarkerService->restoreOriginalComparisonOutputs($comparison);
+        } catch (\Throwable $e) {
+            Log::error('Unable to restore comparison originals', [
+                'comparison_id' => $comparison->id,
+                'error'         => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Restauration impossible : ' . $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'status'  => 'restored',
+            'message' => 'Fichiers originaux restaurés.',
+            'result'  => $result,
+        ]);
+    }
+
     private function flushPendingPaginationJobs(int $comparisonId): void
     {
         $jobsQuery = DB::table('jobs')

@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Storage;
 class PageMarkerService
 {
     private const MARKER_TEMPLATE = '<span class="page-marker" data-image-name="%s"><span class="page-number">%s</span><img src="%s" /></span>';
+    private const ORIGINAL_SOURCE = 'source.original.xhtml';
+    private const ORIGINAL_TARGET = 'target.original.xhtml';
     private ?string $progressPath = null;
     private array $progress = [];
     private ?int $progressVersionId = null;
@@ -211,6 +213,8 @@ class PageMarkerService
         bool $replaceExisting
     ): array {
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $this->ensureOriginalBackups($comparison);
 
         $results = [
             'source' => null,
@@ -1221,6 +1225,129 @@ class PageMarkerService
         }
 
         return $offset;
+    }
+
+    private function ensureOriginalBackups(Comparison $comparison): void
+    {
+        foreach (['source', 'target'] as $role) {
+            [$paths, $backups] = $this->comparisonRoleFileSet($comparison, $role);
+            foreach ($paths as $idx => $path) {
+                if (!is_file($path ?? '')) {
+                    continue;
+                }
+                if (!empty($backups[$idx]) && is_file($backups[$idx])) {
+                    continue;
+                }
+                $contents = @file_get_contents($path);
+                if ($contents === false) {
+                    continue;
+                }
+                if (stripos($contents, 'page-marker') !== false) {
+                    continue;
+                }
+                $backupPath = $backups[$idx] ?? null;
+                if (!$backupPath) {
+                    continue;
+                }
+                File::ensureDirectoryExists(dirname($backupPath));
+                File::put($backupPath, $contents);
+            }
+        }
+    }
+
+    public function restoreOriginalComparisonOutputs(Comparison $comparison): array
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $roles = ['source' => $comparison->sourceVersion, 'target' => $comparison->targetVersion];
+        $summary = [];
+
+        foreach ($roles as $role => $version) {
+            [$paths, $backups] = $this->comparisonRoleFileSet($comparison, $role);
+
+            $backupContent = null;
+            foreach ($backups as $backupPath) {
+                if (is_file($backupPath ?? '')) {
+                    $backupContent = file_get_contents($backupPath);
+                    break;
+                }
+            }
+
+            if ($backupContent === null) {
+                $summary[$role] = [
+                    'status'   => 'missing',
+                    'restored' => [],
+                ];
+                continue;
+            }
+
+            $restored = [];
+            foreach ($paths as $idx => $path) {
+                if (!$path) continue;
+                File::ensureDirectoryExists(dirname($path));
+                File::put($path, $backupContent);
+                $restored[] = $path;
+            }
+
+            $total = 0;
+            if ($version) {
+                $sidecar = $this->loadPaginationSidecar($version->id);
+                if ($sidecar) {
+                    $total = count($sidecar['markers'] ?? []);
+                }
+            }
+
+            $summary[$role] = [
+                'status'   => 'restored',
+                'restored' => $restored,
+                'total'    => $total,
+            ];
+        }
+
+        $this->finishComparisonProgress($comparison->id, [
+            'status'   => 'restored',
+            'roles'    => [
+                'source' => [
+                    'status'   => $summary['source']['status'] ?? 'missing',
+                    'total'    => $summary['source']['total'] ?? 0,
+                    'inserted' => 0,
+                    'missed'   => 0,
+                ],
+                'target' => [
+                    'status'   => $summary['target']['status'] ?? 'missing',
+                    'total'    => $summary['target']['total'] ?? 0,
+                    'inserted' => 0,
+                    'missed'   => 0,
+                ],
+            ],
+            'summary'  => $summary,
+            'updated_at' => time(),
+        ]);
+
+        return $summary;
+    }
+
+    private function comparisonRoleFileSet(Comparison $comparison, string $role): array
+    {
+        $version = $role === 'source' ? $comparison->sourceVersion : $comparison->targetVersion;
+        if (!$version || !$version->work || !$version->work->author) {
+            return [[], []];
+        }
+
+        $authorFolder = $version->work->author->folder;
+        $workFolder   = $version->work->folder;
+        if (!$authorFolder || !$workFolder) {
+            return [[], []];
+        }
+
+        $fileName = $role === 'source' ? 'source.xhtml' : 'target.xhtml';
+        $paths    = $this->candidatePaths($authorFolder, $workFolder, $comparison, $fileName);
+        $backupName = $role === 'source' ? self::ORIGINAL_SOURCE : self::ORIGINAL_TARGET;
+        $backups = array_map(static function ($path) use ($backupName) {
+            return $path ? dirname($path) . DIRECTORY_SEPARATOR . $backupName : null;
+        }, $paths);
+
+        return [$paths, $backups];
     }
 
     private function extractContextSnippet(string $shadow, int $charIndex, int $radius = 45): string

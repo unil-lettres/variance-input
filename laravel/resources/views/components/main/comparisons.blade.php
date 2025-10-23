@@ -144,6 +144,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return `✅ Terminé — insérés : ${inserted}/${total || '—'}, manqués : ${missed}${suffix}`;
     }
+    if (status === 'restored') {
+      return `ℹ️ Originaux restaurés${suffix}`;
+    }
     if (status === 'idle') {
       return `Pagination : aucune exécution enregistrée${suffix}`;
     }
@@ -164,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     entry.elements.add(element);
     const initStatus = initialProgress?.status ?? null;
-    if (initStatus && !['done', 'failed', 'idle'].includes(initStatus)) {
+    if (initStatus && !['done', 'failed', 'idle', 'restored'].includes(initStatus)) {
       entry.completed = false;
       startComparisonPolling(comparisonId);
     }
@@ -384,12 +387,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     container.appendChild(runBtn);
 
+    const restoreBtn = document.createElement('button');
+    restoreBtn.type = 'button';
+    restoreBtn.className = 'btn btn-sm btn-outline-danger mt-2 ms-2';
+    restoreBtn.textContent = 'Restaurer les originaux';
+    restoreBtn.addEventListener('click', () => {
+      if (!confirm('Les fichiers originaux de sortie Medite vont être restaurés; tous les marqueurs de pagination seront supprimés.')) {
+        return;
+      }
+      restoreComparisonPagination(comp, {
+        button: restoreBtn,
+        feedback,
+      });
+    });
+    container.appendChild(restoreBtn);
+
     return container;
   }
 
   async function triggerComparisonPagination(comp, { clearExisting, replaceExisting, button, feedback, roles }) {
-    if (paginationLocks.has(comp.id)) return;
-    paginationLocks.add(comp.id);
+    const lockKey = `inject-${comp.id}`;
+    if (paginationLocks.has(lockKey)) return;
+    paginationLocks.add(lockKey);
 
     const originalLabel = button ? button.textContent : '';
     if (button) {
@@ -450,10 +469,64 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       alert("Impossible de lancer la pagination : " + (err?.message || 'erreur inconnue'));
     } finally {
-      paginationLocks.delete(comp.id);
+      paginationLocks.delete(lockKey);
       if (button) {
         button.disabled = false;
         button.textContent = originalLabel || 'Injecter la pagination';
+      }
+      if (feedback) {
+        setTimeout(() => { feedback.textContent = ''; }, 5000);
+      }
+    }
+  }
+
+  async function restoreComparisonPagination(comp, { button, feedback }) {
+    const lockKey = `restore-${comp.id}`;
+    if (paginationLocks.has(lockKey)) return;
+    paginationLocks.add(lockKey);
+
+    const originalLabel = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+    if (feedback) {
+      feedback.textContent = 'Restauration des originaux…';
+    }
+
+    try {
+      const res = await fetch(withBasePath(`/api/comparisons/${comp.id}/page-markers/restore`), {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+        }
+      });
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || payload.status !== 'restored') {
+        const message = payload.message || `HTTP ${res.status}`;
+        throw new Error(message);
+      }
+
+      if (feedback) {
+        feedback.textContent = payload.message || 'Originaux restaurés.';
+      }
+
+      if (currentWorkId) {
+        loadComparisons(currentWorkId);
+      }
+    } catch (err) {
+      console.error('Erreur restauration pagination', err);
+      if (feedback) {
+        feedback.textContent = 'Échec de la restauration.';
+      }
+      alert("Impossible de restaurer les originaux : " + (err?.message || 'erreur inconnue'));
+    } finally {
+      paginationLocks.delete(lockKey);
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel || 'Restaurer les originaux';
       }
       if (feedback) {
         setTimeout(() => { feedback.textContent = ''; }, 5000);
