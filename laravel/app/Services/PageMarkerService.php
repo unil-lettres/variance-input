@@ -1090,6 +1090,7 @@ class PageMarkerService
             );
 
             $htmlOffset = $map[$charIndex] + $offsetShift;
+            $htmlOffset = $this->advanceToTextBoundary($html, $htmlOffset);
             $html = substr($html, 0, $htmlOffset) . $markerHtml . substr($html, $htmlOffset);
             $offsetShift += strlen($markerHtml);
             $inserted++;
@@ -1158,6 +1159,39 @@ class PageMarkerService
         }
 
         return $hint;
+    }
+
+    private function advanceToTextBoundary(string $html, int $offset): int
+    {
+        $len = strlen($html);
+        if ($offset < 0) {
+            $offset = 0;
+        } elseif ($offset > $len) {
+            $offset = $len;
+        }
+
+        while ($offset < $len) {
+            $char = $html[$offset] ?? '';
+            if ($char === '<') {
+                $gt = strpos($html, '>', $offset);
+                if ($gt === false) {
+                    return $len;
+                }
+                $offset = $gt + 1;
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $next = strpos($html, $char, $offset + 1);
+                if ($next === false) {
+                    return $len;
+                }
+                $offset = $next + 1;
+                continue;
+            }
+            break;
+        }
+
+        return $offset;
     }
 
     private function extractContextSnippet(string $shadow, int $charIndex, int $radius = 45): string
