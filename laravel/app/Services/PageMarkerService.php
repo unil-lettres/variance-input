@@ -1057,17 +1057,19 @@ class PageMarkerService
             }
         }
 
-        [$shadow, $map] = $this->buildIndexedPlaintext($html);
+        [$shadow, $map, $fold] = $this->buildIndexedPlaintext($html);
         $inserted = 0;
         $misses   = [];
         $offsetShift = 0;
 
         foreach ($normalized as $marker) {
             $charIndex = (int) ($marker['char_index'] ?? -1);
-            if ($charIndex < 0 || !array_key_exists($charIndex, $map)) {
+            $resolvedIndex = $this->resolveMarkerIndex($marker, $shadow, $fold, $map, $charIndex);
+            if ($resolvedIndex === null || !array_key_exists($resolvedIndex, $map)) {
                 $misses[] = ['marker' => $marker, 'reason' => 'index_introuvable'];
                 continue;
             }
+            $charIndex = $resolvedIndex;
 
             $imageCode = $this->normalizeImageCode($marker);
             if (!$imageCode) {
@@ -1115,6 +1117,47 @@ class PageMarkerService
         }
 
         return str_pad($code, 3, '0', STR_PAD_LEFT);
+    }
+
+    private function resolveMarkerIndex(array $marker, string $shadow, string $fold, array $map, int $hint): ?int
+    {
+        $total = count($map);
+        if ($total === 0) {
+            return null;
+        }
+
+        $hint = max(0, $hint);
+        if ($hint >= $total) {
+            $hint = $total - 1;
+        }
+
+        $phrase = trim((string) ($marker['phrase'] ?? ''));
+        if ($phrase === '') {
+            return $hint;
+        }
+
+        $variants = $this->phraseVariants($phrase);
+        if (empty($variants)) {
+            return $hint;
+        }
+
+        $start = max(0, $hint - 400);
+        $window = 1200;
+
+        foreach ($variants as $variant) {
+            $foldedVariant = $this->foldString($variant);
+            if ($foldedVariant === '') {
+                continue;
+            }
+            $pattern = $this->buildFlexibleRegex($foldedVariant, true);
+            $match = $this->findMatchWindow($pattern, $fold, $start, $window);
+            if ($match) {
+                [, $offset] = $match;
+                return $offset;
+            }
+        }
+
+        return $hint;
     }
 
     private function extractContextSnippet(string $shadow, int $charIndex, int $radius = 45): string
