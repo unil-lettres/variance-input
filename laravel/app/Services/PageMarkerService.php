@@ -1170,6 +1170,8 @@ class PageMarkerService
             $offset = $len;
         }
 
+        $offset = $this->advancePastOpenTag($html, $offset);
+
         while ($offset < $len) {
             $char = $html[$offset] ?? '';
             if ($char === '<') {
@@ -1189,6 +1191,29 @@ class PageMarkerService
                 continue;
             }
             break;
+        }
+
+        return $offset;
+    }
+
+    private function advancePastOpenTag(string $html, int $offset): int
+    {
+        $lastLt = strrpos($html, '<', - (strlen($html) - $offset));
+        if ($lastLt === false) {
+            return $offset;
+        }
+
+        $lastGt = strrpos($html, '>', - (strlen($html) - $offset));
+        if ($lastGt === false) {
+            $lastGt = -1;
+        }
+
+        if ($lastLt > $lastGt) {
+            $gt = strpos($html, '>', $lastLt);
+            if ($gt !== false) {
+                return $gt + 1;
+            }
+            return strlen($html);
         }
 
         return $offset;
