@@ -9,7 +9,7 @@ use App\Http\Controllers\PublishController;
 
 class EditorController extends Controller
 {
-    public function show(Comparison $comparison, Request $request)
+    public function comparisonEditor(Comparison $comparison, Request $request)
     {
         $request->validate([
             'type' => 'in:source,target'
@@ -33,8 +33,8 @@ class EditorController extends Controller
         $xmlContent = file_get_contents($path);
 
         $publicationInfo = $this->getPublicationInfo($comparison, $type);
-    
-        return view('components.main.editor', [
+
+        return view('components.main.editor.comparison', [
             'comparison' => $comparison,
             'version' => $version,
             'xmlContent' => $xmlContent,
@@ -47,7 +47,7 @@ class EditorController extends Controller
     }
     
 
-    public function update(Comparison $comparison, Request $request)
+    public function comparisonUpdate(Comparison $comparison, Request $request)
     {
         $request->validate([
             'type' => 'in:source,target'
