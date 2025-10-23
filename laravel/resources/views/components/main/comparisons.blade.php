@@ -305,7 +305,8 @@ document.addEventListener('DOMContentLoaded', () => {
     statusEl.dataset.comparisonId = String(comp.id);
     statusEl.dataset.paginationRole = role;
     registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
-    roleStatusRefs.push({ role, statusEl, label: versionName });
+    const statusRef = { role, statusEl, label: versionName };
+    roleStatusRefs.push(statusRef);
 
     const options = document.createElement('div');
     options.className = 'mt-2';
@@ -368,11 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const clearExisting = clearToggle ? clearToggle.checked : true;
       const replaceExisting = replaceToggle ? replaceToggle.checked : true;
       triggerComparisonPagination(comp, {
+        role,
         clearExisting,
         replaceExisting,
         button: runBtn,
         feedback,
-        statusRefs: roleStatusRefs
+        statusRefs: [statusRef]
       });
     });
 
@@ -381,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       restoreComparisonPagination(comp, {
+        role,
         button: restoreBtn,
         feedback,
       });
@@ -389,8 +392,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return container;
   }
 
-  async function triggerComparisonPagination(comp, { clearExisting, replaceExisting, button, feedback, statusRefs }) {
-    const lockKey = `inject-${comp.id}`;
+  async function triggerComparisonPagination(comp, { role = null, clearExisting, replaceExisting, button, feedback, statusRefs }) {
+    const lockKey = role ? `inject-${comp.id}-${role}` : `inject-${comp.id}`;
     if (paginationLocks.has(lockKey)) return;
     paginationLocks.add(lockKey);
 
@@ -404,6 +407,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
+      const payload = {
+        clear_existing: clearExisting ? 1 : 0,
+        replace_existing: replaceExisting ? 1 : 0,
+      };
+      if (role) {
+        payload.role = role;
+      }
+
       const res = await fetch(withBasePath(`/api/comparisons/${comp.id}/page-markers`), {
         method: 'POST',
         headers: {
@@ -411,10 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
           'Accept': 'application/json',
           ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
         },
-        body: JSON.stringify({
-          clear_existing: clearExisting ? 1 : 0,
-          replace_existing: replaceExisting ? 1 : 0
-        })
+        body: JSON.stringify(payload)
       });
 
       const text = await res.text();
@@ -464,8 +472,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function restoreComparisonPagination(comp, { button, feedback }) {
-    const lockKey = `restore-${comp.id}`;
+  async function restoreComparisonPagination(comp, { role = null, button, feedback }) {
+    const lockKey = role ? `restore-${comp.id}-${role}` : `restore-${comp.id}`;
     if (paginationLocks.has(lockKey)) return;
     paginationLocks.add(lockKey);
 
@@ -479,12 +487,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
+      const payload = role ? { role } : null;
+      const headers = {
+        'Accept': 'application/json',
+        ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+      };
+      if (payload) {
+        headers['Content-Type'] = 'application/json';
+      }
+
       const res = await fetch(withBasePath(`/api/comparisons/${comp.id}/page-markers/restore`), {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
-        }
+        headers,
+        body: payload ? JSON.stringify(payload) : null
       });
 
       const payload = await res.json().catch(() => ({}));

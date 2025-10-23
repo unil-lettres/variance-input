@@ -23,7 +23,8 @@ class InjectComparisonPaginationJob implements ShouldQueue, ShouldBeUnique
     public function __construct(
         public int $comparisonId,
         public bool $clearExisting = true,
-        public bool $replaceExisting = true
+        public bool $replaceExisting = true,
+        public ?string $role = null
     ) {
         $this->afterCommit();
         $this->onQueue('page-markers');
@@ -31,7 +32,8 @@ class InjectComparisonPaginationJob implements ShouldQueue, ShouldBeUnique
 
     public function uniqueId(): string
     {
-        return 'inject-pagination-' . $this->comparisonId;
+        $suffix = $this->role ? strtolower($this->role) : 'all';
+        return 'inject-pagination-' . $this->comparisonId . '-' . $suffix;
     }
 
     public function handle(PageMarkerService $pageMarkerService): void
@@ -39,14 +41,31 @@ class InjectComparisonPaginationJob implements ShouldQueue, ShouldBeUnique
         $comparison = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author'])
             ->findOrFail($this->comparisonId);
 
-        $pageMarkerService->markComparisonQueued($comparison->id);
+        $role = $this->role ? strtolower($this->role) : null;
 
         try {
-            $pageMarkerService->applySidecarToComparison(
-                $comparison,
-                $this->clearExisting,
-                $this->replaceExisting
-            );
+            if ($role) {
+                $version = $role === 'target'
+                    ? $comparison->targetVersion
+                    : $comparison->sourceVersion;
+                if ($version) {
+                    $pageMarkerService->markQueued($version->id);
+                }
+
+                $pageMarkerService->applySidecarToComparisonRoleOnly(
+                    $comparison,
+                    $role,
+                    $this->clearExisting,
+                    $this->replaceExisting
+                );
+            } else {
+                $pageMarkerService->markComparisonQueued($comparison->id);
+                $pageMarkerService->applySidecarToComparison(
+                    $comparison,
+                    $this->clearExisting,
+                    $this->replaceExisting
+                );
+            }
         } catch (\Throwable $e) {
             $pageMarkerService->markComparisonFailed($comparison->id, $e->getMessage());
             throw $e;

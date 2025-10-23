@@ -346,6 +346,108 @@ class PageMarkerService
         return $results;
     }
 
+    public function applySidecarToComparisonRoleOnly(
+        Comparison $comparison,
+        string $role,
+        bool $clearExisting,
+        bool $replaceExisting
+    ): array {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $this->ensureOriginalBackups($comparison);
+
+        $role = strtolower($role) === 'target' ? 'target' : 'source';
+
+        $version = $role === 'source'
+            ? $comparison->sourceVersion
+            : $comparison->targetVersion;
+
+        if (!$version) {
+            $result = [
+                'status' => 'skipped',
+                'reason' => 'Version absente',
+                'inserted' => 0,
+                'misses'   => [],
+                'paths'    => [],
+                'total'    => 0,
+            ];
+            $this->finishComparisonProgress($comparison->id, [
+                'status' => 'done',
+                'roles'  => [
+                    $role => [
+                        'status'   => $result['status'],
+                        'reason'   => $result['reason'],
+                        'total'    => 0,
+                        'inserted' => 0,
+                        'missed'   => 0,
+                    ],
+                ],
+                'summary' => [$role => $result],
+                'updated_at' => time(),
+            ]);
+            return $result;
+        }
+
+        $sidecar = $this->loadPaginationSidecar($version->id);
+        if (!$sidecar) {
+            throw new untimeException('Aucun sidecar pagination disponible pour cette version.');
+        }
+
+        $markers = $sidecar['markers'] ?? [];
+        $totalMarkers = count($markers);
+
+        $this->writeComparisonProgress($comparison->id, [
+            'status'        => 'running',
+            'comparison_id' => $comparison->id,
+            'roles'         => [
+                $role => [
+                    'status'   => 'queued',
+                    'total'    => $totalMarkers,
+                    'inserted' => 0,
+                    'missed'   => 0,
+                ],
+            ],
+            'updated_at'    => time(),
+        ]);
+
+        $this->updateComparisonRoleProgress($comparison->id, $role, [
+            'status' => 'running',
+            'total'  => $totalMarkers,
+        ]);
+
+        $result = $this->applySidecarToComparisonRole(
+            $comparison,
+            $version,
+            $role,
+            $markers,
+            $clearExisting,
+            $replaceExisting
+        );
+
+        $this->updateComparisonRoleProgress($comparison->id, $role, [
+            'status'   => $result['status'],
+            'inserted' => $result['inserted'],
+            'missed'   => count($result['misses']),
+            'total'    => $totalMarkers,
+            'paths'    => $result['paths'] ?? [],
+        ]);
+
+        $this->finishComparisonProgress($comparison->id, [
+            'status'        => 'done',
+            'roles'         => [
+                $role => [
+                    'status'   => $result['status'],
+                    'total'    => $totalMarkers,
+                    'inserted' => $result['inserted'],
+                    'missed'   => count($result['misses']),
+                ],
+            ],
+            'summary'       => [$role => $result + ['total' => $totalMarkers]],
+            'updated_at'    => time(),
+        ]);
+
+        return $result + ['total' => $totalMarkers];
+    }
+
     public function loadPaginationSidecar(int $versionId): ?array
     {
         $relative = $this->paginationRelativePath($versionId);
@@ -1255,15 +1357,19 @@ class PageMarkerService
         }
     }
 
-    public function restoreOriginalComparisonOutputs(Comparison $comparison): array
+    public function restoreOriginalComparisonOutputs(Comparison $comparison, ?string $role = null): array
     {
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
-        $roles = ['source' => $comparison->sourceVersion, 'target' => $comparison->targetVersion];
-        $summary = [];
+        $role = $role ? strtolower($role) : null;
+        $rolesToProcess = $role ? [$role] : ['source', 'target'];
 
-        foreach ($roles as $role => $version) {
-            [$paths, $backups] = $this->comparisonRoleFileSet($comparison, $role);
+        $summary = [];
+        $snapshot = $this->getComparisonProgressSnapshot($comparison->id) ?? [];
+        $rolesProgress = $snapshot['roles'] ?? [];
+
+        foreach ($rolesToProcess as $currentRole) {
+            [$paths, $backups] = $this->comparisonRoleFileSet($comparison, $currentRole);
 
             $backupContent = null;
             foreach ($backups as $backupPath) {
@@ -1274,20 +1380,31 @@ class PageMarkerService
             }
 
             if ($backupContent === null) {
-                $summary[$role] = [
+                $summary[$currentRole] = [
                     'status'   => 'missing',
                     'restored' => [],
+                    'total'    => 0,
+                ];
+                $rolesProgress[$currentRole] = [
+                    'status'   => 'missing',
+                    'total'    => 0,
+                    'inserted' => 0,
+                    'missed'   => 0,
                 ];
                 continue;
             }
 
             $restored = [];
-            foreach ($paths as $idx => $path) {
+            foreach ($paths as $path) {
                 if (!$path) continue;
                 File::ensureDirectoryExists(dirname($path));
                 File::put($path, $backupContent);
                 $restored[] = $path;
             }
+
+            $version = $currentRole === 'target'
+                ? $comparison->targetVersion
+                : $comparison->sourceVersion;
 
             $total = 0;
             if ($version) {
@@ -1297,31 +1414,25 @@ class PageMarkerService
                 }
             }
 
-            $summary[$role] = [
+            $summary[$currentRole] = [
                 'status'   => 'restored',
                 'restored' => $restored,
                 'total'    => $total,
             ];
+
+            $rolesProgress[$currentRole] = [
+                'status'   => 'restored',
+                'total'    => $total,
+                'inserted' => 0,
+                'missed'   => 0,
+            ];
         }
 
         $this->finishComparisonProgress($comparison->id, [
-            'status'   => 'restored',
-            'roles'    => [
-                'source' => [
-                    'status'   => $summary['source']['status'] ?? 'missing',
-                    'total'    => $summary['source']['total'] ?? 0,
-                    'inserted' => 0,
-                    'missed'   => 0,
-                ],
-                'target' => [
-                    'status'   => $summary['target']['status'] ?? 'missing',
-                    'total'    => $summary['target']['total'] ?? 0,
-                    'inserted' => 0,
-                    'missed'   => 0,
-                ],
-            ],
-            'summary'  => $summary,
-            'updated_at' => time(),
+            'status'        => 'restored',
+            'roles'         => $rolesProgress,
+            'summary'       => array_replace($snapshot['summary'] ?? [], $summary),
+            'updated_at'    => time(),
         ]);
 
         return $summary;

@@ -190,14 +190,25 @@ class ComparisonController extends Controller
 
         $clear   = Arr::get($validated, 'clear_existing', true);
         $replace = Arr::get($validated, 'replace_existing', true);
+        $roleParam = strtolower((string) $request->input('role', ''));
+        $roleParam = $roleParam !== '' ? $roleParam : null;
+
+        if ($roleParam && !in_array($roleParam, ['source', 'target'], true)) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Rôle invalide. Utilisez "source" ou "target".',
+            ], 422);
+        }
 
         $roles = [
             'source' => $comparison->sourceVersion,
             'target' => $comparison->targetVersion,
         ];
 
+        $selectedRoles = $roleParam ? [$roleParam => ($roles[$roleParam] ?? null)] : $roles;
+
         $missing = [];
-        foreach ($roles as $role => $version) {
+        foreach ($selectedRoles as $role => $version) {
             if (!$version) {
                 $missing[] = "Version {$role} manquante";
                 continue;
@@ -214,18 +225,27 @@ class ComparisonController extends Controller
             ], 422);
         }
 
-        $this->flushPendingPaginationJobs($comparison->id);
-        $this->pageMarkerService->markComparisonQueued($comparison->id);
+        foreach ($selectedRoles as $role => $version) {
+            if ($version) {
+                $this->pageMarkerService->markQueued($version->id);
+            }
+        }
+
+        $this->flushPendingPaginationJobs($comparison->id, $roleParam);
 
         InjectComparisonPaginationJob::dispatch(
             comparisonId: $comparison->id,
             clearExisting: (bool) $clear,
-            replaceExisting: (bool) $replace
+            replaceExisting: (bool) $replace,
+            role: $roleParam
         );
 
         return response()->json([
             'status'  => 'queued',
-            'message' => 'Pagination en file d\'attente pour cette comparaison.',
+            'role'    => $roleParam,
+            'message' => $roleParam
+                ? "Pagination en file d'attente pour la version {$roleParam}."
+                : "Pagination en file d'attente pour cette comparaison.",
         ], 202);
     }
 
@@ -244,12 +264,21 @@ class ComparisonController extends Controller
         return response()->json($snapshot, 200);
     }
 
-    public function restorePageMarkers(Comparison $comparison)
+    public function restorePageMarkers(Request $request, Comparison $comparison)
     {
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
         try {
-            $result = $this->pageMarkerService->restoreOriginalComparisonOutputs($comparison);
+            $roleParam = strtolower((string) $request->input('role', ''));
+            $roleParam = $roleParam !== '' ? $roleParam : null;
+            if ($roleParam && !in_array($roleParam, ['source', 'target'], true)) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Rôle invalide. Utilisez "source" ou "target".',
+                ], 422);
+            }
+
+            $result = $this->pageMarkerService->restoreOriginalComparisonOutputs($comparison, $roleParam);
         } catch (\Throwable $e) {
             Log::error('Unable to restore comparison originals', [
                 'comparison_id' => $comparison->id,
@@ -264,26 +293,41 @@ class ComparisonController extends Controller
 
         return response()->json([
             'status'  => 'restored',
+            'role'    => $roleParam,
             'message' => 'Fichiers originaux restaurés.',
             'result'  => $result,
         ]);
     }
 
-    private function flushPendingPaginationJobs(int $comparisonId): void
+    private function flushPendingPaginationJobs(int $comparisonId, ?string $role = null): void
     {
         $jobsQuery = DB::table('jobs')
             ->where('queue', 'page-markers')
             ->where('payload', 'like', '%inject-pagination%')
             ->where('payload', 'like', '%"comparisonId":' . $comparisonId . '%');
+        if ($role) {
+            $jobsQuery->where('payload', 'like', '%"role":"' . $role . '"%');
+        }
         $jobsQuery->delete();
 
         $failedQuery = DB::table('failed_jobs')
             ->where('queue', 'page-markers')
             ->where('payload', 'like', '%inject-pagination%')
             ->where('payload', 'like', '%"comparisonId":' . $comparisonId . '%');
+        if ($role) {
+            $failedQuery->where('payload', 'like', '%"role":"' . $role . '"%');
+        }
         $failedQuery->delete();
 
-        Cache::forget('laravel_unique_job:inject-pagination-' . $comparisonId);
+        if ($role) {
+            Cache::forget('laravel_unique_job:inject-pagination-' . $comparisonId . '-' . $role);
+            Cache::forget('laravel_unique_job:inject-pagination-' . $comparisonId);
+        } else {
+            foreach (['all', 'source', 'target'] as $suffix) {
+                Cache::forget('laravel_unique_job:inject-pagination-' . $comparisonId . '-' . $suffix);
+            }
+            Cache::forget('laravel_unique_job:inject-pagination-' . $comparisonId);
+        }
     }
 
     private function resolvePublicationPaths(Comparison $comparison): array
