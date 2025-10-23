@@ -235,17 +235,10 @@ document.addEventListener('DOMContentLoaded', () => {
     tick();
   }
 
-  function renderComparisonRole(comp, role, roleStatusRefs) {
+  function renderComparisonRole(comp, role, versionName) {
     const data = (comp.pagination && comp.pagination[role]) || {};
     const container = document.createElement('div');
     container.className = 'small text-start d-flex flex-column gap-2';
-
-    const versionName = role === 'source'
-      ? (comp.source_version?.name ?? `Version ${comp.source_id}`)
-      : (comp.target_version?.name ?? `Version ${comp.target_id}`);
-    const versionInfo = document.createElement('div');
-    versionInfo.innerHTML = `<strong>${versionName}</strong>`;
-    container.appendChild(versionInfo);
 
     const badges = document.createElement('div');
     const markersBadge = createBadge({
@@ -304,9 +297,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressSnapshot = comp.comparison_progress || null;
     statusEl.dataset.comparisonId = String(comp.id);
     statusEl.dataset.paginationRole = role;
-    registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
     const statusRef = { role, statusEl, label: versionName };
-    roleStatusRefs.push(statusRef);
+    registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
 
     const options = document.createElement('div');
     options.className = 'mt-2';
@@ -389,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    return container;
+    return { element: container, statusRef };
   }
 
   async function triggerComparisonPagination(comp, { role = null, clearExisting, replaceExisting, button, feedback, statusRefs }) {
@@ -602,10 +594,19 @@ document.addEventListener('DOMContentLoaded', () => {
           return `${origin}/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.folder}`;
         })();
 
+        const sourceName = comp.source_version?.name ?? `Version ${comp.source_id}`;
+        const targetName = comp.target_version?.name ?? `Version ${comp.target_id}`;
+
         tr.innerHTML = `
           <td>${comp.id}</td>
-          <td class="align-top source-cell"></td>
-          <td class="align-top target-cell"></td>
+          <td class="align-top source-cell">
+            <div><strong>${sourceName}</strong></div>
+            <div class="role-wrapper"></div>
+          </td>
+          <td class="align-top target-cell">
+            <div><strong>${targetName}</strong></div>
+            <div class="role-wrapper"></div>
+          </td>
           <td>${comp.folder ?? ''}</td>
           <td>${comp.ratio ?? ''}</td>
           <td>${comp.lg_pivot ?? ''}</td>
@@ -628,14 +629,15 @@ document.addEventListener('DOMContentLoaded', () => {
           </td>
         `;
         tbody.appendChild(tr);
-        const roleStatusRefs = [];
-        const sourceCell = tr.querySelector('.source-cell');
-        if (sourceCell) {
-          sourceCell.appendChild(renderComparisonRole(comp, 'source', roleStatusRefs));
+        const sourceWrapper = tr.querySelector('.source-cell .role-wrapper');
+        if (sourceWrapper) {
+          const roleComponent = renderComparisonRole(comp, 'source', sourceName);
+          sourceWrapper.appendChild(roleComponent.element);
         }
-        const targetCell = tr.querySelector('.target-cell');
-        if (targetCell) {
-          targetCell.appendChild(renderComparisonRole(comp, 'target', roleStatusRefs));
+        const targetWrapper = tr.querySelector('.target-cell .role-wrapper');
+        if (targetWrapper) {
+          const roleComponent = renderComparisonRole(comp, 'target', targetName);
+          targetWrapper.appendChild(roleComponent.element);
         }
       });
     } catch (err) {
