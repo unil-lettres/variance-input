@@ -45,11 +45,7 @@
     margin: 0 1px;
 }
 
-.cm-page-number-mark.readonly {
-    cursor: text;
-}
-
-.cm-page-number-mark:not(.readonly):hover {
+.cm-page-number-mark:hover {
     background-color: #ffffff;
     color: #59b6aa;
 }

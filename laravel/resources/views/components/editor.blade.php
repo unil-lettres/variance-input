@@ -7,6 +7,7 @@
                 id="save-xml"
                 class="btn btn-success mb-2"
                 {{ !$canEdit ? 'disabled' : '' }}
+                data-bs-toggle="tooltip"
                 title="Sauvegarder les modifications"
             ><i class="bi bi-floppy-fill"></i></button>
             <div class="btn-group" role="group" aria-label="Editor utility buttons">
@@ -14,25 +15,27 @@
                     id="toggle-readonly"
                     class="btn btn-outline-primary mb-2"
                     {{ !$canEdit ? 'disabled' : '' }}
-                    data-bs-toggle="button"
-                    title="Activer/Désactiver le mode édition"
+                    data-bs-toggle="tooltip"
+                    title="Activer / Désactiver le mode édition"
                 ><i class="bi bi-pencil-square"></i></button>
                 <button
                     id="toggle-tags"
-                    data-bs-toggle="button"
+                    data-bs-toggle="tooltip"
                     class="btn btn-outline-primary mb-2"
-                    title="Afficher/Masquer les balises"
+                    title="Afficher / Masquer les balises"
                 ><i class="bi bi-code-square"></i></button>
             </div>
             <div class="btn-group" role="group" aria-label="Editor italic buttons">
                 <button
                     id="italic-open-btn"
+                    data-bs-toggle="tooltip"
                     class="btn btn-outline-primary mb-2"
                     title="Insérer balise italique ouvrante"
                 ><i class="bi bi-code"></i><i class="bi bi-type-italic"></i></button>
                 <button
                     id="italic-close-btn"
                     class="btn btn-outline-primary mb-2"
+                    data-bs-toggle="tooltip"
                     title="Insérer balise italique fermante"
                 ><i class="bi bi-code-slash"></i><i class="bi bi-type-italic"></i></button>
                 <button
@@ -46,7 +49,7 @@
             <button
                 id="search-btn"
                 class="btn btn-outline-primary mb-2"
-                data-bs-toggle="button"
+                data-bs-toggle="tooltip"
                 title="Rechercher du texte"
             ><i class="bi bi-search"></i></button>
         </div>

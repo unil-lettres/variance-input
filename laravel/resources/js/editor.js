@@ -3,6 +3,17 @@ import initEditor from './codemirror-editor';
 document.addEventListener('DOMContentLoaded', () => {
     const { xmlContent, urlFileSave, canEdit } = window.editorParams;
 
+    // Initialize Bootstrap tooltips.
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"], [data-bs-toggle="modal"]');
+    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(
+        tooltipTriggerEl,
+        {
+            delay: { "show": 500, "hide": 100 },
+            trigger: 'hover',
+            offset: [0, 6],
+        }
+    ));
+
     // DOM Elements
     const elements = {
         saveBtn: document.getElementById('save-xml'),
@@ -375,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Italic errors report handler
     elements.italicErrorsModal.addEventListener('show.bs.modal', () => {
         const errors = editor.validateItalicTags();
-        
+
         if (errors.length === 0) {
             elements.italicErrorsList.innerHTML = `
                 <div class="alert alert-success" role="alert">

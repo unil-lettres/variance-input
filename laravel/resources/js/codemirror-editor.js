@@ -47,6 +47,7 @@ class ItalicTagWidget extends WidgetType {
     this.tag = tag;
     this.isOpening = isOpening;
     this.view = view;
+    this.tooltip = null;
   }
 
   toDOM() {
@@ -54,15 +55,153 @@ class ItalicTagWidget extends WidgetType {
     span.className = "cm-italic-tag";
     span.textContent = this.isOpening ? "⟨i⟩" : "⟨/i⟩";
     span.title = `Cliquer pour supprimer`;
+    span.style.cursor = 'pointer';
+    
+    this.tooltip = new bootstrap.Tooltip(span, {
+        trigger: 'hover',
+        offset: [0, 10],
+    });
+
+    span.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      try {
+        const pos = this.view.posAtDOM(span);
+        if (pos === null) return;
+
+        const content = this.view.state.doc.toString();
+        const openTagRegex = /<em\s*>/gi;
+        const closeTagRegex = /<\/em\s*>/gi;
+
+        let tagToDelete = null;
+        let match;
+
+        // Check opening tags
+        openTagRegex.lastIndex = 0;
+        while ((match = openTagRegex.exec(content)) !== null) {
+          if (match.index <= pos && pos <= match.index + match[0].length) {
+            tagToDelete = { from: match.index, to: match.index + match[0].length };
+            break;
+          }
+        }
+
+        // Check closing tags if not found
+        if (!tagToDelete) {
+          closeTagRegex.lastIndex = 0;
+          while ((match = closeTagRegex.exec(content)) !== null) {
+            if (match.index <= pos && pos <= match.index + match[0].length) {
+              tagToDelete = { from: match.index, to: match.index + match[0].length };
+              break;
+            }
+          }
+        }
+
+        // Delete the tag
+        if (tagToDelete) {
+          this.view.dispatch({
+            changes: { from: tagToDelete.from, to: tagToDelete.to, insert: '' }
+          });
+          this.view.focus();
+        }
+      } catch (err) {
+        console.error('Error deleting italic tag:', err);
+      }
+    });
+
     return span;
   }
 
+  destroy(dom) {
+    if (this.tooltip) {
+      this.tooltip.dispose();
+      this.tooltip = null;
+    }
+  }
+
   ignoreEvent(event) {
-    return event.type !== 'mousedown';
+    return false;
   }
 
   eq(other) {
     return other.tag === this.tag && other.isOpening === this.isOpening;
+  }
+}
+
+// Widget to display and edit page numbers
+class PageNumberWidget extends WidgetType {
+  constructor(pageNumber, imageName, view, getCacheFunction, getClickedCallback) {
+    super();
+    this.pageNumber = pageNumber;
+    this.imageName = imageName;
+    this.view = view;
+    this.getCacheFunction = getCacheFunction;
+    this.getClickedCallback = getClickedCallback;
+    this.tooltip = null;
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = 'cm-page-number-mark';
+    span.textContent = this.pageNumber;
+    span.title = 'Cliquer pour modifier';
+    span.style.cursor = 'pointer';
+    
+    this.tooltip = new bootstrap.Tooltip(span, {
+      trigger: 'hover',
+      offset: [0, 10],
+    });
+
+    span.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      try {
+        // Get current position from cache
+        const cache = this.getCacheFunction(this.view);
+        const pageNumberData = cache.pageNumberPositions.get(this.imageName);
+        
+        if (!pageNumberData) return;
+
+        const newPageNumber = prompt("Entrez le nouveau numéro de page:", pageNumberData.content === '?' ? '' : pageNumberData.content);
+
+        if (newPageNumber === null) return;
+
+        if (newPageNumber.length > 6) {
+          alert("Le numéro de page ne peut pas faire plus de 6 caractères.");
+          return;
+        }
+
+        if (newPageNumber !== pageNumberData.content) {
+          this.view.dispatch({
+            changes: { from: pageNumberData.start, to: pageNumberData.end, insert: newPageNumber || '?' }
+          });
+
+          const callback = this.getClickedCallback();
+          if (callback) callback();
+        }
+      } catch (err) {
+        console.error('Error editing page number:', err);
+      }
+    });
+    
+    return span;
+  }
+
+  destroy(dom) {
+    if (this.tooltip) {
+      this.tooltip.dispose();
+      this.tooltip = null;
+    }
+  }
+
+  ignoreEvent(event) {
+    return false;
+  }
+
+  eq(other) {
+    return other.pageNumber === this.pageNumber && 
+           other.imageName === this.imageName;
   }
 }
 
@@ -144,11 +283,11 @@ const hideTagsField = StateField.define({
   })
 });
 
-// Helper functions to manage page number
+// Helper function to parse page numbers from cache
 function parsePageNumbers(view, getCacheFunction) {
   const cache = getCacheFunction(view);
   
-  // Convert cache data to the format expected by decorations
+  // Convert cache data to the format expected by widgets
   const pageNumbers = [];
   cache.pageNumberPositions.forEach((data, imageName) => {
     pageNumbers.push({
@@ -162,135 +301,11 @@ function parsePageNumbers(view, getCacheFunction) {
   return pageNumbers;
 }
 
-function createPageNumberDecorations(view, getIsReadOnly, onPageNumbersChanged, getCacheFunction) {
-  const decorations = [];
-  const pageNumbers = parsePageNumbers(view, getCacheFunction);
-  const isReadOnly = getIsReadOnly();
-
-  if (onPageNumbersChanged) {
-    onPageNumbersChanged(pageNumbers);
-  }
-
-  for (const pageNumber of pageNumbers) {
-    decorations.push(
-      Decoration.mark({
-        class: isReadOnly ? "cm-page-number-mark" : "cm-page-number-mark readonly"
-      }).range(pageNumber.start, pageNumber.end)
-    );
-  }
-
-  return Decoration.set(decorations);
-}
-
-function setupPageNumberClickHandler(view, onUpdate, getIsReadOnly, getCacheFunction) {
-  const handleClick = (e) => {
-    if (!getIsReadOnly()) {
-      return;
-    }
-    
-    try {
-      const pos = view.posAtDOM(e.target);
-      if (pos === null) return;
-      
-      const pageNumbers = parsePageNumbers(view, getCacheFunction);
-
-      for (const pageNumber of pageNumbers) {
-        // Check if click position is within this page number
-        if (pos >= pageNumber.start && pos <= pageNumber.end) {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          const newPageNumber = prompt("Entrez le nouveau numéro de page:", pageNumber.content);
-
-          if (newPageNumber === null) return;
-
-          if (newPageNumber.length > 6) {
-              alert("Le numéro de page ne peut pas faire plus de 6 caractères.");
-              return;
-          }
-
-          if (newPageNumber !== pageNumber.content) {
-            view.dispatch({
-              changes: { from: pageNumber.start, to: pageNumber.end, insert: newPageNumber }
-            });
-            
-            if (onUpdate) {
-              onUpdate();
-            }
-          }
-          return;
-        }
-      }
-    } catch (err) {
-      // Ignore DOM position errors that can occur with decorations
-    }
-  };
-
-  view.dom.addEventListener('click', handleClick);
-}
-
 // ViewPlugin to decorate italic tags
 const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
     this.decorations = this.buildDecorations(view);
-    this.setupClickHandler();
-  }
-
-  setupClickHandler() {
-    this.view.dom.addEventListener('mousedown', (e) => {
-      const target = e.target;
-      if (target.classList.contains('cm-italic-tag')) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        try {
-          // Get the position of the clicked element
-          const pos = this.view.posAtDOM(target);
-          if (pos === null) return;
-          
-          const doc = this.view.state.doc;
-          const content = doc.toString();
-          
-          // Find the tag at this position
-          const openTagRegex = /<em\s*>/gi;
-          const closeTagRegex = /<\/em\s*>/gi;
-          
-          let tagToDelete = null;
-          let match;
-          
-          // Check opening tags
-          openTagRegex.lastIndex = 0;
-          while ((match = openTagRegex.exec(content)) !== null) {
-            if (match.index <= pos && pos <= match.index + match[0].length) {
-              tagToDelete = { from: match.index, to: match.index + match[0].length };
-              break;
-            }
-          }
-          
-          // Check closing tags if not found
-          if (!tagToDelete) {
-            closeTagRegex.lastIndex = 0;
-            while ((match = closeTagRegex.exec(content)) !== null) {
-              if (match.index <= pos && pos <= match.index + match[0].length) {
-                tagToDelete = { from: match.index, to: match.index + match[0].length };
-                break;
-              }
-            }
-          }
-          
-          // Delete the tag
-          if (tagToDelete) {
-            this.view.dispatch({
-              changes: { from: tagToDelete.from, to: tagToDelete.to, insert: '' }
-            });
-            this.view.focus();
-          }
-        } catch (err) {
-          console.error('Error deleting italic tag:', err);
-        }
-      }
-    });
   }
 
   update(update) {
@@ -353,41 +368,47 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
   decorations: v => v.decorations
 });
 
-// ViewPlugin to manage page number decorations
-const createPageNumberPlugin = (getClickedCallback, getIsReadOnly, getPageNumbersChangedCallback, getCacheFunction) => ViewPlugin.fromClass(class {
+// ViewPlugin to manage page number widgets
+const createPageNumberPlugin = (getClickedCallback, getPageNumbersChangedCallback, getCacheFunction) => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
-    this.getIsReadOnly = getIsReadOnly;
+    this.getClickedCallback = getClickedCallback;
     this.getPageNumbersChangedCallback = getPageNumbersChangedCallback;
     this.getCacheFunction = getCacheFunction;
-    this.decorations = createPageNumberDecorations(view, getIsReadOnly, (pageNumbers) => {
-      const cb = getPageNumbersChangedCallback();
-      if (cb) cb(pageNumbers);
-    }, getCacheFunction);
-    this.lastReadOnlyState = getIsReadOnly();
-    
-    // Setup click handler once
-    this.clickHandlerSetup = false;
-    if (!this.clickHandlerSetup) {
-      setupPageNumberClickHandler(view, () => {
-        const callback = getClickedCallback();
-        if (callback) callback();
-      }, getIsReadOnly, getCacheFunction);
-      this.clickHandlerSetup = true;
-    }
+    this.decorations = this.buildDecorations(view);
   }
 
   update(update) {
-    const currentReadOnlyState = this.getIsReadOnly();
-    const readOnlyChanged = currentReadOnlyState !== this.lastReadOnlyState;
-    
-    if (update.docChanged || readOnlyChanged) {
-      this.decorations = createPageNumberDecorations(update.view, this.getIsReadOnly, (pageNumbers) => {
-        const cb = this.getPageNumbersChangedCallback();
-        if (cb) cb(pageNumbers);
-      }, this.getCacheFunction);
-      this.lastReadOnlyState = currentReadOnlyState;
+    if (update.docChanged) {
+      this.decorations = this.buildDecorations(update.view);
+
+      // Notify about page numbers changes
+      const pageNumbers = parsePageNumbers(update.view, this.getCacheFunction);
+      const cb = this.getPageNumbersChangedCallback();
+      if (cb) cb(pageNumbers);
     }
+  }
+
+  buildDecorations(view) {
+    const pageNumbers = parsePageNumbers(view, this.getCacheFunction);
+    const widgets = [];
+
+    for (const pageNumber of pageNumbers) {
+      widgets.push(
+        Decoration.replace({
+          widget: new PageNumberWidget(
+            pageNumber.content,
+            pageNumber.imageName,
+            view,
+            this.getCacheFunction,
+            this.getClickedCallback
+          ),
+          inclusive: true
+        }).range(pageNumber.start, pageNumber.end)
+      );
+    }
+
+    return Decoration.set(widgets);
   }
 }, {
   decorations: v => v.decorations
@@ -489,7 +510,6 @@ export default function (container, initialXml) {
       createItalicTagPlugin(),
       createPageNumberPlugin(
         () => onPageNumberClickedCallback,
-        () => isReadOnly,
         () => onPageNumbersChangedCallback,
         getCache,
       ),
@@ -530,16 +550,6 @@ export default function (container, initialXml) {
         },
         ".cm-selectionBackground": {
           backgroundColor: "#2e4862ff !important"
-        },
-        ".cm-page-number": {
-          backgroundColor: "#ff6b35 !important",
-          color: "#ffffff !important",
-          fontWeight: "bold !important",
-          padding: "2px 6px !important",
-          borderRadius: "3px !important",
-          border: "2px solid #ff4500 !important",
-          display: "inline-block !important",
-          fontSize: "1.1em !important"
         },
       }),
     ]
