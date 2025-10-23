@@ -173,8 +173,12 @@ class PageNumberWidget extends WidgetType {
         }
 
         if (newPageNumber !== pageNumberData.content) {
+          if (newPageNumber.trim() === '') {
+            alert("Le numéro de page ne peut pas être vide. Pour supprimer un numéro de page, cliquez à deux reprises sur le bouton d'insertion qui lui est associé.");
+            return;
+          }
           this.view.dispatch({
-            changes: { from: pageNumberData.start, to: pageNumberData.end, insert: newPageNumber || '?' }
+            changes: { from: pageNumberData.start, to: pageNumberData.end, insert: newPageNumber }
           });
 
           const callback = this.getClickedCallback();
