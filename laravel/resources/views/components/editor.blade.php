@@ -1,3 +1,5 @@
+@props(['xmlContent', 'imagesData', 'urlFileSave', 'canEdit'])
+
 <div class="border border-top-0 p-3 row m-0 overflow-auto editor" style="height: calc(100vh - 200px);">
     <div class="col-md-6 col-12 order-last order-md-first h-100 d-flex flex-column">
         <div>
