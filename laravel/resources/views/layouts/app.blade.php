@@ -42,7 +42,7 @@
         </div>
     </header>
 
-    <main class="container">
+    <main class="container-fluid">
         @yield('content')
     </main>
 
