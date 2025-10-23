@@ -513,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isRunning) {
           statusHtml = '<span class="text-info" title="Medite en cours…">⏳ Medite en cours…</span>';
         } else if (ready) {
-          statusHtml = '<span class="text-success" title="Tous les composants Medite sont présents">✔</span>';
+          statusHtml = '<span class="text-success" title="Tous les composants Medite sont présents"><i class="bi bi-check-circle"></i></span>';
         } else {
           const statusTitle = `Composants manquants :\n- ${missing.join('\n- ')}`;
           const safeTitle = statusTitle.replace(/"/g, '&quot;');
@@ -537,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${caseSensitive ? 'yes' : 'no'}</td>
           <td class="text-center components-status">${statusHtml}</td>
           <td class="pagination-cell align-top"></td>
-          <td class="text-center published-status">${published ? `<span class="text-success" title="${publishedTitle}">✔</span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
+          <td class="text-center published-status">${published ? `<span class="text-success" title="${publishedTitle}"><i class="bi bi-check-circle"></i></span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
           <td class="text-center">
             <input type="checkbox" class="form-check-input publish-toggle"
                    data-id="${comp.id}"
@@ -550,8 +550,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>
             <a href="${xmlUrl}"  class="btn btn-sm btn-outline-primary" target="_blank">XML</a>
             ${(legacyUrl && published) ? `<a href="${legacyUrl}" class="btn btn-sm btn-outline-success ms-1" target="_blank" title="Voir sur le site public">Public</a>` : ''}
-            <a href="/comparison/${comp.id}/editor"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-square"></i></a>
-            <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}">🗑️</button>
+            <a href="/comparison/${comp.id}/editor"  class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil-square"></i></a>
+            <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
           </td>
         `;
         tbody.appendChild(tr);

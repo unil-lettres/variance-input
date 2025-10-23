@@ -23,12 +23,12 @@
                     <tbody>
                         <tr>
                             <td>Description</td>
-                            <td>✔️</td>
+                            <td><i class="bi bi-check-circle"></i></td>
                             <td><input type="checkbox" class="form-check-input" id="description-toggle"></td>
                         </tr>
                         <tr>
                             <td>Notice</td>
-                            <td>✔️</td>
+                            <td><i class="bi bi-check-circle"></i></td>
                             <td><input type="checkbox" class="form-check-input" id="notice-toggle" checked></td>
                         </tr>
                         <tr>
@@ -38,7 +38,7 @@
                         </tr>
                         <tr>
                             <td>Comparaisons</td>
-                            <td>✔️</td>
+                            <td><i class="bi bi-check-circle"></i></td>
                             <td><input type="checkbox" class="form-check-input" id="comparisons-toggle"></td>
                         </tr>
                     </tbody>
