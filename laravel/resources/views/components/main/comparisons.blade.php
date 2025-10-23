@@ -139,6 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const total = roleData.total ?? 0;
       const inserted = fmt(roleData.inserted);
       const missed = fmt(roleData.missed);
+      if (total > 0 && inserted === 0) {
+        return `⚠️ Terminé sans pagination (0/${total}). Relancez Medite puis réinjectez.${suffix}`;
+      }
       return `✅ Terminé — insérés : ${inserted}/${total || '—'}, manqués : ${missed}${suffix}`;
     }
     if (status === 'idle') {
