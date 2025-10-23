@@ -1,7 +1,10 @@
 @php /** components/main/medite.blade.php **/ @endphp
 <div class="card">
-    <div class="card-header">Script Medite</div>
+    <div class="card-header text-uppercase fw-semibold">Lancer Medite</div>
     <div class="card-body">
+        <p class="fst-italic text-muted small mb-3">
+            Choisissez deux versions et paramétrez Medite pour générer un alignement. Une fois le traitement terminé, les résultats alimentent la liste des comparaisons ci-dessous et la partie publique.
+        </p>
         <form id="medite-form">
             @csrf
             <!-- Hidden context -->
@@ -118,7 +121,7 @@ function notifyComparison(eventName, comparisonId) {
 async function refreshVersions(workId){
     $srcSel.innerHTML = '<option value="">Choisir la version source</option>';
     $tgtSel.innerHTML = '<option value="">Choisir la version cible</option>';
-    const res = await fetch(`/api/versions?work_id=${workId}`);
+    const res = await fetch(withBasePath(`/api/versions?work_id=${workId}`));
     if(!res.ok) return;
     const vers = await res.json();
     vers.forEach(v=>{
@@ -167,7 +170,7 @@ $form.addEventListener('submit', async ev => {
     fillHidden('tgt_short', tgtShort);
 
     /*──────────────────── 1) Reserve a comparison row ────────────────────*/
-    const cmpResp = await fetch('/api/comparisons', {
+    const cmpResp = await fetch(withBasePath('/api/comparisons'), {
         method : 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -228,7 +231,7 @@ $form.addEventListener('submit', async ev => {
 
 
 
-    const run = await fetch('/api/run_medite', {
+    const run = await fetch(withBasePath('/api/run_medite'), {
         method : 'POST',
         body   : fd,
         headers: {
@@ -264,7 +267,7 @@ function pollTask(taskId, cmpId){
             return;
         }
 
-        const r = await fetch(`/api/task_status/${taskId}`);
+        const r = await fetch(withBasePath(`/api/task_status/${taskId}`));
         const d = await r.json();
         if (d.status === 'pending') return;   // still running
 
@@ -413,7 +416,7 @@ function pollTask(taskId, cmpId){
             notifyComparison('comparisonReady', cmpId);
 
         } else {   // failed → roll back comparison
-            await fetch(`/comparisons/${cmpId}`, {
+            await fetch(withBasePath(`/comparisons/${cmpId}`), {
                 method:'DELETE',
                 headers:{'X-CSRF-TOKEN': CSRF}
             });

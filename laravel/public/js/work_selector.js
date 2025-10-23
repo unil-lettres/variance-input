@@ -1,5 +1,15 @@
 document.addEventListener("DOMContentLoaded", () => {
   const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  const buildUrl = (path) => {
+    if (typeof path !== 'string') return path;
+    if (typeof window.withBasePath === 'function') {
+      return window.withBasePath(path);
+    }
+    if (!path.startsWith('/')) {
+      return '/' + path;
+    }
+    return path;
+  };
 
   // Grab elements
   const authorSelector  = document.getElementById("author-selector");
@@ -34,6 +44,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const authorFolder = authorOption?.dataset.folder || null;
     const workFolder   = workOption?.dataset.folder || null;
+    const authorLabel  = authorOption?.textContent?.trim() || null;
+    const workLabel    = workOption?.textContent?.trim() || null;
 
     document.dispatchEvent(new CustomEvent('workSelected', {
       detail: {
@@ -42,12 +54,14 @@ document.addEventListener("DOMContentLoaded", () => {
         short_title: shortTitle,
         author_folder: authorFolder,
         work_folder: workFolder,
+        author_label: authorLabel,
+        work_label: workLabel,
       }
     }));
   }
 
   function resetWorksUI(authorId = null) {
-    workSelector.innerHTML = '<option value="">Sélectionner une oeuvre</option>';
+    workSelector.innerHTML = '<option value="" disabled selected>Sélectionner une oeuvre</option>';
     workSelector.value     = '';
     workSelector.disabled  = !authorId;
     toggleWorkButtons();
@@ -56,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function initialReset() {
     // No author/work yet: disable things and tell blades to clear themselves
     authorSelector.value = '';
-    resetWorksUI(null);
+    resetWorksUI(null, null);
     toggleAuthorButtons();
     dispatchWorkSelected(null, null);
   }
@@ -95,10 +109,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (!authorId) {
+      dispatchWorkSelected(workId, null);
+      return;
+    }
+
     // Normal case: a real work was chosen
     const selectedOption = workSelector.options[workSelector.selectedIndex];
     const shortTitle     = selectedOption?.getAttribute('data-short-title') || null;
 
+    console.debug("dispatchWorkSelected", { workId, authorId, shortTitle });
     dispatchWorkSelected(workId, authorId, shortTitle);
   });
 
@@ -128,7 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    fetch('/api/authors', {
+    fetch(buildUrl('/api/authors'), {
       method: 'POST',
       headers: JSON_X_CSRF,
       body: JSON.stringify({ name })
@@ -177,7 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    fetch(`/api/authors/${id}`, {
+    fetch(buildUrl(`/api/authors/${id}`), {
       method: 'PUT',
       headers: JSON_X_CSRF,
       body: JSON.stringify({ name })
@@ -206,7 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const name = authorSelector.options[authorSelector.selectedIndex].text;
     if (!confirm(`Supprimer cet auteur ?\n${name}`)) return;
 
-    fetch(`/api/authors/${id}`, {
+    fetch(buildUrl(`/api/authors/${id}`), {
       method : 'DELETE',
       headers: { 'X-CSRF-TOKEN': csrfToken, ...JSON_HEADERS }
     })
@@ -240,7 +260,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   saveWorkBtn.addEventListener("click", () => {
     const title       = document.getElementById("new-work-title").value.trim();
-    const short_title = document.getElementById("new-work-short").value.trim();
+    const shortInput = document.getElementById("new-work-short");
+    const short_title = shortInput.value.trim().toLowerCase();
+    shortInput.value = short_title;
     const author_id   = authorSelector.value;
 
     if (!author_id) return;
@@ -250,13 +272,13 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Le titre de l'œuvre doit contenir au moins 3 caractères.");
       return;
     }
-    if (short_title.length < 3 || short_title.length > 8) {
-      alert("Le titre abrégé doit contenir entre 3 et 8 caractères.");
+    if (short_title.length < 2 || short_title.length > 8) {
+      alert("Le titre abrégé doit contenir entre 2 et 8 caractères.");
       return;
     }
-    const validShortTitle = /^[a-zA-Z0-9_-]+$/.test(short_title);
+    const validShortTitle = /^[a-z]+$/.test(short_title);
     if (!validShortTitle) {
-      alert("Le titre abrégé ne peut contenir que des lettres, chiffres, tirets ou underscores.");
+      alert("Le titre abrégé ne peut contenir que des lettres minuscules (a à z).");
       return;
     }
     // Check if short_title already exists for the same author
@@ -268,7 +290,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    fetch('/api/works', {
+    fetch(buildUrl('/api/works'), {
       method: 'POST',
       headers: JSON_X_CSRF,
       body: JSON.stringify({ title, short_title, author_id })
@@ -294,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
   editWorkBtn.addEventListener("click", () => {
     const workId = workSelector.value;
     if (!workId) return;
-    fetch(`/api/works/${workId}`, { headers: JSON_HEADERS })
+    fetch(buildUrl(`/api/works/${workId}`), { headers: JSON_HEADERS })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -314,20 +336,22 @@ document.addEventListener("DOMContentLoaded", () => {
   updateWorkBtn.addEventListener("click", () => {
     const id          = document.getElementById("edit-work-id").value;
     const title       = document.getElementById("edit-work-title").value.trim();
-    const short_title = document.getElementById("edit-work-short-title").value.trim();
+    const editShortInput = document.getElementById("edit-work-short-title");
+    const short_title = editShortInput.value.trim().toLowerCase();
+    editShortInput.value = short_title;
     const author_id   = authorSelector.value;
 
     if (title.length < 3) {
       alert("Le titre de l'œuvre doit contenir au moins 3 caractères.");
       return;
     }
-    if (short_title.length < 3 || short_title.length > 8) {
-      alert("Le titre abrégé doit contenir entre 3 et 8 caractères.");
+    if (short_title.length < 2 || short_title.length > 8) {
+      alert("Le titre abrégé doit contenir entre 2 et 8 caractères.");
       return;
     }
-    const validShortTitle = /^[a-zA-Z0-9_-]+$/.test(short_title);
+    const validShortTitle = /^[a-z]+$/.test(short_title);
     if (!validShortTitle) {
-      alert("Le titre abrégé ne peut contenir que des lettres, chiffres, tirets ou underscores.");
+      alert("Le titre abrégé ne peut contenir que des lettres minuscules (a à z).");
       return;
     }
     const duplicate = Array.from(workSelector.options).some(option =>
@@ -338,7 +362,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    fetch(`/api/works/${id}`, {
+    fetch(buildUrl(`/api/works/${id}`), {
       method: 'PUT',
       headers: JSON_X_CSRF,
       body: JSON.stringify({ title, short_title })
@@ -372,7 +396,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const name = workSelector.options[workSelector.selectedIndex].text;
     if (!confirm(`Supprimer cette œuvre ?\n${name}`)) return;
 
-    fetch(`/api/works/${id}`, {
+    fetch(buildUrl(`/api/works/${id}`), {
       method: 'DELETE',
       headers: { 'X-CSRF-TOKEN': csrfToken, ...JSON_HEADERS }
     })
@@ -399,13 +423,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // HELPER FUNCS
   // ==============
   function loadAuthors(selectedAuthorId = null) {
-    fetch('/api/authors', { headers: JSON_HEADERS })
+    fetch(buildUrl('/api/authors'), { headers: JSON_HEADERS })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then(authors => {
-        authorSelector.innerHTML = '<option value="">Sélectionner un auteur</option>';
+        authorSelector.innerHTML = '<option value="" disabled selected>Sélectionner un auteur</option>';
 
         authors.forEach(author => {
           const opt = document.createElement('option');
@@ -434,13 +458,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function loadWorks(authorId, selectedWorkId = null) {
     if (!authorId) return;
 
-    fetch(`/api/author/${authorId}/works`, { headers: JSON_HEADERS })
+    fetch(buildUrl(`/api/author/${authorId}/works`), { headers: JSON_HEADERS })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then(works => {
-        resetWorksUI(authorId);
+        resetWorksUI(authorId, selectedWorkId);
 
         works.forEach(work => {
           const opt = document.createElement('option');

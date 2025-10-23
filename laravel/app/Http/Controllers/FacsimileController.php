@@ -3,19 +3,13 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
-
-use Intervention\Image\Drivers\Gd\Driver;
-use Intervention\Image\Encoders\JpegEncoder;
-use Intervention\Image\ImageManager;
-
+use App\Jobs\ProcessFacsimileImage;
 use App\Models\Version;
 use App\Services\PageMarkerService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class FacsimileController extends Controller
 {
@@ -28,6 +22,8 @@ class FacsimileController extends Controller
      */
     public function store(Request $request)
     {
+        @ini_set('memory_limit', config('variance.facsimile_memory_limit', '512M'));
+        @set_time_limit(300);
         $validated = $request->validate([
             'version_id' => 'required|exists:versions,id',
             'images.*'   => 'required|image|max:12000',           // 12 Mo
@@ -56,6 +52,14 @@ class FacsimileController extends Controller
         }
         $disk->makeDirectory($dirRel);
 
+        $queueDiskName = 'local';
+        $queueDisk     = Storage::disk($queueDiskName);
+        $queueDir      = "facsimile_queue/{$author->folder}/{$work->folder}/{$version->folder}";
+        if ($request->boolean('reset')) {
+            $queueDisk->deleteDirectory($queueDir);
+        }
+        $queueDisk->makeDirectory($queueDir);
+
         // Point de départ : numéro suivant en se basant sur les fichiers déjà présents
         $existingIndexes = collect($disk->files($dirRel))
             ->map(fn ($path) => basename($path))
@@ -67,72 +71,96 @@ class FacsimileController extends Controller
             })
             ->filter();
 
+        $queuedIndexes = collect($queueDisk->files($queueDir))
+            ->map(fn ($path) => basename($path))
+            ->map(function ($name) use ($version) {
+                if (preg_match('/^img_' . preg_quote($version->folder, '/') . '_(\d+)\./i', $name, $m)) {
+                    return (int) $m[1];
+                }
+                return null;
+            })
+            ->filter();
+
+        $existingIndexes = $existingIndexes
+            ->merge($queuedIndexes)
+            ->unique()
+            ->values();
+
         $startIndex = ($existingIndexes->max() ?? 0) + 1;
 
         // -----------------------------------------------------------------
         // 2. Boucle de traitement
         // -----------------------------------------------------------------
         $i       = $startIndex;
-        $added   = 0;
+        $queued  = 0;
         $errors  = [];
-        foreach ($validated['images'] as $file) {
+        // Assure deterministic processing order: original client filenames (natural, case‑insensitive)
+        $images = $validated['images'] ?? [];
+        usort($images, function ($a, $b) {
+            return strnatcasecmp($a->getClientOriginalName(), $b->getClientOriginalName());
+        });
+
+        $maxLongEdge  = max(1, (int) config('variance.facsimile_max_long_edge', 2400));
+        $mainQuality  = max(10, min(100, (int) config('variance.facsimile_main_quality', 85)));
+        $thumbWidth   = max(1, (int) config('variance.facsimile_thumb_width', 200));
+        $thumbQuality = max(10, min(100, (int) config('variance.facsimile_thumb_quality', 80)));
+
+        foreach ($images as $file) {
             $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
             $basename = "img_{$version->folder}_{$index}";
-            $ext      = 'jpg';
+            $ext      = strtolower($file->getClientOriginalExtension() ?: $file->guessClientExtension() ?: 'upload');
+            $ext      = preg_replace('/[^a-z0-9]/', '', $ext) ?: 'upload';
 
-            $mainPath  = "{$dirRel}/{$basename}.{$ext}";
-            $thumbPath = "{$dirRel}/{$basename}_thumb.jpg";
+            $queuedFilename = "{$basename}.{$ext}";
+            $queuedPath     = trim($queueDir . '/' . $queuedFilename, '/');
 
-            // 1) Copie l’original (toujours)
-            $disk->putFileAs($dirRel, $file, basename($mainPath));
-            $added++;      // ← on compte tout de suite
-            $i++;
-
-            // 2) Essaie de faire la miniature – mais sans bloquer l’import
             try {
-                $manager = app(ImageManager::class);
+                $queueDisk->delete($queuedPath);
+                $queueDisk->putFileAs($queueDir, $file, $queuedFilename);
 
-                $image = $manager->read($file->get());
+                ProcessFacsimileImage::dispatch(
+                    versionId: $version->id,
+                    basename: $basename,
+                    queuedDisk: $queueDiskName,
+                    queuedPath: $queuedPath,
+                    outputDir: $dirRel,
+                    maxLongEdge: $maxLongEdge,
+                    mainQuality: $mainQuality,
+                    thumbWidth: $thumbWidth,
+                    thumbQuality: $thumbQuality,
+                );
 
-                $thumbImg = $image
-                    ->scale(200)
-                    ->encode(new JpegEncoder(quality: 80));
-
-                $disk->put($thumbPath, (string) $thumbImg);
-
+                $queued++;
             } catch (\Throwable $e) {
-                Log::warning('Miniature fac-similé échouée', [
+                Log::warning('Facsimile enqueue failed', [
                     'file' => $file->getClientOriginalName(),
                     'err'  => $e->getMessage(),
                 ]);
-                $errors[] = "{$basename}.{$ext}";
+                $errors[] = "{$basename}.jpg";
+                $queueDisk->delete($queuedPath);
             }
-        }
-
-
-        if ($added) {
-            $this->refreshComparisonMarkers($version);
+            $i++;
         }
 
         return response()->json([
-            'status'      => $added ? 'ok' : 'error',
+            'status'      => $queued ? 'queued' : 'error',
             'stored_in'   => $dirRel,
-            'files_added' => $added,
+            'files_added' => $queued,
             'errors'      => $errors,
+            'files_report'=> [],
+            'processing'  => (bool) $queued,
+            'limits'      => [
+                'max_long_edge' => $maxLongEdge,
+                'main_quality'  => $mainQuality,
+                'thumb_width'   => $thumbWidth,
+            ],
         ]);
     }
 
     private function refreshComparisonMarkers(Version $version): void
     {
-        $version->loadMissing('comparisonsAsSource', 'comparisonsAsTarget');
-
-        foreach ($version->comparisonsAsSource as $comparison) {
-            $this->pageMarkerService->ensureDefaultMarkers($comparison);
-        }
-
-        foreach ($version->comparisonsAsTarget as $comparison) {
-            $this->pageMarkerService->ensureDefaultMarkers($comparison);
-        }
+        // Default markers are no longer injected; comparisons will only show
+        // facsimiles when real pagination/_lignes exists and images are published.
     }
 
     /**
@@ -166,16 +194,49 @@ class FacsimileController extends Controller
                 $thumbPath  = preg_replace('/(\.\w+)$/', '_thumb$1', $p);
                 $thumbExist = $disk->exists($thumbPath);
 
+                $sizeBytes = $disk->size($p);
+                $width     = null;
+                $height    = null;
+                $absolute  = $disk->path($p);
+                if (is_file($absolute)) {
+                    $info = @getimagesize($absolute);
+                    if (is_array($info)) {
+                        $width  = $info[0] ?? null;
+                        $height = $info[1] ?? null;
+                    }
+                }
+
                 return [
-                    'name'      => basename($p),
-                    'big'       => '/storage/'.$p,                    // ✅ URL publique
-                    'thumb'     => $thumbExist ? '/storage/'.$thumbPath : null,
-                    'hasThumb'  => $thumbExist,
+                    'name'       => basename($p),
+                    'big'        => admin_url('storage/'.ltrim($p, '/')),
+                    'thumb'      => $thumbExist ? admin_url('storage/'.ltrim($thumbPath, '/')) : null,
+                    'hasThumb'   => $thumbExist,
+                    'size_bytes' => $sizeBytes,
+                    'size_human' => $this->humanReadableSize($sizeBytes),
+                    'width'      => $width,
+                    'height'     => $height,
                 ];
             });
 
         return response()->json($images);
     }
 
+    private function humanReadableSize(int $bytes): string
+    {
+        if ($bytes <= 0) {
+            return '0 o';
+        }
 
+        $units = ['o', 'Ko', 'Mo', 'Go', 'To'];
+        $idx   = 0;
+        $value = (float) $bytes;
+
+        while ($value >= 1024 && $idx < count($units) - 1) {
+            $value /= 1024;
+            $idx++;
+        }
+
+        $precision = $idx === 0 ? 0 : 1;
+        return number_format($value, $precision, ',', ' ') . ' ' . $units[$idx];
+    }
 }

@@ -1,7 +1,10 @@
 <div class="card mb-3">
-    <div class="card-header">Comparaisons</div>
+    <div class="card-header text-uppercase fw-semibold">Comparaisons générées</div>
 
     <div class="card-body">
+        <p class="fst-italic text-muted small mb-3">
+            Retrouvez ici toutes les comparaisons produites avec Medite pour l'œuvre sélectionnée. Vous pouvez suivre leur état, accéder aux résultats ou relancer la pagination si nécessaire.
+        </p>
         <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">
             <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -55,6 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const JSON_HEADERS = { 'Accept': 'application/json' };
   let currentWorkId = null;
+  let currentAuthorFolder = '';
+  let currentWorkFolder = '';
   const runningComparisons = window.__runningComparisons || new Set();
   window.__runningComparisons = runningComparisons;
   const paginationLocks = new Set();
@@ -101,75 +106,73 @@ document.addEventListener('DOMContentLoaded', () => {
     return el;
   }
 
-  function buildPagerStatusText(progress) {
+  function buildComparisonStatusText(progress, role) {
     const fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n : 0;
-    if (!progress || !progress.status) {
-        return 'Pagination : aucune exécution enregistrée';
+    if (!progress) {
+      return 'Pagination : aucune exécution enregistrée';
     }
-    const status = progress.status;
-    const updated = formatTimestamp(progress.updated_at);
+    const updated = progress.updated_at ? formatTimestamp(progress.updated_at) : null;
     const suffix = updated ? ` (maj ${updated})` : '';
+    const globalStatus = progress.status || 'idle';
+    const roleData = progress.roles?.[role] || {};
+    const status = roleData.status || globalStatus;
 
     if (status === 'queued') {
-        return `🕒 En file d'attente…${suffix}`;
+      return `🕒 En file d'attente…${suffix}`;
     }
-
+    if (status === 'skipped') {
+      const reason = roleData.reason ? ` — ${roleData.reason}` : '';
+      return `⚪ Pagination ignorée${reason}${suffix}`;
+    }
     if (status === 'running') {
-        const source = progress.source || {};
-        const target = progress.target || {};
-        const total = progress.entries_total || 0;
-        const processedRaw = Math.max(fmt(source.processed), fmt(target.processed));
-        const processed = total ? Math.min(processedRaw, total) : processedRaw;
-        const inserted = fmt(source.inserted) + fmt(target.inserted);
-        const missed   = fmt(source.missed) + fmt(target.missed);
-        const segments = [];
-        segments.push(`source : ${fmt(source.inserted)} ins · ${fmt(source.missed)} ratés`);
-        if ((target.comparisons ?? 0) > 0) {
-            segments.push(`cible : ${fmt(target.inserted)} ins · ${fmt(target.missed)} ratés`);
-        }
-        return `⏳ Progression : ${processed}/${total || '—'} — ${segments.join(' · ')} · total insérés : ${inserted}, manqués : ${missed}${suffix}`;
+      const total = roleData.total ?? 0;
+      const inserted = fmt(roleData.inserted);
+      const missed = fmt(roleData.missed);
+      const processed = inserted;
+      return `⏳ Progression : ${processed}/${total || '—'} — insérés : ${inserted}, manqués : ${missed}${suffix}`;
     }
-
     if (status === 'failed') {
-        const error = progress.error || 'opération interrompue';
-        return `❌ Échec : ${error}${suffix}`;
+      const error = roleData.error || progress.error || 'opération interrompue';
+      return `❌ Échec : ${error}${suffix}`;
     }
-
-    if (status === 'done') {
-        const summary = progress.summary || {};
-        const source = summary.source || progress.source || {};
-        const target = summary.target || progress.target || {};
-        const totalInserted = fmt(source.inserted) + fmt(target.inserted);
-        const totalMissed   = fmt(source.missed) + fmt(target.missed);
-        return `✅ Terminé — insérés : ${totalInserted}, manqués : ${totalMissed}${suffix}`;
+    if (status === 'done' || status === 'ok') {
+      const total = roleData.total ?? 0;
+      const inserted = fmt(roleData.inserted);
+      const missed = fmt(roleData.missed);
+      return `✅ Terminé — insérés : ${inserted}/${total || '—'}, manqués : ${missed}${suffix}`;
     }
-
+    if (status === 'idle') {
+      return `Pagination : aucune exécution enregistrée${suffix}`;
+    }
     return `ℹ️ Statut : ${status}${suffix}`;
   }
 
-  function registerPaginationStatus(versionId, element, initialProgress, label = '') {
-    if (!versionId || !element) return;
-    const message = buildPagerStatusText(initialProgress || null);
+  function registerPaginationStatus(comparisonId, element, initialProgress, label = '', role = '') {
+    if (!comparisonId || !element) return;
+    const message = buildComparisonStatusText(initialProgress || null, role || '');
     element.dataset.paginationLabel = label;
+    element.dataset.paginationRole = role || '';
+    element.dataset.comparisonId = String(comparisonId);
     element.textContent = label ? `${label} — ${message}` : message;
-    let entry = paginationObservers.get(versionId);
+    let entry = paginationObservers.get(comparisonId);
     if (!entry) {
-      entry = { elements: new Set(), timer: null };
-      paginationObservers.set(versionId, entry);
+      entry = { elements: new Set(), timer: null, completed: false };
+      paginationObservers.set(comparisonId, entry);
     }
     entry.elements.add(element);
-
-    if (initialProgress && ['running', 'queued'].includes(initialProgress.status)) {
-      startPaginationPolling(versionId);
+    const initStatus = initialProgress?.status ?? null;
+    if (initStatus && !['done', 'failed', 'idle'].includes(initStatus)) {
+      entry.completed = false;
+      startComparisonPolling(comparisonId);
     }
   }
 
-  function startPaginationPolling(versionId) {
-    const entry = paginationObservers.get(versionId);
+  function startComparisonPolling(comparisonId) {
+    const entry = paginationObservers.get(comparisonId);
     if (!entry || entry.timer) return;
 
     const tick = async () => {
-      const currentEntry = paginationObservers.get(versionId);
+      const currentEntry = paginationObservers.get(comparisonId);
       if (!currentEntry) return;
 
       // Remove detached elements
@@ -182,28 +185,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentEntry.timer) {
           clearInterval(currentEntry.timer);
         }
-        paginationObservers.delete(versionId);
+        paginationObservers.delete(comparisonId);
         return;
       }
 
       try {
-        const res = await fetch(`/api/versions/${versionId}/page-markers/progress?ts=${Date.now()}`, {
+        const res = await fetch(withBasePath(`/api/comparisons/${comparisonId}/page-markers/progress?ts=${Date.now()}`), {
           headers: { 'Accept': 'application/json' },
           cache: 'no-store'
         });
         if (!res.ok) return;
         const progress = await res.json();
-        const message = buildPagerStatusText(progress);
         currentEntry.elements.forEach(el => {
           const label = el.dataset.paginationLabel || '';
+          const role = el.dataset.paginationRole || '';
+          const message = buildComparisonStatusText(progress, role);
           el.textContent = label ? `${label} — ${message}` : message;
         });
 
         if (!progress || ['done', 'failed', 'idle'].includes(progress.status)) {
+          if (!currentEntry.completed) {
+            currentEntry.completed = true;
+            if (typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
+              loadComparisons(currentWorkId);
+            }
+          }
           if (currentEntry.timer) {
             clearInterval(currentEntry.timer);
             currentEntry.timer = null;
           }
+          paginationObservers.delete(comparisonId);
         }
       } catch (err) {
         console.error('Erreur de suivi de pagination', err);
@@ -296,15 +307,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const statusEl = document.createElement('div');
       statusEl.className = 'text-muted small mt-1';
       block.appendChild(statusEl);
+      container.appendChild(block);
+
       if (versionId) {
-        registerPaginationStatus(versionId, statusEl, data.progress || null, label);
+        const progressSnapshot = comp.comparison_progress || null;
+        statusEl.dataset.comparisonId = String(comp.id);
+        statusEl.dataset.paginationRole = key;
+        registerPaginationStatus(comp.id, statusEl, progressSnapshot, label, key);
+        roleSummaries.push({ role: key, statusEl, label });
       } else {
         statusEl.textContent = `${label} — version indisponible`;
       }
-
-      container.appendChild(block);
-
-      roleSummaries.push({ versionId, statusEl, label });
     });
 
     const clearId = `cmp-clear-${comp.id}`;
@@ -345,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const runBtn = document.createElement('button');
     runBtn.type = 'button';
     runBtn.className = 'btn btn-sm btn-outline-secondary mt-2';
-    runBtn.textContent = 'Lancer la pagination';
+    runBtn.textContent = 'Injecter la pagination';
 
     const lignesReady = (comp.pagination?.source?.lignes_available ?? false) &&
                         (comp.pagination?.target?.lignes_available ?? false);
@@ -381,11 +394,11 @@ document.addEventListener('DOMContentLoaded', () => {
       button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     }
     if (feedback) {
-      feedback.textContent = 'Démarrage de la pagination…';
+      feedback.textContent = 'Préparation de l’injection de pagination…';
     }
 
     try {
-      const res = await fetch(`/api/comparisons/${comp.id}/page-markers`, {
+      const res = await fetch(withBasePath(`/api/comparisons/${comp.id}/page-markers`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -408,24 +421,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (feedback) {
-        feedback.textContent = payload.message || 'Pagination en file d\'attente…';
+        feedback.textContent = payload.message || 'Injection en file d\'attente…';
       }
 
-      roles.forEach(({ versionId, statusEl, label }) => {
-        if (!versionId) return;
-        if (statusEl) {
-          const text = 'Pagination : initialisation en cours…';
-          statusEl.textContent = label ? `${label} — ${text}` : text;
-        }
-        if (statusEl) {
-          statusEl.dataset.paginationLabel = label || '';
-        }
-        startPaginationPolling(versionId);
+      let firstRoleHandled = false;
+      roles.forEach(({ role, statusEl, label }) => {
+        if (!statusEl) return;
+        statusEl.dataset.paginationLabel = label || '';
+        statusEl.dataset.paginationRole = role || '';
+        const text = firstRoleHandled
+          ? 'En file d\'attente…'
+          : 'Pagination : initialisation en cours…';
+        statusEl.textContent = label ? `${label} — ${text}` : text;
+        firstRoleHandled = true;
       });
-
-      if (currentWorkId) {
-        loadComparisons(currentWorkId);
+      const observerEntry = paginationObservers.get(comp.id);
+      if (observerEntry) {
+        observerEntry.completed = false;
       }
+      startComparisonPolling(comp.id);
     } catch (err) {
       console.error('Erreur pagination comparaison', err);
       if (feedback) {
@@ -436,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
       paginationLocks.delete(comp.id);
       if (button) {
         button.disabled = false;
-        button.textContent = originalLabel || 'Lancer la pagination';
+        button.textContent = originalLabel || 'Injecter la pagination';
       }
       if (feedback) {
         setTimeout(() => { feedback.textContent = ''; }, 5000);
@@ -455,6 +469,12 @@ document.addEventListener('DOMContentLoaded', () => {
     tbody.innerHTML = '';
   }
 
+  // Track current author/work folders from the global selector
+  document.addEventListener('workSelected', e => {
+    currentAuthorFolder = e.detail?.author_folder || '';
+    currentWorkFolder   = e.detail?.work_folder || '';
+  });
+
   async function loadComparisons(workId) {
     if (!isValidWorkId(workId)) { resetUI(); return; }
     currentWorkId = workId;
@@ -464,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
     noComparisons.style.display = 'none';
 
     try {
-      const res = await fetch(`/comparisons/by-work?work_id=${workId}`, { headers: JSON_HEADERS });
+      const res = await fetch(withBasePath(`/comparisons/by-work?work_id=${workId}`), { headers: JSON_HEADERS });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const comparisons = await res.json();
 
@@ -500,6 +520,13 @@ document.addEventListener('DOMContentLoaded', () => {
           statusHtml = `<span class="text-warning" title="${safeTitle}">⚠</span>`;
         }
 
+        const xmlUrl  = withBasePath(`/storage/uploads/comparisons/${comp.id}.xml`);
+        const legacyUrl = (function() {
+          if (!currentAuthorFolder || !currentWorkFolder || !comp.folder) return null;
+          const origin = window.location.origin;
+          return `${origin}/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.folder}`;
+        })();
+
         tr.innerHTML = `
           <td>${comp.id}</td>
           <td>${comp.source_version?.name ?? comp.source_id}</td>
@@ -521,8 +548,8 @@ document.addEventListener('DOMContentLoaded', () => {
           </td>
           <td>${comp.created_at ? new Date(comp.created_at).toLocaleString() : ''}</td>
           <td>
-            <a href="/storage/uploads/comparisons/${comp.id}.html" class="btn btn-sm btn-outline-primary" target="_blank">HTML</a>
-            <a href="/storage/uploads/comparisons/${comp.id}.xml"  class="btn btn-sm btn-outline-secondary" target="_blank">XML</a>
+            <a href="${xmlUrl}"  class="btn btn-sm btn-outline-primary" target="_blank">XML</a>
+            ${(legacyUrl && published) ? `<a href="${legacyUrl}" class="btn btn-sm btn-outline-success ms-1" target="_blank" title="Voir sur le site public">Public</a>` : ''}
             <a href="/comparison/${comp.id}/editor"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-square"></i></a>
             <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}">🗑️</button>
           </td>
@@ -610,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       if (shouldPublish) {
-        const res = await fetch('/api/publish_xhtml', {
+        const res = await fetch(withBasePath('/api/publish_xhtml'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -636,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
       } else {
-        const res = await fetch(`/api/publish_xhtml/${comparisonId}`, {
+        const res = await fetch(withBasePath(`/api/publish_xhtml/${comparisonId}`), {
           method: 'DELETE',
           headers: { 'Accept': 'application/json' }
         });
@@ -672,7 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm(`Voulez-vous vraiment supprimer la comparaison #${comparisonId} ?`)) return;
 
     try {
-      const response = await fetch(`/comparisons/${comparisonId}`, {
+      const response = await fetch(withBasePath(`/comparisons/${comparisonId}`), {
         method: 'DELETE',
         headers: {
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),

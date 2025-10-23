@@ -25,14 +25,18 @@ class WorkController extends Controller
     
     public function store(Request $request)
     {
+        $request->merge([
+            'short_title' => strtolower($request->input('short_title', '')),
+        ]);
+
         $validated = $request->validate([
             'title' => 'required|string|min:3|max:80',
             'short_title' => [
                 'required',
                 'string',
-                'min:3',
+                'min:2',
                 'max:8',
-                'regex:/^[a-zA-Z0-9_-]+$/',
+                'regex:/^[a-z]+$/',
                 // Uniqueness scoped to the author
                 function ($attribute, $value, $fail) use ($request) {
                     if (Work::where('author_id', $request->author_id)->where('short_title', $value)->exists()) {
@@ -110,14 +114,18 @@ class WorkController extends Controller
 {
     $work = Work::with('versions')->findOrFail($id); // eager load versions
 
+    $request->merge([
+        'short_title' => strtolower($request->input('short_title', '')),
+    ]);
+
     $validated = $request->validate([
         'title' => 'required|string|min:3|max:80',
         'short_title' => [
             'required',
             'string',
-            'min:3',
+            'min:2',
             'max:8',
-            'regex:/^[a-zA-Z0-9_-]+$/',
+            'regex:/^[a-z]+$/',
             function ($attribute, $value, $fail) use ($work) {
                 $exists = Work::where('author_id', $work->author_id)
                     ->where('short_title', $value)

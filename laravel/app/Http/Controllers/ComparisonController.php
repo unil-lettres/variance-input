@@ -8,10 +8,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 use App\Models\Comparison;
 use App\Http\Controllers\PublishController;
 use App\Services\PageMarkerService;
-use App\Jobs\ApplyLignesJob;
+use App\Jobs\InjectComparisonPaginationJob;
 
 class ComparisonController extends Controller
 {
@@ -53,7 +54,7 @@ class ComparisonController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder) {
-                $this->pageMarkerService->ensureDefaultMarkers($cmp);
+                // Do not inject default pagination markers anymore; rely on real facsimiles/_lignes only
 
                 $cmp->published = false;
                 $cmp->publish_missing = $required;
@@ -105,6 +106,7 @@ class ComparisonController extends Controller
 
                 $cmp->pagination = $this->pageMarkerService->countMarkersForComparison($cmp);
                 $cmp->manifests  = $this->manifestStatusForComparison($cmp, $authorFolder, $workFolder);
+                $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id);
 
                 return $cmp;
             });
@@ -118,7 +120,10 @@ class ComparisonController extends Controller
      */
     public function destroy(int $id)
     {
-        $comparison = Comparison::findOrFail($id);
+        $comparison = Comparison::with([
+            'sourceVersion.work.author',
+            'targetVersion.work.author',
+        ])->findOrFail($id);
 
         $destInfo = $this->resolvePublicationPaths($comparison);
 
@@ -144,6 +149,27 @@ class ComparisonController extends Controller
                 Storage::disk('public')->deleteDirectory($relative);
             } else {
                 File::deleteDirectory($destInfo['source_dir']);
+            }
+        }
+
+        $authorFolder = $comparison->sourceVersion?->work?->author?->folder
+            ?? $comparison->targetVersion?->work?->author?->folder;
+        $workFolder = $comparison->sourceVersion?->work?->folder
+            ?? $comparison->targetVersion?->work?->folder;
+
+        if ($authorFolder && $workFolder) {
+            $comparisonRelative = "uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}";
+            Storage::disk('public')->deleteDirectory($comparisonRelative);
+            $legacyComparisonDir = base_path('../variance/' . $comparisonRelative);
+            if (is_dir($legacyComparisonDir)) {
+                File::deleteDirectory($legacyComparisonDir);
+            }
+
+            $publishedRelative = "uploads/{$authorFolder}/{$workFolder}/{$comparison->folder}";
+            Storage::disk('public')->deleteDirectory($publishedRelative);
+            $legacyPublishedDir = base_path('../variance/' . $publishedRelative);
+            if (is_dir($legacyPublishedDir)) {
+                File::deleteDirectory($legacyPublishedDir);
             }
         }
 
@@ -176,8 +202,8 @@ class ComparisonController extends Controller
                 $missing[] = "Version {$role} manquante";
                 continue;
             }
-            if (!$this->pageMarkerService->hasLignesFile($version->id)) {
-                $missing[] = "Aucun fichier _lignes associé à la version {$version->name}";
+            if (!$this->pageMarkerService->loadPaginationSidecar($version->id)) {
+                $missing[] = "Sidecar pagination manquant pour la version {$version->name}";
             }
         }
 
@@ -188,27 +214,51 @@ class ComparisonController extends Controller
             ], 422);
         }
 
-        foreach ($roles as $role => $version) {
-            if (!$version) {
-                continue;
-            }
+        $this->flushPendingPaginationJobs($comparison->id);
+        $this->pageMarkerService->markComparisonQueued($comparison->id);
 
-            $this->pageMarkerService->markQueued($version->id);
-            $relative = $this->pageMarkerService->lignesRelativePath($version->id);
-            ApplyLignesJob::dispatch(
-                $version->id,
-                $relative,
-                false,
-                (bool) $clear,
-                (bool) $replace,
-                $comparison->id
-            );
-        }
+        InjectComparisonPaginationJob::dispatch(
+            comparisonId: $comparison->id,
+            clearExisting: (bool) $clear,
+            replaceExisting: (bool) $replace
+        );
 
         return response()->json([
             'status'  => 'queued',
             'message' => 'Pagination en file d\'attente pour cette comparaison.',
         ], 202);
+    }
+
+    public function pageMarkersProgress(Comparison $comparison)
+    {
+        $snapshot = $this->pageMarkerService->getComparisonProgressSnapshot($comparison->id);
+        if (!$snapshot) {
+            $snapshot = [
+                'status'        => 'idle',
+                'comparison_id' => $comparison->id,
+                'roles'         => [],
+                'updated_at'    => time(),
+            ];
+        }
+
+        return response()->json($snapshot, 200);
+    }
+
+    private function flushPendingPaginationJobs(int $comparisonId): void
+    {
+        $jobsQuery = DB::table('jobs')
+            ->where('queue', 'page-markers')
+            ->where('payload', 'like', '%inject-pagination%')
+            ->where('payload', 'like', '%"comparisonId":' . $comparisonId . '%');
+        $jobsQuery->delete();
+
+        $failedQuery = DB::table('failed_jobs')
+            ->where('queue', 'page-markers')
+            ->where('payload', 'like', '%inject-pagination%')
+            ->where('payload', 'like', '%"comparisonId":' . $comparisonId . '%');
+        $failedQuery->delete();
+
+        Cache::forget('laravel_unique_job:inject-pagination-' . $comparisonId);
     }
 
     private function resolvePublicationPaths(Comparison $comparison): array

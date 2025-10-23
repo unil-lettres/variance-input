@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Admin Base Path
+    |--------------------------------------------------------------------------
+    |
+    | When the application is served behind a reverse proxy under a sub-path
+    | (e.g. https://example.com/admin), this value allows generated URLs
+    | and front-end assets to determine the correct base prefix.
+    |
+    */
+
+    'admin_base_path' => trim(env('ADMIN_BASE_PATH', ''), '/'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

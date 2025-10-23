@@ -143,7 +143,10 @@ return [
     |
     */
 
-    'path' => env('SESSION_PATH', '/'),
+    'path' => env('SESSION_PATH', (function () {
+        $basePath = trim(config('app.admin_base_path'), '/');
+        return $basePath === '' ? '/' : '/' . $basePath;
+    })()),
 
     /*
     |--------------------------------------------------------------------------

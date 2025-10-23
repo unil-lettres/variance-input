@@ -11,6 +11,10 @@ Route::delete('/publish_xhtml/{comparison}', [PublishController::class, 'unpubli
 Route::post('/upload_facsimiles', [FacsimileController::class, 'store']);
 Route::get('/facsimiles', [FacsimileController::class, 'index']);
 Route::get('/versions/{version}/page-markers/progress', [VersionController::class, 'pageMarkersProgress']);
+Route::delete('/versions/{version}/lignes', [VersionController::class, 'cancelLignes']);
+Route::delete('/versions/{version}/facsimiles', [VersionController::class, 'cancelFacsimiles']);
+Route::get('/versions/{version}/facsimiles/progress', [VersionController::class, 'facsimilesProgress']);
+Route::get('/comparisons/{comparison}/page-markers/progress', [ComparisonController::class, 'pageMarkersProgress']);
 Route::get('/comparisons/{comparison}/manifests/{role}', [ComparisonController::class, 'showManifest'])
     ->where('role', 'source|target')
     ->name('comparisons.manifest');

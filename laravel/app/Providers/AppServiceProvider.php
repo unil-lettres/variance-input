@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
-use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -17,6 +19,23 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        $appUrl = rtrim(config('app.url'), '/');
+        $parsed = $appUrl ? parse_url($appUrl) : null;
+
+        if (is_array($parsed) && isset($parsed['scheme'], $parsed['host'])) {
+            $forcedRoot = $parsed['scheme'].'://'.$parsed['host'];
+            if (isset($parsed['port'])) {
+                $forcedRoot .= ':' . $parsed['port'];
+            }
+            URL::forceRootUrl($forcedRoot);
+        } elseif (! empty($appUrl)) {
+            URL::forceRootUrl($appUrl);
+        }
+
+        $basePath = admin_base_prefix();
+        $appBaseUrl = rtrim(admin_url(), '/');
+
+        View::share('appBasePath', $basePath);
+        View::share('appBaseUrl', $appBaseUrl);
     }
 }
