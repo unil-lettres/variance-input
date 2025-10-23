@@ -1190,6 +1190,10 @@ class PageMarkerService
                 $offset = $next + 1;
                 continue;
             }
+            if ($char === '>') {
+                $offset++;
+                continue;
+            }
             break;
         }
 
