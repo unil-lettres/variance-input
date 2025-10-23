@@ -200,9 +200,8 @@
     <script>
       window.editorParams = {
         xmlContent: @json($xmlContent),
-        comparisonId: {{ $comparison->id }},
-        fileType: '{{ $isSource ? 'source' : 'target' }}',
         canEdit: {{ $canEdit ? 'true' : 'false' }},
+        urlFileSave: '{{ $urlFileSave }}',
       };
     </script>
     @vite('resources/js/editor.js')

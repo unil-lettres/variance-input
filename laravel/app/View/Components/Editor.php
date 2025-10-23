@@ -22,6 +22,7 @@ class Editor extends Component
         public bool $isPublished,
         public bool $canEdit,
         public array $imagesData,
+        public string $urlFileSave,
     )
     { }
 

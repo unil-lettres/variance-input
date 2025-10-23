@@ -42,6 +42,7 @@ class EditorController extends Controller
             'isPublished' => $publicationInfo['is_published'],
             'canEdit' => $publicationInfo['can_edit'],
             'imagesData' => $publicationInfo['images_data'],
+            'urlFileSave' => route('comparison.editor.update', ['comparison' => $comparison->id, 'type' => $type]),
         ]);
     }
     

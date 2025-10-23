@@ -9,5 +9,6 @@
         :is-published="$isPublished"
         :can-edit="$canEdit"
         :images-data="$imagesData"
+        :url-file-save="$urlFileSave"
     />
 @endsection

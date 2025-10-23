@@ -1,7 +1,7 @@
 import initEditor from './codemirror-editor';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const { xmlContent, comparisonId, fileType, canEdit } = window.editorParams;
+    const { xmlContent, urlFileSave, canEdit } = window.editorParams;
 
     // DOM Elements
     const elements = {
@@ -575,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.saveBtn.addEventListener('click', async () => {
         const updatedXml = editor.view.state.doc.toString();
-        const response = await fetch(`/comparison/${comparisonId}/editor?type=${fileType}`, {
+        const response = await fetch(urlFileSave, {
             method: 'PUT',
             headers: {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
