@@ -110,34 +110,34 @@
         <p id="no-preview" class="text-muted"></p>
     </div>
 </div>
-</div>
 
 <!-- Modal for page number generation -->
 <div class="modal fade" id="generatePageNumbersModal" tabindex="-1" aria-labelledby="generatePageNumbersModalLabel" aria-hidden="true">
-<div class="modal-dialog">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h5 class="modal-title" id="generatePageNumbersModalLabel">Générer les numéros de page</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-            <div class="alert alert-info" role="alert">
-                Cette fonction génère des numéros pour les pages qui ne sont pas encore insérées dans le XML (en bleu) en fonction des paramètres choisis. Elle ne modifie pas le fichier XML.
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="generatePageNumbersModalLabel">Générer les numéros de page</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="mb-3">
-                <label for="leadingZeros" class="form-label">Nombre de zéros de remplissage (ex: 3 pour 001)</label>
-                <input type="number" class="form-control" id="leadingZeros" min="0" max="4" value="0">
-                <div class="form-text">Entre 0 et 4</div>
+            <div class="modal-body">
+                <div class="alert alert-info" role="alert">
+                    Cette fonction génère des numéros pour les pages qui ne sont pas encore insérées dans le XML (en bleu) en fonction des paramètres choisis. Elle ne modifie pas le fichier XML.
+                </div>
+                <div class="mb-3">
+                    <label for="leadingZeros" class="form-label">Nombre de zéros de remplissage (ex: 3 pour 001)</label>
+                    <input type="number" class="form-control" id="leadingZeros" min="0" max="4" value="0">
+                    <div class="form-text">Entre 0 et 4</div>
+                </div>
+                <div class="mb-3">
+                    <label for="startPageNumber" class="form-label">Nombre de pages liminaires</label>
+                    <input type="number" class="form-control" id="startPageNumber" min="0" value="0">
+                    <div class="form-text">Nombre de pages à ignorer avant de commencer la numérotation</div>
+                </div>
             </div>
-            <div class="mb-3">
-                <label for="startPageNumber" class="form-label">Nombre de pages liminaires</label>
-                <input type="number" class="form-control" id="startPageNumber" min="0" value="0">
-                <div class="form-text">Nombre de pages à ignorer avant de commencer la numérotation</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" id="confirmGeneratePageNumbers">Générer</button>
             </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-            <button type="button" class="btn btn-primary" id="confirmGeneratePageNumbers">Générer</button>
         </div>
     </div>
 </div>
@@ -164,11 +164,11 @@
 
 @push('scripts')
     <script>
-      window.editorParams = {
-        xmlContent: @json($xmlContent),
-        canEdit: {{ $canEdit ? 'true' : 'false' }},
-        urlFileSave: '{{ $urlFileSave }}',
-      };
+        window.editorParams = {
+            xmlContent: @json($xmlContent),
+            canEdit: {{ $canEdit ? 'true' : 'false' }},
+            urlFileSave: '{{ $urlFileSave }}',
+        };
     </script>
     @vite('resources/js/editor.js')
 @endpush
