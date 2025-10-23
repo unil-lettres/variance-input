@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
         generatePageNumbersModal: document.getElementById('generatePageNumbersModal'),
         italicErrorsModal: document.getElementById('italicErrorsModal'),
         italicErrorsList: document.getElementById('italic-errors-list'),
-        editorQuickHelp: document.getElementById('editor-quick-help'),
     };
 
     // Constants
@@ -534,7 +533,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (imgSrc) {
                 loadImage(imgSrc);
             }
-            elements.editorQuickHelp.textContent = '';
         });
 
         // On mouse leave, restore active button image if there is one
