@@ -66,7 +66,7 @@
             data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
             {{ !$canEdit ? 'disabled' : '' }}
             title="Générer les numéros de page"
-        ><i class="bi bi-123"></i></button>
+        ><i class="bi bi-file-earmark mr-1"></i><i class="bi bi-123"></i></button>
         <div class="overflow-auto mb-auto">
             <div id="buttons-container" class="row row-cols-3 g-1 align-items-start w-100">
                 @foreach ($imagesData ?? [] as $facsimile)
@@ -77,7 +77,7 @@
                             data-img-src="{{ Storage::url(ltrim($facsimile['big'], '/')) }}"
                             {{ !$canEdit ? 'disabled' : '' }}
                         >
-                            <span>?</span>
+                            <span></span>
                             <span
                                 class="position-absolute top-0 start-75 translate-middle badge rounded-pill bg-danger"
                                 data-tag-count="{{ $loop->iteration }}"

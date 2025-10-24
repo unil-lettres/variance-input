@@ -111,10 +111,14 @@ class PageNumberWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = 'cm-page-number-mark';
     span.textContent = this.pageNumber;
-    span.title = 'Cliquez pour modifier';
     span.style.cursor = 'pointer';
+
+    const i = document.createElement("i");
+    i.className = 'bi bi-file-earmark mr-1';
+    span.prepend(i);
     
     this.tooltip = new bootstrap.Tooltip(span, {
+      title: () => this.pageNumber === '?' ? 'Cliquez pour numéroter la page' : 'Cliquez pour modifier le numéro de page',
       trigger: 'hover',
       offset: [0, 10],
     });

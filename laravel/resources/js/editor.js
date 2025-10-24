@@ -220,7 +220,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const pageNumber = button.getAttribute('data-tag-page-number');
-        button.querySelector('span').textContent = pageNumber || '?';
+        if (pageNumber && pageNumber !== '?') {
+            button.querySelector('span').textContent = pageNumber
+        } else {
+            const span = button.querySelector('span');
+            const existingIcon = span.querySelector('i.bi-file-earmark');
+            span.textContent = insertedPageNumber ? '?' : '';
+
+            if (!existingIcon) {
+              const i = document.createElement('i');
+              i.className = 'bi bi-file-earmark mr-1';
+              span.prepend(i);
+            } else {
+              span.prepend(existingIcon);
+            }
+        }
     }
 
     const deactivateActiveButton = () => {
@@ -540,7 +554,9 @@ document.addEventListener('DOMContentLoaded', () => {
               if (isInserted) {
                   isDeleteMode = true;
                   setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
-                  button.querySelector('span').innerHTML = '<i class="bi bi-trash3"></i>';
+                  const i = document.createElement('i');
+                  i.className = 'bi bi-trash3';
+                  button.querySelector('span').replaceChildren(i);
                   editor.scrollToPageMarker(imageName);
               } else {
                   isDeleteMode = false;
