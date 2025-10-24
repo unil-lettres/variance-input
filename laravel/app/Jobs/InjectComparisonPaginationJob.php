@@ -48,9 +48,6 @@ class InjectComparisonPaginationJob implements ShouldQueue, ShouldBeUnique
                 $version = $role === 'target'
                     ? $comparison->targetVersion
                     : $comparison->sourceVersion;
-                if ($version) {
-                    $pageMarkerService->markQueued($version->id);
-                }
 
                 $pageMarkerService->applySidecarToComparisonRoleOnly(
                     $comparison,

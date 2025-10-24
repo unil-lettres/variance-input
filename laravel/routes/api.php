@@ -15,6 +15,7 @@ Route::delete('/versions/{version}/lignes', [VersionController::class, 'cancelLi
 Route::delete('/versions/{version}/facsimiles', [VersionController::class, 'cancelFacsimiles']);
 Route::get('/versions/{version}/facsimiles/progress', [VersionController::class, 'facsimilesProgress']);
 Route::get('/comparisons/{comparison}/page-markers/progress', [ComparisonController::class, 'pageMarkersProgress']);
+Route::post('/comparisons/{comparison}/page-markers/cancel', [ComparisonController::class, 'cancelPageMarkers']);
 Route::post('/comparisons/{comparison}/page-markers/restore', [ComparisonController::class, 'restorePageMarkers']);
 Route::get('/comparisons/{comparison}/manifests/{role}', [ComparisonController::class, 'showManifest'])
     ->where('role', 'source|target')

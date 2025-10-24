@@ -11,9 +11,25 @@ function initComparisonsTable() {
   window.__runningComparisons = runningComparisons;
   const paginationLocks = new Set();
   const paginationObservers = new Map();
+  const pendingRoleStatuses = new Map();
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  let latestComparisonsRequest = 0;
+  let activeComparisonsRequest = 0;
 
-  const TERMINAL_STATUSES = new Set(['done', 'ok', 'failed', 'restored', 'idle', 'skipped']);
+  const TERMINAL_STATUSES = new Set(['done', 'ok', 'failed', 'restored', 'idle', 'skipped', 'cancelled', 'missing']);
+  const STATUS_LABELS = {
+    queued: 'En attente',
+    running: 'En cours',
+    done: 'Terminé',
+    ok: 'Terminé',
+    failed: 'En échec',
+    restored: 'Restauré',
+    idle: 'Inactif',
+    cancelled: 'Annulé',
+    skipped: 'Ignoré',
+    missing: 'Indisponible',
+  };
+  const normalizeStatus = status => String(status ?? '').toLowerCase();
   const formatTimestamp = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { hour12: false }) : null;
   const formatNumber = value => {
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -54,69 +70,163 @@ function initComparisonsTable() {
     return el;
   }
 
-  function buildComparisonStatusText(progress, role) {
-    const fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n : 0;
-    if (!progress) {
-      return 'Pagination : aucune exécution enregistrée';
-    }
-    const updated = progress.updated_at ? formatTimestamp(progress.updated_at) : null;
-    const suffix = updated ? ` (maj ${updated})` : '';
-    const globalStatus = progress.status || 'idle';
-    const roleData = progress.roles?.[role] || {};
-    const status = roleData.status || globalStatus;
+  function pendingStatusKey(comparisonId, role) {
+    if (!role) return null;
+    return `${comparisonId}:${role}`;
+  }
 
-    if (status === 'queued') {
-      return `🕒 En file d'attente…${suffix}`;
-    }
-    if (status === 'skipped') {
-      const reason = roleData.reason ? ` — ${roleData.reason}` : '';
-      return `⚪ Pagination ignorée${reason}${suffix}`;
-    }
-    if (status === 'running') {
-      const total = roleData.total ?? 0;
-      const inserted = fmt(roleData.inserted);
-      const missed = fmt(roleData.missed);
-      const processed = inserted;
-      return `⏳ Progression : ${processed}/${total || '—'} — insérés : ${inserted}, manqués : ${missed}${suffix}`;
-    }
-    if (status === 'failed') {
-      const error = roleData.error || progress.error || 'opération interrompue';
-      return `❌ Échec : ${error}${suffix}`;
-    }
-    if (status === 'done' || status === 'ok') {
-      const total = roleData.total ?? 0;
-      const inserted = fmt(roleData.inserted);
-      const missed = fmt(roleData.missed);
-      if (total > 0 && inserted === 0) {
-        return `⚠️ Terminé sans pagination (0/${total}). Relancez Medite puis réinjectez.${suffix}`;
+  function setPendingStatus(comparisonId, role, status, meta = {}) {
+    const key = pendingStatusKey(comparisonId, role);
+    if (!key) return;
+    pendingRoleStatuses.set(key, {
+      status,
+      updated_at: meta.updated_at ?? Math.floor(Date.now() / 1000),
+      reason: meta.reason,
+      total: meta.total,
+      inserted: meta.inserted,
+      missed: meta.missed,
+    });
+  }
+
+  function clearPendingStatus(comparisonId, role) {
+    const key = pendingStatusKey(comparisonId, role);
+    if (!key) return;
+    pendingRoleStatuses.delete(key);
+  }
+
+  function computeStatusInfo(progress, role, comparisonId) {
+    const fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n : 0;
+    const comparisonKey = progress?.comparison_id ?? comparisonId ?? 0;
+    const key = pendingStatusKey(comparisonKey, role);
+    const roles = progress?.roles || {};
+    const roleEntry = role && Object.prototype.hasOwnProperty.call(roles, role)
+      ? roles[role] ?? null
+      : null;
+    const progressUpdatedAt = Number(progress?.updated_at ?? 0);
+    const pending = key ? pendingRoleStatuses.get(key) : null;
+    const pendingUpdatedAt = Number(pending?.updated_at ?? 0);
+    const roleUpdatedAt = Number(roleEntry?.updated_at ?? progressUpdatedAt);
+    let usePending = false;
+
+    if (pending) {
+      if (!roleEntry || roleEntry.status === undefined) {
+        usePending = true;
+      } else if (pendingUpdatedAt && roleUpdatedAt < pendingUpdatedAt && progressUpdatedAt < pendingUpdatedAt) {
+        usePending = true;
       }
-      return `✅ Terminé — insérés : ${inserted}/${total || '—'}, manqués : ${missed}${suffix}`;
+
+      if (!usePending) {
+        pendingRoleStatuses.delete(key);
+      }
     }
-    if (status === 'restored') {
-      return `ℹ️ Originaux restaurés${suffix}`;
+
+    let rawStatus = (!usePending && roleEntry && roleEntry.status !== undefined)
+      ? roleEntry.status
+      : progress?.status ?? 'idle';
+    let reason = roleEntry?.reason || progress?.reason || '';
+    let total = roleEntry?.total ?? roleEntry?.expected ?? progress?.total ?? 0;
+    let inserted = roleEntry?.inserted ?? 0;
+    let missed = roleEntry?.missed ?? 0;
+
+    if (usePending && pending) {
+      rawStatus = pending.status ?? rawStatus;
+      reason = pending.reason ?? reason;
+      if (pending.total !== undefined) total = pending.total;
+      if (pending.inserted !== undefined) inserted = pending.inserted;
+      if (pending.missed !== undefined) missed = pending.missed;
+      progress = {
+        ...(progress || {}),
+        updated_at: pending.updated_at ?? progress?.updated_at,
+      };
+    } else if (!roleEntry && role && !usePending) {
+      rawStatus = 'idle';
     }
-    if (status === 'idle') {
-      return `Pagination : aucune exécution enregistrée${suffix}`;
+
+    let normalized = normalizeStatus(rawStatus);
+    if (normalized === 'ok') normalized = 'done';
+    if (!normalized) normalized = 'idle';
+
+    const label = STATUS_LABELS[normalized] || STATUS_LABELS[rawStatus] || (rawStatus || 'Inconnu');
+    const updated = progress?.updated_at ? formatTimestamp(progress.updated_at) : null;
+    const suffix = updated ? ` (maj ${updated})` : '';
+
+    let body;
+    if (normalized === 'queued') {
+      body = `🕒 En file d'attente…${suffix}`;
+    } else if (normalized === 'skipped') {
+      const extra = reason ? ` — ${reason}` : '';
+      body = `⚪ Pagination ignorée${extra}${suffix}`;
+    } else if (normalized === 'running') {
+      const rawTotal = Number(total);
+      const displayTotal = Number.isFinite(rawTotal) && rawTotal > 0 ? formatNumber(rawTotal) : 'quelques';
+      body = `⚙️ Injection de ${displayTotal} marqueurs de pagination… Patientez svp${suffix}`;
+    } else if (normalized === 'failed') {
+      const error = roleEntry?.error || progress?.error || reason || 'opération interrompue';
+      body = `❌ Échec : ${error}${suffix}`;
+    } else if (normalized === 'done') {
+      const totalNumber = Number(total) || 0;
+      const insertedNumber = Number(inserted) || 0;
+      const missedNumber = Number(missed) || 0;
+      if (totalNumber > 0 && insertedNumber === 0) {
+        body = `⚠️ Terminé sans pagination (0/${totalNumber}). Relancez Medite puis réinjectez.${suffix}`;
+      } else {
+        const safeTotal = totalNumber ? formatNumber(totalNumber) : '—';
+        body = `✅ Terminé — insérés : ${formatNumber(insertedNumber)}/${safeTotal}, manqués : ${formatNumber(missedNumber)}${suffix}`;
+      }
+    } else if (normalized === 'restored') {
+      body = `ℹ️ Originaux restaurés${suffix}`;
+    } else if (normalized === 'cancelled') {
+      const extra = reason ? ` — ${reason}` : '';
+      body = `🚫 Annulé${extra}${suffix}`;
+    } else if (normalized === 'missing') {
+      body = `⚠️ Données de pagination indisponibles${suffix}`;
+    } else if (normalized === 'idle') {
+      body = `Pagination : aucune exécution enregistrée${suffix}`;
+    } else {
+      body = `ℹ️ Statut : ${rawStatus}${suffix}`;
     }
-    return `ℹ️ Statut : ${status}${suffix}`;
+
+    const text = `Statut : ${label} — ${body}`;
+    const allowCancel = ['queued', 'running'].includes(normalized);
+    return { text, status: normalized, allowCancel };
+  }
+
+  function buildComparisonStatusText(progress, role, comparisonId) {
+    return computeStatusInfo(progress, role, comparisonId).text;
   }
 
   function registerPaginationStatus(comparisonId, element, initialProgress, label = '', role = '') {
     if (!comparisonId || !element) return;
-    const message = buildComparisonStatusText(initialProgress || null, role || '');
+    const statusInfo = computeStatusInfo(initialProgress || null, role || '', comparisonId);
     element.dataset.paginationLabel = label;
     element.dataset.paginationRole = role || '';
     element.dataset.comparisonId = String(comparisonId);
-    element.textContent = label ? `${label} — ${message}` : message;
+    element.textContent = label ? `${label} — ${statusInfo.text}` : statusInfo.text;
+    const cancelBtn = element.__cancelBtn;
+    if (cancelBtn) {
+      cancelBtn.disabled = !statusInfo.allowCancel;
+    }
     let entry = paginationObservers.get(comparisonId);
     if (!entry) {
       entry = { elements: new Set(), timer: null, completed: false, roleTerminated: new Map() };
       paginationObservers.set(comparisonId, entry);
     }
     entry.elements.add(element);
-    const initStatus = initialProgress?.status ?? null;
-    if (initStatus && !['done', 'failed', 'idle', 'restored'].includes(initStatus)) {
+    const roleStatus = role ? statusInfo.status : normalizeStatus(initialProgress?.status ?? null);
+    const initStatus = normalizeStatus(initialProgress?.status ?? null);
+    if (entry.roleTerminated instanceof Map) {
+      const roleKey = role || '__global__';
+      entry.roleTerminated.set(roleKey, TERMINAL_STATUSES.has(roleStatus));
+    }
+    const shouldPoll = [roleStatus, initStatus].some(status => status && !TERMINAL_STATUSES.has(status));
+    if (shouldPoll) {
       entry.completed = false;
+      for (const other of paginationObservers.values()) {
+        if (other === entry) continue;
+        if (other.elements.has(element)) {
+          other.elements.delete(element);
+        }
+      }
       startComparisonPolling(comparisonId);
     }
   }
@@ -150,52 +260,50 @@ function initComparisonsTable() {
         });
         if (!res.ok) return;
         const progress = await res.json();
-        const globalStatus = progress?.status || null;
+        const globalStatus = normalizeStatus(progress?.status ?? null);
         const rolesData = progress?.roles || {};
         const roleTerminatedMap = currentEntry.roleTerminated instanceof Map
           ? currentEntry.roleTerminated
           : new Map();
         currentEntry.roleTerminated = roleTerminatedMap;
-        let shouldRefresh = false;
-        let triggeredRefresh = false;
+        let terminalTransition = false;
 
         currentEntry.elements.forEach(el => {
           const label = el.dataset.paginationLabel || '';
           const role = el.dataset.paginationRole || '';
-          const message = buildComparisonStatusText(progress, role);
-          el.textContent = label ? `${label} — ${message}` : message;
+          const statusInfo = computeStatusInfo(progress, role, comparisonId);
+          el.textContent = label ? `${label} — ${statusInfo.text}` : statusInfo.text;
+          const cancelBtn = el.__cancelBtn;
+          if (cancelBtn) {
+            cancelBtn.disabled = !statusInfo.allowCancel;
+          }
           const roleKey = role || '__global__';
-          const roleStatus = rolesData?.[role]?.status || globalStatus;
+          const roleStatus = role ? statusInfo.status : normalizeStatus(rolesData?.[role]?.status ?? globalStatus);
           const isRoleTerminal = TERMINAL_STATUSES.has(roleStatus);
-          const wasTerminal = roleTerminatedMap.get(roleKey) || false;
+          const wasTerminal = roleTerminatedMap.get(roleKey) === true;
+          roleTerminatedMap.set(roleKey, isRoleTerminal);
           if (isRoleTerminal && !wasTerminal) {
-            roleTerminatedMap.set(roleKey, true);
-            shouldRefresh = true;
-          } else if (!isRoleTerminal) {
-            roleTerminatedMap.set(roleKey, false);
+            terminalTransition = true;
           }
         });
 
-        if (shouldRefresh && typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
+        if (terminalTransition && typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
           loadComparisons(currentWorkId);
-          triggeredRefresh = true;
         }
 
         const roles = rolesData;
-        const roleStatuses = Object.values(roles).map(roleInfo => roleInfo?.status || globalStatus);
+        const roleStatuses = Object.values(roles).map(roleInfo => normalizeStatus(roleInfo?.status ?? globalStatus));
         const rolesKnown = roleStatuses.length > 0;
         const allRolesTerminal = rolesKnown && roleStatuses.every(status => TERMINAL_STATUSES.has(status));
         const isTerminal = !progress
-          || TERMINAL_STATUSES.has(globalStatus)
+          || (globalStatus && TERMINAL_STATUSES.has(globalStatus))
           || allRolesTerminal;
 
         if (isTerminal) {
-          if (!currentEntry.completed) {
-            currentEntry.completed = true;
-            if (!triggeredRefresh && typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
-              loadComparisons(currentWorkId);
-            }
+          if (!currentEntry.completed && typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
+            loadComparisons(currentWorkId);
           }
+          currentEntry.completed = true;
           if (currentEntry.timer) {
             clearInterval(currentEntry.timer);
             currentEntry.timer = null;
@@ -278,8 +386,6 @@ function initComparisonsTable() {
     const progressSnapshot = comp.comparison_progress || null;
     statusEl.dataset.comparisonId = String(comp.id);
     statusEl.dataset.paginationRole = role;
-    const statusRef = { role, statusEl, label: versionName };
-    registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
 
     const options = document.createElement('div');
     options.className = 'mt-2';
@@ -332,15 +438,33 @@ function initComparisonsTable() {
     restoreBtn.textContent = 'Restaurer les originaux';
     btnGroup.appendChild(restoreBtn);
 
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn-sm btn-outline-warning';
+    cancelBtn.textContent = 'Annuler l\'injection';
+    btnGroup.appendChild(cancelBtn);
+
+    statusEl.__cancelBtn = cancelBtn;
+    const statusRef = { role, statusEl, label: versionName, cancelBtn };
+    registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
+
     const hasLignes = data.lignes_available ?? false;
     if (!hasLignes) {
       runBtn.disabled = true;
       feedback.textContent = 'Associez un fichier _lignes à cette version.';
     }
 
+    const currentRoleStatus = normalizeStatus(
+      (progressSnapshot?.roles?.[role]?.status ?? progressSnapshot?.status) || ''
+    );
+    if (!['queued', 'running'].includes(currentRoleStatus)) {
+      cancelBtn.disabled = true;
+    }
+
     runBtn.addEventListener('click', () => {
       const clearExisting = clearToggle ? clearToggle.checked : true;
       const replaceExisting = replaceToggle ? replaceToggle.checked : true;
+      cancelBtn.disabled = false;
       triggerComparisonPagination(comp, {
         role,
         clearExisting,
@@ -359,6 +483,19 @@ function initComparisonsTable() {
         role,
         button: restoreBtn,
         feedback,
+        statusRefs: [statusRef],
+      });
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      if (!confirm('Annuler la pagination en cours pour cette version ?')) {
+        return;
+      }
+      cancelComparisonPagination(comp, {
+        role,
+        button: cancelBtn,
+        feedback,
+        statusRefs: [statusRef],
       });
     });
 
@@ -411,22 +548,39 @@ function initComparisonsTable() {
         feedback.textContent = responsePayload.message || 'Injection en file d\'attente…';
       }
 
-      let firstRoleHandled = false;
-      (statusRefs || []).forEach(({ role, statusEl, label }) => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      if (role) {
+        setPendingStatus(comp.id, role, 'queued', {
+          total: responsePayload.total ?? null,
+          updated_at: timestamp,
+        });
+      }
+      (statusRefs || []).forEach(({ role: statusRole, statusEl, label }) => {
         if (!statusEl) return;
         statusEl.dataset.paginationLabel = label || '';
-        statusEl.dataset.paginationRole = role || '';
-        const text = firstRoleHandled
-          ? 'En file d\'attente…'
-          : 'Pagination : initialisation en cours…';
-        statusEl.textContent = label ? `${label} — ${text}` : text;
-        firstRoleHandled = true;
+        statusEl.dataset.paginationRole = statusRole || '';
+        const progressStub = {
+          status: 'queued',
+          updated_at: timestamp,
+          roles: statusRole ? { [statusRole]: { status: 'queued', updated_at: timestamp } } : {}
+        };
+        const statusInfo = computeStatusInfo(progressStub, statusRole, comp.id);
+        statusEl.textContent = label ? `${label} — ${statusInfo.text}` : statusInfo.text;
+        const cancelBtn = statusEl.__cancelBtn;
+        if (cancelBtn) cancelBtn.disabled = !statusInfo.allowCancel;
       });
       const observerEntry = paginationObservers.get(comp.id);
       if (observerEntry) {
         observerEntry.completed = false;
       }
       startComparisonPolling(comp.id);
+      if (isValidWorkId(currentWorkId)) {
+        setTimeout(() => {
+          if (isValidWorkId(currentWorkId)) {
+            loadComparisons(currentWorkId);
+          }
+        }, 250);
+      }
     } catch (err) {
       console.error('Erreur pagination comparaison', err);
       if (feedback) {
@@ -445,7 +599,7 @@ function initComparisonsTable() {
     }
   }
 
-  async function restoreComparisonPagination(comp, { role = null, button, feedback }) {
+  async function restoreComparisonPagination(comp, { role = null, button, feedback, statusRefs }) {
     const lockKey = role ? `restore-${comp.id}-${role}` : `restore-${comp.id}`;
     if (paginationLocks.has(lockKey)) return;
     paginationLocks.add(lockKey);
@@ -485,9 +639,25 @@ function initComparisonsTable() {
         feedback.textContent = responsePayload.message || 'Originaux restaurés.';
       }
 
-      if (currentWorkId) {
-        loadComparisons(currentWorkId);
+      if (role) {
+        clearPendingStatus(comp.id, role);
+      } else {
+        ['source', 'target'].forEach(r => clearPendingStatus(comp.id, r));
       }
+
+      const progress = responsePayload.progress || {
+        status: 'restored',
+        updated_at: Math.floor(Date.now() / 1000),
+        roles: role ? { [role]: { status: 'restored' } } : {}
+      };
+
+      (statusRefs || []).forEach(({ role: statusRole, statusEl, label }) => {
+        if (!statusEl) return;
+        const statusInfo = computeStatusInfo(progress, statusRole, comp.id);
+        statusEl.textContent = label ? `${label} — ${statusInfo.text}` : statusInfo.text;
+        const cancelBtn = statusEl.__cancelBtn;
+        if (cancelBtn) cancelBtn.disabled = true;
+      });
     } catch (err) {
       console.error('Erreur restauration pagination', err);
       if (feedback) {
@@ -499,6 +669,86 @@ function initComparisonsTable() {
       if (button) {
         button.disabled = false;
         button.textContent = originalLabel || 'Restaurer les originaux';
+      }
+      if (feedback) {
+        setTimeout(() => { feedback.textContent = ''; }, 5000);
+      }
+    }
+  }
+
+  async function cancelComparisonPagination(comp, { role = null, button, feedback, statusRefs }) {
+    const lockKey = role ? `cancel-${comp.id}-${role}` : `cancel-${comp.id}`;
+    if (paginationLocks.has(lockKey)) return;
+    paginationLocks.add(lockKey);
+
+    const originalLabel = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+    if (feedback) {
+      feedback.textContent = 'Annulation en cours…';
+    }
+
+    let shouldDisableButton = false;
+    try {
+      const payload = role ? { role } : {};
+      const res = await fetch(withBasePath(`/api/comparisons/${comp.id}/page-markers/cancel`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+      if (!res.ok || data.status !== 'cancelled') {
+        const message = data.message || data.error || data.raw || `HTTP ${res.status}`;
+        throw new Error(message);
+      }
+
+      if (feedback) {
+        feedback.textContent = data.message || 'Pagination annulée.';
+      }
+
+      const progress = data.progress || {
+        status: 'cancelled',
+        updated_at: Math.floor(Date.now() / 1000),
+        roles: role ? { [role]: { status: 'cancelled', reason: data.message || '' } } : {}
+      };
+
+      if (role) {
+        clearPendingStatus(comp.id, role);
+      } else {
+        ['source', 'target'].forEach(r => clearPendingStatus(comp.id, r));
+      }
+
+      (statusRefs || []).forEach(({ role: statusRole, statusEl, label }) => {
+        if (!statusEl) return;
+        const statusInfo = computeStatusInfo(progress, statusRole, comp.id);
+        statusEl.textContent = label ? `${label} — ${statusInfo.text}` : statusInfo.text;
+        const cancelBtn = statusEl.__cancelBtn;
+        if (cancelBtn) cancelBtn.disabled = true;
+      });
+
+      shouldDisableButton = true;
+
+    } catch (err) {
+      console.error('Erreur annulation pagination', err);
+      if (feedback) {
+        feedback.textContent = 'Échec de l\'annulation.';
+      }
+      alert("Impossible d'annuler la pagination : " + (err?.message || 'erreur inconnue'));
+    } finally {
+      paginationLocks.delete(lockKey);
+      if (button) {
+        button.textContent = originalLabel || 'Annuler l\'injection';
+        button.disabled = shouldDisableButton;
       }
       if (feedback) {
         setTimeout(() => { feedback.textContent = ''; }, 5000);
@@ -527,6 +777,9 @@ function initComparisonsTable() {
     if (!isValidWorkId(workId)) { resetUI(); return; }
     currentWorkId = workId;
 
+    const requestToken = ++latestComparisonsRequest;
+    activeComparisonsRequest = requestToken;
+
     loading.style.display = 'block';
     tbody.innerHTML = '';
     noComparisons.style.display = 'none';
@@ -535,6 +788,10 @@ function initComparisonsTable() {
       const res = await fetch(withBasePath(`/comparisons/by-work?work_id=${workId}`), { headers: JSON_HEADERS });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const comparisons = await res.json();
+
+      if (requestToken !== activeComparisonsRequest) {
+        return;
+      }
 
       if (!Array.isArray(comparisons) || comparisons.length === 0) {
         noComparisons.style.display = 'block';
@@ -625,7 +882,9 @@ function initComparisonsTable() {
       console.error('Erreur lors du chargement des comparaisons:', err);
       // Leave UI cleared; don't try to render an error page as JSON
     } finally {
-      loading.style.display = 'none';
+      if (requestToken === activeComparisonsRequest) {
+        loading.style.display = 'none';
+      }
     }
   }
 

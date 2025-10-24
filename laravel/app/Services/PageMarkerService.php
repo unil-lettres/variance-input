@@ -45,7 +45,7 @@ class PageMarkerService
         $this->initProgress($version->id, count($entries), 1);
 
         if ($this->isCancelled($version->id)) {
-            throw new PaginationCancelledException('Annulé par l’utilisateur');
+            throw new PaginationCancelledException('Annulé par l\'utilisateur');
         }
 
         $result = $this->applyToVersionDocument(
@@ -1438,6 +1438,39 @@ class PageMarkerService
         return $summary;
     }
 
+    public function cancelComparisonProgress(Comparison $comparison, ?string $role = null, string $reason = 'Annulé par l\'utilisateur'): array
+    {
+        $comparisonId = $comparison->id;
+        $snapshot = $this->getComparisonProgressSnapshot($comparisonId) ?? [];
+        $rolesProgress = $snapshot['roles'] ?? [];
+
+        $targets = $role ? [strtolower($role)] : ['source', 'target'];
+        foreach ($targets as $currentRole) {
+            $existing = $rolesProgress[$currentRole] ?? [];
+            $rolesProgress[$currentRole] = array_replace(
+                $existing,
+                [
+                    'status'     => 'cancelled',
+                    'reason'     => $reason,
+                    'updated_at' => time(),
+                ]
+            );
+        }
+
+        $status = $this->summarizeComparisonStatus($rolesProgress, $snapshot['status'] ?? null);
+
+        $payload = [
+            'status'     => $status,
+            'roles'      => $rolesProgress,
+            'summary'    => $snapshot['summary'] ?? [],
+            'updated_at' => time(),
+        ];
+
+        $this->finishComparisonProgress($comparisonId, $payload);
+
+        return $this->getComparisonProgressSnapshot($comparisonId) ?? $payload;
+    }
+
     private function comparisonRoleFileSet(Comparison $comparison, string $role): array
     {
         $version = $role === 'source' ? $comparison->sourceVersion : $comparison->targetVersion;
@@ -1873,7 +1906,58 @@ class PageMarkerService
         $this->writeComparisonProgress($comparisonId, $payload);
     }
 
-    public function markCancelled(int $versionId, string $reason = 'Annulé par l’utilisateur'): void
+    private function summarizeComparisonStatus(array $rolesProgress, ?string $fallback = null): string
+    {
+        if (empty($rolesProgress)) {
+            return $fallback ?? 'idle';
+        }
+
+        $statuses = [];
+        foreach ($rolesProgress as $progress) {
+            $status = strtolower((string) ($progress['status'] ?? ''));
+            if ($status !== '') {
+                $statuses[] = $status;
+            }
+        }
+
+        if (empty($statuses)) {
+            return $fallback ?? 'idle';
+        }
+
+        if (!empty(array_intersect($statuses, ['running', 'queued']))) {
+            return 'running';
+        }
+
+        if (!empty(array_intersect($statuses, ['failed']))) {
+            return 'failed';
+        }
+
+        if (!empty(array_intersect($statuses, ['cancelled']))) {
+            if (empty(array_intersect($statuses, ['done', 'ok', 'restored']))) {
+                return 'cancelled';
+            }
+        }
+
+        if (!empty(array_intersect($statuses, ['done', 'ok']))) {
+            return 'done';
+        }
+
+        if (!empty(array_intersect($statuses, ['restored']))) {
+            return 'restored';
+        }
+
+        if (!empty(array_intersect($statuses, ['skipped']))) {
+            return 'skipped';
+        }
+
+        if (!empty(array_intersect($statuses, ['cancelled']))) {
+            return 'cancelled';
+        }
+
+        return $fallback ?? 'idle';
+    }
+
+    public function markCancelled(int $versionId, string $reason = 'Annulé par l\'utilisateur'): void
     {
         $path = $this->progressFilePath($versionId);
         $snapshot = $this->getProgressSnapshot($versionId) ?? [
@@ -1984,7 +2068,7 @@ class PageMarkerService
         $this->progress['inserted_total'] = (int)($this->progress['source']['inserted'] ?? 0) + (int)($this->progress['target']['inserted'] ?? 0);
         $this->progress['missed_total'] = (int)($this->progress['source']['missed'] ?? 0) + (int)($this->progress['target']['missed'] ?? 0);
         if ($this->progressVersionId && $this->isCancelled($this->progressVersionId)) {
-            throw new PaginationCancelledException('Annulé par l’utilisateur');
+            throw new PaginationCancelledException('Annulé par l\'utilisateur');
         }
         $this->progress['updated_at'] = time();
         $this->writeProgress();

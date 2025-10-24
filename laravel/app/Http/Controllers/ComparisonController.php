@@ -299,6 +299,46 @@ class ComparisonController extends Controller
         ]);
     }
 
+    public function cancelPageMarkers(Request $request, Comparison $comparison)
+    {
+        $comparison->loadMissing('sourceVersion', 'targetVersion');
+
+        $roleParam = strtolower((string) $request->input('role', ''));
+        $roleParam = $roleParam !== '' ? $roleParam : null;
+        if ($roleParam && !in_array($roleParam, ['source', 'target'], true)) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Rôle invalide. Utilisez "source" ou "target".',
+            ], 422);
+        }
+
+        $reason = 'Annulé par l\'utilisateur';
+
+        try {
+            $this->flushPendingPaginationJobs($comparison->id, $roleParam);
+
+            $progress = $this->pageMarkerService->cancelComparisonProgress($comparison, $roleParam, $reason);
+        } catch (\Throwable $e) {
+            Log::error('Unable to cancel comparison pagination', [
+                'comparison_id' => $comparison->id,
+                'role'          => $roleParam,
+                'error'         => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Impossible d\'annuler la pagination : ' . $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'status'   => 'cancelled',
+            'role'     => $roleParam,
+            'message'  => 'Pagination annulée.',
+            'progress' => $progress,
+        ]);
+    }
+
     private function flushPendingPaginationJobs(int $comparisonId, ?string $role = null): void
     {
         $jobsQuery = DB::table('jobs')
