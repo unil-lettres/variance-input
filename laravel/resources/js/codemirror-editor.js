@@ -255,12 +255,16 @@ function parsePageNumbers(view, getCacheFunction) {
   
   // Convert cache data to the format expected by widgets
   const pageNumbers = [];
-  cache.pageNumberPositions.forEach((data, imageName) => {
+  cache.markerPositions.forEach((markerData, imageName) => {
+    const pageNumber = cache.pageNumbers.get(imageName);
+    const tag = markerData.tag;
+    const pos = markerData.pos;
+    
     pageNumbers.push({
       imageName: imageName,
-      content: data.content,
-      start: data.start,
-      end: data.end
+      content: pageNumber,
+      start: pos,
+      end: pos + tag.length
     });
   });
   
