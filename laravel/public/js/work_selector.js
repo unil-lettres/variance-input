@@ -28,6 +28,31 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveWorkBtn     = document.getElementById("save-work-btn");
   const updateWorkBtn   = document.getElementById("update-work-btn");
 
+  const mainContainer = document.getElementById("admin-main");
+  const initialSelection = (() => {
+    const parseId = (raw) => {
+      const normalized = String(raw ?? '').trim();
+      return /^\d+$/.test(normalized) ? normalized : null;
+    };
+    const cleanSlug = (raw) => {
+      const normalized = String(raw ?? '').trim();
+      return normalized !== '' ? normalized : null;
+    };
+
+    if (!mainContainer) {
+      return { authorId: null, authorSlug: null, workId: null, workSlug: null };
+    }
+
+    const { initialAuthorId, initialAuthorSlug, initialWorkId, initialWorkSlug } = mainContainer.dataset;
+
+    return {
+      authorId: parseId(initialAuthorId),
+      authorSlug: cleanSlug(initialAuthorSlug),
+      workId: parseId(initialWorkId),
+      workSlug: cleanSlug(initialWorkSlug),
+    };
+  })();
+
   // ============
   // UTILITIES
   // ============
@@ -79,7 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // LOAD + TOGGLE
   // ============
   initialReset();   // <— important: notify blades at startup
-  loadAuthors();    // then load data
+  loadAuthors(initialSelection.authorId, initialSelection.workId);    // then load data
 
   // ——— AUTHOR CHANGE ———
   authorSelector.addEventListener("change", () => {
@@ -94,7 +119,12 @@ document.addEventListener("DOMContentLoaded", () => {
     dispatchWorkSelected(null, authorId);
 
     // Then (optionally) load that author’s works
-    if (authorId) loadWorks(authorId);
+    if (authorId) {
+      reflectSelectionInUrl();
+      loadWorks(authorId);
+    } else {
+      reflectSelectionInUrl();
+    }
   });
 
   // ——— WORK CHANGE ———
@@ -106,11 +136,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!workId) {                 // cleared selection
       dispatchWorkSelected(null, authorId);
+      reflectSelectionInUrl();
       return;
     }
 
     if (!authorId) {
       dispatchWorkSelected(workId, null);
+      reflectSelectionInUrl();
       return;
     }
 
@@ -120,6 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     console.debug("dispatchWorkSelected", { workId, authorId, shortTitle });
     dispatchWorkSelected(workId, authorId, shortTitle);
+    reflectSelectionInUrl();
   });
 
   // ==============
@@ -422,7 +455,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==============
   // HELPER FUNCS
   // ==============
-  function loadAuthors(selectedAuthorId = null) {
+  function loadAuthors(selectedAuthorId = null, selectedWorkId = null) {
     fetch(buildUrl('/api/authors'), { headers: JSON_HEADERS })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -439,18 +472,27 @@ document.addEventListener("DOMContentLoaded", () => {
           authorSelector.appendChild(opt);
         });
 
+        let targetAuthorId = null;
         if (selectedAuthorId) {
-          // make the new author current in the dropdown
-          authorSelector.value = selectedAuthorId;
-
-          // 🔔 clear description & other work-dependent blades
-          dispatchWorkSelected(null, selectedAuthorId);
-
-          // repopulate works list (will start empty)
-          loadWorks(selectedAuthorId);
+          const option = authorSelector.querySelector(`option[value="${selectedAuthorId}"]`);
+          if (option) {
+            authorSelector.value = selectedAuthorId;
+            targetAuthorId = selectedAuthorId;
+          }
         }
 
         toggleAuthorButtons();
+
+        if (targetAuthorId) {
+          // 🔔 clear description & other work-dependent blades
+          dispatchWorkSelected(null, targetAuthorId);
+          reflectSelectionInUrl();
+
+          // repopulate works list (will start empty)
+          loadWorks(targetAuthorId, selectedWorkId);
+        } else {
+          reflectSelectionInUrl();
+        }
       })
       .catch(console.error);
   }
@@ -480,19 +522,26 @@ document.addEventListener("DOMContentLoaded", () => {
         workSelector.disabled = false;
         addWorkBtn.disabled   = !authorId;
 
+        let targetWorkId = null;
         if (selectedWorkId) {
-          // pre-select the freshly created / requested work
-          workSelector.value = selectedWorkId;
+          const option = workSelector.querySelector(`option[value="${selectedWorkId}"]`);
+          if (option) {
+            workSelector.value = selectedWorkId;
+            targetWorkId = selectedWorkId;
+          }
+        }
 
+        if (targetWorkId) {
           // 🔔 let every listening blade refresh itself (description, versions, …)
           const shortTitle = workSelector.options[workSelector.selectedIndex]
                                ?.getAttribute('data-short-title') || null;
 
-          dispatchWorkSelected(selectedWorkId, authorId, shortTitle);
+          dispatchWorkSelected(targetWorkId, authorId, shortTitle);
         }
 
         // keep edit / delete buttons in sync
         toggleWorkButtons();
+        reflectSelectionInUrl();
       })
       .catch(console.error);
   }
@@ -501,6 +550,45 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasValue = !!authorSelector.value;
     editAuthorBtn.disabled   = !hasValue;
     deleteAuthorBtn.disabled = !hasValue;
+  }
+
+  function reflectSelectionInUrl() {
+    if (!window?.history || typeof window.history.replaceState !== 'function') {
+      return;
+    }
+
+    const authorOption = authorSelector.value
+      ? authorSelector.options[authorSelector.selectedIndex]
+      : null;
+    const workOption = workSelector.value
+      ? workSelector.options[workSelector.selectedIndex]
+      : null;
+
+    let targetPath = '/';
+    const authorSlug = authorOption?.dataset?.folder || null;
+
+    if (authorSlug) {
+      targetPath = `/select/${authorSlug}`;
+      const workSlug = workOption?.dataset?.folder || null;
+      if (workSlug) {
+        targetPath = `/select/${authorSlug}/${workSlug}`;
+      }
+    }
+
+    const baseAdjusted = typeof window.withBasePath === 'function'
+      ? window.withBasePath(targetPath)
+      : targetPath;
+
+    if (typeof baseAdjusted !== 'string') {
+      return;
+    }
+
+    if ((window.location.pathname || '') === baseAdjusted) {
+      return;
+    }
+
+    const finalUrl = baseAdjusted + (window.location.search || '') + (window.location.hash || '');
+    window.history.replaceState({}, '', finalUrl);
   }
 
   function toggleWorkButtons() {

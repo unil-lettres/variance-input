@@ -11,12 +11,45 @@ use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
 use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\EditorController;
+use App\Models\Author;
+use App\Models\Work;
 
 Route::get('/', function () {
-    return auth()->check()
-        ? view('pages.main')
-        : redirect()->to(admin_path('login'));
+    if (! auth()->check()) {
+        return redirect()->to(admin_path('login'));
+    }
+
+    return view('pages.main', [
+        'initialSelection' => null,
+    ]);
 })->middleware('auth');
+
+Route::get('/select/{authorSlug}/{workSlug?}', function (string $authorSlug, ?string $workSlug = null) {
+    if (! auth()->check()) {
+        return redirect()->to(admin_path('login'));
+    }
+
+    $author = Author::where('folder', $authorSlug)->firstOrFail();
+
+    $work = null;
+    if ($workSlug !== null) {
+        $work = Work::where('folder', $workSlug)
+            ->where('author_id', $author->id)
+            ->firstOrFail();
+    }
+
+    return view('pages.main', [
+        'initialSelection' => [
+            'authorId'   => $author->id,
+            'authorSlug' => $author->folder,
+            'workId'     => $work?->id,
+            'workSlug'   => $work?->folder,
+        ],
+    ]);
+})->where([
+    'authorSlug' => '[A-Za-z0-9_-]+',
+    'workSlug'   => '[A-Za-z0-9_-]+',
+])->middleware('auth')->name('admin.select');
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
