@@ -40,11 +40,10 @@ class LineBreakWidget extends WidgetType {
   }
 }
 
-// Widget to style italic tags visibly
+// Widget to style italic tags
 class ItalicTagWidget extends WidgetType {
-  constructor(tag, isOpening, view) {
+  constructor(isOpening, view) {
     super();
-    this.tag = tag;
     this.isOpening = isOpening;
     this.view = view;
     this.tooltip = null;
@@ -70,40 +69,12 @@ class ItalicTagWidget extends WidgetType {
         const pos = this.view.posAtDOM(span);
         if (pos === null) return;
 
-        const content = this.view.state.doc.toString();
-        const openTagRegex = /<em\s*>/gi;
-        const closeTagRegex = /<\/em\s*>/gi;
+        const tag = this.isOpening ? '<em>' : '</em>';
 
-        let tagToDelete = null;
-        let match;
-
-        // Check opening tags
-        openTagRegex.lastIndex = 0;
-        while ((match = openTagRegex.exec(content)) !== null) {
-          if (match.index <= pos && pos <= match.index + match[0].length) {
-            tagToDelete = { from: match.index, to: match.index + match[0].length };
-            break;
-          }
-        }
-
-        // Check closing tags if not found
-        if (!tagToDelete) {
-          closeTagRegex.lastIndex = 0;
-          while ((match = closeTagRegex.exec(content)) !== null) {
-            if (match.index <= pos && pos <= match.index + match[0].length) {
-              tagToDelete = { from: match.index, to: match.index + match[0].length };
-              break;
-            }
-          }
-        }
-
-        // Delete the tag
-        if (tagToDelete) {
-          this.view.dispatch({
-            changes: { from: tagToDelete.from, to: tagToDelete.to, insert: '' }
-          });
-          this.view.focus();
-        }
+        this.view.dispatch({
+          changes: { from: pos, to: pos + tag.length, insert: '' }
+        });
+        this.view.focus();
       } catch (err) {
         console.error('Error deleting italic tag:', err);
       }
@@ -121,10 +92,6 @@ class ItalicTagWidget extends WidgetType {
 
   ignoreEvent(event) {
     return false;
-  }
-
-  eq(other) {
-    return other.tag === this.tag && other.isOpening === this.isOpening;
   }
 }
 
@@ -334,7 +301,6 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
       tags.push({
         from: match.index,
         to: match.index + match[0].length,
-        tag: match[0],
         isOpening: true
       });
     }
@@ -347,7 +313,6 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
       tags.push({
         from: match.index,
         to: match.index + match[0].length,
-        tag: match[0],
         isOpening: false
       });
     }
@@ -360,7 +325,7 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
     for (const tagInfo of tags) {
       widgets.push(
         Decoration.replace({
-          widget: new ItalicTagWidget(tagInfo.tag, tagInfo.isOpening, view),
+          widget: new ItalicTagWidget(tagInfo.isOpening, view),
           inclusive: false
         }).range(tagInfo.from, tagInfo.to)
       );
