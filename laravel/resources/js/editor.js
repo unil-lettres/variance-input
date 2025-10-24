@@ -82,18 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshButtonStates();
     });
 
-    editor.onPageNumbersChanged((pageNumbers) => {
-        pageNumbers.forEach(({ imageName, content }) => {
-            const button = document.querySelector(`button[data-tag="${imageName}"]`);
-            if (button) {
-                button.setAttribute('data-tag-page-number', content);
-                button.querySelector('span').textContent = content;
-            }
-        });
-
-        updatePaginationColors();
-    });
-
     editor.onSearchPanelStateChanged((isOpen) => {
         elements.searchBtn.classList.toggle('active', isOpen);
     });

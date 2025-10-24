@@ -169,11 +169,6 @@ class PageNumberWidget extends WidgetType {
   ignoreEvent(event) {
     return false;
   }
-
-  eq(other) {
-    return other.pageNumber === this.pageNumber && 
-           other.imageName === this.imageName;
-  }
 }
 
 // Effect to toggle tag visibility
@@ -338,11 +333,10 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
 });
 
 // ViewPlugin to manage page number widgets
-const createPageNumberPlugin = (getClickedCallback, getPageNumbersChangedCallback, getCacheFunction) => ViewPlugin.fromClass(class {
+const createPageNumberPlugin = (getClickedCallback, getCacheFunction) => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
     this.getClickedCallback = getClickedCallback;
-    this.getPageNumbersChangedCallback = getPageNumbersChangedCallback;
     this.getCacheFunction = getCacheFunction;
     this.decorations = this.buildDecorations(view);
   }
@@ -350,11 +344,6 @@ const createPageNumberPlugin = (getClickedCallback, getPageNumbersChangedCallbac
   update(update) {
     if (update.docChanged) {
       this.decorations = this.buildDecorations(update.view);
-
-      // Notify about page numbers changes
-      const pageNumbers = parsePageNumbers(update.view, this.getCacheFunction);
-      const cb = this.getPageNumbersChangedCallback();
-      if (cb) cb(pageNumbers);
     }
   }
 
@@ -390,7 +379,6 @@ export default function (container, initialXml) {
   const editableCompartment = new Compartment();
 
   let onPageNumberClickedCallback = null;
-  let onPageNumbersChangedCallback = null;
   let onEditorReadyCallback = null;
   let onSearchPanelStateChangedCallback = null;
   let onContentChangedCallback = null;
@@ -479,7 +467,6 @@ export default function (container, initialXml) {
       createItalicTagPlugin(),
       createPageNumberPlugin(
         () => onPageNumberClickedCallback,
-        () => onPageNumbersChangedCallback,
         getCache,
       ),
       EditorView.updateListener.of((update) => {
@@ -641,10 +628,6 @@ export default function (container, initialXml) {
 
     onPageNumberClicked(callback) {
       onPageNumberClickedCallback = callback;
-    },
-
-    onPageNumbersChanged(callback) {
-      onPageNumbersChangedCallback = callback;
     },
 
     onEditorReady(callback) {
