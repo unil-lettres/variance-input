@@ -53,7 +53,7 @@ class ItalicTagWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = "cm-italic-tag";
     span.textContent = this.isOpening ? "⟨i⟩" : "⟨/i⟩";
-    span.title = `Cliquer pour supprimer`;
+    span.title = `Cliquez pour supprimer`;
     span.style.cursor = 'pointer';
     
     this.tooltip = new bootstrap.Tooltip(span, {
@@ -111,7 +111,7 @@ class PageNumberWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = 'cm-page-number-mark';
     span.textContent = this.pageNumber;
-    span.title = 'Cliquer pour modifier';
+    span.title = 'Cliquez pour modifier';
     span.style.cursor = 'pointer';
     
     this.tooltip = new bootstrap.Tooltip(span, {

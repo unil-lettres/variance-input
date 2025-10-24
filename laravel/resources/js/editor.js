@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // State - only one active button at a time, either in insert or delete mode
     let activeButton = null;
     let isDeleteMode = false; // true = delete mode, false = insert mode
+    const tooltipsMap = new Map();
 
     const itemsPerPage = 39;
     let tagsWereHiddenBeforeEdit = true;
@@ -494,6 +495,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const imgSrc = button.getAttribute('data-img-src');
         const imageName = button.getAttribute('data-tag');
 
+        const tooltip = new bootstrap.Tooltip(button, {
+            title: () => {
+                const isInserted = editor.isPageMarkerInserted(imageName);
+                const isInsertionMode = activeButton === button && !isDeleteMode;
+                if (isInserted) {
+                  if (isDeleteMode) {
+                      return 'Cliquez à nouveau pour supprimer ce marqueur de page';
+                  } else {
+                      return 'Afficher / supprimer ce marqueur de page';
+                  }
+                } else {
+                  if (isInsertionMode) {
+                      return 'Cliquez dans le texte pour insérer ce marqueur de page';
+                  } else {
+                      return 'Cliquez pour sélectionner ce marqueur de page';
+                  }
+                }
+            },
+            trigger: 'hover',
+            delay: { "show": 300, "hide": 0 },
+            offset: [0, 10],
+        });
+        tooltipsMap.set(button, tooltip);
+
         button.addEventListener('click', () => {
             const isInserted = editor.isPageMarkerInserted(imageName);
 
@@ -504,27 +529,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     deactivateActiveButton();
                 }
-                return;
-            }
-
-            if (activeButton) {
-                deactivateActiveButton();
-            }
-
-            activeButton = button;
-            loadImage(imgSrc);
-
-            if (isInserted) {
-                isDeleteMode = true;
-                setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
-                button.querySelector('span').innerHTML = '<i class="bi bi-trash3"></i>';
-                editor.scrollToPageMarker(imageName);
             } else {
-                isDeleteMode = false;
-                setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
-                refreshButtonName(button);
-                elements.editorContainer.classList.add('insert-page');
+              if (activeButton) {
+                  deactivateActiveButton();
+              }
+
+              activeButton = button;
+              loadImage(imgSrc);
+
+              if (isInserted) {
+                  isDeleteMode = true;
+                  setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
+                  button.querySelector('span').innerHTML = '<i class="bi bi-trash3"></i>';
+                  editor.scrollToPageMarker(imageName);
+              } else {
+                  isDeleteMode = false;
+                  setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
+                  refreshButtonName(button);
+                  elements.editorContainer.classList.add('insert-page');
+              }
             }
+            tooltipsMap.get(button)?.show();
         });
 
         // Hover to show image preview
