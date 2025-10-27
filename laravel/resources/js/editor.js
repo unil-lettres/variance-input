@@ -42,10 +42,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const BUTTON_STATES = {
-        INACTIVE: { add: 'btn-primary', remove: ['btn-insert', 'btn-success', 'btn-danger'] },
-        ACTIVE_INSERT: { add: 'btn-insert', remove: ['btn-primary', 'btn-success', 'btn-danger'] },
-        INSERTED: { add: 'btn-success', remove: ['btn-primary', 'btn-insert', 'btn-danger'] },
-        ACTIVE_DELETE: { add: 'btn-danger', remove: ['btn-primary', 'btn-insert', 'btn-success'] }
+        INACTIVE: 'btn-secondary',
+        ACTIVE_INSERT: 'btn-insert', 
+        INSERTED: 'btn-success',
+        NOT_NAMED: 'btn-warning',
+        ACTIVE_DELETE: 'btn-danger',
     };
 
     // State - only one active button at a time, either in insert or delete mode
@@ -195,12 +196,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Utility functions
     const setButtonState = (button, state) => {
-        if (Array.isArray(state.remove)) {
-            button.classList.remove(...state.remove);
-        } else {
-            button.classList.remove(state.remove);
-        }
-        button.classList.add(state.add);
+        // Remove all button state classes.
+        const btnClasses = new Set(Object.values(BUTTON_STATES));
+        button.classList.remove(...(Array.from(button.classList).filter(c => btnClasses.has(c))));
+
+        button.classList.add(state);
     };
 
     const showMessage = (message) => {
@@ -241,10 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeButton) {
             const imageName = activeButton.getAttribute('data-tag');
             const isInserted = editor.isPageMarkerInserted(imageName);
+            const pageNumber = editor.getPageNumber(imageName);
 
             // Reset to appropriate state
             if (isInserted) {
-                setButtonState(activeButton, BUTTON_STATES.INSERTED);
+                const isNamed = pageNumber && pageNumber !== '?';
+                setButtonState(activeButton, isNamed ? BUTTON_STATES.INSERTED : BUTTON_STATES.NOT_NAMED);
             } else {
                 setButtonState(activeButton, BUTTON_STATES.INACTIVE);
             }
@@ -323,9 +325,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
             const imageName = button.getAttribute('data-tag');
             const isInserted = insertedMarkers.has(imageName);
+            const pageNumber = editor.getPageNumber(imageName);
 
-            const state = isInserted ? BUTTON_STATES.INSERTED : BUTTON_STATES.INACTIVE;
-            setButtonState(button, state);
+            if (isInserted) {
+                const isNamed = pageNumber && pageNumber !== '?';
+                setButtonState(button, isNamed ? BUTTON_STATES.INSERTED : BUTTON_STATES.NOT_NAMED);
+            } else {
+                setButtonState(button, BUTTON_STATES.INACTIVE);
+            }
 
             refreshButtonName(button);
 

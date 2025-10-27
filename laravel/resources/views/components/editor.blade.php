@@ -72,7 +72,7 @@
                 @foreach ($imagesData ?? [] as $facsimile)
                     <div class="col button-item" style="display: none;">
                         <button
-                            class="h-100 w-100 btn btn-primary btn-sm position-relative"
+                            class="h-100 w-100 btn btn-secondary btn-sm position-relative"
                             data-tag="{{ $loop->iteration }}"
                             data-img-src="{{ Storage::url(ltrim($facsimile['big'], '/')) }}"
                             {{ !$canEdit ? 'disabled' : '' }}
