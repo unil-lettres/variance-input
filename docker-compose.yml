@@ -66,6 +66,8 @@ services:
     build:
       context: ./medite
     container_name: medite
+    mem_limit: 20g
+    mem_reservation: 10g
     volumes:
       - ./medite/app:/app
       - ./laravel/storage/app/public:/app/storage_public

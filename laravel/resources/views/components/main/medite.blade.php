@@ -258,12 +258,13 @@ $form.addEventListener('submit', async ev => {
  *------------------------------------------------------------*/
 function pollTask(taskId, cmpId){
     let retries = 0;
-    const max = 120;
+    const intervalMs = 2000;
+    const max = Math.ceil((45 * 60 * 1000) / intervalMs); // allow 45 minutes of polling
 
     const timer = setInterval(async () => {
         if (++retries > max) {
             clearInterval(timer);
-            $progress.textContent = 'Timeout';
+            $progress.innerHTML = '<div class="alert alert-info mb-0">Processing continues in the background. Check the comparisons table later.</div>';
             return;
         }
 
@@ -429,7 +430,7 @@ function pollTask(taskId, cmpId){
             $progress.appendChild(alert);
             notifyComparison('comparisonFailed', cmpId);
         }
-    }, 2000);
+    }, intervalMs);
 }
 
 </script>
