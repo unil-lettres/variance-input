@@ -473,10 +473,13 @@ export default function (container, initialXml) {
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
         ".cm-cursor": {
-          borderLeftColor: "#528bff !important",
+          borderLeftColor: "#d9ff00ff !important",
           borderLeftWidth: "2px !important",
           display: "block !important",
-          visibility: "visible !important"
+          visibility: "visible !important",
+        },
+        ".cm-cursorLayer": {
+          animationIterationCount: "infinite",
         },
         ".cm-selectionBackground": {
           backgroundColor: "#2e4862ff !important"
