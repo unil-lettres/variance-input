@@ -69,7 +69,9 @@ document.addEventListener('DOMContentLoaded', () => {
     editor.onContentChanged(() => {
         const currentContent = editor.view.state.doc.toString();
         hasUnsavedChanges = currentContent !== initialXmlContent;
-        
+
+        refreshButtonStates();
+
         // Update save button appearance
         if (hasUnsavedChanges) {
             elements.saveBtn.classList.remove('btn-success');
