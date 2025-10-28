@@ -90,54 +90,52 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.searchBtn.classList.toggle('active', isOpen);
     });
 
-    // Pagination functions
-    const checkIfPageFullyInserted = (pageNumber) => {
+    const getPageStatus = (pageNumber) => {
         const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
-        if (pageButtons.length === 0) return false;
+        if (pageButtons.length === 0) return { hasDuplicates: false, isFullyInserted: false, hasPageWithoutNumber: false };
 
-        const { insertedMarkers } = editor.getAllMarkers();
+        const { insertedMarkers, markerCounts } = editor.getAllMarkers();
         let allInserted = true;
+        let hasDuplicates = false;
+        let hasPageWithoutNumber = false;
+
         pageButtons.forEach(button => {
             const imageName = button.getAttribute('data-tag');
+
             if (!insertedMarkers.has(imageName)) {
                 allInserted = false;
             }
-        });
 
-        return allInserted;
-    };
-
-    const checkIfPageHasDuplicates = (pageNumber) => {
-        const pageButtons = document.querySelectorAll(`.button-item[data-page="${pageNumber}"] button[data-tag]`);
-
-        const { markerCounts } = editor.getAllMarkers();
-        for (let button of pageButtons) {
-            const imageName = button.getAttribute('data-tag');
             const count = markerCounts.get(imageName) || 0;
             if (count > 1) {
-                return true;
+                hasDuplicates = true;
             }
-        }
 
-        return false;
+            const pageNum = editor.getPageNumber(imageName);
+            if (!pageNum || pageNum === '?') {
+                hasPageWithoutNumber = true;
+            }
+        });
+
+        return { hasDuplicates, isFullyInserted: allInserted, hasPageWithoutNumber };
     };
 
     const updatePaginationColors = () => {
         document.querySelectorAll('#pagination .page-item').forEach((item, index) => {
             const pageNumber = index + 1;
             const link = item.querySelector('.page-link');
-            const hasDuplicates = checkIfPageHasDuplicates(pageNumber);
-            const isFullyInserted = checkIfPageFullyInserted(pageNumber);
+            const { hasDuplicates, isFullyInserted, hasPageWithoutNumber } = getPageStatus(pageNumber);
+
+            link.classList.remove('page-fully-inserted');
+            link.classList.remove('page-has-duplicates');
+            link.classList.remove('page-has-without-number');
 
             if (hasDuplicates) {
                 link.classList.add('page-has-duplicates');
-                link.classList.remove('page-fully-inserted');
-            } else if (isFullyInserted) {
+            } else if (isFullyInserted && !hasPageWithoutNumber) {
                 link.classList.add('page-fully-inserted');
-                link.classList.remove('page-has-duplicates');
-            } else {
-                link.classList.remove('page-fully-inserted');
-                link.classList.remove('page-has-duplicates');
+            } else if (isFullyInserted && hasPageWithoutNumber) {
+                link.classList.add('page-has-without-number');
             }
         });
     };
