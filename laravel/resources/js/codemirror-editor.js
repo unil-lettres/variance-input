@@ -280,65 +280,26 @@ function parsePageNumbers(view, getCacheFunction) {
 const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
-    this.decorations = this.buildDecorations(view);
+
+    this.italicOpenMatcher = new MatchDecorator({
+      regexp: /(<em\s*>|<\/em\s*>)/gi,
+      decoration: (match) => Decoration.replace({
+        widget: new ItalicTagWidget(match[1].startsWith("<em"), view),
+      })
+    });
+
+    this.placeholders = this.italicOpenMatcher.createDeco(view)
   }
 
   update(update) {
-    if (update.docChanged || update.viewportChanged) {
-      this.decorations = this.buildDecorations(update.view);
-    }
+    this.placeholders = this.italicOpenMatcher.updateDeco(update, this.placeholders)
   }
 
-  buildDecorations(view) {
-    const doc = view.state.doc;
-    const text = doc.toString();
-
-    // Collect all italic tags with their positions
-    const tags = [];
-
-    // Find ALL opening tags
-    const openTagRegex = /<em\s*>/gi;
-    let match;
-
-    openTagRegex.lastIndex = 0;
-    while ((match = openTagRegex.exec(text)) !== null) {
-      tags.push({
-        from: match.index,
-        to: match.index + match[0].length,
-        isOpening: true
-      });
-    }
-
-    // Find ALL closing tags </em> - decorate them all as italic closing tags
-    const closeTagRegex = /<\/em\s*>/gi;
-    closeTagRegex.lastIndex = 0;
-    
-    while ((match = closeTagRegex.exec(text)) !== null) {
-      tags.push({
-        from: match.index,
-        to: match.index + match[0].length,
-        isOpening: false
-      });
-    }
-
-    // Sort tags by position (from lowest to highest)
-    tags.sort((a, b) => a.from - b.from);
-
-    // Create decorations from sorted tags
-    const widgets = [];
-    for (const tagInfo of tags) {
-      widgets.push(
-        Decoration.replace({
-          widget: new ItalicTagWidget(tagInfo.isOpening, view),
-          inclusive: false
-        }).range(tagInfo.from, tagInfo.to)
-      );
-    }
-
-    return Decoration.set(widgets);
-  }
 }, {
-  decorations: v => v.decorations
+  decorations: instance => instance.placeholders,
+  provide: plugin => EditorView.atomicRanges.of(view => {
+    return view.plugin(plugin)?.placeholders || Decoration.none
+  })
 });
 
 // ViewPlugin to manage page number widgets
