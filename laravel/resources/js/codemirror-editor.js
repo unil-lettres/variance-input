@@ -1,5 +1,6 @@
 import { EditorState, Compartment, StateField, StateEffect } from "@codemirror/state";
-import { EditorView, drawSelection, Decoration, WidgetType, ViewPlugin } from "@codemirror/view";
+import { EditorView, drawSelection, Decoration, WidgetType, ViewPlugin, MatchDecorator, keymap } from "@codemirror/view";
+import { standardKeymap } from "@codemirror/commands";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { search, openSearchPanel, closeSearchPanel, searchPanelOpen as getSearchPanelState } from "@codemirror/search";
@@ -477,6 +478,7 @@ export default function (container, initialXml) {
         () => onPageNumberClickedCallback,
         getCache,
       ),
+      keymap.of(standardKeymap),
       EditorView.updateListener.of((update) => {
         // Fire the ready callback only once, after the first update
         if (!editorReady && update.view.state.doc.length > 0) {
