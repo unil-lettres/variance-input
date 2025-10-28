@@ -331,7 +331,7 @@ const createPageNumberPlugin = (getClickedCallback, getCacheFunction) => ViewPlu
             this.getCacheFunction,
             this.getClickedCallback
           ),
-          inclusive: true
+          block: false
         }).range(pageNumber.start, pageNumber.end)
       );
     }
@@ -339,7 +339,10 @@ const createPageNumberPlugin = (getClickedCallback, getCacheFunction) => ViewPlu
     return Decoration.set(widgets);
   }
 }, {
-  decorations: v => v.decorations
+  decorations: instance => instance.decorations,
+  provide: plugin => EditorView.atomicRanges.of(view => {
+    return view.plugin(plugin)?.decorations || Decoration.none
+  })
 });
 
 export default function (container, initialXml) {
