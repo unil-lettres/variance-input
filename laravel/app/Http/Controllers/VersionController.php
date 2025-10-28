@@ -208,7 +208,7 @@ class VersionController extends Controller
     public function cancelLignes(Version $version): JsonResponse
     {
         $version->loadMissing('work.author');
-        $this->pageMarkerService->markCancelled($version->id, 'Annulé par l’utilisateur');
+        $this->pageMarkerService->markCancelled($version->id, 'Annulé par l\'utilisateur');
 
         $info = $this->pageMarkerService->getLignesInfo($version->id);
         if ($info) {

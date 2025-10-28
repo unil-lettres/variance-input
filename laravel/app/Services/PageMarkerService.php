@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Storage;
 class PageMarkerService
 {
     private const MARKER_TEMPLATE = '<span class="page-marker" data-image-name="%s"><span class="page-number">%s</span><img src="%s" /></span>';
+    private const ORIGINAL_SOURCE = 'source.original.xhtml';
+    private const ORIGINAL_TARGET = 'target.original.xhtml';
     private ?string $progressPath = null;
     private array $progress = [];
     private ?int $progressVersionId = null;
@@ -43,7 +45,7 @@ class PageMarkerService
         $this->initProgress($version->id, count($entries), 1);
 
         if ($this->isCancelled($version->id)) {
-            throw new PaginationCancelledException('Annulé par l’utilisateur');
+            throw new PaginationCancelledException('Annulé par l\'utilisateur');
         }
 
         $result = $this->applyToVersionDocument(
@@ -212,6 +214,8 @@ class PageMarkerService
     ): array {
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
+        $this->ensureOriginalBackups($comparison);
+
         $results = [
             'source' => null,
             'target' => null,
@@ -340,6 +344,108 @@ class PageMarkerService
         ]);
 
         return $results;
+    }
+
+    public function applySidecarToComparisonRoleOnly(
+        Comparison $comparison,
+        string $role,
+        bool $clearExisting,
+        bool $replaceExisting
+    ): array {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $this->ensureOriginalBackups($comparison);
+
+        $role = strtolower($role) === 'target' ? 'target' : 'source';
+
+        $version = $role === 'source'
+            ? $comparison->sourceVersion
+            : $comparison->targetVersion;
+
+        if (!$version) {
+            $result = [
+                'status' => 'skipped',
+                'reason' => 'Version absente',
+                'inserted' => 0,
+                'misses'   => [],
+                'paths'    => [],
+                'total'    => 0,
+            ];
+            $this->finishComparisonProgress($comparison->id, [
+                'status' => 'done',
+                'roles'  => [
+                    $role => [
+                        'status'   => $result['status'],
+                        'reason'   => $result['reason'],
+                        'total'    => 0,
+                        'inserted' => 0,
+                        'missed'   => 0,
+                    ],
+                ],
+                'summary' => [$role => $result],
+                'updated_at' => time(),
+            ]);
+            return $result;
+        }
+
+        $sidecar = $this->loadPaginationSidecar($version->id);
+        if (!$sidecar) {
+            throw new untimeException('Aucun sidecar pagination disponible pour cette version.');
+        }
+
+        $markers = $sidecar['markers'] ?? [];
+        $totalMarkers = count($markers);
+
+        $this->writeComparisonProgress($comparison->id, [
+            'status'        => 'running',
+            'comparison_id' => $comparison->id,
+            'roles'         => [
+                $role => [
+                    'status'   => 'queued',
+                    'total'    => $totalMarkers,
+                    'inserted' => 0,
+                    'missed'   => 0,
+                ],
+            ],
+            'updated_at'    => time(),
+        ]);
+
+        $this->updateComparisonRoleProgress($comparison->id, $role, [
+            'status' => 'running',
+            'total'  => $totalMarkers,
+        ]);
+
+        $result = $this->applySidecarToComparisonRole(
+            $comparison,
+            $version,
+            $role,
+            $markers,
+            $clearExisting,
+            $replaceExisting
+        );
+
+        $this->updateComparisonRoleProgress($comparison->id, $role, [
+            'status'   => $result['status'],
+            'inserted' => $result['inserted'],
+            'missed'   => count($result['misses']),
+            'total'    => $totalMarkers,
+            'paths'    => $result['paths'] ?? [],
+        ]);
+
+        $this->finishComparisonProgress($comparison->id, [
+            'status'        => 'done',
+            'roles'         => [
+                $role => [
+                    'status'   => $result['status'],
+                    'total'    => $totalMarkers,
+                    'inserted' => $result['inserted'],
+                    'missed'   => count($result['misses']),
+                ],
+            ],
+            'summary'       => [$role => $result + ['total' => $totalMarkers]],
+            'updated_at'    => time(),
+        ]);
+
+        return $result + ['total' => $totalMarkers];
     }
 
     public function loadPaginationSidecar(int $versionId): ?array
@@ -1223,6 +1329,171 @@ class PageMarkerService
         return $offset;
     }
 
+    private function ensureOriginalBackups(Comparison $comparison): void
+    {
+        foreach (['source', 'target'] as $role) {
+            [$paths, $backups] = $this->comparisonRoleFileSet($comparison, $role);
+            foreach ($paths as $idx => $path) {
+                if (!is_file($path ?? '')) {
+                    continue;
+                }
+                if (!empty($backups[$idx]) && is_file($backups[$idx])) {
+                    continue;
+                }
+                $contents = @file_get_contents($path);
+                if ($contents === false) {
+                    continue;
+                }
+                if (stripos($contents, 'page-marker') !== false) {
+                    continue;
+                }
+                $backupPath = $backups[$idx] ?? null;
+                if (!$backupPath) {
+                    continue;
+                }
+                File::ensureDirectoryExists(dirname($backupPath));
+                File::put($backupPath, $contents);
+            }
+        }
+    }
+
+    public function restoreOriginalComparisonOutputs(Comparison $comparison, ?string $role = null): array
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $role = $role ? strtolower($role) : null;
+        $rolesToProcess = $role ? [$role] : ['source', 'target'];
+
+        $summary = [];
+        $snapshot = $this->getComparisonProgressSnapshot($comparison->id) ?? [];
+        $rolesProgress = $snapshot['roles'] ?? [];
+
+        foreach ($rolesToProcess as $currentRole) {
+            [$paths, $backups] = $this->comparisonRoleFileSet($comparison, $currentRole);
+
+            $backupContent = null;
+            foreach ($backups as $backupPath) {
+                if (is_file($backupPath ?? '')) {
+                    $backupContent = file_get_contents($backupPath);
+                    break;
+                }
+            }
+
+            if ($backupContent === null) {
+                $summary[$currentRole] = [
+                    'status'   => 'missing',
+                    'restored' => [],
+                    'total'    => 0,
+                ];
+                $rolesProgress[$currentRole] = [
+                    'status'   => 'missing',
+                    'total'    => 0,
+                    'inserted' => 0,
+                    'missed'   => 0,
+                ];
+                continue;
+            }
+
+            $restored = [];
+            foreach ($paths as $path) {
+                if (!$path) continue;
+                File::ensureDirectoryExists(dirname($path));
+                File::put($path, $backupContent);
+                $restored[] = $path;
+            }
+
+            $version = $currentRole === 'target'
+                ? $comparison->targetVersion
+                : $comparison->sourceVersion;
+
+            $total = 0;
+            if ($version) {
+                $sidecar = $this->loadPaginationSidecar($version->id);
+                if ($sidecar) {
+                    $total = count($sidecar['markers'] ?? []);
+                }
+            }
+
+            $summary[$currentRole] = [
+                'status'   => 'restored',
+                'restored' => $restored,
+                'total'    => $total,
+            ];
+
+            $rolesProgress[$currentRole] = [
+                'status'   => 'restored',
+                'total'    => $total,
+                'inserted' => 0,
+                'missed'   => 0,
+            ];
+        }
+
+        $this->finishComparisonProgress($comparison->id, [
+            'status'        => 'restored',
+            'roles'         => $rolesProgress,
+            'summary'       => array_replace($snapshot['summary'] ?? [], $summary),
+            'updated_at'    => time(),
+        ]);
+
+        return $summary;
+    }
+
+    public function cancelComparisonProgress(Comparison $comparison, ?string $role = null, string $reason = 'Annulé par l\'utilisateur'): array
+    {
+        $comparisonId = $comparison->id;
+        $snapshot = $this->getComparisonProgressSnapshot($comparisonId) ?? [];
+        $rolesProgress = $snapshot['roles'] ?? [];
+
+        $targets = $role ? [strtolower($role)] : ['source', 'target'];
+        foreach ($targets as $currentRole) {
+            $existing = $rolesProgress[$currentRole] ?? [];
+            $rolesProgress[$currentRole] = array_replace(
+                $existing,
+                [
+                    'status'     => 'cancelled',
+                    'reason'     => $reason,
+                    'updated_at' => time(),
+                ]
+            );
+        }
+
+        $status = $this->summarizeComparisonStatus($rolesProgress, $snapshot['status'] ?? null);
+
+        $payload = [
+            'status'     => $status,
+            'roles'      => $rolesProgress,
+            'summary'    => $snapshot['summary'] ?? [],
+            'updated_at' => time(),
+        ];
+
+        $this->finishComparisonProgress($comparisonId, $payload);
+
+        return $this->getComparisonProgressSnapshot($comparisonId) ?? $payload;
+    }
+
+    private function comparisonRoleFileSet(Comparison $comparison, string $role): array
+    {
+        $version = $role === 'source' ? $comparison->sourceVersion : $comparison->targetVersion;
+        if (!$version || !$version->work || !$version->work->author) {
+            return [[], []];
+        }
+
+        $authorFolder = $version->work->author->folder;
+        $workFolder   = $version->work->folder;
+        if (!$authorFolder || !$workFolder) {
+            return [[], []];
+        }
+
+        $fileName = $role === 'source' ? 'source.xhtml' : 'target.xhtml';
+        $paths    = $this->candidatePaths($authorFolder, $workFolder, $comparison, $fileName);
+        $backupName = $role === 'source' ? self::ORIGINAL_SOURCE : self::ORIGINAL_TARGET;
+        $backups = array_map(static function ($path) use ($backupName) {
+            return $path ? dirname($path) . DIRECTORY_SEPARATOR . $backupName : null;
+        }, $paths);
+
+        return [$paths, $backups];
+    }
+
     private function extractContextSnippet(string $shadow, int $charIndex, int $radius = 45): string
     {
         $start = max(0, $charIndex - $radius);
@@ -1635,7 +1906,58 @@ class PageMarkerService
         $this->writeComparisonProgress($comparisonId, $payload);
     }
 
-    public function markCancelled(int $versionId, string $reason = 'Annulé par l’utilisateur'): void
+    private function summarizeComparisonStatus(array $rolesProgress, ?string $fallback = null): string
+    {
+        if (empty($rolesProgress)) {
+            return $fallback ?? 'idle';
+        }
+
+        $statuses = [];
+        foreach ($rolesProgress as $progress) {
+            $status = strtolower((string) ($progress['status'] ?? ''));
+            if ($status !== '') {
+                $statuses[] = $status;
+            }
+        }
+
+        if (empty($statuses)) {
+            return $fallback ?? 'idle';
+        }
+
+        if (!empty(array_intersect($statuses, ['running', 'queued']))) {
+            return 'running';
+        }
+
+        if (!empty(array_intersect($statuses, ['failed']))) {
+            return 'failed';
+        }
+
+        if (!empty(array_intersect($statuses, ['cancelled']))) {
+            if (empty(array_intersect($statuses, ['done', 'ok', 'restored']))) {
+                return 'cancelled';
+            }
+        }
+
+        if (!empty(array_intersect($statuses, ['done', 'ok']))) {
+            return 'done';
+        }
+
+        if (!empty(array_intersect($statuses, ['restored']))) {
+            return 'restored';
+        }
+
+        if (!empty(array_intersect($statuses, ['skipped']))) {
+            return 'skipped';
+        }
+
+        if (!empty(array_intersect($statuses, ['cancelled']))) {
+            return 'cancelled';
+        }
+
+        return $fallback ?? 'idle';
+    }
+
+    public function markCancelled(int $versionId, string $reason = 'Annulé par l\'utilisateur'): void
     {
         $path = $this->progressFilePath($versionId);
         $snapshot = $this->getProgressSnapshot($versionId) ?? [
@@ -1746,7 +2068,7 @@ class PageMarkerService
         $this->progress['inserted_total'] = (int)($this->progress['source']['inserted'] ?? 0) + (int)($this->progress['target']['inserted'] ?? 0);
         $this->progress['missed_total'] = (int)($this->progress['source']['missed'] ?? 0) + (int)($this->progress['target']['missed'] ?? 0);
         if ($this->progressVersionId && $this->isCancelled($this->progressVersionId)) {
-            throw new PaginationCancelledException('Annulé par l’utilisateur');
+            throw new PaginationCancelledException('Annulé par l\'utilisateur');
         }
         $this->progress['updated_at'] = time();
         $this->writeProgress();

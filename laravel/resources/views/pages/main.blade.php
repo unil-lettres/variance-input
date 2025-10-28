@@ -3,7 +3,16 @@
 @section('title', 'Home')
 
 @section('content')
-<div class="container mt-4">
+@php
+    $initialSelection = $initialSelection ?? null;
+@endphp
+
+<div id="admin-main"
+     class="container mt-4"
+     data-initial-author-id="{{ $initialSelection['authorId'] ?? '' }}"
+     data-initial-author-slug="{{ $initialSelection['authorSlug'] ?? '' }}"
+     data-initial-work-id="{{ $initialSelection['workId'] ?? '' }}"
+     data-initial-work-slug="{{ $initialSelection['workSlug'] ?? '' }}">
 
     {{-- Sélecteur d’œuvre --}}
     <div id="zone-0" class="mb-4">

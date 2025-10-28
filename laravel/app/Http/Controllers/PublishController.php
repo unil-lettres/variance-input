@@ -81,8 +81,15 @@ class PublishController extends Controller
         ]);
     }
 
-    public function unpublish(Comparison $comparison)
+    public function unpublish($comparison)
     {
+        $comparison = Comparison::find($comparison);
+        if (!$comparison) {
+            return response()->json([
+                'error' => 'Comparaison introuvable ou déjà supprimée.',
+            ], 404);
+        }
+
         try {
             $paths = $this->resolvePaths($comparison);
         } catch (\RuntimeException $e) {
