@@ -78,3 +78,16 @@
     background-color: #ffffff;
     color: #9b59b6;
 }
+
+/* Highlight animation for selected page markers */
+@keyframes cmPageMarkerPulse {
+  0% { box-shadow: 0 0 0 0 #59b6aa; transform: scale(1); }
+  50% { box-shadow: 0 0 12px 6px #59b6aa; transform: scale(1.04); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); transform: scale(1); }
+}
+
+.cm-page-number-mark.page-marker-highlight {
+  animation: cmPageMarkerPulse 450ms ease-in-out;
+  animation-iteration-count: 2;
+  border-radius: 4px;
+}

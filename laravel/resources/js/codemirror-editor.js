@@ -112,6 +112,7 @@ class PageNumberWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = 'cm-page-number-mark';
     span.textContent = this.pageNumber;
+    span.setAttribute('data-image-name', this.imageName);
     span.style.cursor = 'pointer';
 
     const i = document.createElement("i");
@@ -122,6 +123,10 @@ class PageNumberWidget extends WidgetType {
       title: () => this.pageNumber === '?' ? 'Cliquez pour numéroter la page' : 'Cliquez pour modifier le numéro de page',
       trigger: 'hover',
       offset: [0, 10],
+    });
+
+    span.addEventListener('animationend', () => {
+      span.classList.remove('page-marker-highlight');
     });
 
     span.addEventListener('click', (e) => {
@@ -577,6 +582,13 @@ export default function (container, initialXml) {
           effects: EditorView.scrollIntoView(result.pos, { y: "center" })
         });
         view.focus();
+
+        requestAnimationFrame(() => {
+          const el = view.dom.querySelector(`.cm-page-number-mark[data-image-name="${imageName}"]`);
+          if (el) {
+            el.classList.add('page-marker-highlight');
+          }
+        });
       }
     },
 
