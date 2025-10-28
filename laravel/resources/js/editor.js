@@ -46,12 +46,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ACTIVE_INSERT: 'btn-insert', 
         INSERTED: 'btn-success',
         NOT_NAMED: 'btn-warning',
-        ACTIVE_DELETE: 'btn-danger',
     };
 
     // State - only one active button at a time, either in insert or delete mode
     let activeButton = null;
-    let isDeleteMode = false; // true = delete mode, false = insert mode
     const tooltipsMap = new Map();
 
     const itemsPerPage = 39;
@@ -198,9 +196,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const setButtonState = (button, state) => {
         // Remove all button state classes.
         const btnClasses = new Set(Object.values(BUTTON_STATES));
+        btnClasses.add('btn-outlined');
         button.classList.remove(...(Array.from(button.classList).filter(c => btnClasses.has(c))));
 
         button.classList.add(state);
+
+        if (state === BUTTON_STATES.ACTIVE_INSERT) {
+            button.classList.add('btn-outlined');
+        }
     };
 
     const showMessage = (message) => {
@@ -254,8 +257,11 @@ document.addEventListener('DOMContentLoaded', () => {
             refreshButtonName(activeButton);
 
             activeButton = null;
-            isDeleteMode = false;
             elements.editorContainer.classList.remove('insert-page');
+
+            elements.noPreviewText.style.display = 'block';
+            elements.previewImg.parentElement.style.display = 'none';
+            elements.imageName.style.display = 'none';
         }
     };
 
@@ -519,15 +525,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const tooltip = new bootstrap.Tooltip(button, {
             title: () => {
                 const isInserted = editor.isPageMarkerInserted(imageName);
-                const isInsertionMode = activeButton === button && !isDeleteMode;
                 if (isInserted) {
-                  if (isDeleteMode) {
-                      return 'Cliquez à nouveau pour supprimer ce marqueur de page';
-                  } else {
-                      return 'Afficher / supprimer ce marqueur de page';
-                  }
+                    return 'Afficher ce marqueur de page dans l\'éditeur';
                 } else {
-                  if (isInsertionMode) {
+                  if (activeButton === button) {
                       return 'Cliquez dans le texte pour insérer ce marqueur de page';
                   } else {
                       return 'Cliquez pour sélectionner ce marqueur de page';
@@ -544,9 +545,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const isInserted = editor.isPageMarkerInserted(imageName);
 
             if (activeButton === button) {
-                if (isDeleteMode) {
-                    editor.removePageMarker(imageName);
-                    refreshButtonStates();
+                if (isInserted) {
+                    editor.scrollToPageMarker(imageName);
                 } else {
                     deactivateActiveButton();
                 }
@@ -556,17 +556,12 @@ document.addEventListener('DOMContentLoaded', () => {
               }
 
               activeButton = button;
+              button.classList.add('btn-outlined');
               loadImage(imgSrc);
 
               if (isInserted) {
-                  isDeleteMode = true;
-                  setButtonState(button, BUTTON_STATES.ACTIVE_DELETE);
-                  const i = document.createElement('i');
-                  i.className = 'bi bi-trash3';
-                  button.querySelector('span').replaceChildren(i);
                   editor.scrollToPageMarker(imageName);
               } else {
-                  isDeleteMode = false;
                   setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
                   refreshButtonName(button);
                   elements.editorContainer.classList.add('insert-page');
@@ -574,30 +569,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             tooltipsMap.get(button)?.show();
         });
-
-        // Hover to show image preview
-        button.addEventListener('mouseenter', () => {
-            if (imgSrc) {
-                loadImage(imgSrc);
-            }
-        });
-
-        // On mouse leave, restore active button image if there is one
-        button.addEventListener('mouseleave', () => {
-            // If leaving the active button in delete mode, deactivate it
-            if (activeButton === button && isDeleteMode) {
-                deactivateActiveButton();
-            } else if (activeButton && activeButton !== button) {
-                const activeImgSrc = activeButton.getAttribute('data-img-src');
-                loadImage(activeImgSrc);
-            }
-        });
     });
 
     // Editor click to insert tag
     elements.editorContainer.addEventListener('click', (e) => {
         // Only insert page marker if we have an active button in insert mode
-        if (activeButton && !isDeleteMode) {
+        if (activeButton) {
             const imageName = activeButton.getAttribute('data-tag');
             const pageNumber = activeButton.getAttribute('data-tag-page-number') || '?';
             if (editor.insertPageMarker(imageName, pageNumber) === true) {
@@ -609,7 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Close insert mode when clicking anywhere on the page (except on buttons or editor)
     document.addEventListener('click', (e) => {
-        if (activeButton && !isDeleteMode) {
+        if (activeButton) {
             const isClickOnEditor = elements.editorContainer.contains(e.target);
             const isClickOnButton = e.target.closest('[data-tag]');
             const isClickOnImageUrl = e.target.id === 'image-name';

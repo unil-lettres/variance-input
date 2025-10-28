@@ -56,7 +56,7 @@
         <div
             id="editor-container"
             style="border:1px solid #ccc;"
-            class="overflow-scroll"
+            class="mt-2 overflow-scroll"
         ></div>
     </div>
     <div class="col-md-2 col-12 h-100 d-flex flex-column justify-content-between gap-2">
@@ -68,7 +68,7 @@
             title="Générer les numéros de page"
         ><i class="bi bi-file-earmark mr-1"></i><i class="bi bi-123"></i></button>
         <div class="overflow-auto mb-auto">
-            <div id="buttons-container" class="row row-cols-3 g-1 align-items-start w-100">
+            <div id="buttons-container" class="row row-cols-3 px-1 py-2 g-1 align-items-start w-100">
                 @foreach ($imagesData ?? [] as $facsimile)
                     <div class="col button-item" style="display: none;">
                         <button

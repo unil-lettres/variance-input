@@ -79,6 +79,11 @@
     color: #9b59b6;
 }
 
+.btn-outlined {
+    outline: 1px solid var(--bs-primary) !important;
+    outline-offset: 1px !important;
+}
+
 /* Highlight animation for selected page markers */
 @keyframes cmPageMarkerPulse {
   0% { box-shadow: 0 0 0 0 #59b6aa; transform: scale(1); }

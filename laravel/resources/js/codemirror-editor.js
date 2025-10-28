@@ -140,7 +140,7 @@ class PageNumberWidget extends WidgetType {
         
         if (!pageNumberData) return;
 
-        const newPageNumber = prompt("Entrez le nouveau numéro de page:", pageNumberData.content === '?' ? '' : pageNumberData.content);
+        const newPageNumber = prompt("Entrez le nouveau numéro de page, laissez vide pour le supprimer :", pageNumberData.content === '?' ? '' : pageNumberData.content);
 
         if (newPageNumber === null) return;
 
@@ -149,18 +149,24 @@ class PageNumberWidget extends WidgetType {
           return;
         }
 
+        let changes = {};
+
         if (newPageNumber !== pageNumberData.content) {
           if (newPageNumber.trim() === '') {
-            alert("Le numéro de page ne peut pas être vide. Pour supprimer un numéro de page, cliquez à deux reprises sur le bouton d'insertion qui lui est associé.");
-            return;
-          }
-          this.view.dispatch({
-            changes: { from: pageNumberData.start, to: pageNumberData.end, insert: newPageNumber }
-          });
+            const markerPositions = cache.markerPositions.get(this.imageName) || null;
+            const tagPos = markerPositions.pos;
+            const tagEnd = tagPos + markerPositions.tag.length;
 
-          const callback = this.getClickedCallback();
-          if (callback) callback();
+            changes =  { from: tagPos, to: tagEnd, insert: '' };
+          } else {
+            changes = { from: pageNumberData.start, to: pageNumberData.end, insert: newPageNumber };
+          }
         }
+
+        this.view.dispatch({changes});
+
+        const callback = this.getClickedCallback();
+        if (callback) callback();
       } catch (err) {
         console.error('Error editing page number:', err);
       }
@@ -629,21 +635,6 @@ export default function (container, initialXml) {
 
     onContentChanged(callback) {
       onContentChangedCallback = callback;
-    },
-
-    removePageMarker(imageName) {
-      const result = this.getPageMarkerTag(imageName);
-
-      if (result) {
-        const tagPos = result.pos;
-        const tagEnd = tagPos + result.tag.length;
-
-        view.dispatch({
-          changes: { from: tagPos, to: tagEnd, insert: '' }
-        });
-
-        invalidateCache();
-      }
     },
 
     toggleSearch() {
