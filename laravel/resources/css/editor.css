@@ -5,6 +5,7 @@
 
 .page-item:not(.active) .page-link.page-fully-inserted {
     color: var(--bs-success);
+    border-color: var(--bs-success);
 }
 
 .page-item.active .page-link.page-fully-inserted {
@@ -14,6 +15,7 @@
 
 .page-item:not(.active) .page-link.page-has-duplicates {
     color: var(--bs-danger);
+    border-color: var(--bs-danger);
 }
 
 .page-item.active .page-link.page-has-duplicates {
@@ -23,6 +25,7 @@
 
 .page-item:not(.active) .page-link.page-has-without-number {
     color: var(--bs-warning);
+    border-color: var(--bs-warning);
 }
 
 .page-item.active .page-link.page-has-without-number {
