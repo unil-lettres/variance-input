@@ -19,8 +19,8 @@ celery = Celery(app.name)
 celery.conf.update(
     broker_url='redis://redis:6379/0',
     result_backend='redis://redis:6379/0',
-    task_soft_time_limit=300,  # Raise SoftTimeLimitExceeded after 5 minutes
-    task_time_limit=360        # Force kill task after 6 minutes
+    task_soft_time_limit=1800,  # Allow up to 30 minutes for heavy comparisons
+    task_time_limit=2100        # Hard-stop after 35 minutes
 )
 
 redis_conn = redis.StrictRedis(host='redis', port=6379, db=0)
@@ -238,7 +238,8 @@ def run_diff_script(
 
     except subprocess.CalledProcessError as e:
         combined = (e.stdout or '') + (e.stderr or '')
-        error_output = _compact(combined) or str(e)
+        details = _compact(combined)
+        error_output = details + ("\n" if details else "") + str(e)
         print("[run_diff_script] ERROR:", error_output)
         return {
             "status": "error",
@@ -331,8 +332,8 @@ def run_diff2():
             "xhtml_output_dir": xhtml_output_dir,
             "comparison_id": comparison_id,
         },
-        time_limit=900,        # Hard timeout (seconds)
-        soft_time_limit=840    # Graceful shutdown before hard timeout
+        time_limit=2100,        # Hard timeout (seconds)
+        soft_time_limit=1800    # Graceful shutdown before hard timeout
     )
 
     return jsonify({"task_id": task.id}), 200
