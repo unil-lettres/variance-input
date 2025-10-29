@@ -122,8 +122,8 @@ Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
 Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->name('comparisons.destroy');
 
 // Editor
-Route::get('/versions/{id}/editor', [EditorController::class, 'show'])->name('versions.editor');
-Route::put('/versions/{id}/editor', [EditorController::class, 'update'])->name('versions.editor.update');
+Route::get('comparison/{comparison}/editor', [EditorController::class, 'comparisonEditor'])->middleware('auth')->name('comparison.editor');
+Route::put('comparison/{comparison}/editor', [EditorController::class, 'comparisonUpdate'])->middleware('auth')->name('comparison.editor.update');
 
 // TEI to XHTML conversion
 // Route::post('/api/run_xhtml', [XhtmlController::class, 'run']);

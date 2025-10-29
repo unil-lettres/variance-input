@@ -863,7 +863,8 @@ function initComparisonsTable() {
           <td>
             <a href="${xmlUrl}"  class="btn btn-sm btn-outline-primary" target="_blank">XML</a>
             ${(legacyUrl && published) ? `<a href="${legacyUrl}" class="btn btn-sm btn-outline-success ms-1" target="_blank" title="Voir sur le site public">Public</a>` : ''}
-            <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}">🗑️</button>
+            <a href="/comparison/${comp.id}/editor"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-square"></i></a>
+            <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
           </td>
         `;
         tbody.appendChild(tr);

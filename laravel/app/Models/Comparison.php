@@ -54,4 +54,24 @@ class Comparison extends Model
     {
         return $this->hasOne(ComparisonStatus::class);
     }
+
+    public function getSourceFilePath()
+    {
+        return $this->getFilePath('source');
+    }
+
+    public function getTargetFilePath()
+    {
+        return $this->getFilePath('target');
+    }
+
+    private function getFilePath($type = 'source')
+    {
+        $isTarget = $type === 'target';
+        $version = $isTarget ? $this->targetVersion : $this->sourceVersion;
+        $work = $version->work;
+        $author = $work->author;
+
+        return storage_path("app/public/uploads/{$author->folder}/{$work->folder}/comparisons/{$this->id}/{$type}.xhtml");
+    }
 }

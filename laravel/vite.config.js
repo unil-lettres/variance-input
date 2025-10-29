@@ -4,8 +4,11 @@ import laravel from 'laravel-vite-plugin'
 export default defineConfig({
   plugins: [
     laravel({
-      // For now, only bundle the CodeMirror entry
-      input: ['resources/js/codemirror.js'],
+      input: [
+        'resources/js/app.js',
+        'resources/css/app.css',
+        'resources/js/editor.js',
+      ],
       refresh: true,          // harmless in prod builds; useful if you run `vite` in dev
       buildDirectory: 'build' // outputs to public/build (default), explicit for clarity
     }),

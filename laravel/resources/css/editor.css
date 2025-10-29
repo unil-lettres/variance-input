@@ -1,0 +1,101 @@
+.btn-insert {
+    background-color: #59b6aa !important;
+    color: #ffffff !important;
+}
+
+.page-item:not(.active) .page-link.page-fully-inserted {
+    color: var(--bs-success);
+    border-color: var(--bs-success);
+}
+
+.page-item.active .page-link.page-fully-inserted {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+}
+
+.page-item:not(.active) .page-link.page-has-duplicates {
+    color: var(--bs-danger);
+    border-color: var(--bs-danger);
+}
+
+.page-item.active .page-link.page-has-duplicates {
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
+}
+
+.page-item:not(.active) .page-link.page-has-without-number {
+    color: var(--bs-warning);
+    border-color: var(--bs-warning);
+}
+
+.page-item.active .page-link.page-has-without-number {
+    background-color: var(--bs-warning);
+    border-color: var(--bs-warning);
+}
+
+#facsimile-preview {
+    transition: transform 0.2s ease-out;
+    will-change: transform;
+}
+
+.cm-page-number-mark {
+    background-color: #59b6aa;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 0.85em;
+    font-family: monospace;
+    cursor: pointer;
+    display: inline-block;
+    margin: 0 1px;
+}
+
+.cm-page-number-mark:hover {
+    background-color: #ffffff;
+    color: #59b6aa;
+}
+
+.cm-italic-tag {
+    background-color: #9b59b6;
+    color: #ffffff;
+    font-weight: bold;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 0.85em;
+    font-family: monospace;
+    cursor: pointer;
+    display: inline-block;
+    margin: 0 1px;
+}
+
+.cm-readonly:not(.insert-page) {
+    cursor: default;
+}
+
+.cm-readonly .cm-selectionLayer {
+    display: none !important;
+}
+
+.cm-italic-tag:hover {
+    background-color: #ffffff;
+    color: #9b59b6;
+}
+
+.btn-outlined {
+    outline: 1px solid var(--bs-primary) !important;
+    outline-offset: 1px !important;
+}
+
+/* Highlight animation for selected page markers */
+@keyframes cmPageMarkerPulse {
+  0% { box-shadow: 0 0 0 0 #59b6aa; transform: scale(1); }
+  50% { box-shadow: 0 0 12px 6px #59b6aa; transform: scale(1.04); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); transform: scale(1); }
+}
+
+.cm-page-number-mark.page-marker-highlight {
+  animation: cmPageMarkerPulse 450ms ease-in-out;
+  animation-iteration-count: 2;
+  border-radius: 4px;
+}
