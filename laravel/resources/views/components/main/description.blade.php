@@ -1,13 +1,15 @@
 <!-- resources/views/components/main/description.blade.php -->
 
 <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
-        <div class="d-flex align-items-center gap-2 description-toggle"
-             role="button"
-             data-bs-toggle="collapse"
-             data-bs-target="#descriptionCollapse"
-             aria-expanded="true"
-             aria-controls="descriptionCollapse">
+    <div
+        class="card-header d-flex justify-content-between align-items-center fw-semibold description-toggle"
+        role="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#descriptionCollapse"
+        aria-expanded="true"
+        aria-controls="descriptionCollapse"
+    >
+        <div class="d-flex align-items-center gap-2">
             <span class="collapse-chevron" aria-hidden="true"></span>
         <span class="text-uppercase">Description</span>
         </div>

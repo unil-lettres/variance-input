@@ -1,12 +1,14 @@
 <!-- resources/views/components/main/media.blade.php -->
 <div class="card mb-3" id="media-panel">
-  <div class="card-header text-uppercase fw-semibold d-flex justify-content-between align-items-center">
-    <div class="d-flex align-items-center gap-2 media-toggle"
-         role="button"
-         data-bs-toggle="collapse"
-         data-bs-target="#mediaCollapse"
-         aria-expanded="true"
-         aria-controls="mediaCollapse">
+  <div
+      class="media-toggle card-header text-uppercase fw-semibold d-flex justify-content-between align-items-center" 
+      role="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#mediaCollapse"
+      aria-expanded="true"
+      aria-controls="mediaCollapse"
+  >
+    <div class="d-flex align-items-center gap-2">
       <span class="collapse-chevron" aria-hidden="true"></span>
       <span>Médias d'accompagnement</span>
     </div>
