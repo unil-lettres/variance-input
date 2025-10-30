@@ -57,7 +57,6 @@
             </div>
         </div>
     </div>
-    </div>
 </div>
 
 <!-- ────────────── Delete confirmation ────────────── -->
@@ -77,7 +76,6 @@
                 <button type="button" class="btn btn-danger" id="confirm-delete-version">Supprimer</button>
             </div>
         </div>
-    </div>
     </div>
 </div>
 
@@ -125,7 +123,6 @@
                 <button type="button" class="btn btn-primary" id="submit-upload-form">Téléverser</button>
             </div>
         </div>
-    </div>
     </div>
 </div>
 
