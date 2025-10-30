@@ -784,6 +784,9 @@ function initComparisonsTable() {
     tbody.innerHTML = '';
     noComparisons.style.display = 'none';
 
+    this.initializedTooltips?.forEach(tooltip => tooltip.dispose());
+    this.initializedTooltips = [];
+
     try {
       const res = await fetch(withBasePath(`/comparisons/by-work?work_id=${workId}`), { headers: JSON_HEADERS });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -863,13 +866,28 @@ function initComparisonsTable() {
                    ${comp.publish_source ? '' : 'disabled'}>
           </td>
           <td>${comp.created_at ? new Date(comp.created_at).toLocaleString() : ''}</td>
-          <td>
-            <a href="${xmlUrl}"  class="btn btn-sm btn-outline-primary" target="_blank">XML</a>
-            ${(legacyUrl && published) ? `<a href="${legacyUrl}" class="btn btn-sm btn-outline-success ms-1" target="_blank" title="Voir sur le site public">Public</a>` : ''}
-            <a href="${editorUrl}"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-square"></i></a>
-            <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
+          <td class="text-center">
+            <div class="btn-group-vertical" role="group" aria-label="Action buttons">
+              ${(legacyUrl && published) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
+              <a href="${editorUrl}" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>
+              <a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>
+              <button data-bs-toggle="tooltip" title="Supprimer la comparaison" class="btn btn-outline-danger delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
+            </div>
           </td>
         `;
+
+        // Initialize Bootstrap tooltips.
+        const tooltipTriggerList = tr.querySelectorAll('[data-bs-toggle="tooltip"]');
+        this.initializedTooltips.push(...Array.from(tooltipTriggerList).map(tooltipTriggerEl => {
+          return new bootstrap.Tooltip(
+            tooltipTriggerEl,
+            {
+              trigger: 'hover',
+              delay: { show: 300, hide: 0 },
+              placement: 'left',
+            });
+        }));
+
         tbody.appendChild(tr);
         const sourceWrapper = tr.querySelector('.source-cell .role-wrapper');
         if (sourceWrapper) {
@@ -1052,6 +1070,7 @@ function initComparisonsTable() {
 }
 
 window.initComparisonsTable = initComparisonsTable;
+initComparisonsTable.initializedTooltips = [];
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initComparisonsTable);
