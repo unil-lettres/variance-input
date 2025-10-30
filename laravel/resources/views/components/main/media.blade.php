@@ -12,9 +12,9 @@
       <span class="collapse-chevron" aria-hidden="true"></span>
       <span>Médias d'accompagnement</span>
     </div>
-    <div class="d-flex align-items-center gap-2 small" id="media-status-pills">
-      <span id="media-status-vignette" class="badge bg-danger-subtle text-danger media-status-pill">VIGNETTE ✗</span>
-      <span id="media-status-pdf" class="badge bg-danger-subtle text-danger media-status-pill">PDF ✗</span>
+    <div class="d-flex align-items-center gap-2" id="media-status-pills">
+      <span id="media-status-vignette" class="badge bg-danger-subtle text-danger media-status-pill"></span>
+      <span id="media-status-pdf" class="badge bg-danger-subtle text-danger media-status-pill"></span>
     </div>
   </div>
   <div id="mediaCollapse" class="collapse show">
@@ -112,12 +112,6 @@
   .media-toggle[aria-expanded="false"] .collapse-chevron::before {
     transform: rotate(-90deg);
   }
-  .media-status-pill {
-    font-size: 0.75rem;
-    padding: 0.2rem 0.5rem;
-    font-variant: small-caps;
-    letter-spacing: 0.03em;
-  }
   #mediaCollapse,
   #mediaCollapse *,
   #mediaCollapse.show,
@@ -140,6 +134,18 @@
     vignette: document.getElementById('media-status-vignette'),
     pdf: document.getElementById('media-status-pdf')
   };
+  const statusTooltip = { vignette: "", pdf: "" };
+
+  new bootstrap.Tooltip(statusPills.vignette, {
+    title: () => statusTooltip.vignette,
+    trigger: 'hover',
+    delay: { "show": 500, "hide": 0 }
+  });
+  new bootstrap.Tooltip(statusPills.pdf, {
+    title: () => statusTooltip.pdf,
+    trigger: 'hover',
+    delay: { "show": 500, "hide": 0 }
+  });
 
   updateMediaStatus('vignette', false, true);
   updateMediaStatus('pdf', false, true);
@@ -147,22 +153,25 @@
   function updateMediaStatus(type, hasFile, hide = false) {
     const pill = statusPills[type];
     if (!pill) return;
+
+    pill.className = 'd-block badge media-status-pill';
     const label = statusLabels[type] || type.toUpperCase();
+
     if (hide) {
-      pill.style.display = 'none';
-      pill.title = '';
+      pill.classList.add('d-none');
       pill.textContent = '';
       return;
     }
-    pill.style.display = 'inline-block';
+
+    pill.classList.add('d-block');
     if (hasFile) {
-      pill.className = 'badge bg-success-subtle text-success media-status-pill';
-      pill.textContent = `${label} ✔`;
-      pill.title = `${label} disponible`;
+      pill.classList.add('text-bg-success');
+      pill.innerHTML = `<i class="bi bi-check-circle"></i> ${label}`;
+      statusTooltip[type] = 'Le média a été ajouté';
     } else {
-      pill.className = 'badge bg-danger-subtle text-danger media-status-pill';
-      pill.textContent = `${label} ✗`;
-      pill.title = `${label} manquant`;
+      pill.classList.add('text-bg-secondary');
+      pill.innerHTML = `<i class="bi bi-x-circle"></i> ${label}`;
+      statusTooltip[type] = 'Le média n\'a pas été ajouté';
     }
   }
 

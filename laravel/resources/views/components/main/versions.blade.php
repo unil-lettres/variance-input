@@ -10,7 +10,7 @@
             <span class="collapse-chevron" aria-hidden="true"></span>
             <span class="text-uppercase">Versions & fac-similés</span>
         </div>
-        <span id="versions-count-pill" class="badge bg-danger-subtle text-danger media-status-pill">0</span>
+        <span id="versions-count-pill" class="badge text-bg-danger media-status-pill">0</span>
     </div>
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
@@ -1017,20 +1017,17 @@ function updateVersionsCount(count) {
     const pill = document.getElementById('versions-count-pill');
     if (!pill) return;
 
+    pill.className = 'badge text-uppercase media-status-pill d-block align-items-center';
     if (count === null || count === undefined) {
-        pill.style.display = 'none';
+        pill.classList.add('d-none');
         return;
     }
 
-    const classes = count > 0
-        ? 'badge bg-success-subtle text-success media-status-pill d-inline-flex align-items-center'
-        : 'badge bg-danger-subtle text-danger media-status-pill d-inline-flex align-items-center';
+    pill.classList.add(count > 0 ? 'text-bg-success' : 'text-bg-danger');
+    pill.classList.add('d-block');
 
-    pill.className = classes;
-    pill.style.display = 'inline-flex';
     const label = count === 1 ? '1 version' : `${count} versions`;
     pill.textContent = label;
-    pill.title = label;
 }
 
 function openFacsimileUploadModal(version) {

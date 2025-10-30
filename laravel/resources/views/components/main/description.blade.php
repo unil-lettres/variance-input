@@ -13,7 +13,7 @@
             <span class="collapse-chevron" aria-hidden="true"></span>
         <span class="text-uppercase">Description</span>
         </div>
-        <span id="description-status-pill" class="badge bg-danger-subtle text-danger media-status-pill">DESCRIPTION ✗</span>
+        <span id="description-status-pill" class="badge text-bg-secondary media-status-pill"></span>
     </div>
     <div id="descriptionCollapse" class="collapse show">
     <div class="card-body">
@@ -273,24 +273,32 @@ function toggleDirtyIndicator(hasChanges) {
     }
 }
 
+let tootltipTitle = "";
+new bootstrap.Tooltip(document.getElementById('description-status-pill'), {
+    title: () => tootltipTitle,
+    trigger: 'hover',
+    delay: { "show": 500, "hide": 0 }
+});
+
 function updateStatusPill(hasContent, hide = false) {
     if (!statusPill) return;
+
+    statusPill.className = 'd-block text-uppercase badge media-status-pill';
+
     if (hide) {
-        statusPill.style.display = 'none';
-        statusPill.title = '';
+        statusPill.classList.add('d-none');
         statusPill.textContent = '';
         return;
     }
-    statusPill.style.display = 'inline-block';
-    const label = 'DESCRIPTION';
+    statusPill.classList.add('d-block');
     if (hasContent) {
-        statusPill.className = 'badge bg-success-subtle text-success media-status-pill';
-        statusPill.textContent = `${label} ✔`;
-        statusPill.title = `${label} disponible`;
+        statusPill.classList.add('text-bg-success');
+        statusPill.innerHTML = `<i class="bi bi-check-circle"></i> Description`;
+        tootltipTitle = 'La description est complétée';
     } else {
-        statusPill.className = 'badge bg-danger-subtle text-danger media-status-pill';
-        statusPill.textContent = `${label} ✗`;
-        statusPill.title = `${label} manquante`;
+        statusPill.classList.add('text-bg-secondary');
+        statusPill.innerHTML = `<i class="bi bi-x-circle"></i> Description`;
+        tootltipTitle = 'La description est vide';
     }
 }
 </script>
