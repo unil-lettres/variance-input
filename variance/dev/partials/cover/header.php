@@ -28,7 +28,7 @@ $currentPage = basename($_SERVER['REQUEST_URI']) ;
 	<!--	The only one plugin allowed to be in header-->
 	<script src="<?php echo DIR_REL ?>/app/js/vendors/modernizr-custom.js"></script>
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
-    <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
 	<!--[if IE]>
 	<script src="https://html5shiv.googlecode.com/svn/trunk/html5.js"></script>

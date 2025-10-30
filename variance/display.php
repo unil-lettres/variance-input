@@ -26,7 +26,7 @@ if (!empty($_COOKIE['viewer_params'])) {
     <link rel="stylesheet" href="<?php echo DIR_REL ?>/dist/css/screen.min.css?v3">
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,300" rel="stylesheet" type="text/css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
-    <link rel="icon" type="image/png" href="favicon.png"/>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
     <!--	The only one plugin allowed to be in header-->
     <script src="<?php echo DIR_REL ?>/app/js/vendors/modernizr-custom.js"></script>
