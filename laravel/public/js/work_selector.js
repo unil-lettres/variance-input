@@ -53,11 +53,14 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   })();
 
+
   // ============
   // UTILITIES
   // ============
   const JSON_HEADERS = { 'Accept': 'application/json' };
   const JSON_X_CSRF  = { ...JSON_HEADERS, 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken };
+
+  let readyForDispatch = false;
 
   function dispatchWorkSelected(workId, authorId, shortTitle = null) {
     const authorOption = authorId
@@ -104,6 +107,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // LOAD + TOGGLE
   // ============
   initialReset();   // <— important: notify blades at startup
+
+  if (initialSelection.authorId && initialSelection.workId) {
+    readyForDispatch = true;
+  }
+
   loadAuthors(initialSelection.authorId, initialSelection.workId);    // then load data
 
   // ——— AUTHOR CHANGE ———
@@ -150,7 +158,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectedOption = workSelector.options[workSelector.selectedIndex];
     const shortTitle     = selectedOption?.getAttribute('data-short-title') || null;
 
-    console.debug("dispatchWorkSelected", { workId, authorId, shortTitle });
     dispatchWorkSelected(workId, authorId, shortTitle);
     reflectSelectionInUrl();
   });
@@ -484,8 +491,10 @@ document.addEventListener("DOMContentLoaded", () => {
         toggleAuthorButtons();
 
         if (targetAuthorId) {
-          // 🔔 clear description & other work-dependent blades
-          dispatchWorkSelected(null, targetAuthorId);
+          // 🔔 clear dependent blades only when we're not restoring an initial selection
+          if (!readyForDispatch) {
+            dispatchWorkSelected(null, targetAuthorId);
+          }
           reflectSelectionInUrl();
 
           // repopulate works list (will start empty)
@@ -528,6 +537,14 @@ document.addEventListener("DOMContentLoaded", () => {
           if (option) {
             workSelector.value = selectedWorkId;
             targetWorkId = selectedWorkId;
+          } else if (readyForDispatch && works.length > 0) {
+            // Initial selection might reference a work that no longer exists;
+            // fall back to the first available work.
+            const fallbackOption = workSelector.querySelector(`option[value="${works[0].id}"]`);
+            if (fallbackOption) {
+              workSelector.value = works[0].id;
+              targetWorkId = works[0].id;
+            }
           }
         }
 
@@ -537,6 +554,16 @@ document.addEventListener("DOMContentLoaded", () => {
                                ?.getAttribute('data-short-title') || null;
 
           dispatchWorkSelected(targetWorkId, authorId, shortTitle);
+          readyForDispatch = false;
+        } else if (readyForDispatch && works.length > 0) {
+          const first = works[0];
+          const option = workSelector.querySelector(`option[value=\"${first.id}\"]`);
+          if (option) {
+            workSelector.value = first.id;
+            const shortTitle = option.getAttribute('data-short-title') || null;
+            dispatchWorkSelected(first.id, authorId, shortTitle);
+            readyForDispatch = false;
+          }
         }
 
         // keep edit / delete buttons in sync

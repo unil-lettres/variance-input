@@ -57,10 +57,13 @@ class ItalicTagWidget extends WidgetType {
     span.title = `Cliquez pour supprimer`;
     span.style.cursor = 'pointer';
     
-    this.tooltip = new bootstrap.Tooltip(span, {
+    const bootstrapLib = window.bootstrap;
+    if (bootstrapLib) {
+      this.tooltip = new bootstrapLib.Tooltip(span, {
         trigger: 'hover',
         offset: [0, 10],
-    });
+      });
+    }
 
     span.addEventListener('click', (e) => {
       e.preventDefault();
@@ -119,11 +122,14 @@ class PageNumberWidget extends WidgetType {
     i.className = 'bi bi-file-earmark mr-1';
     span.prepend(i);
     
-    this.tooltip = new bootstrap.Tooltip(span, {
-      title: () => this.pageNumber === '?' ? 'Cliquez pour numéroter la page' : 'Cliquez pour modifier le numéro de page',
-      trigger: 'hover',
-      offset: [0, 10],
-    });
+    const bootstrapLib = window.bootstrap;
+    if (bootstrapLib) {
+      this.tooltip = new bootstrapLib.Tooltip(span, {
+        title: () => this.pageNumber === '?' ? 'Cliquez pour numéroter la page' : 'Cliquez pour modifier le numéro de page',
+        trigger: 'hover',
+        offset: [0, 10],
+      });
+    }
 
     span.addEventListener('animationend', () => {
       span.classList.remove('page-marker-highlight');
@@ -483,6 +489,13 @@ export default function (container, initialXml) {
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
       EditorView.theme({
+        "&": {
+          backgroundColor: "#282a36",
+          color: "#f8f8f2"
+        },
+        ".cm-content": {
+          color: "inherit"
+        },
         ".cm-cursor": {
           borderLeftColor: "#d9ff00ff !important",
           borderLeftWidth: "2px !important",
@@ -495,7 +508,7 @@ export default function (container, initialXml) {
         ".cm-selectionBackground": {
           backgroundColor: "#2e4862ff !important"
         },
-      }),
+      }, { dark: true }),
     ]
   });
 

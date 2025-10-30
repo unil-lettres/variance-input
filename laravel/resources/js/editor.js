@@ -5,7 +5,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize Bootstrap tooltips.
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"], [data-bs-toggle="modal"]');
-    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(
+    const bootstrapLib = window.bootstrap;
+    if (!bootstrapLib) {
+        console.error('Bootstrap JavaScript library is not available on window.bootstrap.');
+        return;
+    }
+
+    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrapLib.Tooltip(
         tooltipTriggerEl,
         {
             delay: { "show": 500, "hide": 100 },
@@ -446,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pos = parseInt(item.getAttribute('data-error-pos'));
                     
                     // Close modal
-                    const modal = bootstrap.Modal.getInstance(elements.italicErrorsModal);
+                    const modal = bootstrapLib.Modal.getInstance(elements.italicErrorsModal);
                     modal.hide();
                     
                     // Navigate to error position
@@ -513,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshButtonStates();
 
         // Close modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('generatePageNumbersModal'));
+        const modal = bootstrapLib.Modal.getInstance(document.getElementById('generatePageNumbersModal'));
         modal.hide();
     });
 
@@ -522,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const imgSrc = button.getAttribute('data-img-src');
         const imageName = button.getAttribute('data-tag');
 
-        const tooltip = new bootstrap.Tooltip(button, {
+        const tooltip = new bootstrapLib.Tooltip(button, {
             title: () => {
                 const isInserted = editor.isPageMarkerInserted(imageName);
                 if (isInserted) {

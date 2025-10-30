@@ -1,7 +1,23 @@
 import { defineConfig } from 'vite'
 import laravel from 'laravel-vite-plugin'
+import { config as loadEnv } from 'dotenv'
+
+loadEnv()
+
+function resolveBasePath() {
+  const raw = process.env.ADMIN_BASE_PATH || ''
+  const trimmed = raw.trim()
+
+  if (trimmed === '' || trimmed === '/') {
+    return '/'
+  }
+
+  const withoutSlashes = trimmed.replace(/^\/|\/$/g, '')
+  return `/${withoutSlashes}/`
+}
 
 export default defineConfig({
+  base: resolveBasePath(),
   plugins: [
     laravel({
       input: [

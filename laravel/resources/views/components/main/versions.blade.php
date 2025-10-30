@@ -170,6 +170,12 @@
   .versions-toggle[aria-expanded="false"] .collapse-chevron::before {
     transform: rotate(-90deg);
   }
+  #versionsCollapse,
+  #versionsCollapse *,
+  #versionsCollapse.show,
+  #versionsCollapse.show * {
+    visibility: visible !important;
+  }
 </style>
 @endpush
 

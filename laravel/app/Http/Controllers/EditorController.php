@@ -31,6 +31,11 @@ class EditorController extends Controller
         }
     
         $xmlContent = file_get_contents($path);
+        $encoding = $this->detectEncoding($xmlContent);
+        if ($encoding !== 'UTF-8') {
+            $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', $encoding);
+        }
+        $editorPath = 'comparison/' . $comparison->id . '/editor';
 
         $publicationInfo = $this->getPublicationInfo($comparison, $type);
 
@@ -42,7 +47,9 @@ class EditorController extends Controller
             'isPublished' => $publicationInfo['is_published'],
             'canEdit' => $publicationInfo['can_edit'],
             'imagesData' => $publicationInfo['images_data'],
-            'urlFileSave' => route('comparison.editor.update', ['comparison' => $comparison->id, 'type' => $type]),
+            'sourceTabUrl' => admin_url($editorPath . '?type=source'),
+            'targetTabUrl' => admin_url($editorPath . '?type=target'),
+            'urlFileSave' => admin_url($editorPath . '?' . http_build_query(['type' => $type])),
         ]);
     }
     
@@ -70,7 +77,13 @@ class EditorController extends Controller
             abort(404, "Fichier introuvable: {$path}");
         }
 
-        file_put_contents($path, $newXml);
+        $existingContent = file_get_contents($path);
+        $originalEncoding = $this->detectEncoding($existingContent);
+        $contentToWrite = $originalEncoding === 'UTF-8'
+            ? $newXml
+            : mb_convert_encoding($newXml, $originalEncoding, 'UTF-8');
+
+        file_put_contents($path, $contentToWrite);
 
         return response()->json(['message' => 'Fichier mis à jour avec succès']);
     }
@@ -147,5 +160,12 @@ class EditorController extends Controller
             'images_data' => $imagesData,
             'can_edit' => !$isPublished && $imagesData !== null,
         ];
+    }
+
+    private function detectEncoding(string $content): string
+    {
+        $detected = mb_detect_encoding($content, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
+
+        return $detected ?: 'UTF-8';
     }
 }

@@ -20,7 +20,7 @@
     <ul class="nav nav-tabs mt-3">
         <li class="nav-item">
             <a
-                href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'source']) }}"
+                href="{{ $sourceTabUrl }}"
                 class="nav-link {{ $isSource ? 'active' : '' }}"
             >
                 Source
@@ -28,7 +28,7 @@
         </li>
         <li class="nav-item">
             <a
-                href="{{ route('comparison.editor', ['comparison' => $comparison->id, 'type' => 'target']) }}"
+                href="{{ $targetTabUrl }}"
                 class="nav-link {{ !$isSource ? 'active' : '' }}"
             >
                 Cible

@@ -116,6 +116,12 @@
     font-variant: small-caps;
     letter-spacing: 0.03em;
   }
+  #mediaCollapse,
+  #mediaCollapse *,
+  #mediaCollapse.show,
+  #mediaCollapse.show * {
+    visibility: visible !important;
+  }
 </style>
 @endpush
 

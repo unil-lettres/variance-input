@@ -42,6 +42,12 @@
   .description-toggle[aria-expanded="false"] .collapse-chevron::before {
     transform: rotate(-90deg);
   }
+  #descriptionCollapse,
+  #descriptionCollapse *,
+  #descriptionCollapse.show,
+  #descriptionCollapse.show * {
+    visibility: visible !important;
+  }
 </style>
 @endpush
 
@@ -64,6 +70,8 @@ let dirtyIndicatorVisible = false;
 let statusPill = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+    }, 1500);
     saveBtn   = document.getElementById('save-button');
     cancelBtn = document.getElementById('cancel-button');
     statusEl  = document.getElementById('desc-status');
@@ -111,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.addEventListener('workSelected', event => {
-        const { workId } = event.detail;
+            const { workId } = event.detail;
         currentWorkId = workId || null;
 
         if (!ckeditorInstance) {

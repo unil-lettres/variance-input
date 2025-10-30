@@ -170,7 +170,7 @@
         window.editorParams = {
             xmlContent: @json($xmlContent),
             canEdit: {{ $canEdit ? 'true' : 'false' }},
-            urlFileSave: '{{ $urlFileSave }}',
+            urlFileSave: @json($urlFileSave),
         };
     </script>
     @vite('resources/js/editor.js')

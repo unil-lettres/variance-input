@@ -35,6 +35,10 @@ class AppServiceProvider extends ServiceProvider
         $basePath = admin_base_prefix();
         $appBaseUrl = rtrim(admin_url(), '/');
 
+        if ($appBaseUrl !== '') {
+            config(['app.asset_url' => $appBaseUrl]);
+        }
+
         View::share('appBasePath', $basePath);
         View::share('appBaseUrl', $appBaseUrl);
     }

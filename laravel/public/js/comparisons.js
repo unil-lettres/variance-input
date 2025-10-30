@@ -831,6 +831,9 @@ function initComparisonsTable() {
           const origin = window.location.origin;
           return `${origin}/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.folder}`;
         })();
+        const editorUrl = typeof withBasePath === 'function'
+          ? withBasePath(`/comparison/${comp.id}/editor`)
+          : `/comparison/${comp.id}/editor`;
 
         const sourceName = comp.source_version?.name ?? `Version ${comp.source_id}`;
         const targetName = comp.target_version?.name ?? `Version ${comp.target_id}`;
@@ -863,7 +866,7 @@ function initComparisonsTable() {
           <td>
             <a href="${xmlUrl}"  class="btn btn-sm btn-outline-primary" target="_blank">XML</a>
             ${(legacyUrl && published) ? `<a href="${legacyUrl}" class="btn btn-sm btn-outline-success ms-1" target="_blank" title="Voir sur le site public">Public</a>` : ''}
-            <a href="/comparison/${comp.id}/editor"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-square"></i></a>
+            <a href="${editorUrl}"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-square"></i></a>
             <button class="btn btn-sm btn-outline-danger ms-1 delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
           </td>
         `;
