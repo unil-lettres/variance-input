@@ -1,6 +1,6 @@
 <!-- work_selector.blade.php -->
 
-<div class="card mb-3">
+<div class="card mb-3" id ="container-work-selector">
     <div class="card-header text-uppercase fw-semibold">Sélection de l'oeuvre</div>
     <div class="card-body">
         <div class="row g-3 align-items-center">
@@ -11,9 +11,9 @@
                         <option value="" disabled selected>Sélectionner un auteur</option>
                     </select>
                     <div class="btn-group flex-nowrap flex-shrink-0" role="group" aria-label="Actions auteur">
-                        <button id="add-author-btn" class="btn btn-outline-success" title="Ajouter un auteur"><i class="bi bi-person-plus"></i></button>
-                        <button id="edit-author-btn" class="btn btn-outline-primary" title="Modifier le nom de l'auteur" disabled><i class="bi bi-pencil-square"></i></button>
-                        <button id="delete-author-btn" class="btn btn-outline-danger" title="Supprimer l'auteur sélectionné" disabled><i class="bi bi-trash3"></i></button>
+                        <button id="add-author-btn" class="btn btn-outline-success" data-bs-toggle="tooltip" title="Ajouter un auteur"><i class="bi bi-person-plus"></i></button>
+                        <button id="edit-author-btn" class="btn btn-outline-primary" data-bs-toggle="tooltip" title="Modifier le nom de l'auteur" disabled><i class="bi bi-pencil-square"></i></button>
+                        <button id="delete-author-btn" class="btn btn-outline-danger" data-bs-toggle="tooltip" title="Supprimer l'auteur sélectionné" disabled><i class="bi bi-trash3"></i></button>
                     </div>
                 </div>
             </div>
@@ -25,9 +25,9 @@
                         <option value="" disabled selected>Sélectionner une oeuvre</option>
                     </select>
                     <div class="btn-group flex-nowrap flex-shrink-0" role="group" aria-label="Actions oeuvre">
-                        <button id="add-work-btn" class="btn btn-outline-success" title="Ajouter une oeuvre" disabled><i class="bi bi-journal-plus"></i></button>
-                        <button id="edit-work-btn" class="btn btn-outline-primary" title="Modifier le nom de l'oeuvre" disabled><i class="bi bi-pencil-square"></i></button>
-                        <button id="delete-work-btn" class="btn btn-outline-danger" title="Supprimer l'oeuvre sélectionnée" disabled><i class="bi bi-trash3"></i></button>
+                        <button id="add-work-btn" class="btn btn-outline-success" data-bs-toggle="tooltip" title="Ajouter une oeuvre" disabled><i class="bi bi-journal-plus"></i></button>
+                        <button id="edit-work-btn" class="btn btn-outline-primary" data-bs-toggle="tooltip" title="Modifier le nom de l'oeuvre" disabled><i class="bi bi-pencil-square"></i></button>
+                        <button id="delete-work-btn" class="btn btn-outline-danger" data-bs-toggle="tooltip" title="Supprimer l'oeuvre sélectionnée" disabled><i class="bi bi-trash3"></i></button>
                     </div>
                 </div>
             </div>
@@ -127,6 +127,20 @@
 </div>
 
 @push('scripts')
+
+<script>
+  const tooltipTriggerList = document.getElementById('container-work-selector').querySelectorAll('[data-bs-toggle="tooltip"]');
+  [...tooltipTriggerList].map(
+    tooltipTriggerEl => new bootstrap.Tooltip(
+      tooltipTriggerEl,
+      {
+        trigger: 'hover',
+        delay: { "show": 300, "hide": 0 }
+      }
+    )
+  );
+</script>
+
 <!-- Reference *only* the single JS file, no inline duplication. -->
 <script src="{{ admin_asset('js/work_selector.js') }}"></script>
 @endpush

@@ -27,7 +27,6 @@
                     class="btn btn-outline-primary"
                     id="open-upload-version-modal"
                     disabled
-                    title="Téléverser une version"
                     aria-label="Téléverser une version">
                 Téléverser une version
             </button>
