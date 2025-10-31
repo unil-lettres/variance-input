@@ -1267,7 +1267,13 @@ async function cancelLignesProcessing(versionId){
     }
 }
 
+let actionButtonsTooltips = [];
+
 async function fetchVersions(workId){
+
+    actionButtonsTooltips.forEach(tt => tt.dispose());
+    actionButtonsTooltips = [];
+    
     const list = document.getElementById('versions-list');
     if (!workId) {
         list.innerHTML = '<li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>';
@@ -1299,7 +1305,7 @@ async function fetchVersions(workId){
 
         const table = document.createElement('table');
         table.className='table table-bordered table-hover table-sm version-table';
-        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th>Fichier _lignes</th><th class="text-end">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th>Fichier _lignes</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         const activeLignesIds = new Set();
@@ -1541,21 +1547,50 @@ async function fetchVersions(workId){
 
             tr.appendChild(tdLignes);
             const tdActions = document.createElement('td');
-            tdActions.className='text-end align-middle';
-            const editorUrl = withBasePath(`/versions/${v.id}/editor`);
+            tdActions.className='text-center align-middle';
+            const editorUrl = withBasePath(`/version/${v.id}/editor`);
 
             const btnEditor = document.createElement('a');
             btnEditor.href = editorUrl;
             btnEditor.target = '_blank';
-            btnEditor.className = 'btn btn-sm btn-info me-1';
-            btnEditor.textContent = 'Editor';
+            btnEditor.setAttribute('data-bs-toggle', 'tooltip');
+            btnEditor.className = 'btn btn-outline-primary';
+            btnEditor.innerHTML = '<i class="bi bi-pencil-square"></i>';
+            const tooltipEditor = new bootstrap.Tooltip(
+                btnEditor,
+                {
+                    title: 'Éditer la version',
+                    delay: { show: 500, hide: 0 },
+                    trigger: 'hover'
+                }
+            );
+            actionButtonsTooltips.push(tooltipEditor);
             tdActions.appendChild(btnEditor);
 
             const btnDel = document.createElement('button');
-            btnDel.className='btn btn-sm btn-danger';
-            btnDel.textContent='Delete';
+            btnDel.className = 'btn btn-outline-danger';
+            btnDel.innerHTML = '<i class="bi bi-trash3"></i>';
+            btnDel.setAttribute('data-bs-toggle', 'tooltip');
             btnDel.addEventListener('click',()=>confirmDeleteVersion(v));
+            const tooltipDel = new bootstrap.Tooltip(
+                btnDel,
+                {
+                    title: 'Supprimer la version',
+                    delay: { show: 500, hide: 0 },
+                    trigger: 'hover'
+                }
+            );
+            actionButtonsTooltips.push(tooltipDel);
             tdActions.appendChild(btnDel);
+
+            const btnGroup = document.createElement('div');
+            btnGroup.className = 'btn-group';
+            btnGroup.role = 'group';
+            btnGroup.ariaLabel = 'Version utility buttons';
+
+            btnGroup.appendChild(btnEditor);
+            btnGroup.appendChild(btnDel);
+            tdActions.appendChild(btnGroup);
 
             tr.appendChild(tdActions);
             tbody.appendChild(tr);
