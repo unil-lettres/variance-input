@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const BUTTON_STATES = {
         INACTIVE: 'btn-secondary',
-        ACTIVE_INSERT: 'btn-insert', 
+        ACTIVE_INSERT: 'btn-insert',
         INSERTED: 'btn-success',
         NOT_NAMED: 'btn-warning',
     };
@@ -330,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const refreshButtonStates = () => {
+        editor.stopEnsureCacheUpdate();
         deactivateActiveButton();
 
         const { insertedMarkers } = editor.getAllMarkers();
@@ -356,6 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         updateTagCountBadges();
         updatePaginationColors();
+        editor.resumeEnsureCacheUpdate();
     };
 
     const updateTagsButtonUI = (tagsHidden) => {
@@ -422,17 +424,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="list-group">
             `;
-            
+
             errors.forEach((error, index) => {
                 html += `
-                    <button 
-                        type="button" 
-                        class="list-group-item list-group-item-action error-item" 
+                    <button
+                        type="button"
+                        class="list-group-item list-group-item-action error-item"
                         data-error-pos="${error.pos}"
                     >
                         <div class="d-flex w-100 justify-content-between">
                             <h6 class="mb-1">
-                                <i class="bi bi-x-circle text-danger"></i> 
+                                <i class="bi bi-x-circle text-danger"></i>
                                 Erreur ${index + 1}
                             </h6>
                             <small class="text-muted">Ligne ${error.lineNumber}</small>
@@ -442,19 +444,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 `;
             });
-            
+
             html += '</div>';
             elements.italicErrorsList.innerHTML = html;
-            
+
             // Add click handlers to error items
             document.querySelectorAll('.error-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const pos = parseInt(item.getAttribute('data-error-pos'));
-                    
+
                     // Close modal
                     const modal = bootstrapLib.Modal.getInstance(elements.italicErrorsModal);
                     modal.hide();
-                    
+
                     // Navigate to error position
                     editor.scrollToPosition(pos);
                 });
@@ -629,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(data.message || 'Fichier sauvegardé avec succès !');
             hasUnsavedChanges = false;
             initialXmlContent = updatedXml;
-            
+
             // Reset button to success state
             elements.saveBtn.classList.remove('btn-danger');
             elements.saveBtn.classList.add('btn-success');

@@ -375,6 +375,7 @@ export default function (container, initialXml) {
   let isReadOnly = true;
   let editorReady = false;
   let searchPanelOpen = false;
+  let skipCacheUpdate = false;
 
   let markerCache = {
     content: null,
@@ -390,7 +391,7 @@ export default function (container, initialXml) {
   };
 
   const ensureCacheUpdated = (viewInstance) => {
-    if (!viewInstance) return;
+    if (!viewInstance || skipCacheUpdate) return;
     
     const content = viewInstance.state.doc.toString();
 
@@ -522,6 +523,16 @@ export default function (container, initialXml) {
   return {
     get view() {
       return view;
+    },
+
+    stopEnsureCacheUpdate() {
+      ensureCacheUpdated(view);
+      skipCacheUpdate = true;
+    },
+    
+    resumeEnsureCacheUpdate() {
+      skipCacheUpdate = false;
+      ensureCacheUpdated(view);
     },
 
     toggleReadOnly() {
