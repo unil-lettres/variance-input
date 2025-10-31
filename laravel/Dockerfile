@@ -21,7 +21,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 # copy .env early so composer scripts using env vars work
-COPY .env ./
+COPY example.env .env
 
 # 4) PHP dependencies (no scripts yet – artisan not present)
 COPY composer.json composer.lock ./
