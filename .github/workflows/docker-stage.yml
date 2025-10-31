@@ -26,7 +26,7 @@ jobs:
       - name: Build image
         uses: unil-lettres/actions/docker-build@main
         with:
-          dockerfile: ./${{ matrix.service }}/Dockerfile.app
+          dockerfile: ./${{ matrix.service }}/Dockerfile
           platform: ${{ matrix.arch }}
           image_repository: ${{ vars.DOCKERHUB_REPOSITORY }}
           name_prefix: ${{ matrix.service }}
