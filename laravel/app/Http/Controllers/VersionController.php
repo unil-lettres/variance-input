@@ -574,7 +574,7 @@ class VersionController extends Controller
             return [];
         }
 
-        $entries = $this->collectManifestEntries($authorFolder, $workFolder, $version->folder);
+        $entries = $version->collectManifestEntries();
         if (empty($entries)) {
             return [];
         }
@@ -611,38 +611,6 @@ class VersionController extends Controller
         $this->mirrorToLegacy($relativeDir, $filename, $payload);
 
         return ['file' => "{$relativeDir}/{$filename}", 'count' => count($entries)];
-    }
-
-    private function collectManifestEntries(string $authorFolder, string $workFolder, string $versionFolder): array
-    {
-        $disk = Storage::disk('public');
-        $prefix = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
-        if (!$disk->exists($prefix)) {
-            return [];
-        }
-
-        $files = collect($disk->files($prefix))
-            ->map(fn ($path) => basename($path))
-            ->filter(fn ($name) => preg_match('/\.(jpe?g|png)$/i', $name))
-            ->reject(fn ($name) => $this->isThumbnail($name))
-            ->sort(fn ($a, $b) => strnatcasecmp($a, $b))
-            ->values();
-
-        return $files->map(function ($file) use ($disk, $prefix, $authorFolder, $workFolder, $versionFolder) {
-            $base = pathinfo($file, PATHINFO_FILENAME);
-            $ext  = pathinfo($file, PATHINFO_EXTENSION);
-            $thumbName = $base . '_thumb.' . $ext;
-
-            $big   = "/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}/{$file}";
-            $small = $disk->exists("{$prefix}/{$thumbName}")
-                ? "/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}/{$thumbName}"
-                : $big;
-
-            return [
-                'small' => $small,
-                'big'   => $big,
-            ];
-        })->toArray();
     }
 
     private function mirrorToLegacy(string $relativeDir, string $fileName, string $contents): void

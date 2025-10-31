@@ -6,9 +6,57 @@ use App\Models\Comparison;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\PublishController;
+use App\Models\Version;
 
 class EditorController extends Controller
 {
+    public function versionEditor(Version $version)
+    {
+        $path = $version->getXMLFilePath();
+        if (!file_exists($path)) {
+            abort(404, "Fichier introuvable: {$path}");
+        }
+    
+        $xmlContent = file_get_contents($path);
+        $encoding = $this->detectEncoding($xmlContent);
+        if ($encoding !== 'UTF-8') {
+            $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', $encoding);
+        }
+        $editorPath = 'version/' . $version->id . '/editor';
+
+        return view('components.main.editor.version', [
+            'version' => $version,
+            'xmlContent' => $xmlContent,
+            'canEdit' => true,
+            'imagesData' => $version->collectManifestEntries(
+                $version->work->author->folder,
+                $version->work->folder,
+                $version->folder
+            ),
+            'urlFileSave' => admin_url($editorPath),
+        ]);
+    }
+
+    public function versionUpdate(Version $version, Request $request)
+    {
+        $newXml = $request->getContent();
+        $path = $version->getXMLFilePath();
+        
+        if (!file_exists($path)) {
+            abort(404, "Fichier introuvable: {$path}");
+        }
+
+        $existingContent = file_get_contents($path);
+        $originalEncoding = $this->detectEncoding($existingContent);
+        $contentToWrite = $originalEncoding === 'UTF-8'
+            ? $newXml
+            : mb_convert_encoding($newXml, $originalEncoding, 'UTF-8');
+
+        file_put_contents($path, $contentToWrite);
+
+        return response()->json(['message' => 'Fichier mis à jour avec succès']);
+    }
+
     public function comparisonEditor(Comparison $comparison, Request $request)
     {
         $request->validate([
@@ -27,7 +75,7 @@ class EditorController extends Controller
         }
 
         if (!file_exists($path)) {
-            abort(404, "XML file not found at: {$path}");
+            abort(404, "Fichier introuvable: {$path}");
         }
     
         $xmlContent = file_get_contents($path);
@@ -53,7 +101,6 @@ class EditorController extends Controller
         ]);
     }
     
-
     public function comparisonUpdate(Comparison $comparison, Request $request)
     {
         $request->validate([
@@ -151,7 +198,7 @@ class EditorController extends Controller
             $jsonPath = "uploads/{$authorFolder}/{$workInfo->work_folder}/{$version->folder}/images_{$type}_{$baseName}.json";
             if (Storage::disk('public')->exists($jsonPath)) {
                 $jsonContent = Storage::disk('public')->get($jsonPath);
-                $imagesData = json_decode($jsonContent, true);
+                $imagesData = $this->parseImagesData(json_decode($jsonContent, true) ?? []);
             }
         }
 
@@ -160,6 +207,16 @@ class EditorController extends Controller
             'images_data' => $imagesData,
             'can_edit' => !$isPublished && $imagesData !== null,
         ];
+    }
+
+    private function parseImagesData(array $imagesData): array
+    {
+        return array_map(function ($item) {
+            return [
+                'small' => admin_url(Storage::url(ltrim($item['small'], '/'))),
+                'big'   => admin_url(Storage::url(ltrim($item['big'], '/'))),
+            ];
+        }, $imagesData);
     }
 
     private function detectEncoding(string $content): string

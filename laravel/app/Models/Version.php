@@ -63,6 +63,11 @@ class Version extends Model
     {
         return $this->hasOne(VersionStatus::class);
     }
+
+    public function getXMLFilePath()
+    {
+        return storage_path("app/public/uploads/versions/{$this->folder}.xml");
+    }
     
     public function getFileSizeAttribute()
 {
@@ -82,5 +87,37 @@ class Version extends Model
         } else {
             return $size . ' octets';
         }
+    }
+
+    public function collectManifestEntries(): array
+    {
+        $disk = Storage::disk('public');
+        $prefix = "uploads/{$this->work->author->folder}/{$this->work->folder}/{$this->folder}";
+        if (!$disk->exists($prefix)) {
+            return [];
+        }
+
+        $files = collect($disk->files($prefix))
+            ->map(fn ($path) => basename($path))
+            ->filter(fn ($name) => preg_match('/\.(jpe?g|png)$/i', $name))
+            ->reject(fn ($name) => str_contains(strtolower($name), '_thumb'))
+            ->sort(fn ($a, $b) => strnatcasecmp($a, $b))
+            ->values();
+
+        return $files->map(function ($file) use ($disk, $prefix) {
+            $base = pathinfo($file, PATHINFO_FILENAME);
+            $ext  = pathinfo($file, PATHINFO_EXTENSION);
+            $thumbName = $base . '_thumb.' . $ext;
+
+            $big   = "/uploads/{$this->work->author->folder}/{$this->work->folder}/{$this->folder}/{$file}";
+            $small = $disk->exists("{$prefix}/{$thumbName}")
+                ? "/uploads/{$this->work->author->folder}/{$this->work->folder}/{$this->folder}/{$thumbName}"
+                : $big;
+
+            return [
+                'small' => $small,
+                'big'   => $big,
+            ];
+        })->toArray();
     }
 }

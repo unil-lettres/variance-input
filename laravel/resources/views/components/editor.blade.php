@@ -74,7 +74,7 @@
                         <button
                             class="h-100 w-100 btn btn-secondary btn-sm position-relative"
                             data-tag="{{ $loop->iteration }}"
-                            data-img-src="{{ Storage::url(ltrim($facsimile['big'], '/')) }}"
+                            data-img-src="{{ $facsimile['big'] }}"
                             {{ !$canEdit ? 'disabled' : '' }}
                         >
                             <span></span>

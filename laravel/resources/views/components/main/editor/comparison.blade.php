@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-    <h1>Edition de la version <b>{{ $version->name }}</b> pour la comparaison <b>#{{ $comparison->id }}</b></h1>
+    <h1>Version <b>{{ $version->name }}</b> | Comparaison <b>#{{ $comparison->id }}</b> | Oeuvre <b>{{ $version->work->title }}</b> | Auteur <b>{{ $version->work->author->name }}</b></h1>
 
     @if (!$canEdit)
         <div
