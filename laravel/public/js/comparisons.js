@@ -869,7 +869,7 @@ function initComparisonsTable() {
           <td class="text-center">
             <div class="btn-group-vertical" role="group" aria-label="Action buttons">
               ${(legacyUrl && published) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
-              ${(!isRunning && ready && !published) ? `<a href="${editorUrl}" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
+              ${(!isRunning && ready && !published) ? `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
               <a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>
               <button data-bs-toggle="tooltip" title="Supprimer la comparaison" class="btn btn-outline-danger delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
             </div>
