@@ -583,9 +583,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeButton) {
             const imageName = activeButton.getAttribute('data-tag');
             const pageNumber = activeButton.getAttribute('data-tag-page-number') || '?';
-            if (editor.insertPageMarker(imageName, pageNumber) === true) {
-                refreshButtonStates();
-                deactivateActiveButton();
+
+            if (!editor.isPageMarkerInserted(imageName)) {
+              const success = editor.insertPageMarker(imageName, pageNumber);
+              if (success) {
+                  refreshButtonStates();
+                  deactivateActiveButton();
+              }
+            } else {
+              deactivateActiveButton();
             }
         }
     });
