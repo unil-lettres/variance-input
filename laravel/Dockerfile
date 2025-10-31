@@ -43,9 +43,8 @@ RUN composer dump-autoload --optimize \
 # 8) Build Vite / front-end assets
 RUN npm run build
 
-# 9) Storage permissions
-RUN chown -R www-data:www-data storage bootstrap/cache \
- && chmod -R 775 storage bootstrap/cache
+# 9) Storage link
+RUN php artisan storage:link
 
 # 10) Serve application
 EXPOSE 8000
