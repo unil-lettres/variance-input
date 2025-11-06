@@ -11,7 +11,7 @@
     >
         <div class="d-flex align-items-center gap-2">
             <span class="collapse-chevron" aria-hidden="true"></span>
-        <span class="text-uppercase">Description</span>
+            <span>Description</span>
         </div>
         <span id="description-status-pill" class="badge text-bg-secondary media-status-pill"></span>
     </div>

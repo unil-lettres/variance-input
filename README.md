@@ -1,9 +1,17 @@
 # Variance & Medite Integration
 
-Variance is a Docker-based toolchain that lets editors upload textual
-versions, generate Medite comparisons, manage facsimiles, and produce
-publish-ready assets with pagination markers derived from `_lignes`
-files. The project is split into:
+This project automates and provides an admin UI to produce the legacy
+Variance publish files. Editors can upload textual versions, generate
+Medite comparisons, manage facsimiles, and assemble the published asset
+bundle with pagination markers derived from `_lignes` files. In practice
+this means:
+
+- One place to manage versions, `_lignes`, facsimiles, and comparison manifests.
+- Automatic Medite runs with pagination injection feedback per role.
+- A single “Export” action that delivers the legacy-ready bundle (comparison +
+  manifest-selected facsimiles only).
+
+The project is split into:
 
 - **Laravel** – Admin UI, API, job queue, pagination services.
 - **Medite (Flask + Celery)** – Runs the alignment engine and produces
@@ -24,13 +32,13 @@ files. The project is split into:
 
 1. **Clone & Boot**
    ```bash
-   git clone https://github.com/unil-variance/variance2.git
-   cd variance2
+   git clone https://github.com/unil-lettres/variance-input.git
+   cd variance-input
    docker compose up -d --build
    ```
 
    This brings up:
-   - `laravel` (admin web app on http://localhost:8000)
+   - `laravel` (admin web app at http://localhost:8080/admin via the proxy)
    - `medite` (Flask API on http://localhost:5000)
    - `laravel-queue` (queue worker for pagination & facsimile jobs)
    - Supporting services (MariaDB, Redis, Nginx proxy, legacy PHP site)
@@ -52,25 +60,30 @@ files. The project is split into:
 
 ## Daily Workflow
 
-- **Upload version** – Admin UI → Versions → “Téléverser une version”. Creates
-  a TEI file under `storage/app/public/uploads/versions/`.
+- **Upload version** – “Téléverser une version” in the **Versions** card
+  generates the TEI container under `storage/app/public/uploads/versions/`.
 
-- **Attach pagination (`_lignes`)** – Upload the `_lignes` text. The system
-  generates a sidecar JSON (`storage/app/private/pagination/{version}.json`)
-  containing character offsets for every facsimile marker.
+- **Attach pagination (`_lignes`)** – Drop the `_lignes` text file; the queue
+  produces `storage/app/private/pagination/{version}.json` sidecars that
+  describe every pagination marker.
 
-- **Import facsimiles** – Optional. Upload image batches via the UI; jobs
-  resize/organise them under `storage/app/public/uploads/{author}/{work}/{version}`.
+- **Import & curate facsimiles** – Upload batches of images (optional) and use
+  the **Fac-similés** manifest manager to choose which files belong to each
+  comparison (JSON manifests stay in sync with the comparisons table pills).
 
-- **Run Medite** – Start a comparison run from the comparisons card. Output
-  shards land in `storage/app/public/uploads/{author}/{work}/comparisons/{id}`.
+- **Run Medite** – Launch a comparison from the **Comparaisons** card. Medite
+  writes its XHTML/TEI components to
+  `storage/app/public/uploads/{author}/{work}/comparisons/{id}`.
 
-- **Inject pagination** – Click “Injecter la pagination” next to a comparison.
-  A queue job reads the sidecar(s) and inserts `<span class="page-marker">` tags
-  into `source.xhtml` / `target.xhtml`.
+- **Inject pagination** – Use “Injecter la pagination” per role (source/target)
+  to merge the `_lignes` markers into the Medite XHTML files.
 
-- **Publish** – Once satisfied, publish the comparison to the legacy public
-  tree (optional).
+- **Export legacy bundle** – Click “Exporter” to download a zip containing the
+  published comparison folder plus only the facsimiles referenced in the JSON
+  manifests (source/target).
+
+- **Publish** – Optional. Keep the comparison synced to the legacy public tree
+  via the “Publier” toggle.
 
 ---
 
@@ -122,7 +135,16 @@ files. The project is split into:
    - Version-level progress is tracked in `storage/app/tmp/pager/{version_id}.json`
      so the UI shows when the sidecar is ready.
 
-3. **Run Medite**
+3. **Curate facsimiles & manifests**
+   - Upload image batches via the facsimile carousel; jobs normalise the
+     originals (`img_*`) and generate thumbnails.
+   - The manifest manager lists every comparison (source/target). Selecting a
+     comparison highlights the images currently published in its JSON manifest.
+   - Changes are written back to
+     `storage/app/public/uploads/{author}/{work}/{version}/images_{role}_{author--work--comparison}.json`
+     and reflected immediately in the comparisons table (“JSON” pill).
+
+4. **Run Medite**
    - Launch from the comparisons table. `MediteController::runMedite` calls the
      Flask service which executes the Celery task.
    - Medite writes TEI diff + XHTML components under
@@ -130,7 +152,7 @@ files. The project is split into:
      mirrors into `storage/app/public/uploads/{author}/{work}/comparisons/{id}`.
    - Comparison metadata is stored/updated in the DB.
 
-4. **Inject pagination markers**
+5. **Inject pagination markers**
    - Click “Injecter la pagination”. `ComparisonController::applyPageMarkers`
      ensures both versions have sidecars, marks the comparison queued, and
      dispatches `InjectComparisonPaginationJob`.
@@ -141,7 +163,12 @@ files. The project is split into:
      `storage/app/tmp/pager/comparisons/{comparison_id}.json`; the UI polls this
      endpoint to show queued → running → done per role (source/target).
 
-5. **Optional publication**
+6. **Export the legacy bundle**
+   - “Exporter” generates a zip containing the published comparison directory
+     plus, for each role, only the facsimile images referenced in the manifest
+     JSON (and the manifest itself).
+
+7. **Optional publication**
    - Use the “Publier” button to copy comparison artefacts into
      `public/uploads/{author}/{work}/{comparison_folder}` for the legacy site.
 
@@ -162,11 +189,13 @@ files. The project is split into:
 | TEI version                     | `storage/app/public/uploads/versions/{folder}.xml`                |
 | `_lignes` raw file              | `storage/app/private/lignes/{version_id}.txt`                     |
 | Pagination sidecar              | `storage/app/private/pagination/{version_id}.json`                |
+| Facsimile manifest JSON         | `storage/app/public/uploads/{author}/{work}/{version}/images_{role}_{author--work--comparison}.json` |
 | Version progress                | `storage/app/tmp/pager/{version_id}.json`                         |
 | Comparison progress             | `storage/app/tmp/pager/comparisons/{comparison_id}.json`          |
 | Medite outputs (XHTML/TEI)      | `storage/app/public/uploads/{author}/{work}/comparisons/{id}`     |
 | Published comparison (optional) | `public/uploads/{author}/{work}/{comparison_folder}`              |
 | Facsimile images (draft)        | `storage/app/public/uploads/{author}/{work}/{version}/`           |
+| Exported legacy zip             | Downloaded on demand via `/comparisons/{id}/export`                |
 
 ---
 
@@ -178,7 +207,5 @@ For deeper dives check:
 - `laravel/app/Jobs/ApplyLignesJob.php`
 - `laravel/app/Jobs/InjectComparisonPaginationJob.php`
 - `medite/app/flask_app.py`
-
-Happy comparing! :)
 
 Happy comparing! :)

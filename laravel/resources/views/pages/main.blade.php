@@ -29,7 +29,7 @@
         @include('components.main.description')
     </div>
 
-    {{-- Médias généraux (affiches, audio, etc.) --}}
+    {{-- Médias --}}
     <div id="zone-3" class="mb-4">
         @include('components.main.media')
     </div>
@@ -39,14 +39,14 @@
         @include('components.main.versions')
     </div>
 
-    {{-- ▼ NOUVEAU : fac-similés (dépend d’une version) --}}
-    <div id="zone-4b" class="mb-4">
-        @include('components.main.facsimiles')
-    </div>
-
     {{-- Comparaisons --}}
     <div id="zone-5" class="mb-4">
         @include('components.main.comparisons')
+    </div>
+
+    {{-- Fac-similés --}}
+    <div id="zone-4b" class="mb-4">
+        @include('components.main.facsimiles')
     </div>
 
     {{-- Lancement de MEDITE --}}
@@ -55,6 +55,15 @@
     </div>
 
 </div>
+
+@push('styles')
+<style>
+    #admin-main .card-header {
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+    }
+</style>
+@endpush
 
 @push('scripts')
 <script>

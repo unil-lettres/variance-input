@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cache;
+use ZipArchive;
 use App\Models\Comparison;
+use App\Models\Version;
 use App\Http\Controllers\PublishController;
 use App\Services\PageMarkerService;
 use App\Jobs\InjectComparisonPaginationJob;
@@ -179,6 +181,66 @@ class ComparisonController extends Controller
         return response()->json(['message' => 'Comparison deleted']);
     }
 
+    public function exportPublishedLegacy(Comparison $comparison)
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
+        $work = $comparison->sourceVersion?->work ?? $comparison->targetVersion?->work;
+        $author = $work?->author;
+
+        if (!$work || !$author) {
+            abort(404, 'Impossible de déterminer le dossier legacy à exporter.');
+        }
+
+        $disk = Storage::disk('public');
+
+        $sourceFolder = $this->resolvePublishedVersionFolder($comparison->sourceVersion);
+        $targetFolder = $this->resolvePublishedVersionFolder($comparison->targetVersion);
+        $comparisonFolder = $this->resolvePublishedComparisonFolder($comparison);
+
+        $zipName = ($comparison->folder ?: 'comparison_' . $comparison->id) . '_legacy.zip';
+        $tmpDir  = storage_path('app/tmp');
+        File::ensureDirectoryExists($tmpDir);
+        $tmpPath = tempnam($tmpDir, 'legacy_');
+
+        $zip = new ZipArchive();
+        if ($zip->open($tmpPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            return response()->json([
+                'message' => 'Impossible de créer l’archive d’export.',
+            ], 500);
+        }
+
+        $filesAdded = 0;
+
+        if ($sourceFolder) {
+            $filesAdded += $this->addManifestedFacsimilesToZip($zip, $comparison, $comparison->sourceVersion, 'source');
+        }
+        if ($targetFolder) {
+            $filesAdded += $this->addManifestedFacsimilesToZip($zip, $comparison, $comparison->targetVersion, 'target');
+        }
+
+        if ($comparisonFolder) {
+            $absolute = $disk->path($comparisonFolder);
+            $zipPath = $comparison->folder ?: basename($comparisonFolder);
+            $filesAdded += $this->addDirectoryToZip($zip, $absolute, $zipPath);
+        }
+
+        $zip->close();
+
+        if ($filesAdded === 0) {
+            File::delete($tmpPath);
+            return response()->json([
+                'message' => 'Les dossiers publiés sont vides pour cette comparaison.',
+            ], 404);
+        }
+
+        return response()->download($tmpPath, $zipName)->deleteFileAfterSend(true);
+    }
+
     public function applyPageMarkers(Request $request, Comparison $comparison)
     {
         $validated = $request->validate([
@@ -208,14 +270,23 @@ class ComparisonController extends Controller
         $selectedRoles = $roleParam ? [$roleParam => ($roles[$roleParam] ?? null)] : $roles;
 
         $missing = [];
+        $queuedRoles = [];
         foreach ($selectedRoles as $role => $version) {
             if (!$version) {
                 $missing[] = "Version {$role} manquante";
                 continue;
             }
-            if (!$this->pageMarkerService->loadPaginationSidecar($version->id)) {
+            $sidecar = $this->pageMarkerService->loadPaginationSidecar($version->id);
+            if (!$sidecar) {
                 $missing[] = "Sidecar pagination manquant pour la version {$version->name}";
+                continue;
             }
+            $queuedRoles[$role] = [
+                'version_id' => $version->id,
+                'total'      => is_array($sidecar['markers'] ?? null)
+                    ? count($sidecar['markers'])
+                    : (int) ($sidecar['marker_count'] ?? 0),
+            ];
         }
 
         if (!empty($missing)) {
@@ -225,11 +296,7 @@ class ComparisonController extends Controller
             ], 422);
         }
 
-        foreach ($selectedRoles as $role => $version) {
-            if ($version) {
-                $this->pageMarkerService->markQueued($version->id);
-            }
-        }
+        $this->pageMarkerService->markComparisonQueued($comparison->id, $queuedRoles);
 
         $this->flushPendingPaginationJobs($comparison->id, $roleParam);
 
@@ -407,6 +474,150 @@ class ComparisonController extends Controller
             'dest_dir'   => $destDir,
             'published'  => $published,
         ];
+    }
+
+    private function resolvePublishedVersionFolder(?Version $version): ?string
+    {
+        if (!$version) {
+            return null;
+        }
+
+        $version->loadMissing('work.author', 'work');
+        $authorFolder = $version->work->author->folder ?? null;
+        $workFolder   = $version->work->folder ?? null;
+        $versionFolder = $version->folder ?? null;
+
+        if (!$authorFolder || !$workFolder || !$versionFolder) {
+            return null;
+        }
+
+        $relative = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+
+        return Storage::disk('public')->exists($relative) ? $relative : null;
+    }
+
+    private function resolvePublishedComparisonFolder(Comparison $comparison): ?string
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $work = $comparison->sourceVersion?->work ?? $comparison->targetVersion?->work;
+        $author = $work?->author;
+
+        if (!$work || !$author || !$comparison->folder) {
+            return null;
+        }
+
+        $relative = "uploads/{$author->folder}/{$work->folder}/{$comparison->folder}";
+
+        return Storage::disk('public')->exists($relative) ? $relative : null;
+    }
+
+    private function addManifestedFacsimilesToZip(ZipArchive $zip, Comparison $comparison, ?Version $version, string $role): int
+    {
+        if (!$version) {
+            return 0;
+        }
+
+        $version->loadMissing('work.author', 'work');
+
+        $authorFolder  = $version->work->author->folder ?? null;
+        $workFolder    = $version->work->folder ?? null;
+        $versionFolder = $version->folder ?? null;
+        $comparisonFolder = $comparison->folder;
+
+        if (!$authorFolder || !$workFolder || !$versionFolder || !$comparisonFolder) {
+            return 0;
+        }
+
+        $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $baseName    = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparisonFolder));
+        $manifestRelative = "{$relativeDir}/images_{$role}_{$baseName}.json";
+
+        $disk = Storage::disk('public');
+        if (!$disk->exists($manifestRelative)) {
+            return 0;
+        }
+
+        $entries = json_decode($disk->get($manifestRelative), true);
+        if (!is_array($entries)) {
+            $entries = [];
+        }
+
+        $files = [];
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            foreach (['big', 'small'] as $key) {
+                $value = $entry[$key] ?? null;
+                if (!is_string($value) || $value === '') {
+                    continue;
+                }
+                $normalized = ltrim($value, '/');
+                if (strpos($normalized, 'uploads/') !== 0) {
+                    $normalized = $relativeDir . '/' . ltrim($normalized, '/');
+                }
+                $files[$normalized] = true;
+            }
+        }
+
+        $zipRoot = $versionFolder;
+        $added = 0;
+
+        $manifestAbsolute = $disk->path($manifestRelative);
+        if (is_file($manifestAbsolute)) {
+            $zip->addFile($manifestAbsolute, $zipRoot . '/' . basename($manifestRelative));
+            $added++;
+        }
+
+        foreach (array_keys($files) as $fileRelative) {
+            if (!$disk->exists($fileRelative)) {
+                continue;
+            }
+            $absolute = $disk->path($fileRelative);
+            $relativeInsideVersion = ltrim(str_replace($relativeDir, '', $fileRelative), '/');
+            if ($relativeInsideVersion === '') {
+                $relativeInsideVersion = basename($fileRelative);
+            }
+            $zip->addFile($absolute, $zipRoot . '/' . $relativeInsideVersion);
+            $added++;
+        }
+
+        return $added;
+    }
+
+    private function addDirectoryToZip(ZipArchive $zip, string $absolutePath, string $zipRoot): int
+    {
+        if (!is_dir($absolutePath)) {
+            return 0;
+        }
+
+        $zipRoot = trim($zipRoot, '/\\');
+        if ($zipRoot === '') {
+            $zipRoot = basename($absolutePath);
+        }
+
+        $zip->addEmptyDir($zipRoot);
+        $added = 0;
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($absolutePath, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $file) {
+            $relative = ltrim(str_replace($absolutePath, '', $file->getPathname()), DIRECTORY_SEPARATOR);
+            $entryName = $zipRoot . '/' . str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+
+            if ($file->isDir()) {
+                $zip->addEmptyDir($entryName);
+            } else {
+                $zip->addFile($file->getPathname(), $entryName);
+                $added++;
+            }
+        }
+
+        return $added;
     }
 
     private function manifestStatusForComparison(Comparison $comparison, ?string $authorFolder, ?string $workFolder): array

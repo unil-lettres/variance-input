@@ -1,6 +1,6 @@
 # Variance Architecture Overview
 
-Variance ships as a multi-container stack that combines modern Laravel admin tooling, the Medite alignment engine, and the legacy public-facing PHP site. This document explains how the pieces fit together and what each container is responsible for.
+Variance ships as a multi-container stack that combines modern Laravel admin tooling (versions, pagination, facsimile manifest manager, legacy export), the Medite alignment engine, and the legacy public-facing PHP site. This document explains how the pieces fit together and what each container is responsible for.
 
 ---
 
@@ -38,7 +38,7 @@ Variance ships as a multi-container stack that combines modern Laravel admin too
 * Routes requests:
   * `/admin` → `laravel` container
   * `/` → `variance-web` (legacy site)
-  * `/medite` or API paths → `medite` flask service (if needed)
+  * `/medite` (optional) → `medite` flask service
 * Terminates HTTP connections locally; no TLS in dev by default.
 
 ### laravel
@@ -47,8 +47,8 @@ Variance ships as a multi-container stack that combines modern Laravel admin too
   * Version uploads (`VersionController`).
   * `_lignes` ingestion and pagination sidecar generation (`PageMarkerService`, `ApplyLignesJob`).
   * Medite orchestration (`MediteController`).
-  * Comparison management, pagination injection (`ComparisonController`, `InjectComparisonPaginationJob`).
-  * Facsimile ingestion/publishing.
+  * Comparison management, pagination injection, legacy export (`ComparisonController`, `InjectComparisonPaginationJob`).
+  * Facsimile ingestion plus manifest curation (JSON manager + selection events).
 * Shares uploaded assets via bind mounts (`variance_data`, `variance/uploads`, etc.).
 
 ### laravel-queue
@@ -90,9 +90,10 @@ Variance ships as a multi-container stack that combines modern Laravel admin too
 
 Key data flow:
 1. Laravel stores versions and sidecars under `laravel/storage/app/...`.
-2. Medite reads TEI from that location, writes diffs/XHTML back.
-3. Queue jobs inject pagination into the resulting XHTML.
-4. variance-proxy allows browsing/updating through one port; variance-web serves the published resources.
+2. Facsimile uploads are normalised and curated via JSON manifests tied to Medite comparisons.
+3. Medite reads TEI from that location, writes diffs/XHTML back.
+4. Queue jobs inject pagination and keep manifest counts in sync.
+5. variance-proxy allows browsing/updating through one port; variance-web serves the published resources.
 
 ---
 
@@ -115,7 +116,7 @@ Key data flow:
 
 | Component         | Responsibilities |
 |-------------------|------------------|
-| **Laravel**       | Admin UI, version ingestion, pagination sidecar creation, Medite orchestration, comparison management, facsimile workflows, API routes, artisan tooling. |
+| **Laravel**       | Admin UI, version ingestion, pagination sidecar creation, Medite orchestration, comparison management, facsimile manifest curation, legacy export bundles, API routes, artisan tooling. |
 | **Laravel queue** | Executes queued jobs (pagination, facsimiles) to keep HTTP requests non-blocking. |
 | **Medite**        | Heavy alignment tasks; transforms TEI versions into comparison artefacts (TEI diff, XHTML fragments). |
 | **variance-proxy**| Developer-friendly entry point, simplifies URL routing, keeps legacy + modern apps accessible via one port. |
@@ -127,6 +128,7 @@ Key data flow:
 ## Operational Notes
 
 * Queue jobs are essential: without the `laravel-queue` container running, `_lignes` uploads won’t produce sidecars and pagination injection will stall.
+* Export bundles rely on manifest JSON; keep the facsimile manager up to date or the download will contain no images.
 * `variance-proxy` is optional in theory but recommended—bypassing it requires juggling multiple ports.
 * The legacy PHP site reads from the same storage roots as Laravel; keep that tree mounted read-only (`variance/uploads`) to avoid accidental edits.
 * For production/hardening:

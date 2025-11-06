@@ -12,6 +12,8 @@ function initComparisonsTable() {
   const paginationLocks = new Set();
   const paginationObservers = new Map();
   const pendingRoleStatuses = new Map();
+  const comparisonRoleComponents = new Map();
+  const comparisonData = new Map();
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   let latestComparisonsRequest = 0;
   let activeComparisonsRequest = 0;
@@ -349,26 +351,82 @@ function initComparisonsTable() {
         });
     badges.appendChild(lignesBadge);
 
-    const manifestInfo = (comp.manifests && comp.manifests[role]) || {};
-    if (manifestInfo.exists) {
-      const rawCount = Number(manifestInfo.count ?? 0);
+    const manifestBadgeWrapper = document.createElement('span');
+    manifestBadgeWrapper.className = 'manifest-badge-wrapper';
+    badges.appendChild(manifestBadgeWrapper);
+    const versionId = role === 'source' ? Number(comp.source_id) : Number(comp.target_id);
+    const versionLabel = versionName || (role === 'source'
+      ? (comp.source_version?.name ?? `Version ${comp.source_id}`)
+      : (comp.target_version?.name ?? `Version ${comp.target_id}`));
+    let currentManifestInfo = (comp.manifests && comp.manifests[role])
+      ? { ...comp.manifests[role] }
+      : {};
+
+    function manifestTargetUrl(info) {
+      if (info && typeof info === 'object') {
+        if (info.api_url) return info.api_url;
+        if (info.url) return info.url;
+      }
+      return typeof withBasePath === 'function'
+        ? withBasePath(`/comparisons/${comp.id}/manifests/${role}`)
+        : `/comparisons/${comp.id}/manifests/${role}`;
+    }
+
+    function renderManifestBadge(info = {}) {
+      manifestBadgeWrapper.innerHTML = '';
+      const safeInfo = info && typeof info === 'object' ? info : {};
+      const exists = !!safeInfo.exists;
+      const rawCount = Number(safeInfo.count ?? (Array.isArray(safeInfo.selected) ? safeInfo.selected.length : 0));
       const countValue = Number.isFinite(rawCount) ? rawCount : 0;
       const displayCount = formatNumber(countValue);
-      badges.appendChild(createBadge({
-        text: `JSON ${displayCount} x2`,
-        className: 'bg-info text-dark ms-1',
-        href: manifestInfo.api_url || manifestInfo.url || null,
-        title: manifestInfo.file
-          ? `${manifestInfo.file} — ${displayCount} fac-similé${countValue === 1 ? '' : 's'} + miniature${countValue === 1 ? '' : 's'}`
-          : 'Manifeste JSON — fac-similés et miniatures'
-      }));
-    } else {
-      badges.appendChild(createBadge({
-        text: 'manifeste absent',
-        className: 'bg-light text-muted ms-1',
-        title: 'Aucun manifeste JSON détecté'
-      }));
+
+      if (exists) {
+        const manifestBadge = createBadge({
+          text: `JSON ${displayCount} x2`,
+          className: 'bg-info text-dark ms-1 manifest-json-pill',
+          title: safeInfo.file
+            ? `${safeInfo.file} — ${displayCount} fac-similé${countValue === 1 ? '' : 's'} + miniature${countValue === 1 ? '' : 's'}`
+            : 'Manifeste JSON — fac-similés et miniatures'
+        });
+        manifestBadge.addEventListener('click', evt => {
+          evt.preventDefault();
+          evt.stopPropagation();
+          document.dispatchEvent(new CustomEvent('facsimiles:focusManifest', {
+            detail: {
+              versionId,
+              versionName: versionLabel || '',
+              comparisonId: comp.id,
+              role,
+            },
+          }));
+        });
+        manifestBadgeWrapper.appendChild(manifestBadge);
+      } else {
+        const placeholder = createBadge({
+          text: 'manifeste absent',
+          className: 'bg-light text-muted ms-1',
+          title: 'Aucun manifeste JSON détecté'
+        });
+        manifestBadgeWrapper.appendChild(placeholder);
+      }
     }
+
+    function updateManifest(info = {}) {
+      const incoming = info && typeof info === 'object' ? info : {};
+      currentManifestInfo = {
+        ...(currentManifestInfo || {}),
+        ...incoming,
+      };
+      if (currentManifestInfo.count === undefined && Array.isArray(currentManifestInfo.selected)) {
+        currentManifestInfo.count = currentManifestInfo.selected.length;
+      }
+      if (incoming.api_url === undefined && currentManifestInfo.api_url === undefined) {
+        currentManifestInfo.api_url = manifestTargetUrl(incoming);
+      }
+      renderManifestBadge(currentManifestInfo);
+    }
+
+    updateManifest(currentManifestInfo);
     container.appendChild(badges);
 
     if (data.lignes && (data.lignes.updated_at || data.lignes.size)) {
@@ -499,7 +557,42 @@ function initComparisonsTable() {
       });
     });
 
-    return { element: container, statusRef };
+    return {
+      element: container,
+      statusRef,
+      updateManifest,
+      getManifestInfo: () => ({ ...(currentManifestInfo || {}) }),
+    };
+  }
+
+  function renderMediteParams(comp) {
+    const chips = [];
+
+    const addNumeric = (label, raw) => {
+      if (raw === null || raw === undefined || raw === '') return;
+      const num = Number(raw);
+      const display = Number.isFinite(num) ? num : raw;
+      chips.push(`<span class="comparison-param-chip"><strong>${label}</strong> ${display}</span>`);
+    };
+
+    const addBoolean = (label, raw) => {
+      if (raw === null || raw === undefined) return;
+      const active = raw === true || raw === 1 || raw === '1';
+      const stateClass = active ? 'text-bg-primary text-white border-0' : 'text-bg-light text-muted';
+      chips.push(`<span class="comparison-param-chip ${stateClass}"><strong>${label}</strong> ${active ? 'oui' : 'non'}</span>`);
+    };
+
+    addNumeric('Pivot', comp.lg_pivot);
+    addNumeric('Ratio', comp.ratio);
+    addNumeric('Seuil', comp.seuil);
+    addBoolean('Sensibilité casse', comp.case_sensitive);
+    addBoolean('Sensibilité diacritiques', comp.diacri_sensitive);
+
+    if (!chips.length) {
+      return '<span class="text-muted">—</span>';
+    }
+
+    return `<div class="comparison-params">${chips.join('')}</div>`;
   }
 
   async function triggerComparisonPagination(comp, { role = null, clearExisting, replaceExisting, button, feedback, statusRefs }) {
@@ -765,6 +858,8 @@ function initComparisonsTable() {
     loading.style.display = 'none';
     noComparisons.style.display = 'none';
     tbody.innerHTML = '';
+    comparisonRoleComponents.clear();
+    comparisonData.clear();
   }
 
   // Track current author/work folders from the global selector
@@ -782,6 +877,8 @@ function initComparisonsTable() {
 
     loading.style.display = 'block';
     tbody.innerHTML = '';
+    comparisonRoleComponents.clear();
+    comparisonData.clear();
     noComparisons.style.display = 'none';
 
     this.initializedTooltips?.forEach(tooltip => tooltip.dispose());
@@ -801,8 +898,6 @@ function initComparisonsTable() {
         return;
       }
 
-      const boolVal = value => value === true || value === 1 || value === '1';
-
       comparisons.forEach(comp => {
         const tr = document.createElement('tr');
         tr.dataset.id = comp.id;
@@ -812,7 +907,6 @@ function initComparisonsTable() {
         const missing = Array.isArray(comp.publish_missing) ? comp.publish_missing : [];
         const ready = comp.components_ready && missing.length === 0;
         const published = comp.published;
-        const caseSensitive = boolVal(comp.case_sensitive);
         const publishedTitle = published
           ? 'Fichiers publiés disponibles'
           : 'Comparaison non publiée';
@@ -828,7 +922,10 @@ function initComparisonsTable() {
           statusHtml = `<span class="text-warning" title="${safeTitle}">⚠</span>`;
         }
 
-        const xmlUrl  = withBasePath(`/storage/uploads/comparisons/${comp.id}.xml`);
+        const xmlUrl     = withBasePath(`/storage/uploads/comparisons/${comp.id}.xml`);
+        const exportUrl  = typeof withBasePath === 'function'
+          ? withBasePath(`/comparisons/${comp.id}/export`)
+          : `/comparisons/${comp.id}/export`;
         const legacyUrl = (function() {
           if (!currentAuthorFolder || !currentWorkFolder || !comp.folder) return null;
           const origin = window.location.origin;
@@ -841,6 +938,9 @@ function initComparisonsTable() {
         const sourceName = comp.source_version?.name ?? `Version ${comp.source_id}`;
         const targetName = comp.target_version?.name ?? `Version ${comp.target_id}`;
 
+        comparisonData.set(comp.id, comp);
+        const mediteParamsHtml = renderMediteParams(comp);
+
         tr.innerHTML = `
           <td>${comp.id}</td>
           <td class="align-top source-cell">
@@ -852,9 +952,7 @@ function initComparisonsTable() {
             <div class="role-wrapper"></div>
           </td>
           <td>${comp.folder ?? ''}</td>
-          <td>${comp.ratio ?? ''}</td>
-          <td>${comp.lg_pivot ?? ''}</td>
-          <td>${caseSensitive ? 'yes' : 'no'}</td>
+          <td class="align-top">${mediteParamsHtml}</td>
           <td class="text-center components-status">${statusHtml}</td>
           <td class="text-center published-status">${published ? `<span class="text-success" title="${publishedTitle}">✔</span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
           <td class="text-center">
@@ -871,6 +969,7 @@ function initComparisonsTable() {
               ${(legacyUrl && published) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
               ${(!isRunning && ready && !published) ? `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
               <a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>
+              <a href="${exportUrl}" data-bs-toggle="tooltip" title="Exporter le pack legacy" class="btn btn-outline-secondary" target="_blank"><i class="bi bi-download"></i></a>
               <button data-bs-toggle="tooltip" title="Supprimer la comparaison" class="btn btn-outline-danger delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
             </div>
           </td>
@@ -893,11 +992,19 @@ function initComparisonsTable() {
         if (sourceWrapper) {
           const roleComponent = renderComparisonRole(comp, 'source', sourceName);
           sourceWrapper.appendChild(roleComponent.element);
+          comparisonRoleComponents.set(`${comp.id}:source`, {
+            comp,
+            component: roleComponent,
+          });
         }
         const targetWrapper = tr.querySelector('.target-cell .role-wrapper');
         if (targetWrapper) {
           const roleComponent = renderComparisonRole(comp, 'target', targetName);
           targetWrapper.appendChild(roleComponent.element);
+          comparisonRoleComponents.set(`${comp.id}:target`, {
+            comp,
+            component: roleComponent,
+          });
         }
       });
     } catch (err) {
@@ -938,6 +1045,64 @@ function initComparisonsTable() {
   });
 
   document.addEventListener('versionsUpdated',   e => loadComparisons(e.detail?.workId));
+
+  document.addEventListener('comparisonManifestUpdated', e => {
+    const detail = e.detail || {};
+    const comparisonId = Number(detail.comparisonId ?? detail.id);
+    if (!Number.isFinite(comparisonId)) {
+      return;
+    }
+    const role = detail.role === 'target' ? 'target' : 'source';
+
+    if (detail.workId && currentWorkId && Number(detail.workId) !== Number(currentWorkId)) {
+      return;
+    }
+
+    const key = `${comparisonId}:${role}`;
+    const entry = comparisonRoleComponents.get(key);
+    if (!entry) {
+      if (!detail.workId || Number(detail.workId) === Number(currentWorkId)) {
+        loadComparisons(currentWorkId);
+      }
+      return;
+    }
+
+    const comp = entry.comp || comparisonData.get(comparisonId) || {};
+    comparisonData.set(comparisonId, comp);
+
+    comp.manifests = comp.manifests || {};
+    const manifestDetail = detail.manifest && typeof detail.manifest === 'object'
+      ? { ...detail.manifest }
+      : {};
+    if (typeof detail.count === 'number' && !Number.isNaN(detail.count)) {
+      manifestDetail.count = detail.count;
+    }
+    if (!('exists' in manifestDetail)) {
+      manifestDetail.exists = true;
+    }
+
+    const previous = comp.manifests[role] || {};
+    const updatedManifest = {
+      ...previous,
+      ...manifestDetail,
+    };
+
+    if (!updatedManifest.api_url) {
+      updatedManifest.api_url = previous.api_url
+        || (typeof withBasePath === 'function'
+          ? withBasePath(`/comparisons/${comparisonId}/manifests/${role}`)
+          : `/comparisons/${comparisonId}/manifests/${role}`);
+    }
+    if (!updatedManifest.url && previous.url) {
+      updatedManifest.url = previous.url;
+    }
+
+    comp.manifests[role] = updatedManifest;
+
+    if (entry.component?.updateManifest) {
+      entry.component.updateManifest(updatedManifest);
+    }
+  });
 
   document.addEventListener('change', async event => {
     const toggle = event.target.closest('.publish-toggle');

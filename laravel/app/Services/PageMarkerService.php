@@ -1834,13 +1834,39 @@ class PageMarkerService
         $this->clearCancellation($versionId);
     }
 
-    public function markComparisonQueued(int $comparisonId): void
+    public function markComparisonQueued(int $comparisonId, ?array $roles = null): void
     {
         $payload = [
             'status'        => 'queued',
             'comparison_id' => $comparisonId,
             'updated_at'    => time(),
         ];
+        if ($roles !== null) {
+            $formatted = [];
+            foreach ($roles as $role => $info) {
+                $roleKey = strtolower((string) $role);
+                if ($roleKey === '') {
+                    continue;
+                }
+                $info = is_array($info) ? $info : [];
+                $entry = [
+                    'status'     => 'queued',
+                    'total'      => (int) ($info['total'] ?? 0),
+                    'inserted'   => 0,
+                    'missed'     => 0,
+                ];
+                if (isset($info['version_id'])) {
+                    $entry['version_id'] = $info['version_id'];
+                }
+                if (array_key_exists('reason', $info)) {
+                    $entry['reason'] = $info['reason'];
+                }
+                $formatted[$roleKey] = $entry;
+            }
+            if (!empty($formatted)) {
+                $payload['roles'] = $formatted;
+            }
+        }
         $this->writeComparisonProgress($comparisonId, $payload);
     }
 
@@ -1989,6 +2015,15 @@ class PageMarkerService
         if (is_file($flag)) {
             @unlink($flag);
         }
+    }
+
+    public function resetProgress(int $versionId): void
+    {
+        $path = $this->progressFilePath($versionId);
+        if (is_file($path)) {
+            @unlink($path);
+        }
+        $this->clearCancellation($versionId);
     }
 
     public function isCancelled(int $versionId): bool
@@ -2157,6 +2192,30 @@ class PageMarkerService
             'updated_at'  => Storage::disk('local')->lastModified($relative),
             'size'        => Storage::disk('local')->size($relative),
             'details'     => $details,
+        ];
+    }
+
+    public function deleteLignesArtifacts(int $versionId): array
+    {
+        $disk = Storage::disk('local');
+
+        $lignesRelative = $this->lignesRelativePath($versionId);
+        $lignesRemoved = false;
+        if ($disk->exists($lignesRelative)) {
+            $lignesRemoved = $disk->delete($lignesRelative);
+        }
+
+        $paginationRelative = $this->paginationRelativePath($versionId);
+        $paginationRemoved = false;
+        if ($disk->exists($paginationRelative)) {
+            $paginationRemoved = $disk->delete($paginationRelative);
+        }
+
+        $this->resetProgress($versionId);
+
+        return [
+            'lignes_removed' => $lignesRemoved,
+            'pagination_removed' => $paginationRemoved,
         ];
     }
 

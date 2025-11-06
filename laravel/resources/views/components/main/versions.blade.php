@@ -8,7 +8,7 @@
          aria-controls="versionsCollapse">
         <div class="d-flex align-items-center gap-2">
             <span class="collapse-chevron" aria-hidden="true"></span>
-            <span class="text-uppercase">Versions & fac-similés</span>
+            <span>Versions</span>
         </div>
         <span id="versions-count-pill" class="badge text-bg-danger media-status-pill">0</span>
     </div>
@@ -146,6 +146,7 @@
                     <div id="facsimile-upload-spinner" class="spinner-border spinner-border-sm text-primary" role="status" style="display:none;"></div>
                 </div>
                 <div id="facsimile-upload-log" class="small text-muted mb-2" style="white-space: pre-line;"></div>
+                <div id="facsimile-upload-total" class="small text-muted mb-2"></div>
                 <div id="facsimile-upload-summary" class="small text-muted" style="white-space: pre-line;"></div>
             </div>
             <div class="modal-footer">
@@ -207,6 +208,7 @@ let facLog           = null;
 let facSummary       = null;
 let facFolderLabel  = null;
 let facModalInstance = null;
+let facTotalSizeEl   = null;
 let facVersionId     = null;
 let facVersionName   = '';
 let selectedAuthorLabel = '';
@@ -391,6 +393,18 @@ function renderFacsimileStatus(versionId, facsimileData){
         state.uploadBtn.title = queued > 0
             ? 'Traitement en cours — veuillez patienter avant de téléverser'
             : 'Importer de nouveaux fac-similés';
+    }
+    if (state.clearBtn) {
+        const hasAnyFacsimiles = ready > 0 || published > 0 || queued > 0;
+        if (queued > 0) {
+            state.clearBtn.disabled = true;
+            state.clearBtn.title = 'Traitement en cours — utilisez plutôt l’annulation ci-dessous';
+        } else {
+            state.clearBtn.disabled = !hasAnyFacsimiles;
+            state.clearBtn.title = hasAnyFacsimiles
+                ? 'Supprimer tous les fac-similés'
+                : 'Aucune image à supprimer';
+        }
     }
 
     if (state.statusNote && state.statusText) {
@@ -595,6 +609,11 @@ function renderLignesStatus(versionId, lignesInfo, progress){
             ? 'Traitement en cours — veuillez patienter'
             : 'Importer un fichier _lignes';
     }
+    if (state.lignesDeleteBtn) {
+        const disableDelete = !hasFile || (status && ['queued', 'running'].includes(status));
+        state.lignesDeleteBtn.hidden = !hasFile;
+        state.lignesDeleteBtn.disabled = disableDelete;
+    }
 
     if (versionsCache.has(id)) {
         const cached = versionsCache.get(id) ?? {};
@@ -628,6 +647,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     facSpinner     = document.getElementById('facsimile-upload-spinner');
     facLog         = document.getElementById('facsimile-upload-log');
     facSummary     = document.getElementById('facsimile-upload-summary');
+    facTotalSizeEl = document.getElementById('facsimile-upload-total');
     facFolderLabel = document.getElementById('facsimile-folder-label');
 
     const $fileInput = document.getElementById('versionFile');
@@ -663,6 +683,7 @@ window.addEventListener('DOMContentLoaded',()=>{
                 facSummary.className = 'small text-muted';
                 facSummary.textContent = '';
             }
+            if (facTotalSizeEl) facTotalSizeEl.textContent = '';
             if (facSpinner) facSpinner.style.display = 'none';
             if (facModalInfo) facModalInfo.innerHTML = 'Sélectionnez un dossier contenant les images à importer.';
             if (facFolderLabel) facFolderLabel.textContent = 'Aucun dossier';
@@ -709,6 +730,14 @@ window.addEventListener('DOMContentLoaded',()=>{
             if (facFolderLabel) {
                 const firstPath = images.length ? (images[0].webkitRelativePath || images[0].name || '') : '';
                 facFolderLabel.textContent = firstPath ? (firstPath.split('/')[0] || firstPath) : 'Aucun dossier';
+            }
+            if (facTotalSizeEl) {
+                if (images.length) {
+                    const totalBytes = images.reduce((sum, file) => sum + (file.size || 0), 0);
+                    facTotalSizeEl.textContent = `Volume total estimé : ${formatBytes(totalBytes)}`;
+                } else {
+                    facTotalSizeEl.textContent = '';
+                }
             }
             if (facUploadBtn) facUploadBtn.disabled = images.length === 0;
             if (facLog) {
@@ -845,6 +874,7 @@ window.addEventListener('DOMContentLoaded',()=>{
             if (facFileInput) facFileInput.value = '';
             if (facUploadBtn) facUploadBtn.disabled = true;
             if (facLog) facLog.textContent = '';
+            if (facTotalSizeEl) facTotalSizeEl.textContent = '';
             if (facSummary) {
                 facSummary.className = 'small text-success';
                 facSummary.textContent = `✅ ${uploadedCount} fichier(s) importé(s)` + (lastStoredDir ? ` dans ${lastStoredDir}` : '');
@@ -1136,19 +1166,28 @@ async function publishFacsimiles(version) {
     }
 }
 
-async function cancelFacsimileProcessing(versionId){
+async function purgeFacsimiles(versionId, { reason = 'clear' } = {}){
     const id = Number(versionId);
     if (!Number.isFinite(id)) return;
     const version = versionsCache.get(id);
     const label = version?.name ? `« ${version.name} »` : `ID ${id}`;
-    if (!confirm(`Interrompre le traitement des fac-similés pour ${label} ?\nLes images déjà importées seront supprimées.`)) {
+    const isCancel = reason === 'cancel';
+    const confirmMessage = isCancel
+        ? `Interrompre le traitement des fac-similés pour ${label} ?\nLes images déjà importées seront supprimées.`
+        : `Supprimer tous les fac-similés pour ${label} ?\nLes originaux, miniatures et manifestes seront définitivement supprimés.`;
+    if (!confirm(confirmMessage)) {
         return;
     }
 
     const state = facsimileRowState.get(id);
-    if (state?.cancelBtn) {
-        state.cancelBtn.disabled = true;
+    const buttonsToDisable = [];
+    if (isCancel && state?.cancelBtn) {
+        buttonsToDisable.push(state.cancelBtn);
     }
+    if (!isCancel && state?.clearBtn) {
+        buttonsToDisable.push(state.clearBtn);
+    }
+    buttonsToDisable.forEach(btn => btn.disabled = true);
 
     try {
         const res = await fetch(withBasePath(`/api/versions/${id}/facsimiles`), {
@@ -1169,11 +1208,11 @@ async function cancelFacsimileProcessing(versionId){
         }
     } catch (err) {
         console.error(err);
-        alert(err.message || 'Impossible d’annuler le traitement des fac-similés.');
+        alert(err.message || (isCancel
+            ? 'Impossible d’annuler le traitement des fac-similés.'
+            : 'Impossible de supprimer les fac-similés.'));
     } finally {
-        if (state?.cancelBtn) {
-            state.cancelBtn.disabled = false;
-        }
+        buttonsToDisable.forEach(btn => { btn.disabled = false; });
     }
 }
 
@@ -1227,6 +1266,72 @@ async function uploadLignesFile(versionId, file){
             const hasFile = !!(cache?.lignes);
             const progressStatus = cache?.page_marker_progress?.status;
             state.lignesDownloadBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+        }
+        if (state?.lignesDeleteBtn) {
+            const cache = versionsCache.get(id);
+            const hasFile = !!(cache?.lignes);
+            const progressStatus = cache?.page_marker_progress?.status;
+            state.lignesDeleteBtn.hidden = !hasFile;
+            state.lignesDeleteBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+        }
+    }
+}
+
+async function deleteLignesFile(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    if (!confirm('Supprimer définitivement le fichier _lignes pour cette version ?')) return;
+
+    const state = facsimileRowState.get(id);
+    if (state?.lignesDeleteBtn) state.lignesDeleteBtn.disabled = true;
+    if (state?.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/lignes/file`), {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        const payload = await readJsonResponse(res);
+        const progress = payload?.progress ?? null;
+        renderLignesStatus(id, payload.lignes ?? null, progress);
+        if (versionsCache.has(id)) {
+            const cached = versionsCache.get(id) ?? {};
+            cached.lignes = payload.lignes ?? null;
+            cached.page_marker_progress = progress ?? null;
+            if (Object.prototype.hasOwnProperty.call(payload ?? {}, 'pagination')) {
+                cached.pagination = payload.pagination;
+            }
+            versionsCache.set(id, cached);
+        }
+        stopLignesPolling(id);
+        if (Number.isFinite(selectedWorkId)) {
+            document.dispatchEvent(new CustomEvent('versionsUpdated', { detail: { workId: selectedWorkId } }));
+        } else {
+            document.dispatchEvent(new CustomEvent('versionsUpdated', { detail: { workId: null } }));
+        }
+        if (payload?.message) {
+            alert(payload.message);
+        }
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Impossible de supprimer le fichier _lignes.');
+    } finally {
+        const cache = versionsCache.get(id);
+        const hasFile = !!(cache?.lignes);
+        const progressStatus = cache?.page_marker_progress?.status;
+        if (state?.lignesSpinner) state.lignesSpinner.style.display = 'none';
+        if (state?.lignesDeleteBtn) {
+            state.lignesDeleteBtn.hidden = !hasFile;
+            state.lignesDeleteBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+        }
+        if (state?.lignesDownloadBtn) {
+            state.lignesDownloadBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+        }
+        if (state?.lignesUploadBtn) {
+            state.lignesUploadBtn.disabled = !!(progressStatus && ['queued','running'].includes(progressStatus));
         }
     }
 }
@@ -1364,6 +1469,12 @@ async function fetchVersions(workId){
                 document.dispatchEvent(new CustomEvent('facsimiles:select', {
                     detail: { versionId: v.id, versionName: v.name }
                 }));
+                const facsimilesCard = document.getElementById('facsimiles-card');
+                if (facsimilesCard) {
+                    setTimeout(() => {
+                        facsimilesCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 50);
+                }
             });
             facButtons.appendChild(btnFacView);
 
@@ -1390,6 +1501,21 @@ async function fetchVersions(workId){
             btnFacPublish.addEventListener('click', () => { publishFacsimiles(v); });
             facButtons.appendChild(btnFacPublish);
 
+            const btnFacClear = document.createElement('button');
+            btnFacClear.type = 'button';
+            btnFacClear.className = 'btn btn-outline-danger';
+            btnFacClear.textContent = 'Supprimer';
+            const hasAnyFacsimiles = (sourceCount + publishedCount + queueCount) > 0;
+            btnFacClear.disabled = !hasAnyFacsimiles;
+            btnFacClear.title = hasAnyFacsimiles
+                ? 'Supprimer tous les fac-similés'
+                : 'Aucune image à supprimer';
+            btnFacClear.setAttribute('aria-label', 'Supprimer les fac-similés');
+            btnFacClear.addEventListener('click', () => {
+                purgeFacsimiles(v.id, { reason: 'clear' });
+            });
+            facButtons.appendChild(btnFacClear);
+
             const progressWrap = document.createElement('div');
             progressWrap.className = 'progress mt-1';
             progressWrap.style.height = '4px';
@@ -1412,7 +1538,7 @@ async function fetchVersions(workId){
             cancelBtn.hidden = true;
             cancelBtn.title = 'Annuler le traitement et supprimer les fac-similés importés';
             cancelBtn.setAttribute('aria-label', 'Annuler le traitement des fac-similés');
-            cancelBtn.addEventListener('click', () => cancelFacsimileProcessing(v.id));
+            cancelBtn.addEventListener('click', () => purgeFacsimiles(v.id, { reason: 'cancel' }));
             statusNote.appendChild(cancelBtn);
 
             tdFac.appendChild(facButtons);
@@ -1428,6 +1554,7 @@ async function fetchVersions(workId){
                 statusNote,
                 statusText,
                 cancelBtn,
+                clearBtn: btnFacClear,
                 progressWrap,
                 progressBar,
             };
@@ -1460,6 +1587,15 @@ async function fetchVersions(workId){
             lignesUploadBtn.className = 'btn btn-outline-primary px-2 py-1';
             lignesUploadBtn.textContent = 'Importer';
             lignesBtnGroup.appendChild(lignesUploadBtn);
+
+            const lignesDeleteBtn = document.createElement('button');
+            lignesDeleteBtn.type = 'button';
+            lignesDeleteBtn.className = 'btn btn-outline-danger px-2 py-1';
+            lignesDeleteBtn.textContent = 'Supprimer';
+            lignesDeleteBtn.disabled = true;
+            lignesDeleteBtn.hidden = true;
+            lignesDeleteBtn.addEventListener('click', () => deleteLignesFile(v.id));
+            lignesBtnGroup.appendChild(lignesDeleteBtn);
 
             const lignesFileInput = document.createElement('input');
             lignesFileInput.type = 'file';
@@ -1515,6 +1651,7 @@ async function fetchVersions(workId){
             rowState.lignesSpinner = lignesSpinner;
             rowState.lignesDownloadBtn = lignesDownloadBtn;
             rowState.lignesUploadBtn = lignesUploadBtn;
+            rowState.lignesDeleteBtn = lignesDeleteBtn;
             rowState.lignesFileInput = lignesFileInput;
             rowState.lignesProgressWrap = lignesProgressWrap;
             rowState.lignesProgressBar = lignesProgressBar;
@@ -1552,7 +1689,6 @@ async function fetchVersions(workId){
 
             const btnEditor = document.createElement('a');
             btnEditor.href = editorUrl;
-            btnEditor.target = '_blank';
             btnEditor.setAttribute('data-bs-toggle', 'tooltip');
             btnEditor.className = 'btn btn-outline-primary';
             btnEditor.innerHTML = '<i class="bi bi-pencil-square"></i>';

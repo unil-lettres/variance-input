@@ -209,18 +209,187 @@ class VersionController extends Controller
     {
         $version->loadMissing('work.author');
         $this->pageMarkerService->markCancelled($version->id, 'Annulé par l\'utilisateur');
+        $this->pageMarkerService->resetProgress($version->id);
 
         $info = $this->pageMarkerService->getLignesInfo($version->id);
         if ($info) {
             $info['url'] = admin_url("api/versions/{$version->id}/lignes");
         }
-        $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
+        $progress = ['status' => 'idle', 'version_id' => $version->id, 'updated_at' => time()];
 
         return response()->json([
-            'status'   => 'cancelled',
-            'message'  => 'Traitement des balises de pagination annulé.',
+            'status'   => 'reset',
+            'message'  => 'Progression réinitialisée.',
             'lignes'   => $info,
             'progress' => $progress,
+        ]);
+    }
+
+    public function deleteLignesFile(Version $version): JsonResponse
+    {
+        $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
+        $status = strtolower((string) ($progress['status'] ?? ''));
+        if (in_array($status, ['queued', 'running'], true)) {
+            return response()->json([
+                'status'   => 'busy',
+                'message'  => 'Impossible de supprimer le fichier _lignes pendant un traitement en cours.',
+                'progress' => $progress,
+            ], 409);
+        }
+
+        $removed = $this->pageMarkerService->deleteLignesArtifacts($version->id);
+
+        $info = $this->pageMarkerService->getLignesInfo($version->id);
+        if ($info) {
+            $info['url'] = admin_url("api/versions/{$version->id}/lignes");
+        }
+
+        $pagination = $this->pageMarkerService->getPaginationInfo($version->id);
+        $updatedProgress = $this->pageMarkerService->getProgressSnapshot($version->id);
+
+        $message = $removed['lignes_removed']
+            ? 'Fichier _lignes supprimé.'
+            : 'Aucun fichier _lignes à supprimer.';
+
+        return response()->json([
+            'status'     => 'ok',
+            'message'    => $message,
+            'lignes'     => $info,
+            'pagination' => $pagination,
+            'progress'   => $updatedProgress,
+            'removed'    => $removed,
+        ]);
+    }
+
+    public function manifestComparisons(Version $version): JsonResponse
+    {
+        $version->loadMissing('work.author', 'work');
+        $authorFolder = $version->work->author->folder ?? null;
+        $workFolder   = $version->work->folder ?? null;
+        if (!$authorFolder || !$workFolder) {
+            return response()->json([]);
+        }
+
+        $defaultEntries = $version->collectManifestEntries();
+        $defaultNames = [];
+        foreach ($defaultEntries as $entry) {
+            $path = $entry['big'] ?? null;
+            if ($path) {
+                $name = basename($path);
+                if ($name !== '') {
+                    $defaultNames[] = $name;
+                }
+            }
+        }
+        $defaultNames = array_values(array_unique($defaultNames));
+
+        $comparisons = Comparison::with(['sourceVersion', 'targetVersion'])
+            ->where('source_id', $version->id)
+            ->orWhere('target_id', $version->id)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $payload = [];
+        foreach ($comparisons as $comparison) {
+            if ($comparison->source_id === $version->id) {
+                $payload[] = $this->formatManifestComparison($version, $comparison, 'source', $defaultNames);
+            }
+            if ($comparison->target_id === $version->id) {
+                $payload[] = $this->formatManifestComparison($version, $comparison, 'target', $defaultNames);
+            }
+        }
+
+        return response()->json($payload);
+    }
+
+    public function updateManifestImages(Request $request, Version $version, Comparison $comparison): JsonResponse
+    {
+        $data = $request->validate([
+            'role'   => 'required|in:source,target',
+            'images' => 'array',
+            'images.*' => 'string',
+        ]);
+
+        $role = $data['role'];
+        if (($role === 'source' && $comparison->source_id !== $version->id) ||
+            ($role === 'target' && $comparison->target_id !== $version->id)) {
+            return response()->json([
+                'message' => 'Cette version n\'est pas associée à la comparaison pour le rôle sélectionné.',
+            ], 422);
+        }
+
+        $version->loadMissing('work.author', 'work');
+        $authorFolder = $version->work->author->folder ?? null;
+        $workFolder   = $version->work->folder ?? null;
+        if (!$authorFolder || !$workFolder || !$version->folder) {
+            return response()->json([
+                'message' => 'Impossible de déterminer l\'emplacement des fac-similés.',
+            ], 422);
+        }
+
+        $relativePath = $this->manifestRelativePath($version, $comparison, $role);
+        if (!$relativePath) {
+            return response()->json([
+                'message' => 'Chemin de manifeste invalide.',
+            ], 422);
+        }
+
+        $versionEntries = $version->collectManifestEntries();
+        $entriesByName = [];
+        foreach ($versionEntries as $entry) {
+            $path = $entry['big'] ?? null;
+            if (!$path) {
+                continue;
+            }
+            $name = basename($path);
+            if ($name !== '') {
+                $entriesByName[$name] = $entry;
+            }
+        }
+
+        $selectedNames = [];
+        $entries = [];
+        $seen = [];
+
+        foreach ($data['images'] ?? [] as $rawName) {
+            $name = trim(basename($rawName));
+            if ($name === '' || isset($seen[$name])) {
+                continue;
+            }
+            $seen[$name] = true;
+
+            if (isset($entriesByName[$name])) {
+                $entries[] = $entriesByName[$name];
+                $selectedNames[] = $name;
+                continue;
+            }
+
+            $entry = $this->buildManifestEntryFromName($version, $name);
+            if ($entry) {
+                $entries[] = $entry;
+                $selectedNames[] = $name;
+            }
+        }
+
+        Storage::disk('public')->makeDirectory(dirname($relativePath));
+        $payload = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        Storage::disk('public')->put($relativePath, $payload);
+        $this->mirrorToLegacy(dirname($relativePath), basename($relativePath), $payload);
+
+        $metadata = $this->readManifestMetadata($version, $comparison, $role, $selectedNames);
+
+        if (($metadata['count'] ?? 0) > 0) {
+            $this->pageMarkerService->ensureDefaultMarkers($comparison);
+        }
+
+        return response()->json([
+            'status'     => 'ok',
+            'selected'   => $metadata['selected'],
+            'count'      => $metadata['count'],
+            'exists'     => $metadata['exists'],
+            'file'       => $metadata['file'],
+            'updated_at' => $metadata['updated_at'],
+            'inferred'   => $metadata['inferred'],
         ]);
     }
 
@@ -372,6 +541,13 @@ class VersionController extends Controller
             $json = @file_get_contents($progressFile) ?: '';
             $payload = $json !== '' ? json_decode($json, true) : null;
             if (is_array($payload)) {
+                $status = strtolower((string) ($payload['status'] ?? ''));
+                $updatedAt = (int) ($payload['updated_at'] ?? 0);
+                $staleThreshold = 180; // seconds
+                if ($status === 'queued' && $updatedAt > 0 && (time() - $updatedAt) > $staleThreshold) {
+                    $this->pageMarkerService->resetProgress($version->id);
+                    return response()->json(['status' => 'idle', 'version_id' => $version->id, 'updated_at' => time()], 200);
+                }
                 return response()->json($payload, 200);
             }
             usleep(20000);
@@ -574,11 +750,7 @@ class VersionController extends Controller
             return [];
         }
 
-        $entries = $version->collectManifestEntries();
-        if (empty($entries)) {
-            return [];
-        }
-
+        $defaultEntries = $version->collectManifestEntries();
         $comparisons = Comparison::where('source_id', $version->id)
             ->orWhere('target_id', $version->id)
             ->get();
@@ -588,17 +760,213 @@ class VersionController extends Controller
             $baseName = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparison->folder));
 
             if ($comparison->source_id === $version->id) {
-                $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'source', $baseName, $entries);
-                $results[] = ['comparison_id' => $comparison->id, 'type' => 'source'] + $info;
+                $entries = $this->resolveManifestEntries($version, $comparison, 'source', $defaultEntries);
+                if (!empty($entries)) {
+                    $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'source', $baseName, $entries);
+                    $results[] = ['comparison_id' => $comparison->id, 'type' => 'source'] + $info;
+                }
             }
 
             if ($comparison->target_id === $version->id) {
-                $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'target', $baseName, $entries);
-                $results[] = ['comparison_id' => $comparison->id, 'type' => 'target'] + $info;
+                $entries = $this->resolveManifestEntries($version, $comparison, 'target', $defaultEntries);
+                if (!empty($entries)) {
+                    $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'target', $baseName, $entries);
+                    $results[] = ['comparison_id' => $comparison->id, 'type' => 'target'] + $info;
+                }
             }
         }
 
         return $results;
+    }
+
+    private function formatManifestComparison(Version $version, Comparison $comparison, string $role, array $fallbackNames): array
+    {
+        $meta = $this->readManifestMetadata($version, $comparison, $role, $fallbackNames);
+
+        $sourceName = $comparison->sourceVersion?->name ?? "Version {$comparison->source_id}";
+        $targetName = $comparison->targetVersion?->name ?? "Version {$comparison->target_id}";
+        $roleLabel  = $role === 'source' ? 'Source' : 'Cible';
+
+        return [
+            'comparison_id'     => $comparison->id,
+            'comparison_label'  => sprintf('#%d · %s → %s', $comparison->id, $sourceName, $targetName),
+            'comparison_folder' => $comparison->folder,
+            'role'              => $role,
+            'role_label'        => $roleLabel,
+            'selected'          => $meta['selected'],
+            'count'             => $meta['count'],
+            'exists'            => $meta['exists'],
+            'inferred'          => $meta['inferred'],
+            'file'              => $meta['file'],
+            'updated_at'        => $meta['updated_at'],
+        ];
+    }
+
+    private function manifestRelativePath(Version $version, Comparison $comparison, string $role): ?string
+    {
+        $role = strtolower($role);
+        if (!in_array($role, ['source', 'target'], true)) {
+            return null;
+        }
+
+        $version->loadMissing('work.author', 'work');
+        $authorFolder  = $version->work->author->folder ?? null;
+        $workFolder    = $version->work->folder ?? null;
+        $versionFolder = $version->folder ?? null;
+
+        if (!$authorFolder || !$workFolder || !$versionFolder) {
+            return null;
+        }
+
+        $baseName = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparison->folder));
+        $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $filename    = sprintf('images_%s_%s.json', $role, $baseName);
+
+        return "{$relativeDir}/{$filename}";
+    }
+
+    private function readManifestMetadata(Version $version, Comparison $comparison, string $role, array $fallbackNames = []): array
+    {
+        $relativePath = $this->manifestRelativePath($version, $comparison, $role);
+        if (!$relativePath) {
+            return [
+                'exists'     => false,
+                'selected'   => $fallbackNames,
+                'count'      => count($fallbackNames),
+                'file'       => null,
+                'updated_at' => null,
+                'inferred'   => !empty($fallbackNames),
+            ];
+        }
+
+        $disk = Storage::disk('public');
+        $raw = null;
+        $exists = false;
+        $updatedAt = null;
+
+        if ($disk->exists($relativePath)) {
+            $raw = $disk->get($relativePath);
+            $exists = true;
+            $updatedAt = $disk->lastModified($relativePath);
+        } else {
+            $legacyPath = base_path('../variance/' . $relativePath);
+            if (is_file($legacyPath)) {
+                $raw = File::get($legacyPath);
+                $exists = true;
+                $updatedAt = filemtime($legacyPath) ?: null;
+            }
+        }
+
+        $selected = [];
+        if ($raw !== null) {
+            $entries = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($entries)) {
+                foreach ($entries as $entry) {
+                    if (!is_array($entry)) {
+                        continue;
+                    }
+                    $path = $entry['big'] ?? $entry['small'] ?? null;
+                    if ($path) {
+                        $name = basename($path);
+                        if ($name !== '') {
+                            $selected[] = $name;
+                        }
+                    }
+                }
+            }
+        }
+
+        $inferred = false;
+        if (!$exists && !empty($fallbackNames)) {
+            $selected = $fallbackNames;
+            $inferred = true;
+        }
+
+        return [
+            'exists'     => $exists,
+            'selected'   => $selected,
+            'count'      => count($selected),
+            'file'       => $exists ? $relativePath : null,
+            'updated_at' => $updatedAt,
+            'inferred'   => $inferred,
+        ];
+    }
+
+    private function readManifestEntries(Version $version, Comparison $comparison, string $role): ?array
+    {
+        $relativePath = $this->manifestRelativePath($version, $comparison, $role);
+        if (!$relativePath) {
+            return null;
+        }
+
+        $disk = Storage::disk('public');
+        $raw = null;
+        if ($disk->exists($relativePath)) {
+            $raw = $disk->get($relativePath);
+        } else {
+            $legacyPath = base_path('../variance/' . $relativePath);
+            if (is_file($legacyPath)) {
+                $raw = File::get($legacyPath);
+            }
+        }
+
+        if ($raw === null) {
+            return null;
+        }
+
+        $entries = json_decode($raw, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($entries)) {
+            return null;
+        }
+
+        $filtered = [];
+        foreach ($entries as $entry) {
+            if (is_array($entry) && isset($entry['big'])) {
+                $filtered[] = $entry;
+            }
+        }
+
+        return $filtered;
+    }
+
+    private function resolveManifestEntries(Version $version, Comparison $comparison, string $role, array $fallbackEntries = []): array
+    {
+        $existing = $this->readManifestEntries($version, $comparison, $role);
+        if (is_array($existing) && !empty($existing)) {
+            return $existing;
+        }
+
+        if (!empty($fallbackEntries)) {
+            return $fallbackEntries;
+        }
+
+        return $version->collectManifestEntries();
+    }
+
+    private function buildManifestEntryFromName(Version $version, string $fileName): ?array
+    {
+        $version->loadMissing('work.author', 'work');
+        $authorFolder  = $version->work->author->folder ?? null;
+        $workFolder    = $version->work->folder ?? null;
+        $versionFolder = $version->folder ?? null;
+
+        if (!$authorFolder || !$workFolder || !$versionFolder) {
+            return null;
+        }
+
+        $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $disk = Storage::disk('public');
+        $imageRel = "{$relativeDir}/{$fileName}";
+        if (!$disk->exists($imageRel)) {
+            return null;
+        }
+        $thumbRel = preg_replace('/(\.\w+)$/', '_thumb$1', $imageRel);
+        $smallRel = $disk->exists($thumbRel) ? $thumbRel : $imageRel;
+
+        return [
+            'small' => '/' . ltrim($smallRel, '/'),
+            'big'   => '/' . ltrim($imageRel, '/'),
+        ];
     }
 
     private function writeManifest(string $authorFolder, string $workFolder, string $versionFolder, string $type, string $baseName, array $entries): array

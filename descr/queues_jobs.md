@@ -34,17 +34,12 @@ php artisan queue:work --queue=facsimiles,page-markers
 
 ## Facsimile Jobs
 
-### `ProcessFacsimileBatch`
+### `ProcessFacsimileImage`
 - **Queue**: `facsimiles`
-- **Triggered by**: Facsimile upload (`FacsimileController`).
-- **Task**: Move originals into version-specific storage, generate resized variants, prepare manifests.
+- **Triggered by**: Facsimile upload (`FacsimileController::store`).
+- **Task**: Save the uploaded file, normalise the final name, generate thumbnails, and mirror draft assets into `storage/app/public/uploads/{author}/{work}/{version}`.
 
-### `PublishFacsimileJob`
-- **Queue**: `facsimiles`
-- **Triggered by**: “Publier” action on a version.
-- **Task**: Copy processed images & manifests into the public tree (`variance/uploads/...`).
-
-*(Job class names for facsimiles may vary; inspect `laravel/app/Jobs` for the current list.)*
+Publication (`VersionController::publishFacsimiles`) runs synchronously – it copies processed images and manifests into the legacy tree without queuing extra jobs.
 
 ---
 

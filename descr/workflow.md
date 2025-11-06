@@ -54,7 +54,21 @@ markers into comparison outputs.
 
 ---
 
-## 3. Running Medite
+## 3. Facsimile Upload & Manifest Management
+
+1. **User action**  
+   Upload facsimile batches from the Versions card or use the manifest manager in the facsimile carousel to curate existing images.
+
+2. **Processing**  
+   `FacsimileController` dispatches `ProcessFacsimileImage` jobs on the `facsimiles` queue. Each job normalises filenames (`img_*` convention), generates thumbnails, and stores the assets under `storage/app/public/uploads/{author}/{work}/{version}` (mirrored for preview).
+
+3. **Manifest curation**  
+   The facsimile blade lists all comparisons for the selected version via `/api/versions/{version}/comparisons`. Saving a selection (`PUT /api/versions/{version}/manifests/{comparison}`) writes `images_{role}_{author--work--comparison}.json` alongside the images and updates the “JSON” badge in the comparisons table.
+
+4. **Events**  
+   Successive uploads/fire-and-save actions emit `facsimilesUploaded` and `comparisonManifestUpdated` browser events so the gallery and comparisons table stay in sync without a reload.
+
+## 4. Running Medite
 
 1. **User action**  
    Launch a comparison from the comparisons card (`Lancer Medite`).
@@ -78,7 +92,7 @@ markers into comparison outputs.
 
 ---
 
-## 4. Injecting Pagination Markers into Comparisons
+## 5. Injecting Pagination Markers into Comparisons
 
 1. **User action**  
    Click “Injecter la pagination” on a comparison row.
@@ -102,11 +116,21 @@ markers into comparison outputs.
 
 ---
 
-## 5. Optional Publication
+## 6. Downloading the Legacy Bundle
+
+The comparisons table exposes an “Exporter” button. Clicking it calls
+`GET /comparisons/{comparison}/export`, which bundles:
+
+- The published comparison directory (`public/uploads/{author}/{work}/{comparison_folder}`).
+- For each role, only the facsimile images referenced in the active manifest JSON, plus the manifest file itself.
+
+This produces a zip matching the legacy Variance folder layout without shipping unused images.
+
+## 7. Optional Publication
 
 When the comparison is ready, the user can publish the components (copies them
 to `public/uploads/{author}/{work}/{folder}`) via the “Publier” button. This step
-is independent of the pagination workflow.
+remains independent of pagination and export.
 
 ---
 
@@ -118,6 +142,7 @@ is independent of the pagination workflow.
   `php artisan queue:work --queue=facsimiles,page-markers`.  
 - Developers can also run `docker compose exec laravel php artisan queue:work
   --queue=page-markers` to process jobs manually.
+- Facsimile uploads trigger `ProcessFacsimileImage` jobs on the `facsimiles` queue; keep the worker running to see gallery updates.
 
 ---
 
@@ -129,10 +154,12 @@ is independent of the pagination workflow.
 | Generated TEI                   | `storage/app/public/uploads/versions/{folder}.xml`                |
 | `_lignes` raw file              | `storage/app/private/lignes/{version_id}.txt`                     |
 | Pagination sidecar JSON         | `storage/app/private/pagination/{version_id}.json`                |
+| Facsimile manifest JSON         | `storage/app/public/uploads/{author}/{work}/{version}/images_{role}_{author--work--comparison}.json` |
 | Version progress                | `storage/app/tmp/pager/{version_id}.json`                         |
 | Comparison progress             | `storage/app/tmp/pager/comparisons/{comparison_id}.json`          |
 | Comparison XHTML/TEI            | `storage/app/public/uploads/{author}/{work}/comparisons/{id}`     |
 | Published comparison (optional) | `public/uploads/{author}/{work}/{comparison_folder}`              |
+| Exported legacy zip             | Delivered via `/comparisons/{comparison}/export`                  |
 
 This flow keeps the canonical TEI untouched, stores pagination metadata as a
 sidecar, and applies markers to comparisons on demand so every run stays

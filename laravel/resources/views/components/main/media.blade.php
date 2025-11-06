@@ -1,7 +1,7 @@
 <!-- resources/views/components/main/media.blade.php -->
 <div class="card mb-3" id="media-panel">
   <div
-      class="media-toggle card-header text-uppercase fw-semibold d-flex justify-content-between align-items-center" 
+      class="media-toggle card-header fw-semibold d-flex justify-content-between align-items-center" 
       role="button"
       data-bs-toggle="collapse"
       data-bs-target="#mediaCollapse"
@@ -10,7 +10,7 @@
   >
     <div class="d-flex align-items-center gap-2">
       <span class="collapse-chevron" aria-hidden="true"></span>
-      <span>Médias d'accompagnement</span>
+      <span>Media</span>
     </div>
     <div class="d-flex align-items-center gap-2" id="media-status-pills">
       <span id="media-status-vignette" class="badge bg-danger-subtle text-danger media-status-pill"></span>

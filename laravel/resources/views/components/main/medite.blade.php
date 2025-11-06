@@ -1,6 +1,6 @@
 @php /** components/main/medite.blade.php **/ @endphp
 <div class="card">
-    <div class="card-header text-uppercase fw-semibold">Lancer Medite</div>
+    <div class="card-header fw-semibold">lancer medite</div>
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
             Choisissez deux versions et paramétrez Medite pour générer un alignement. Une fois le traitement terminé, les résultats alimentent la liste des comparaisons ci-dessous et la partie publique.

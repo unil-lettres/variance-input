@@ -120,6 +120,9 @@ Route::post('/api/comparisons/{comparison}/page-markers', [ComparisonController:
 // Comparisons
 Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
 Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->name('comparisons.destroy');
+Route::get('/comparisons/{comparison}/export', [ComparisonController::class, 'exportPublishedLegacy'])
+    ->middleware('auth')
+    ->name('comparisons.export');
 
 // Editor
 Route::get('/version/{version}/editor', [EditorController::class, 'versionEditor'])->middleware('auth')->name('version.editor');

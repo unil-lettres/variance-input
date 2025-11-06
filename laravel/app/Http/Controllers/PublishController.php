@@ -230,20 +230,25 @@ class PublishController extends Controller
                 continue;
             }
 
-            $entries = $this->collectManifestEntries($authorFolder, $workFolder, $versionFolder);
+            $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+            $filename    = sprintf('images_%s_%s.json', $type, $baseName);
+            $storagePath = "{$relativeDir}/{$filename}";
+
+            $entries = $this->loadExistingManifestEntries($storagePath);
+            if ($entries === null) {
+                $entries = $this->collectManifestEntries($authorFolder, $workFolder, $versionFolder);
+            }
             if (empty($entries)) {
                 continue;
             }
 
-            $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
-            $filename    = sprintf('images_%s_%s.json', $type, $baseName);
             $jsonPayload = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-            Storage::disk('public')->put("{$relativeDir}/{$filename}", $jsonPayload);
+            Storage::disk('public')->put($storagePath, $jsonPayload);
             $this->mirrorToLegacy($relativeDir, $filename, $jsonPayload);
 
             $manifests[$type] = [
-                'file'  => "{$relativeDir}/{$filename}",
+                'file'  => $storagePath,
                 'count' => count($entries),
             ];
         }
@@ -287,6 +292,27 @@ class PublishController extends Controller
                 @unlink($legacyFile);
             }
         }
+    }
+
+    private function loadExistingManifestEntries(string $relativePath): ?array
+    {
+        $disk = Storage::disk('public');
+        if ($disk->exists($relativePath)) {
+            $entries = json_decode($disk->get($relativePath), true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($entries)) {
+                return $entries;
+            }
+        }
+
+        $legacyPath = base_path('../variance/' . $relativePath);
+        if (is_file($legacyPath)) {
+            $entries = json_decode(File::get($legacyPath), true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($entries)) {
+                return $entries;
+            }
+        }
+
+        return null;
     }
 
     private function collectManifestEntries(string $authorFolder, string $workFolder, string $versionFolder): array

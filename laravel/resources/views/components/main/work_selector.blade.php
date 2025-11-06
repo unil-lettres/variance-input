@@ -1,7 +1,7 @@
 <!-- work_selector.blade.php -->
 
 <div class="card mb-3" id ="container-work-selector">
-    <div class="card-header text-uppercase fw-semibold">Sélection de l'oeuvre</div>
+    <div class="card-header fw-semibold">Oeuvre</div>
     <div class="card-body">
         <div class="row g-3 align-items-center">
             <!-- Author controls -->
