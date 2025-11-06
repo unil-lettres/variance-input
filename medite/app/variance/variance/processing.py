@@ -20,6 +20,7 @@ from variance.diff_core import (
 )
 from variance.tei_writer import (
     build_header, ops2xhtml, add_list_xml, add_list_xhtml, add_main_xhtml,
+    reset_numbering_state,
 )
 from variance.xhtml_writer import (
     write_xhtml_lists, write_xhtml_mains, saxon_transform,
@@ -87,6 +88,8 @@ def process(
     xhtml_mains: dict[str, list[str]] = defaultdict(list)
     zbody = ""  # diff‑annotated body will accumulate here
 
+    reset_numbering_state()
+
     # wrappers -----------------------------------------------------
     def add_list(z, start, end, attr, name, suffix):
         add_list_xml(ops2xml, z, start, end, attr, name)
@@ -105,7 +108,7 @@ def process(
             tag = z1.soup.new_tag("anchor", **{"xml:id": id1, "corresp": id2, "function": "bc"})
             txt = slice_fmt(z1, d.a_start, d.a_end)
             zbody += str(tag) + txt
-            add_main_xhtml(xhtml_mains, txt, "bc", "source", id1)
+            add_main_xhtml(xhtml_mains, txt, "bc", "source", id1, counterpart_id=id2)
 
         elif isinstance(d, S):
             tid = f"v1_{d.start}_{d.end}"
@@ -145,7 +148,14 @@ def process(
             else:
                 add_list(z1, d.start, d.end, {"target": id1}, kind, id1)
 
-            add_main_xhtml(xhtml_mains, txt, kind, "source", id1)
+            add_main_xhtml(
+                xhtml_mains,
+                txt,
+                kind,
+                "source",
+                id1,
+                counterpart_id=id2 if kind == "transpose" else None,
+            )
 
         elif isinstance(d, DB):
             zbody += str(z1.soup.new_tag("metamark", function="trans", target=f"v2_{d.start}_{d.end}"))
@@ -160,8 +170,14 @@ def process(
                                   target=src_id, corresp=tgt_id)
             txt_src = slice_fmt(z1, d.a_start, d.a_end)
             zbody += str(tag) + txt_src
-            add_main_xhtml(xhtml_mains, txt_src,
-                           "substitution", "source", src_id)
+            add_main_xhtml(
+                xhtml_mains,
+                txt_src,
+                "substitution",
+                "source",
+                src_id,
+                counterpart_id=tgt_id,
+            )
 
             # 2) Single list entry “old → new”
             txt_old = slice_fmt(z1, d.a_start, d.a_end).strip()
@@ -189,11 +205,20 @@ def process(
         elif isinstance(d, BC):
             tid = f"v2_{d.b_start}_{d.b_end}"
             txt = slice_fmt(z2, d.b_start, d.b_end)
-            add_main_xhtml(xhtml_mains, txt, "bc", "target", tid)
+            src_id = f"v1_{d.a_start}_{d.a_end}"
+            add_main_xhtml(xhtml_mains, txt, "bc", "target", tid, counterpart_id=src_id)
         elif isinstance(d, R):
             tid = f"v2_{d.b_start}_{d.b_end}"
             txt = slice_fmt(z2, d.b_start, d.b_end)
-            add_main_xhtml(xhtml_mains, txt, "substitution", "target", tid)
+            src_id = f"v1_{d.a_start}_{d.a_end}"
+            add_main_xhtml(
+                xhtml_mains,
+                txt,
+                "substitution",
+                "target",
+                tid,
+                counterpart_id=src_id,
+            )
 
     # --------------------------------------------------------------
     # 4. Serialize TEI diff + XHTML files

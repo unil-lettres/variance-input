@@ -13,8 +13,7 @@
 
 from __future__ import annotations
 import xml.etree.ElementTree as ET
-from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from variance.canon import newline
 from variance.io_helpers import Output
@@ -42,13 +41,39 @@ ops2xhtml: Dict[str, dict] = {
 #
 #   operation → desired XHTML‐ID prefix
 #
-_ID_PREFIX: Dict[str,str] = {
-    "deletion":     "as",   # “a” + “s” for suppression
-    "addition":     "ai",   # “a” + “i” for insertion
-    "transpose":    "ad",   # “a” + “d” for déplacé (moved)
-    "substitution": "ar",   # “a” + “r” for replaced
-    "bc":           "bc",   # best‐common block: keep “bc”
-}
+_ID_COUNTERS: Dict[str, int] = {name: 0 for name in ops2xhtml.keys()}
+_ID_MAP: Dict[str, Dict[str, int]] = {name: {} for name in ops2xhtml.keys()}
+
+
+def reset_numbering_state() -> None:
+    """
+    Reset ID counters so each comparison starts from 00000 again.
+    """
+    for name in _ID_COUNTERS:
+        _ID_COUNTERS[name] = 0
+        _ID_MAP[name].clear()
+
+
+def _next_index(name: str, tei_id: str, counterpart_id: Optional[str] = None) -> int:
+    """
+    Return the legacy sequential index for *tei_id*, sharing the same value
+    with *counterpart_id* when relevant (e.g. source ↔ target pairs).
+    """
+    mapping = _ID_MAP[name]
+    if tei_id in mapping:
+        return mapping[tei_id]
+
+    if counterpart_id and counterpart_id in mapping:
+        index = mapping[counterpart_id]
+    else:
+        index = _ID_COUNTERS[name]
+        _ID_COUNTERS[name] += 1
+
+    mapping[tei_id] = index
+    if counterpart_id:
+        mapping[counterpart_id] = index
+
+    return index
 
 
 # ----------------------------------------------------------------------
@@ -109,36 +134,47 @@ def add_list_xhtml(
     for a, b in (("\n", ""), ("<p/>", "\n"), ("<p>", ""), ("</p>", "\n"), ("</div>", "")):
         txt = txt.replace(a, b)
 
-    # 2) lookup static prefixes ---------------------------------------
+    # 2) build href / id / label using legacy numbering ----------------
     o = ops2xhtml[name]   # e.g. {"href":"#as", "id":"lbs", "file":"s"}
 
-    # 3) build href / id / label for each op-type ----------------------
+    link_classes = {
+        "addition": "sync",
+        "deletion": "sync",
+        "substitution": "sync sync-twice",
+        "transpose": "sync sync-twice",
+        "bc": "sync",
+    }
+
     if name == "substitution" and isinstance(id_suffix, tuple):
         src_id, tgt_id, label = id_suffix
-        href      = f"{o['href']}_{src_id},{o['href']}_{tgt_id}"  # "#ar_v1…, #ar_v2…"
-        lid       = f"{o['id']}_{src_id}"                         # "lbr_v1…"
+        index = _next_index(name, src_id, tgt_id)
+        num = f"{index:05d}"
+        href = f"#ar_{num}"
+        lid = f"lbr_{num}"
         link_text = label
 
     elif name == "transpose" and isinstance(id_suffix, tuple):
-        src_id, tgt_id, label = id_suffix
-        href      = f"{o['href']}_{src_id},{o['href']}_{tgt_id}"  # "#ar_v1…, #ar_v2…"
-        lid       = f"{o['id']}_{src_id}"                         # "lbr_v1…"
-        link_text = txt.strip()  # or use `label` if you want the arrow
-
-    elif name == "deletion":
-        # deletion list item must point to deletion‐span ids (“as_…”)
-        href      = f"#as_{id_suffix}"
-        lid       = f"lbs_{id_suffix}"
+        src_id, tgt_id, _label = id_suffix
+        index = _next_index(name, src_id, tgt_id)
+        num = f"{index:05d}"
+        href = f"#ad_{num}"
+        lid = f"lbd_{num}"
         link_text = txt.strip()
 
     else:
-        href      = f"{o['href']}_{id_suffix}"
-        lid       = f"{o['id']}_{id_suffix}"
+        tei_id: str
+        if isinstance(id_suffix, tuple):
+            tei_id = id_suffix[0]
+        else:
+            tei_id = id_suffix
+        index = _next_index(name, tei_id)
+        num = f"{index:05d}"
+        href = f"{o['href']}_{num}"
+        lid = f"{o['id']}_{num}"
         link_text = txt.strip()
 
-    # 4) store the ready-made <li> snippet ----------------------------
     xhtml_lists[name].append(
-        f'<li><a class="sync" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
+        f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
     )
 
 def add_main_xhtml(
@@ -147,13 +183,11 @@ def add_main_xhtml(
     name: str,
     main: str,
     id_suffix: str,
+    counterpart_id: Optional[str] = None,
 ) -> None:
     """
-    Inject the inline synced element into *xhtml_mains[main]*.
-
-    • deletions   →  <a  class="span_s sync sync-single"  …>
-    • additions   →  <span class="span_i sync sync-single" …>
-    • bc / substitution / transpose keep their earlier mapping.
+    Inject the inline synced element into *xhtml_mains[main]* using the legacy
+    “ac_00000” / “bc_00000” style identifiers.
     """
 
     # ── 1. clean snippet text ─────────────────────────────────────────
@@ -164,31 +198,52 @@ def add_main_xhtml(
     ):
         txt = txt.replace(a, b)
 
-    # ── 2. element + class to use for each op-type  ───────────────────
-    el, cls = {
-        "bc":           ("a",   "span_c sync sync-single"),
-        "deletion":     ("a",   "span_s sync sync-single"),
-        "substitution": ("a",   "sync sync-single span_r"),
-        "transpose":    ("a",   "sync sync-single span_d"),
-        "addition":     ("span","span_i sync sync-single"),
-    }[name]
+    index = _next_index(name, id_suffix, counterpart_id)
+    num = f"{index:05d}"
+    prefix_letter = "a" if main == "source" else "b"
 
-    # ── 3. build href / id  ───────────────────────────────────────────
-    o       = ops2xhtml[name]          # {'href':'#as', 'id':'lbs', …}
-    href    = f"{o['href']}_{id_suffix}"          # e.g. "#as_v1_142_154"
-    span_id = f"{o['href'].lstrip('#')}_{id_suffix}"  # "as_v1_142_154"
+    if name == "bc":
+        el = "a"
+        cls = "span_c sync sync-single"
+        if main == "source":
+            element_id = f"ac_{num}"
+            href = f"#bc_{num}"
+        else:
+            element_id = f"bc_{num}"
+            href = f"#ac_{num}"
+    elif name == "deletion":
+        el = "span"
+        cls = "span_s"
+        element_id = f"{prefix_letter}s_{num}"
+        href = None
+    elif name == "addition":
+        el = "span"
+        cls = "span_i"
+        element_id = f"{prefix_letter}i_{num}"
+        href = None
+    elif name == "substitution":
+        el = "a"
+        cls = "span_r sync sync-single"
+        if main == "source":
+            element_id = f"ar_{num}"
+            href = f"#br_{num}"
+        else:
+            element_id = f"br_{num}"
+            href = f"#ar_{num}"
+    elif name == "transpose":
+        el = "a"
+        cls = "span_d sync sync-single"
+        if main == "source":
+            element_id = f"ad_{num}"
+            href = f"#bd_{num}"
+        else:
+            element_id = f"bd_{num}"
+            href = f"#ad_{num}"
+    else:
+        raise ValueError(f"Unhandled operation type: {name}")
 
-    # 4) append final snippet
-    attrs = f' class="{cls}" href="{href}" id="{span_id}" data-tags=""'
+    attrs = [f'class="{cls}"', f'id="{element_id}"', 'data-tags=""']
+    if href:
+        attrs.insert(1, f'href="{href}"')
 
-    # ► add corresp when this element has a partner on the other side
-    if name in {"substitution", "transpose"}:
-        # partner sits on the *other* version → just switch the v1/v2 prefix
-        other_id = span_id.replace("v1_", "TMP_").replace("v2_", "v1_").replace("TMP_", "v2_")
-        attrs += f' corresp="{other_id}"'
-
-    xhtml_mains[main].append(f'<{el}{attrs}>{txt}</{el}>')
-
-
-
-
+    xhtml_mains[main].append(f'<{el} {" ".join(attrs)}>{txt}</{el}>')
