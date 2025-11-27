@@ -56,7 +56,7 @@ class ItalicTagWidget extends WidgetType {
     span.textContent = this.isOpening ? "⟨i⟩" : "⟨/i⟩";
     span.title = `Cliquez pour supprimer`;
     span.style.cursor = 'pointer';
-    
+
     const bootstrapLib = window.bootstrap;
     if (bootstrapLib) {
       this.tooltip = new bootstrapLib.Tooltip(span, {
@@ -121,7 +121,7 @@ class PageNumberWidget extends WidgetType {
     const i = document.createElement("i");
     i.className = 'bi bi-file-earmark mr-1';
     span.prepend(i);
-    
+
     const bootstrapLib = window.bootstrap;
     if (bootstrapLib) {
       this.tooltip = new bootstrapLib.Tooltip(span, {
@@ -143,7 +143,7 @@ class PageNumberWidget extends WidgetType {
         // Get current position from cache
         const cache = this.getCacheFunction(this.view);
         const pageNumberData = cache.pageNumberPositions.get(this.imageName);
-        
+
         if (!pageNumberData) return;
 
         const newPageNumber = prompt("Entrez le nouveau numéro de page, laissez vide pour le supprimer :", pageNumberData.content === '?' ? '' : pageNumberData.content);
@@ -177,7 +177,7 @@ class PageNumberWidget extends WidgetType {
         console.error('Error editing page number:', err);
       }
     });
-    
+
     return span;
   }
 
@@ -197,7 +197,7 @@ class PageNumberWidget extends WidgetType {
 const toggleTagVisibility = StateEffect.define();
 
 // State field to track whether tags should be hidden
-const hideTagsField = StateField.define({
+const createHideTagsField = (markerType) => StateField.define({
   create() {
     return false; // Start with tags VISIBLE for performance reasons
   },
@@ -217,7 +217,7 @@ const hideTagsField = StateField.define({
       const doc = view.state.doc;
       const text = doc.toString();
 
-      // Regex to match XML tags: <tag...> or </tag> or <tag/>
+      // Regex to match XML tags: <tag...> or </tag> or <tag/> or <pb ... pagination="123" />
       const tagRegex = /<\/?[a-zA-Z][^>]*\/?>/g;
       let match;
 
@@ -230,6 +230,37 @@ const hideTagsField = StateField.define({
         const originalTag = match[0];
         if (originalTag.match(/<em\s*>/i) || originalTag.match(/<\/em\s*>/i)) {
           continue;
+        }
+
+        // Handle <pb> tags with pagination attribute - hide parts around the number
+        if (markerType === 'pb' && tag.startsWith('<pb') && originalTag.includes('pagination="')) {
+             const paginationAttr = 'pagination="';
+             const paginationIndex = originalTag.indexOf(paginationAttr);
+
+             if (paginationIndex !== -1) {
+                 const prefixEnd = from + paginationIndex + paginationAttr.length;
+                 const suffixStart = text.indexOf('"', prefixEnd);
+
+                 if (suffixStart !== -1 && suffixStart < to) {
+                     // Hide the prefix: <pb ... pagination="
+                     widgets.push(
+                        Decoration.replace({
+                            widget: new InvisibleTagWidget(text.substring(from, prefixEnd)),
+                            inclusive: true
+                        }).range(from, prefixEnd)
+                     );
+
+                     // Hide the suffix: " ... />
+                     widgets.push(
+                        Decoration.replace({
+                            widget: new InvisibleTagWidget(text.substring(suffixStart, to)),
+                            inclusive: true
+                        }).range(suffixStart, to)
+                     );
+
+                     continue;
+                 }
+             }
         }
 
         // Handle <br> tags - replace with line break widget
@@ -274,14 +305,14 @@ const hideTagsField = StateField.define({
 // Helper function to parse page numbers from cache
 function parsePageNumbers(view, getCacheFunction) {
   const cache = getCacheFunction(view);
-  
+
   // Convert cache data to the format expected by widgets
   const pageNumbers = [];
   cache.markerPositions.forEach((markerData, imageName) => {
     const pageNumber = cache.pageNumbers.get(imageName);
     const tag = markerData.tag;
     const pos = markerData.pos;
-    
+
     pageNumbers.push({
       imageName: imageName,
       content: pageNumber,
@@ -289,7 +320,7 @@ function parsePageNumbers(view, getCacheFunction) {
       end: pos + tag.length
     });
   });
-  
+
   return pageNumbers;
 }
 
@@ -362,7 +393,9 @@ const createPageNumberPlugin = (getClickedCallback, getCacheFunction) => ViewPlu
   })
 });
 
-export default function (container, initialXml) {
+export default function (container, initialXml, markerType = 'span') {
+
+  const hideTagsField = createHideTagsField(markerType);
 
   // Create compartments for dynamic reconfiguration
   const readOnlyCompartment = new Compartment();
@@ -392,7 +425,7 @@ export default function (container, initialXml) {
 
   const ensureCacheUpdated = (viewInstance) => {
     if (!viewInstance || skipCacheUpdate) return;
-    
+
     const content = viewInstance.state.doc.toString();
 
     if (markerCache.content === content) {
@@ -406,12 +439,25 @@ export default function (container, initialXml) {
     markerCache.pageNumbers.clear();
     markerCache.pageNumberPositions.clear();
 
-    const regex = /<span class="page-marker" data-image-name="([^"]+)"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
+    let regex;
+    if (markerType === 'pb') {
+        regex = /<pb facs="([^"]+)" pagination="([^"]*)"\/>/g;
+    } else {
+        regex = /<span class="page-marker" data-image-name="([^"]+)"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
+    }
+
     let match;
 
     while ((match = regex.exec(content)) !== null) {
       const fullMatch = match[0];
-      const imageName = String(parseInt(match[1], 10));
+
+      let imageName;
+      if (markerType === 'pb') {
+          imageName = match[1];
+      } else {
+          imageName = String(parseInt(match[1], 10));
+      }
+
       const pageNumber = match[2];
       const tag = match[0];
       const pos = match.index;
@@ -425,12 +471,23 @@ export default function (container, initialXml) {
       if (!markerCache.markerPositions.has(imageName)) {
         markerCache.markerPositions.set(imageName, { tag, pos });
         markerCache.pageNumbers.set(imageName, pageNumber);
-        
-        const pageNumberTagStart = fullMatch.indexOf('<span class="page-number">');
-        const contentStart = pos + pageNumberTagStart + '<span class="page-number">'.length;
-        const contentEnd = contentStart + pageNumber.length;
-        
-        if (pageNumber.length > 0 && contentStart < contentEnd && contentEnd <= content.length) {
+
+        let contentStart, contentEnd;
+
+        if (markerType === 'pb') {
+             const paginationAttr = 'pagination="';
+             const paginationIndex = fullMatch.indexOf(paginationAttr);
+             if (paginationIndex !== -1) {
+                 contentStart = pos + paginationIndex + paginationAttr.length;
+                 contentEnd = contentStart + pageNumber.length;
+             }
+        } else {
+            const pageNumberTagStart = fullMatch.indexOf('<span class="page-number">');
+            contentStart = pos + pageNumberTagStart + '<span class="page-number">'.length;
+            contentEnd = contentStart + pageNumber.length;
+        }
+
+        if (contentStart !== undefined && pageNumber.length > 0 && contentStart < contentEnd && contentEnd <= content.length) {
           markerCache.pageNumberPositions.set(imageName, {
             content: pageNumber,
             start: contentStart,
@@ -440,7 +497,7 @@ export default function (container, initialXml) {
       }
     }
   };
-  
+
   const getCache = (viewInstance) => {
     ensureCacheUpdated(viewInstance);
     return markerCache;
@@ -529,7 +586,7 @@ export default function (container, initialXml) {
       ensureCacheUpdated(view);
       skipCacheUpdate = true;
     },
-    
+
     resumeEnsureCacheUpdate() {
       skipCacheUpdate = false;
       ensureCacheUpdated(view);
@@ -569,7 +626,12 @@ export default function (container, initialXml) {
       const { head } = view.state.selection.main;
 
       // Build the page marker tag
-      const pageMarkerTag = `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">${pageNumber}</span><img src="/img/settings/page_right.svg" /></span>`;
+      let pageMarkerTag;
+      if (markerType === 'pb') {
+          pageMarkerTag = `<pb facs="${imageName}" pagination="${pageNumber}"/>`;
+      } else {
+          pageMarkerTag = `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">${pageNumber}</span><img src="/img/settings/page_right.svg" /></span>`;
+      }
 
       if (!this.canInsertAtPosition(head)) {
         alert("Impossible de placer le marqueur de page dans une balise XML.");
@@ -591,11 +653,11 @@ export default function (container, initialXml) {
     canInsertAtPosition(pos) {
       const content = view.state.doc.toString();
       const beforePosition = content.substring(0, pos);
-      
+
       // Check if position is inside a tag (between < and >)
       const lastOpenBracket = beforePosition.lastIndexOf('<');
       const lastCloseBracket = beforePosition.lastIndexOf('>');
-      
+
       return lastOpenBracket <= lastCloseBracket;
     },
 
@@ -673,12 +735,12 @@ export default function (container, initialXml) {
     insertItalicOpenTag() {
       const { head } = view.state.selection.main;
       const openingTag = '<em>';
-      
+
       view.dispatch({
         changes: { from: head, insert: openingTag },
         selection: { anchor: head + openingTag.length }
       });
-      
+
       invalidateCache();
       view.focus();
     },
@@ -686,12 +748,12 @@ export default function (container, initialXml) {
     insertItalicCloseTag() {
       const { head } = view.state.selection.main;
       const closingTag = '</em>';
-      
+
       view.dispatch({
         changes: { from: head, insert: closingTag },
         selection: { anchor: head + closingTag.length }
       });
-      
+
       invalidateCache();
       view.focus();
     },
@@ -704,12 +766,12 @@ export default function (container, initialXml) {
       // Find all italic opening and all closing tags
       const openTagRegex = /<em\s*>/gi;
       const closeTagRegex = /<\/em\s*>/gi;
-      
+
       const openTags = [];
       const closeTags = [];
-      
+
       let match;
-      
+
       openTagRegex.lastIndex = 0;
       while ((match = openTagRegex.exec(content)) !== null) {
         openTags.push({
@@ -718,7 +780,7 @@ export default function (container, initialXml) {
           tag: match[0]
         });
       }
-      
+
       closeTagRegex.lastIndex = 0;
       while ((match = closeTagRegex.exec(content)) !== null) {
         closeTags.push({
@@ -746,49 +808,49 @@ export default function (container, initialXml) {
       // Process each opening tag with priority checks
       for (let i = 0; i < openTags.length; i++) {
         const openTag = openTags[i];
-        
+
         // Check 1 (priority): Tag inside XML tag
         const beforeTag = content.substring(0, openTag.pos);
         const lastOpenBracket = beforeTag.lastIndexOf('<');
         const lastCloseBracket = beforeTag.lastIndexOf('>');
-        
+
         if (lastOpenBracket > lastCloseBracket) {
           if (addError(openTag.pos, 'inside_tag', 'Balise italique d\'ouverture à l\'intérieur d\'une balise XML')) {
             continue; // Skip other checks for this tag
           }
         }
-        
+
         // Check 2: Nested tags
         if (i < openTags.length - 1) {
           const nextOpen = openTags[i + 1];
           const currentClose = closeTags[i];
-          
+
           if (currentClose && nextOpen.pos < currentClose.pos) {
             if (addError(nextOpen.pos, 'nested', 'Balises italiques imbriquées détectées')) {
               continue;
             }
           }
         }
-        
+
         // Check 3: Missing closing tag
         if (!closeTags[i]) {
           if (addError(openTag.pos, 'missing_close', 'Balise italique d\'ouverture sans balise de fermeture correspondante')) {
             continue;
           }
         }
-        
+
         // If we have a closing tag, check content
         if (closeTags[i]) {
           const closeTag = closeTags[i];
           const betweenTags = content.substring(openTag.end, closeTag.pos);
-          
+
           // Check 4: Contains other tags
           if (/<[^>]+>/g.test(betweenTags)) {
             if (addError(openTag.pos, 'contains_tags', 'Balise italique contient d\'autres balises (seul du texte est autorisé)')) {
               continue;
             }
           }
-          
+
           // Check 5: Empty tag
           const textOnly = betweenTags.replace(/<[^>]+>/g, '').trim();
           if (textOnly.length === 0) {
@@ -801,12 +863,12 @@ export default function (container, initialXml) {
       if (closeTags.length > openTags.length) {
         for (let i = openTags.length; i < closeTags.length; i++) {
           const closeTag = closeTags[i];
-          
+
           // Check if inside XML tag
           const beforeTag = content.substring(0, closeTag.pos);
           const lastOpenBracket = beforeTag.lastIndexOf('<');
           const lastCloseBracket = beforeTag.lastIndexOf('>');
-          
+
           if (lastOpenBracket > lastCloseBracket) {
             addError(closeTag.pos, 'inside_tag', 'Balise italique de fermeture à l\'intérieur d\'une balise XML');
           } else {

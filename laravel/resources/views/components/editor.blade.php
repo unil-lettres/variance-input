@@ -1,4 +1,4 @@
-@props(['xmlContent', 'imagesData', 'urlFileSave', 'canEdit'])
+@props(['xmlContent', 'imagesData', 'urlFileSave', 'canEdit', 'markerType' => 'span'])
 
 <div class="border border-top-0 p-3 row m-0 overflow-auto editor" style="height: calc(100vh - 200px);">
     <div class="col-md-6 col-12 order-last order-md-first h-100 d-flex flex-column">
@@ -73,7 +73,7 @@
                     <div class="col button-item" style="display: none;">
                         <button
                             class="h-100 w-100 btn btn-secondary btn-sm position-relative"
-                            data-tag="{{ $loop->iteration }}"
+                            data-tag="{{ $markerType === 'pb' ? $facsimile['filename'] : $loop->iteration }}"
                             data-img-src="{{ $facsimile['big'] }}"
                             {{ !$canEdit ? 'disabled' : '' }}
                         >
@@ -171,6 +171,7 @@
             xmlContent: @json($xmlContent),
             canEdit: {{ $canEdit ? 'true' : 'false' }},
             urlFileSave: @json($urlFileSave),
+            markerType: @json($markerType),
         };
     </script>
     @vite('resources/js/editor.js')

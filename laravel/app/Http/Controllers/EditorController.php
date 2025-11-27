@@ -28,11 +28,13 @@ class EditorController extends Controller
             'version' => $version,
             'xmlContent' => $xmlContent,
             'canEdit' => true,
-            'imagesData' => $version->collectManifestEntries(
-                $version->work->author->folder,
-                $version->work->folder,
-                $version->folder
-            ),
+            'imagesData' => array_map(function ($item) {
+                return [
+                    'small' => $item['small'],
+                    'big' => $item['big'],
+                    'filename' => basename($item['big']),
+                ];
+            }, $version->collectManifestEntries()),
             'urlFileSave' => admin_url($editorPath),
         ]);
     }
@@ -215,6 +217,7 @@ class EditorController extends Controller
             return [
                 'small' => admin_url(Storage::url(ltrim($item['small'], '/'))),
                 'big'   => admin_url(Storage::url(ltrim($item['big'], '/'))),
+                'filename' => basename($item['big']),
             ];
         }, $imagesData);
     }

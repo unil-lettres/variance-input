@@ -13,5 +13,6 @@
         :images-data="$imagesData"
         :url-file-save="$urlFileSave"
         :can-edit="$canEdit"
+        marker-type="pb"
     />
 @endsection
