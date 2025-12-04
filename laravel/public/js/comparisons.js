@@ -338,18 +338,44 @@ function initComparisonsTable() {
     });
     badges.appendChild(markersBadge);
 
-    const lignesBadge = (data.lignes_available ?? false)
-      ? createBadge({
-          text: '_lignes',
-          className: 'bg-success ms-1',
-          title: 'Fichier _lignes disponible'
-        })
-      : createBadge({
-          text: '_lignes manquant',
-          className: 'bg-warning text-dark ms-1',
-          title: 'Associez un fichier _lignes à cette version'
-        });
-    badges.appendChild(lignesBadge);
+    const sidecarInfo = data.sidecar && typeof data.sidecar === 'object' ? data.sidecar : {};
+    const origin = (sidecarInfo.details?.origin || sidecarInfo.origin || '').toLowerCase();
+    let originLabel = '';
+    let originClass = 'bg-warning text-dark ms-1';
+    let originTitle = '';
+    if (origin === 'pb-xhtml') {
+      originLabel = 'sidecar (pb)';
+      originClass = 'bg-info text-dark ms-1';
+      originTitle = 'Sidecar généré depuis les balises <pb> des fichiers XHTML';
+    } else if (origin === 'pb-tei') {
+      originLabel = 'sidecar (pb TEI)';
+      originClass = 'bg-info text-dark ms-1';
+      originTitle = 'Sidecar généré depuis les balises <pb> du TEI';
+    } else if (origin) {
+      originLabel = origin;
+      originClass = 'bg-info text-dark ms-1';
+    }
+
+    const hasLignesFile = data.lignes_available ?? false;
+    if (originLabel) {
+      badges.appendChild(createBadge({
+        text: originLabel,
+        className: originClass,
+        title: originTitle || 'Sidecar présent'
+      }));
+    } else if (hasLignesFile) {
+      badges.appendChild(createBadge({
+        text: '_lignes',
+        className: 'bg-success ms-1',
+        title: 'Fichier _lignes disponible'
+      }));
+    } else {
+      badges.appendChild(createBadge({
+        text: '_lignes manquant',
+        className: 'bg-warning text-dark ms-1',
+        title: 'Associez un fichier _lignes ou générez un sidecar'
+      }));
+    }
 
     const manifestBadgeWrapper = document.createElement('span');
     manifestBadgeWrapper.className = 'manifest-badge-wrapper';
@@ -484,6 +510,26 @@ function initComparisonsTable() {
     btnGroup.className = 'd-flex gap-2 mt-2 flex-wrap';
     container.appendChild(btnGroup);
 
+    const lignesInputId = `cmp-${comp.id}-${role}-lignes`;
+    const lignesInput = document.createElement('input');
+    lignesInput.type = 'file';
+    lignesInput.accept = '.txt,text/plain';
+    lignesInput.id = lignesInputId;
+    lignesInput.style.display = 'none';
+    container.appendChild(lignesInput);
+
+    const uploadLignesBtn = document.createElement('button');
+    uploadLignesBtn.type = 'button';
+    uploadLignesBtn.className = 'btn btn-sm btn-outline-primary';
+    uploadLignesBtn.textContent = 'Importer _lignes';
+    btnGroup.appendChild(uploadLignesBtn);
+
+    const buildSidecarBtn = document.createElement('button');
+    buildSidecarBtn.type = 'button';
+    buildSidecarBtn.className = 'btn btn-sm btn-outline-primary';
+    buildSidecarBtn.textContent = 'Créer le sidecar (pb)';
+    btnGroup.appendChild(buildSidecarBtn);
+
     const runBtn = document.createElement('button');
     runBtn.type = 'button';
     runBtn.className = 'btn btn-sm btn-outline-secondary';
@@ -506,10 +552,10 @@ function initComparisonsTable() {
     const statusRef = { role, statusEl, label: versionName, cancelBtn };
     registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
 
-    const hasLignes = data.lignes_available ?? false;
-    if (!hasLignes) {
+    const hasSidecar = data.lignes_available ?? false;
+    if (!hasSidecar) {
       runBtn.disabled = true;
-      feedback.textContent = 'Associez un fichier _lignes à cette version.';
+      feedback.textContent = 'Associez un fichier _lignes ou générez le sidecar depuis les balises <pb>.';
     }
 
     const currentRoleStatus = normalizeStatus(
@@ -530,6 +576,75 @@ function initComparisonsTable() {
         button: runBtn,
         feedback,
         statusRefs: [statusRef]
+      });
+    });
+
+    uploadLignesBtn.addEventListener('click', () => {
+      lignesInput.value = '';
+      lignesInput.click();
+    });
+
+    lignesInput.addEventListener('change', async () => {
+      if (!lignesInput.files || !lignesInput.files.length) return;
+      const file = lignesInput.files[0];
+      const versionId = role === 'source' ? comp.source_id : comp.target_id;
+      if (!versionId) {
+        alert('Version introuvable pour cette comparaison.');
+        return;
+      }
+      uploadLignesBtn.disabled = true;
+      uploadLignesBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      if (feedback) {
+        feedback.textContent = 'Envoi du fichier _lignes…';
+      }
+      try {
+        const fd = new FormData();
+        fd.append('lignes', file);
+        const res = await fetch(withBasePath(`/api/versions/${versionId}/lignes`), {
+          method: 'POST',
+          headers: {
+            ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+          },
+          body: fd
+        });
+        const text = await res.text();
+        let payload = {};
+        try { payload = JSON.parse(text); } catch { payload = { raw: text }; }
+        if (!res.ok) {
+          const msg = payload.message || payload.error || payload.raw || `HTTP ${res.status}`;
+          throw new Error(msg);
+        }
+        if (feedback) {
+          feedback.textContent = payload.message || 'Fichier _lignes importé, traitement en cours…';
+        }
+        runBtn.disabled = false;
+        // refresh table after a short delay to reflect new sidecar status
+        setTimeout(() => {
+          if (typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
+            loadComparisons(currentWorkId);
+          }
+        }, 800);
+      } catch (err) {
+        console.error('Upload _lignes failed', err);
+        alert(err.message || 'Impossible d’importer le fichier _lignes.');
+        if (feedback) {
+          feedback.textContent = `Erreur _lignes : ${err.message || 'échec'}`;
+        }
+      } finally {
+        uploadLignesBtn.disabled = false;
+        uploadLignesBtn.textContent = 'Importer _lignes';
+      }
+    });
+
+    buildSidecarBtn.addEventListener('click', () => {
+      buildSidecarFromXhtml(comp, {
+        role,
+        button: buildSidecarBtn,
+        feedback,
+        onSuccess: () => {
+          runBtn.disabled = false;
+          feedback.textContent = 'Sidecar généré. Vous pouvez injecter la pagination.';
+        }
       });
     });
 
@@ -692,6 +807,57 @@ function initComparisonsTable() {
     }
   }
 
+  async function buildSidecarFromXhtml(comp, { role = null, button, feedback, onSuccess } = {}) {
+    const originalLabel = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+    if (feedback) {
+      feedback.textContent = 'Génération du sidecar depuis les balises <pb>…';
+    }
+
+    try {
+      const payload = role ? { role } : {};
+      const res = await fetch(withBasePath(`/api/comparisons/${comp.id}/pagination/from-xhtml`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await res.text();
+      let responsePayload = {};
+      try { responsePayload = JSON.parse(text); } catch { responsePayload = { raw: text }; }
+
+      if (!res.ok) {
+        const message = responsePayload.message || responsePayload.error || responsePayload.raw || `HTTP ${res.status}`;
+        throw new Error(message);
+      }
+
+      if (feedback) {
+        feedback.textContent = responsePayload.message || 'Sidecar généré depuis le XHTML.';
+      }
+      if (typeof onSuccess === 'function') {
+        onSuccess(responsePayload);
+      }
+    } catch (err) {
+      console.error('Sidecar generation failed', err);
+      if (feedback) {
+        feedback.textContent = `Erreur lors de la génération du sidecar : ${err.message}`;
+      }
+      alert(err.message || 'Impossible de générer le sidecar.');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel || 'Créer le sidecar (pb)';
+      }
+    }
+  }
+
   async function restoreComparisonPagination(comp, { role = null, button, feedback, statusRefs }) {
     const lockKey = role ? `restore-${comp.id}-${role}` : `restore-${comp.id}`;
     if (paginationLocks.has(lockKey)) return;
@@ -751,6 +917,11 @@ function initComparisonsTable() {
         const cancelBtn = statusEl.__cancelBtn;
         if (cancelBtn) cancelBtn.disabled = true;
       });
+
+      // Refresh comparison list so pagination marker counts / availability reflect restored state
+      if (typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
+        loadComparisons(currentWorkId);
+      }
     } catch (err) {
       console.error('Erreur restauration pagination', err);
       if (feedback) {

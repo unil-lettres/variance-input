@@ -832,6 +832,276 @@ class PageMarkerService
         return 0;
     }
 
+    /** Count <pb> markers inside the TEI version. */
+    public function countPbMarkers(Version $version): int
+    {
+        $contents = $this->readVersionXml($version);
+        if ($contents === null) {
+            return 0;
+        }
+
+        return preg_match_all('/<pb\b[^>]*>/i', $contents, $matches) ?: 0;
+    }
+
+    /**
+     * Generate a pagination sidecar from inline <pb> tags found in the TEI.
+     * Uses the character index in the stripped plaintext as the insertion point.
+     *
+     * @return array{count:int,relative:string}
+     */
+    public function createSidecarFromPb(Version $version): array
+    {
+        $contents = $this->readVersionXml($version);
+        if ($contents === null) {
+            return ['count' => 0, 'relative' => $this->paginationRelativePath($version->id)];
+        }
+
+        $markers = $this->extractPbMarkers($contents);
+        $relative = $this->paginationRelativePath($version->id);
+
+        $payload = [
+            'version_id'   => $version->id,
+            'version_folder' => $version->folder,
+            'work_id'      => $version->work_id,
+            'marker_count' => count($markers),
+            'markers'      => $markers,
+            'origin'       => 'pb-tei',
+            'generated_at' => time(),
+        ];
+
+        Storage::disk('local')->put($relative, json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        return ['count' => count($markers), 'relative' => $relative];
+    }
+
+    /**
+     * Read the TEI XML for a version.
+     */
+    private function readVersionXml(Version $version): ?string
+    {
+        $candidates = [
+            storage_path("app/public/uploads/versions/{$version->folder}.xml"),
+            public_path("uploads/versions/{$version->folder}.xml"),
+            base_path("../variance/uploads/versions/{$version->folder}.xml"),
+        ];
+
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                $contents = @file_get_contents($path);
+                if ($contents !== false && $contents !== '') {
+                    return $contents;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Turn inline <pb> nodes into pagination entries with char_index/image/page.
+     *
+     * @param string $contents TEI XML
+     * @return array<int, array{char_index:int,image?:string,page?:string}>
+     */
+    private function extractPbMarkers(string $contents): array
+    {
+        // Ignore the header so offsets line up with Medite XHTML (which never includes teiHeader).
+        $contents = $this->stripTeiHeader($contents);
+
+        // Build the plaintext shadow + offset map to compute char_index the same way insertion does.
+        [, $map] = $this->buildIndexedPlaintext($contents);
+
+        $markers = [];
+        $mapIndex = 0;
+        $offset = 0;
+        $pattern = '/<pb\b[^>]*>/i';
+
+        while (preg_match($pattern, $contents, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            $tag = $match[0][0];
+            $pos = $match[0][1];
+
+            // Advance through the map to find the plaintext index that corresponds to this tag position.
+            $mapCount = count($map);
+            while ($mapIndex < $mapCount && $map[$mapIndex] < $pos) {
+                $mapIndex++;
+            }
+
+            $attrs = $this->parsePbAttributes($tag);
+            $entry = ['char_index' => $mapIndex];
+            if (!empty($attrs['facs'])) {
+                $entry['image'] = $attrs['facs'];
+            }
+            if (!empty($attrs['pagination'])) {
+                $entry['page'] = $attrs['pagination'];
+            } elseif (!empty($attrs['n'])) {
+                $entry['page'] = $attrs['n'];
+            }
+
+            $markers[] = $entry;
+            $offset = $pos + strlen($tag);
+        }
+
+        return $markers;
+    }
+
+    /**
+     * Remove the <teiHeader> block to align offsets with comparison XHTML content.
+     */
+    private function stripTeiHeader(string $contents): string
+    {
+        $stripped = preg_replace('~<teiHeader.*?</teiHeader>~is', '', $contents);
+        return $stripped ?? $contents;
+    }
+
+    /**
+     * Build a pagination sidecar from the pb tags present in comparison XHTML
+     * files (source.xhtml / target.xhtml). This aligns char_index with the
+     * Medite-normalized text that will receive the pagination spans.
+     *
+     * @return array{status:string,details:array}
+     */
+    public function createSidecarFromComparisonOutputs(Comparison $comparison, ?string $role = null): array
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $roles = [
+            'source' => $comparison->sourceVersion,
+            'target' => $comparison->targetVersion,
+        ];
+
+        if ($role !== null) {
+            $role = strtolower($role);
+            if (!array_key_exists($role, $roles)) {
+                return [
+                    'status'  => 'error',
+                    'details' => [['role' => $role, 'message' => 'Rôle invalide']],
+                ];
+            }
+            $roles = [$role => $roles[$role]];
+        }
+
+        $details = [];
+
+        foreach ($roles as $r => $version) {
+            if (!$version || !$version->work || !$version->work->author) {
+                $details[] = ['role' => $r, 'status' => 'missing', 'message' => 'Version ou dossier auteur/œuvre manquant'];
+                continue;
+            }
+
+            $fileName = $r === 'source' ? 'source.xhtml' : 'target.xhtml';
+            $paths    = $this->candidatePaths($version->work->author->folder, $version->work->folder, $comparison, $fileName);
+            $existing = array_values(array_filter($paths, static fn ($p) => is_file($p)));
+            if (empty($existing)) {
+                $details[] = ['role' => $r, 'status' => 'missing', 'message' => "Fichier {$fileName} introuvable"];
+                continue;
+            }
+
+            $contents = file_get_contents($existing[0]);
+            if ($contents === false || $contents === '') {
+                $details[] = ['role' => $r, 'status' => 'missing', 'message' => "Impossible de lire {$fileName}"];
+                continue;
+            }
+
+            $markers = $this->extractPbMarkersFromHtml($contents);
+            $relative = $this->paginationRelativePath($version->id);
+
+            $payload = [
+                'version_id'     => $version->id,
+                'version_folder' => $version->folder,
+                'work_id'        => $version->work_id,
+                'comparison_id'  => $comparison->id,
+                'role'           => $r,
+                'marker_count'   => count($markers),
+                'markers'        => $markers,
+                'origin'         => 'pb-xhtml',
+                'generated_at'   => time(),
+            ];
+
+            Storage::disk('local')->put(
+                $relative,
+                json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            );
+
+            $details[] = [
+                'role'   => $r,
+                'status' => 'ok',
+                'count'  => count($markers),
+                'path'   => $relative,
+            ];
+        }
+
+        $allOk = !empty($details) && collect($details)->every(fn ($d) => ($d['status'] ?? '') === 'ok');
+
+        return [
+            'status'  => $allOk ? 'ok' : 'partial',
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Extract pb markers from XHTML/HTML and compute char_index using the
+     * plaintext map produced by buildIndexedPlaintext.
+     *
+     * @return array<int, array{char_index:int,image?:string,page?:string}>
+     */
+    private function extractPbMarkersFromHtml(string $contents): array
+    {
+        [$shadow, $map] = $this->buildIndexedPlaintext($contents);
+        $mapCount = count($map);
+
+        $markers = [];
+        $pattern = '/<pb\b[^>]*>/i';
+        $offset = 0;
+
+        while (preg_match($pattern, $contents, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            $tag = $match[0][0];
+            $pos = $match[0][1];
+
+            $mapIndex = 0;
+            while ($mapIndex < $mapCount && $map[$mapIndex] < $pos) {
+                $mapIndex++;
+            }
+            if ($mapIndex >= $mapCount) {
+                $mapIndex = $mapCount > 0 ? $mapCount - 1 : 0;
+            }
+
+            $attrs = $this->parsePbAttributes($tag);
+            $entry = ['char_index' => $mapIndex];
+            if (!empty($attrs['facs'])) {
+                $entry['image'] = $attrs['facs'];
+            }
+            if (!empty($attrs['pagination'])) {
+                $entry['page'] = $attrs['pagination'];
+            } elseif (!empty($attrs['n'])) {
+                $entry['page'] = $attrs['n'];
+            }
+
+            $markers[] = $entry;
+            $offset = $pos + strlen($tag);
+        }
+
+        return $markers;
+    }
+
+    /**
+     * Extract facs/pagination/n attributes from a <pb> tag.
+     */
+    private function parsePbAttributes(string $tag): array
+    {
+        $attrs = [];
+        if (preg_match('/\bfacs\s*=\s*["\']([^"\']+)["\']/i', $tag, $m)) {
+            $attrs['facs'] = $m[1];
+        }
+        if (preg_match('/\bpagination\s*=\s*["\']([^"\']+)["\']/i', $tag, $m)) {
+            $attrs['pagination'] = $m[1];
+        }
+        if (preg_match('/\bn\s*=\s*["\']([^"\']+)["\']/i', $tag, $m)) {
+            $attrs['n'] = $m[1];
+        }
+
+        return $attrs;
+    }
+
     private function candidatePaths(string $authorFolder, string $workFolder, Comparison $comparison, string $fileName, bool $preferPublished = false): array
     {
         $baseComparison = "uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}";
@@ -1211,12 +1481,21 @@ class PageMarkerService
 
     private function normalizeImageCode(array $marker): ?string
     {
+        $raw = null;
         if (isset($marker['image_code'])) {
-            $code = preg_replace('/\D/', '', (string) $marker['image_code']);
+            $raw = (string) $marker['image_code'];
         } elseif (isset($marker['image'])) {
-            $code = preg_replace('/\D/', '', (string) $marker['image']);
-        } else {
+            $raw = (string) $marker['image'];
+        }
+        if ($raw === null || $raw === '') {
             return null;
+        }
+
+        // Prefer the trailing numeric chunk (e.g., img_1pbp_003.jpg => 003)
+        if (preg_match('/(\d{1,4})(?!.*\d)/', $raw, $m)) {
+            $code = $m[1];
+        } else {
+            $code = preg_replace('/\D/', '', $raw);
         }
 
         if ($code === null || $code === '') {
@@ -2119,6 +2398,18 @@ class PageMarkerService
         $this->progress['updated_at'] = time();
         $this->progress['summary'] = $summary;
         $this->progress['updated_at'] = time();
+        if ($this->progressVersionId) {
+            $sidecar = $this->getPaginationInfo($this->progressVersionId);
+            if ($sidecar) {
+                $this->progress['sidecar'] = [
+                    'path'         => $sidecar['path'] ?? null,
+                    'updated_at'   => $sidecar['updated_at'] ?? null,
+                    'size'         => $sidecar['size'] ?? null,
+                    'marker_count' => $sidecar['details']['marker_count'] ?? null,
+                    'missed_count' => $sidecar['details']['missed_count'] ?? null,
+                ];
+            }
+        }
         $this->writeProgress();
         if ($this->progressVersionId) {
             $this->clearCancellation($this->progressVersionId);
@@ -2164,6 +2455,7 @@ class PageMarkerService
             'path'       => $relative,
             'updated_at' => Storage::disk('local')->lastModified($relative),
             'size'       => Storage::disk('local')->size($relative),
+            'line_count' => $this->countFileLines($relative),
         ];
     }
 
@@ -2182,6 +2474,7 @@ class PageMarkerService
                 'marker_count' => (int) ($decoded['marker_count'] ?? 0),
                 'missed_count' => (int) ($decoded['missed_count'] ?? 0),
                 'generated_at' => (int) ($decoded['generated_at'] ?? 0),
+                'origin'       => $decoded['origin'] ?? null,
             ];
         } catch (\Throwable $e) {
             $details = null;
@@ -2224,6 +2517,11 @@ class PageMarkerService
         return Storage::disk('local')->exists($this->lignesRelativePath($versionId));
     }
 
+    public function hasPaginationSidecar(int $versionId): bool
+    {
+        return Storage::disk('local')->exists($this->paginationRelativePath($versionId));
+    }
+
     public function getStoredLignesAbsolutePath(int $versionId): ?string
     {
         $relative = $this->lignesRelativePath($versionId);
@@ -2236,6 +2534,39 @@ class PageMarkerService
     public function lignesRelativePath(int $versionId): string
     {
         return "private/lignes/{$versionId}.txt";
+    }
+
+    private function countFileLines(string $relative): int
+    {
+        $disk = Storage::disk('local');
+        $absolute = $disk->path($relative);
+        if (!is_readable($absolute)) {
+            return 0;
+        }
+
+        $handle = @fopen($absolute, 'rb');
+        if ($handle === false) {
+            return 0;
+        }
+
+        $count = 0;
+        try {
+            while (!feof($handle)) {
+                $chunk = fread($handle, 64 * 1024);
+                if ($chunk === false) {
+                    break;
+                }
+                $count += substr_count($chunk, "\n");
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        if ($count === 0 && filesize($absolute) > 0) {
+            return 1;
+        }
+
+        return $count;
     }
 
     public function paginationRelativePath(int $versionId): string
@@ -2272,8 +2603,9 @@ class PageMarkerService
                 $comparison,
                 'source'
             );
-            $result['source']['lignes_available'] = $this->hasLignesFile($sourceVersion->id);
+            $result['source']['lignes_available'] = $this->hasLignesFile($sourceVersion->id) || $this->hasPaginationSidecar($sourceVersion->id);
             $result['source']['lignes']           = $this->getLignesInfo($sourceVersion->id);
+            $result['source']['sidecar']          = $this->getPaginationInfo($sourceVersion->id);
             $result['source']['progress']         = $this->getProgressSnapshot($sourceVersion->id);
         }
 
@@ -2284,8 +2616,9 @@ class PageMarkerService
                 $comparison,
                 'target'
             );
-            $result['target']['lignes_available'] = $this->hasLignesFile($targetVersion->id);
+            $result['target']['lignes_available'] = $this->hasLignesFile($targetVersion->id) || $this->hasPaginationSidecar($targetVersion->id);
             $result['target']['lignes']           = $this->getLignesInfo($targetVersion->id);
+            $result['target']['sidecar']          = $this->getPaginationInfo($targetVersion->id);
             $result['target']['progress']         = $this->getProgressSnapshot($targetVersion->id);
         }
 

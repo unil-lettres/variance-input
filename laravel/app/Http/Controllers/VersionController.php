@@ -16,6 +16,8 @@ use App\Services\PageMarkerService;
 
 class VersionController extends Controller
 {
+    private const INLINE_TAG_WHITELIST = ['pb'];
+
     public function __construct(private PageMarkerService $pageMarkerService)
     {
     }
@@ -44,6 +46,7 @@ class VersionController extends Controller
                     'name'       => $version->name,
                     'folder'     => $version->folder,
                     'work_id'    => $version->work_id,
+                    'pb_markers' => $this->pageMarkerService->countPbMarkers($version),
                     'facsimiles' => $this->facsimileStatus($version),
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
                     'page_marker_progress' => $this->pageMarkerService->getProgressSnapshot($version->id),
@@ -87,6 +90,7 @@ class VersionController extends Controller
         $lines        = explode("\n", $utf8);
         $escapedLines = array_map(fn($l) => htmlspecialchars($l, ENT_XML1 | ENT_COMPAT, 'UTF-8'), $lines);
         $bodyWithLb   = implode("\n          <lb/>\n", $escapedLines);
+        $bodyWithLb   = $this->restoreInlineTags($bodyWithLb, self::INLINE_TAG_WHITELIST);
 
         /* 6. TEI skeleton */
         $xmlId = 'v' . $nextNumber . preg_replace('/[^A-Za-z0-9]/', '', strtolower($shortTitle));
@@ -581,6 +585,39 @@ class VersionController extends Controller
         ]);
     }
 
+    public function paginationInfo(Version $version)
+    {
+        $info = $this->pageMarkerService->getPaginationInfo($version->id);
+        if (!$info) {
+            return response()->json([
+                'status'     => 'missing',
+                'version_id' => $version->id,
+            ], 404);
+        }
+
+        return response()->json($info + ['version_id' => $version->id], 200);
+    }
+
+    /** Build pagination sidecar from <pb> tags present in the version TEI. */
+    public function createPaginationFromPb(Version $version): JsonResponse
+    {
+        $result = $this->pageMarkerService->createSidecarFromPb($version);
+
+        if ($result['count'] === 0) {
+            return response()->json([
+                'status'  => 'empty',
+                'message' => 'Aucune balise <pb> trouvée dans cette version.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status'     => 'ok',
+            'count'      => $result['count'],
+            'relative'   => $result['relative'],
+            'version_id' => $version->id,
+        ], 200);
+    }
+
     /* ──────────────────────────── HELPERS ──────────────────────────── */
 
     /** Detect + convert arbitrary bytes to UTF‑8 LF */
@@ -602,7 +639,7 @@ class VersionController extends Controller
         return str_replace(["\r\n", "\r"], "\n", $utf8);
     }
 
-    /** Unicode tidy‑up (subset of original txt2tei.py) */
+    /** Unicode tidy-up (subset of original txt2tei.py) */
     private function normalizeCharacters(string $txt): string
     {
         return str_replace([
@@ -739,6 +776,28 @@ class VersionController extends Controller
         $versionFolder = $version->folder ?? '';
 
         return trim(sprintf('facsimile_queue/%s/%s/%s', $authorFolder, $workFolder, $versionFolder), '/');
+    }
+
+    /**
+     * Re-introduce whitelisted inline tags (e.g. <pb/>) that were escaped when
+     * generating the TEI body. Keeps the rest of the text entity-encoded to
+     * avoid arbitrary markup from uploads.
+     *
+     * @param  string $text
+     * @param  array<int, string> $allowedTags
+     */
+    private function restoreInlineTags(string $text, array $allowedTags): string
+    {
+        if (empty($allowedTags)) {
+            return $text;
+        }
+
+        $alternation = implode('|', array_map(static fn ($tag) => preg_quote($tag, '/'), $allowedTags));
+        $pattern = '/&lt;\/?(?:' . $alternation . ')(?:\s+.*?)?\/?&gt;/si';
+
+        return preg_replace_callback($pattern, static function ($match) {
+            return html_entity_decode($match[0], ENT_QUOTES | ENT_XML1, 'UTF-8');
+        }, $text);
     }
 
     private function publishManifestsForVersion(Version $version): array

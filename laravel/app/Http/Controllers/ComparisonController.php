@@ -316,6 +316,36 @@ class ComparisonController extends Controller
         ], 202);
     }
 
+    /**
+     * Build pagination sidecar(s) from pb tags present in comparison XHTML outputs.
+     */
+    public function buildPaginationFromXhtml(Request $request, Comparison $comparison)
+    {
+        $validated = $request->validate([
+            'role' => 'nullable|in:source,target',
+        ]);
+
+        $role = $validated['role'] ?? null;
+
+        $result = $this->pageMarkerService->createSidecarFromComparisonOutputs($comparison, $role);
+        $details = $result['details'] ?? [];
+
+        $okDetails = array_values(array_filter($details, fn ($d) => ($d['status'] ?? '') === 'ok'));
+        if (empty($okDetails)) {
+            return response()->json([
+                'status'  => 'error',
+                'details' => $details,
+                'message' => 'Impossible de générer le sidecar depuis les fichiers XHTML.',
+            ], 422);
+        }
+
+        return response()->json([
+            'status'  => $result['status'] ?? 'ok',
+            'details' => $details,
+            'message' => 'Sidecar généré à partir des fichiers comparison XHTML.',
+        ], 200);
+    }
+
     public function pageMarkersProgress(Comparison $comparison)
     {
         $snapshot = $this->pageMarkerService->getComparisonProgressSnapshot($comparison->id);

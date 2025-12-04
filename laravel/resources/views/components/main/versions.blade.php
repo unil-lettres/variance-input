@@ -15,7 +15,7 @@
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
-            Les versions textuelles alimentent Medite ainsi que la partie publique, où les lecteurs peuvent consulter les différentes éditions.
+            Les versions textuelles alimentent Medite. Ajoutez vos balises <code>&lt;pb&gt;</code> via l’éditeur (icône crayon) puis gérez toute la pagination (sidecar, injection, restauration) depuis le tableau des comparaisons. Pour les fac-similés, le bouton «&nbsp;Téléverser&nbsp;» importe l’ensemble des images; l’onglet Fac-similés permet ensuite de choisir, par comparaison, le sous-ensemble publié (manifeste JSON).
         </p>
 
         <!-- ────────────── Versions list  ────────────── -->
@@ -327,9 +327,19 @@ async function requestLignesProgress(versionId){
         const data = await res.json();
         const cached = versionsCache.get(id) ?? {};
         cached.page_marker_progress = data;
+        let paginationInfo = cached.pagination ?? null;
+        if (data?.sidecar) {
+            paginationInfo = data.sidecar;
+            cached.pagination = paginationInfo;
+        } else if (data?.status === 'done') {
+            const refreshed = await refreshPaginationInfo(id);
+            if (refreshed) {
+                paginationInfo = refreshed;
+            }
+        }
         versionsCache.set(id, cached);
         const lignesInfo = cached.lignes ?? null;
-        renderLignesStatus(id, lignesInfo, data);
+        renderLignesStatus(id, lignesInfo, data, paginationInfo);
         const status = data?.status || 'idle';
         if (['idle', 'done', 'failed'].includes(status)) {
             stopLignesPolling(id);
@@ -348,6 +358,30 @@ function ensureLignesPolling(versionId, { immediate = false } = {}){
     }
     if (immediate) {
         requestLignesProgress(id);
+    }
+}
+
+async function refreshPaginationInfo(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return null;
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/pagination-info?ts=${Date.now()}`), {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        if (!res.ok) {
+            return null;
+        }
+        const data = await res.json();
+        const cached = versionsCache.get(id) ?? {};
+        cached.pagination = data;
+        versionsCache.set(id, cached);
+        return data;
+    } catch (err) {
+        console.error('Could not refresh pagination info', err);
+        return null;
     }
 }
 
@@ -469,12 +503,13 @@ function renderFacsimileStatus(versionId, facsimileData){
     }
 }
 
-function renderLignesStatus(versionId, lignesInfo, progress){
+function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = null){
     const id = Number(versionId);
     const state = facsimileRowState.get(id);
     if (!state) return;
 
     const hasFile = lignesInfo && typeof lignesInfo === 'object';
+    const hasSidecar = paginationInfo && typeof paginationInfo === 'object';
     const progressData = progress ?? null;
     const status = progressData?.status ?? null;
     const stage = progressData?.stage ?? null;
@@ -486,39 +521,57 @@ function renderLignesStatus(versionId, lignesInfo, progress){
     const processed = Math.max(processedTotal, srcProcessed, tgtProcessed);
     const comparisonTotal = Number(progressData?.comparison_total ?? 0);
     const comparisonCurrent = Number(progressData?.comparison_current ?? 0);
+    const lineCount = Number(lignesInfo?.line_count ?? 0);
+    const linesLabel = Number.isFinite(lineCount) && lineCount > 0
+        ? `${lineCount.toLocaleString('fr-FR')} ligne${lineCount > 1 ? 's' : ''}`
+        : null;
     let message = '';
     let cssClass = 'small text-muted';
+    const showSpinner = () => {
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+    };
+    const hideSpinner = () => {
+        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+    };
 
     if (stage === 'queued' || status === 'queued') {
         message = '🕓 Pagination en attente de traitement…';
         cssClass = `${baseClass} text-info`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+        showSpinner();
     } else if (stage === 'preparing') {
         message = '🔧 Création du sidecar pagination…';
         cssClass = `${baseClass} text-info`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+        showSpinner();
     } else if (status === 'running') {
-        message = '🛠️ Analyse des marqueurs…';
+        const markersTotal = totalEntries || lineCount || null;
+        const processedMarkers = processed > 0 ? processed : (srcProcessed || tgtProcessed || null);
+        const progressLabel = markersTotal
+            ? ` (${(processedMarkers ?? 0).toLocaleString('fr-FR')}/${markersTotal.toLocaleString('fr-FR')} lignes)`
+            : (processedMarkers
+                ? ` (${processedMarkers.toLocaleString('fr-FR')} lignes traitées)`
+                : '');
+        message = `🛠️ Analyse des marqueurs…${progressLabel}`;
         cssClass = `${baseClass} text-info`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+        showSpinner();
     } else if (status === 'failed') {
         const error = String(progressData?.error || 'Erreur inconnue');
         message = `❌ Échec du traitement : ${error}`;
         cssClass = `${baseClass} text-danger`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+        hideSpinner();
     } else if (status === 'cancelled') {
         message = '🚫 Traitement annulé.';
         cssClass = `${baseClass} text-warning`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+        hideSpinner();
     } else if (status === 'done') {
-        const summaryTotal = Number(progressData?.summary?.total ?? progressData?.sidecar?.marker_count ?? 0);
-        const summaryMissed = Number(progressData?.missed_total ?? progressData?.sidecar?.missed_count ?? 0);
+        const sidecarMeta = progressData?.sidecar ?? paginationInfo ?? null;
+        const summaryTotal = Number(progressData?.summary?.total ?? sidecarMeta?.marker_count ?? 0);
+        const summaryMissed = Number(progressData?.missed_total ?? sidecarMeta?.missed_count ?? 0);
         const markerPart = Number.isFinite(summaryTotal) && summaryTotal > 0
             ? `${summaryTotal} marqueur(s)`
             : null;
 
-        const sidecarSize = Number(progressData?.sidecar?.size ?? progressData?.sidecar_size ?? 0);
-        const sidecarUpdated = Number(progressData?.sidecar?.updated_at ?? progressData?.sidecar_updated_at ?? 0);
+        const sidecarSize = Number(sidecarMeta?.size ?? progressData?.sidecar_size ?? 0);
+        const sidecarUpdated = Number(sidecarMeta?.updated_at ?? progressData?.sidecar_updated_at ?? 0);
 
         const sizeLabel = sidecarSize > 0 ? formatBytes(sidecarSize) : null;
         const dateLabel = sidecarUpdated > 0 ? formatTimestamp(sidecarUpdated) : null;
@@ -535,17 +588,36 @@ function renderLignesStatus(versionId, lignesInfo, progress){
 
         message = `✅ Sidecar pagination prêt${markerPart ? ` — ${markerPart}` : ''}${missedLabel}${suffix}`;
         cssClass = `${baseClass} text-success`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
-    } else if (hasFile) {
-        const size = formatBytes(lignesInfo.size);
-        const updated = formatTimestamp(lignesInfo.updated_at);
-        message = `✅ ${size} — mis à jour le ${updated}`;
+        hideSpinner();
+    } else if (hasFile && !hasSidecar) {
+        const mainLabel = linesLabel ?? 'Fichier _lignes prêt';
+        message = `⌛ ${mainLabel} — en attente du traitement pagination.`;
+        cssClass = `${baseClass} text-warning`;
+        hideSpinner();
+    } else if (hasSidecar) {
+        const markerCount = Number(paginationInfo?.details?.marker_count ?? 0);
+        const sizeLabel = paginationInfo?.size ? formatBytes(paginationInfo.size) : null;
+        const dateLabel = paginationInfo?.updated_at ? formatTimestamp(paginationInfo.updated_at) : null;
+        const origin = String(paginationInfo?.details?.origin || '').toLowerCase();
+        const originLabel = origin === 'pb' ? 'depuis <pb>' : '_lignes';
+        const markerLabel = markerCount > 0 ? `${markerCount} marqueur(s) (${originLabel})` : `Sidecar pagination (${originLabel})`;
+        const suffix = [sizeLabel, dateLabel].filter(Boolean).join(' · ');
+        message = `✅ ${markerLabel}${suffix ? ` — ${suffix}` : ''}`;
         cssClass = `${baseClass} text-success`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+        hideSpinner();
+    } else if (hasFile) {
+        const fallbackSize = formatBytes(lignesInfo.size);
+        const updated = formatTimestamp(lignesInfo.updated_at);
+        const mainLabel = linesLabel ?? fallbackSize ?? 'Fichier _lignes';
+        message = updated
+            ? `✅ ${mainLabel} — mis à jour le ${updated}`
+            : `✅ ${mainLabel}`;
+        cssClass = `${baseClass} text-success`;
+        hideSpinner();
     } else {
         message = 'Aucun fichier _lignes importé.';
         cssClass = `${baseClass} text-muted`;
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
+        hideSpinner();
     }
 
     if (state.lignesStatusText) {
@@ -1238,12 +1310,13 @@ async function uploadLignesFile(versionId, file){
         });
         const payload = await readJsonResponse(res);
         const progress = payload?.progress ?? null;
-        renderLignesStatus(id, payload.lignes ?? null, progress);
+        const paginationInfo = payload?.pagination ?? versionsCache.get(id)?.pagination ?? null;
+        renderLignesStatus(id, payload.lignes ?? null, progress, paginationInfo);
         if (versionsCache.has(id)) {
             const cached = versionsCache.get(id);
             cached.lignes = payload.lignes ?? cached.lignes ?? null;
             cached.page_marker_progress = progress;
-            if (payload.pagination) {
+            if (Object.prototype.hasOwnProperty.call(payload ?? {}, 'pagination')) {
                 cached.pagination = payload.pagination;
             }
             versionsCache.set(id, cached);
@@ -1277,6 +1350,33 @@ async function uploadLignesFile(versionId, file){
     }
 }
 
+async function createPaginationFromPb(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+
+    const res = await fetch(withBasePath(`/api/versions/${id}/pagination/from-pb`), {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        }
+    });
+
+    const payload = await readJsonResponse(res);
+    if (payload?.status === 'ok') {
+        if (versionsCache.has(id)) {
+            const cached = versionsCache.get(id);
+            cached.pagination = { status: 'generated_from_pb', count: payload.count };
+            versionsCache.set(id, cached);
+        }
+        alert(`Sidecar pagination créé (${payload.count} balises <pb>).`);
+    } else if (payload?.status === 'empty') {
+        alert(payload.message || 'Aucune balise <pb> trouvée.');
+    } else {
+        alert(payload?.message || 'Impossible de générer le sidecar depuis les <pb>.');
+    }
+}
+
 async function deleteLignesFile(versionId){
     const id = Number(versionId);
     if (!Number.isFinite(id)) return;
@@ -1296,7 +1396,7 @@ async function deleteLignesFile(versionId){
         });
         const payload = await readJsonResponse(res);
         const progress = payload?.progress ?? null;
-        renderLignesStatus(id, payload.lignes ?? null, progress);
+        renderLignesStatus(id, payload.lignes ?? null, progress, payload?.pagination ?? null);
         if (versionsCache.has(id)) {
             const cached = versionsCache.get(id) ?? {};
             cached.lignes = payload.lignes ?? null;
@@ -1354,10 +1454,15 @@ async function cancelLignesProcessing(versionId){
         });
         const payload = await readJsonResponse(res);
         const progress = payload?.progress ?? null;
-        renderLignesStatus(id, payload.lignes ?? (versionsCache.get(id)?.lignes ?? null), progress);
+        const cachedBefore = versionsCache.get(id)?.lignes ?? null;
+        const paginationInfo = payload?.pagination ?? versionsCache.get(id)?.pagination ?? null;
+        renderLignesStatus(id, payload.lignes ?? cachedBefore, progress, paginationInfo);
         if (versionsCache.has(id)) {
             const cached = versionsCache.get(id);
             cached.page_marker_progress = progress;
+            if (Object.prototype.hasOwnProperty.call(payload ?? {}, 'pagination')) {
+                cached.pagination = payload.pagination;
+            }
             versionsCache.set(id, cached);
         }
         stopLignesPolling(id);
@@ -1410,10 +1515,9 @@ async function fetchVersions(workId){
 
         const table = document.createElement('table');
         table.className='table table-bordered table-hover table-sm version-table';
-        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th>Fichier _lignes</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
-        const activeLignesIds = new Set();
         versions.forEach(v=>{
             const tr = document.createElement('tr');
             const shortFolder = (v.folder || '').split('/').pop();
@@ -1438,6 +1542,13 @@ async function fetchVersions(workId){
             editTrigger.title = 'Modifier la désignation';
             editTrigger.addEventListener('click', () => openEditModal(v));
             tdName.appendChild(editTrigger);
+
+            const pbCount = Number(v.pb_markers ?? 0);
+            const pbBadge = document.createElement('span');
+            pbBadge.className = 'badge rounded-pill bg-light text-muted border ms-2 align-middle';
+            pbBadge.textContent = `pb: ${pbCount}`;
+            pbBadge.title = 'Balises <pb> présentes dans la version';
+            tdName.appendChild(pbBadge);
 
             tr.appendChild(tdName);
 
@@ -1563,100 +1674,6 @@ async function fetchVersions(workId){
 
             tr.appendChild(tdFac);
 
-            const tdLignes = document.createElement('td');
-            tdLignes.className = 'align-middle';
-
-            const lignesBtnGroup = document.createElement('div');
-            lignesBtnGroup.className = 'btn-group btn-group-sm';
-
-            const lignesDownloadBtn = document.createElement('button');
-            lignesDownloadBtn.type = 'button';
-            lignesDownloadBtn.className = 'btn btn-outline-secondary px-2 py-1';
-            lignesDownloadBtn.textContent = 'Télécharger';
-            lignesDownloadBtn.disabled = true;
-            lignesDownloadBtn.addEventListener('click', () => {
-                const cache = versionsCache.get(Number(v.id));
-                const hasUrl = cache?.lignes?.url;
-                const targetUrl = hasUrl ? cache.lignes.url : withBasePath(`/api/versions/${v.id}/lignes`);
-                window.open(targetUrl, '_blank', 'noopener');
-            });
-            lignesBtnGroup.appendChild(lignesDownloadBtn);
-
-            const lignesUploadBtn = document.createElement('button');
-            lignesUploadBtn.type = 'button';
-            lignesUploadBtn.className = 'btn btn-outline-primary px-2 py-1';
-            lignesUploadBtn.textContent = 'Importer';
-            lignesBtnGroup.appendChild(lignesUploadBtn);
-
-            const lignesDeleteBtn = document.createElement('button');
-            lignesDeleteBtn.type = 'button';
-            lignesDeleteBtn.className = 'btn btn-outline-danger px-2 py-1';
-            lignesDeleteBtn.textContent = 'Supprimer';
-            lignesDeleteBtn.disabled = true;
-            lignesDeleteBtn.hidden = true;
-            lignesDeleteBtn.addEventListener('click', () => deleteLignesFile(v.id));
-            lignesBtnGroup.appendChild(lignesDeleteBtn);
-
-            const lignesFileInput = document.createElement('input');
-            lignesFileInput.type = 'file';
-            lignesFileInput.accept = '.txt,text/plain';
-            lignesFileInput.className = 'd-none';
-            lignesFileInput.addEventListener('change', async (event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                await uploadLignesFile(v.id, file);
-                lignesFileInput.value = '';
-            });
-            tdLignes.appendChild(lignesFileInput);
-
-            lignesUploadBtn.addEventListener('click', () => {
-                lignesFileInput.click();
-            });
-
-            const lignesStatus = document.createElement('div');
-            lignesStatus.className = 'small text-muted mt-2 d-flex align-items-center gap-2 flex-wrap';
-            const lignesStatusText = document.createElement('span');
-            lignesStatus.appendChild(lignesStatusText);
-
-            const lignesSpinner = document.createElement('div');
-            lignesSpinner.className = 'spinner-border spinner-border-sm text-primary ms-2';
-            lignesSpinner.setAttribute('role', 'status');
-            lignesSpinner.style.display = 'none';
-            lignesStatus.appendChild(lignesSpinner);
-
-            const lignesCancelBtn = document.createElement('button');
-            lignesCancelBtn.type = 'button';
-            lignesCancelBtn.className = 'btn btn-link btn-sm text-danger p-0 ms-1';
-            lignesCancelBtn.innerHTML = '&times;';
-            lignesCancelBtn.hidden = true;
-            lignesCancelBtn.title = 'Annuler le traitement des balises de pagination';
-            lignesCancelBtn.addEventListener('click', () => cancelLignesProcessing(v.id));
-            lignesStatus.appendChild(lignesCancelBtn);
-
-            tdLignes.appendChild(lignesBtnGroup);
-            const lignesProgressWrap = document.createElement('div');
-            lignesProgressWrap.className = 'progress mt-1';
-            lignesProgressWrap.style.height = '4px';
-            lignesProgressWrap.hidden = true;
-            const lignesProgressBar = document.createElement('div');
-            lignesProgressBar.className = 'progress-bar bg-info';
-            lignesProgressBar.style.width = '0%';
-            lignesProgressBar.setAttribute('role', 'progressbar');
-            lignesProgressWrap.appendChild(lignesProgressBar);
-            tdLignes.appendChild(lignesProgressWrap);
-            tdLignes.appendChild(lignesStatus);
-
-            rowState.lignesStatus = lignesStatus;
-            rowState.lignesStatusText = lignesStatusText;
-            rowState.lignesSpinner = lignesSpinner;
-            rowState.lignesDownloadBtn = lignesDownloadBtn;
-            rowState.lignesUploadBtn = lignesUploadBtn;
-            rowState.lignesDeleteBtn = lignesDeleteBtn;
-            rowState.lignesFileInput = lignesFileInput;
-            rowState.lignesProgressWrap = lignesProgressWrap;
-            rowState.lignesProgressBar = lignesProgressBar;
-            rowState.lignesCancelBtn = lignesCancelBtn;
-
             renderFacsimileStatus(v.id, v.facsimiles ?? {
                 source_count: sourceCount,
                 published_count: publishedCount,
@@ -1664,8 +1681,6 @@ async function fetchVersions(workId){
                 total_expected: totalExpected,
                 processing: queueCount > 0
             });
-            const lignesProgress = v.page_marker_progress ?? null;
-            renderLignesStatus(v.id, v.lignes ?? null, lignesProgress);
 
             if (queueCount > 0) {
                 ensureFacsimilePolling(v.id);
@@ -1673,16 +1688,7 @@ async function fetchVersions(workId){
                 stopFacsimilePolling(v.id);
             }
 
-            if (lignesProgress?.status && ['queued', 'running'].includes(lignesProgress.status)) {
-                ensureLignesPolling(v.id);
-            } else {
-                stopLignesPolling(v.id);
-            }
-
             activeFacsimileIds.add(Number(v.id));
-            activeLignesIds.add(Number(v.id));
-
-            tr.appendChild(tdLignes);
             const tdActions = document.createElement('td');
             tdActions.className='text-center align-middle';
             const editorUrl = withBasePath(`/version/${v.id}/editor`);
@@ -1737,18 +1743,12 @@ async function fetchVersions(workId){
                 stopFacsimilePolling(id);
             }
         });
-        lignesPollers.forEach((_, id) => {
-            if (!activeLignesIds.has(id)) {
-                stopLignesPolling(id);
-            }
-        });
     }catch(err){
         console.error(err);
         versionsCache = new Map();
         updateVersionsCount(null);
         list.innerHTML='<div class="text-danger p-2">Failed to load versions</div>';
         facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
-        lignesPollers.forEach((_, id) => stopLignesPolling(id));
     }
 }
 function openEditModal(v){

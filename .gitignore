@@ -54,3 +54,12 @@ assets/
 laravel/storage/*.key
 laravel/storage/logs/
 laravel/bootstrap/cache/*.php
+
+############################################
+#  Local scripts / uploads / sidecars      #
+############################################
+/scripts/
+laravel/storage/app/public/uploads/
+laravel/storage/app/private/
+laravel/storage/app/tmp/
+laravel/public/uploads/

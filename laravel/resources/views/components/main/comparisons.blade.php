@@ -2,8 +2,11 @@
     <div class="card-header fw-semibold">Comparaisons</div>
 
     <div class="card-body">
-        <p class="fst-italic text-muted small mb-3">
+        <p class="fst-italic text-muted small mb-2">
             Retrouvez ici toutes les comparaisons produites avec Medite pour l'œuvre sélectionnée. Vous pouvez suivre leur état, accéder aux résultats ou relancer la pagination si nécessaire.
+        </p>
+        <p class="text-muted small mb-3">
+            Pagination : deux workflows possibles. (1) Importer un fichier <code>_lignes</code> pour une version, puis « Injecter la pagination ». (2) Insérer des balises <code>&lt;pb&gt;</code> dans l’éditeur de version, lancer Medite, cliquer sur « Créer le sidecar (pb) » puis « Injecter la pagination ». Les boutons ci‑dessous centralisent toutes les opérations (génération, injection, restauration).
         </p>
         <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">

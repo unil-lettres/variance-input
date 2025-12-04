@@ -116,6 +116,7 @@ Route::get('/api/task_status/{taskId}', [MediteController::class, 'taskStatus'])
 Route::post('/api/comparisons', [MediteController::class, 'createComparison']);
 Route::post('/save_comparison', [MediteController::class, 'saveComparison']);
 Route::post('/api/comparisons/{comparison}/page-markers', [ComparisonController::class, 'applyPageMarkers']);
+Route::post('/api/comparisons/{comparison}/pagination/from-xhtml', [ComparisonController::class, 'buildPaginationFromXhtml']);
 
 // Comparisons
 Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
