@@ -1,6 +1,17 @@
 @php /** components/main/medite.blade.php **/ @endphp
 <div class="card">
-    <div class="card-header fw-semibold">lancer medite</div>
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center medite-toggle"
+         role="button"
+         data-bs-toggle="collapse"
+         data-bs-target="#mediteCollapse"
+        aria-expanded="true"
+        aria-controls="mediteCollapse">
+        <div class="d-flex align-items-center gap-2">
+            <span class="collapse-chevron" aria-hidden="true"></span>
+            <span>Medite</span>
+        </div>
+    </div>
+    <div id="mediteCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
             Choisissez deux versions et paramétrez Medite pour générer un alignement. Une fois le traitement terminé, les résultats alimentent la liste des comparaisons ci-dessous et la partie publique.
@@ -61,7 +72,27 @@
         <div id="progress-indicator" class="mt-4" style="display:none;"></div>
         <div id="results" class="mt-4" style="display:none;"></div>
     </div>
+    </div>
 </div>
+
+@push('styles')
+<style>
+  .medite-toggle .collapse-chevron::before {
+    content: "\25BC";
+    display: inline-block;
+    transition: transform .2s ease;
+  }
+  .medite-toggle[aria-expanded="false"] .collapse-chevron::before {
+    transform: rotate(-90deg);
+  }
+  #mediteCollapse,
+  #mediteCollapse *,
+  #mediteCollapse.show,
+  #mediteCollapse.show * {
+    visibility: visible !important;
+  }
+</style>
+@endpush
 
 @push('scripts')
 <script>

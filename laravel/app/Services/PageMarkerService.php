@@ -962,6 +962,10 @@ class PageMarkerService
      */
     public function createSidecarFromComparisonOutputs(Comparison $comparison, ?string $role = null): array
     {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
         $roles = [
@@ -1046,7 +1050,7 @@ class PageMarkerService
      */
     private function extractPbMarkersFromHtml(string $contents): array
     {
-        [$shadow, $map] = $this->buildIndexedPlaintext($contents);
+        [$shadow, $map] = $this->buildIndexedPlaintext($contents, false);
         $mapCount = count($map);
 
         $markers = [];
@@ -1780,10 +1784,10 @@ class PageMarkerService
         return mb_substr($shadow, $start, $length, 'UTF-8');
     }
 
-    private function buildIndexedPlaintext(string $src): array
+    private function buildIndexedPlaintext(string $src, bool $needFold = true): array
     {
         $shadow = '';
-        $fold   = '';
+        $fold   = $needFold ? '' : null;
         $map    = [];
         $length = strlen($src);
         $offset = 0;
@@ -1811,7 +1815,9 @@ class PageMarkerService
                         foreach ($chars as $_) {
                             $map[] = $offset;
                         }
-                        $fold .= $this->foldString($decoded);
+                        if ($needFold) {
+                            $fold .= $this->foldString($decoded);
+                        }
                         $offset = $semi + 1;
                         continue;
                     }
@@ -1826,7 +1832,9 @@ class PageMarkerService
             $glyphLen = strlen($glyph);
 
             $shadow .= $glyph;
-            $fold   .= $this->foldString($glyph);
+            if ($needFold) {
+                $fold   .= $this->foldString($glyph);
+            }
             $map[] = $offset;
             $offset += $glyphLen;
         }

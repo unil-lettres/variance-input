@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const updateAuthorBtn = document.getElementById("update-author-btn");
   const saveWorkBtn     = document.getElementById("save-work-btn");
   const updateWorkBtn   = document.getElementById("update-work-btn");
+  const editWorkShortTitleLabel = document.getElementById("edit-work-short-title-label");
 
   const mainContainer = document.getElementById("admin-main");
   const initialSelection = (() => {
@@ -364,7 +365,9 @@ document.addEventListener("DOMContentLoaded", () => {
       .then(work => {
         document.getElementById("edit-work-id").value = work.id;
         document.getElementById("edit-work-title").value = work.title;
-        document.getElementById("edit-work-short-title").value = work.short_title;
+        if (editWorkShortTitleLabel) {
+          editWorkShortTitleLabel.textContent = work.short_title || '';
+        }
         new bootstrap.Modal(document.getElementById("editWorkModal")).show();
       })
       .catch(err => {
@@ -376,36 +379,17 @@ document.addEventListener("DOMContentLoaded", () => {
   updateWorkBtn.addEventListener("click", () => {
     const id          = document.getElementById("edit-work-id").value;
     const title       = document.getElementById("edit-work-title").value.trim();
-    const editShortInput = document.getElementById("edit-work-short-title");
-    const short_title = editShortInput.value.trim().toLowerCase();
-    editShortInput.value = short_title;
     const author_id   = authorSelector.value;
 
     if (title.length < 3) {
       alert("Le titre de l'œuvre doit contenir au moins 3 caractères.");
       return;
     }
-    if (short_title.length < 2 || short_title.length > 8) {
-      alert("Le titre abrégé doit contenir entre 2 et 8 caractères.");
-      return;
-    }
-    const validShortTitle = /^[a-z]+$/.test(short_title);
-    if (!validShortTitle) {
-      alert("Le titre abrégé ne peut contenir que des lettres minuscules (a à z).");
-      return;
-    }
-    const duplicate = Array.from(workSelector.options).some(option =>
-      option.value !== id && option.textContent.includes(`[${short_title}]`)
-    );
-    if (duplicate) {
-      alert("Un autre travail utilise déjà ce titre abrégé.");
-      return;
-    }
 
     fetch(buildUrl(`/api/works/${id}`), {
       method: 'PUT',
       headers: JSON_X_CSRF,
-      body: JSON.stringify({ title, short_title })
+      body: JSON.stringify({ title })
     })
     .then(res => {
       if (!res.ok) throw new Error("Erreur serveur");

@@ -118,7 +118,7 @@ class VersionController extends Controller
     public function update(Request $req, $id)
     {
         $version = Version::findOrFail($id);
-        $version->update($req->validate(['name' => 'required|string|max:45']));
+        $version->update($req->validate(['name' => 'required|string|max:100']));
         return response()->json($version, 200);
     }
 

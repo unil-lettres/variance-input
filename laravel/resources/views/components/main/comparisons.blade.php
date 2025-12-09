@@ -1,6 +1,22 @@
 <div class="card mb-3">
-    <div class="card-header fw-semibold">Comparaisons</div>
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center comparisons-toggle"
+         role="button"
+         data-bs-toggle="collapse"
+         data-bs-target="#comparisonsCollapse"
+         aria-expanded="true"
+         aria-controls="comparisonsCollapse">
+        <div class="d-flex align-items-center gap-2">
+            <span class="collapse-chevron" aria-hidden="true"></span>
+            <span>Comparaisons</span>
+        </div>
+        <div class="d-flex align-items-center gap-1">
+            <span id="comparisons-count-published" class="badge text-bg-success comparisons-count-pill">0</span>
+            <span id="comparisons-count-sep" class="text-muted">/</span>
+            <span id="comparisons-count-total" class="badge text-bg-secondary comparisons-count-pill">0</span>
+        </div>
+    </div>
 
+    <div id="comparisonsCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-2">
             Retrouvez ici toutes les comparaisons produites avec Medite pour l'œuvre sélectionnée. Vous pouvez suivre leur état, accéder aux résultats ou relancer la pagination si nécessaire.
@@ -38,10 +54,29 @@
             Aucune comparaison trouvée pour cette œuvre.
         </div>
     </div>
+    </div>
 </div>
 
 @push('styles')
 <style>
+  .comparisons-toggle .collapse-chevron::before {
+    content: "\25BC";
+    display: inline-block;
+    transition: transform .2s ease;
+  }
+  .comparisons-toggle[aria-expanded="false"] .collapse-chevron::before {
+    transform: rotate(-90deg);
+  }
+  .comparisons-count-pill {
+    min-width: 32px;
+    text-align: center;
+  }
+  #comparisonsCollapse,
+  #comparisonsCollapse *,
+  #comparisonsCollapse.show,
+  #comparisonsCollapse.show * {
+    visibility: visible !important;
+  }
   .comparisons-table th {
     font-weight: 600;
     font-size: 0.85rem;

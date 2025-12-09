@@ -2,6 +2,9 @@ function initComparisonsTable() {
   const tbody          = document.querySelector('#comparisons-table tbody');
   const loading        = document.getElementById('comparisons-loading');
   const noComparisons  = document.getElementById('no-comparisons');
+  const countPublished = document.getElementById('comparisons-count-published');
+  const countTotal     = document.getElementById('comparisons-count-total');
+  const countSeparator = document.getElementById('comparisons-count-sep');
 
   const JSON_HEADERS = { 'Accept': 'application/json' };
   let currentWorkId = null;
@@ -17,6 +20,7 @@ function initComparisonsTable() {
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   let latestComparisonsRequest = 0;
   let activeComparisonsRequest = 0;
+  let currentAuthorId = null;
 
   const TERMINAL_STATUSES = new Set(['done', 'ok', 'failed', 'restored', 'idle', 'skipped', 'cancelled', 'missing']);
   const STATUS_LABELS = {
@@ -51,6 +55,34 @@ function initComparisonsTable() {
     }
     return `${val.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
   };
+  const normalizeCount = value => {
+    const num = Number(value);
+    return Number.isFinite(num) && num >= 0 ? num : 0;
+  };
+  const isValidId = value => {
+    const s = String(value ?? '').trim();
+    return /^\d+$/.test(s) && Number(s) > 0;
+  };
+
+  function updateComparisonCounts(published, total) {
+    if (!countPublished || !countTotal) return;
+    const pub = normalizeCount(published);
+    const tot = normalizeCount(total);
+    const hide = tot === 0 && pub === 0 && (!isValidWorkId(currentWorkId) || !isValidId(currentAuthorId));
+    if (hide) {
+      countPublished.classList.add('d-none');
+      countTotal.classList.add('d-none');
+      if (countSeparator) countSeparator.classList.add('d-none');
+      return;
+    }
+    countPublished.textContent = pub;
+    countTotal.textContent = tot;
+    if (countSeparator) {
+      countSeparator.classList.remove('d-none');
+    }
+    countPublished.classList.remove('d-none');
+    countTotal.classList.remove('d-none');
+  }
 
   function createBadge({ text, className = '', href = null, title = '' }) {
     const tag = href ? 'a' : 'span';
@@ -1025,16 +1057,21 @@ function initComparisonsTable() {
     return /^\d+$/.test(s) && Number(s) > 0;
   }
 
+  // Initial reset for counts with no selection
+  updateComparisonCounts(0, 0);
+
   function resetUI() {
     loading.style.display = 'none';
     noComparisons.style.display = 'none';
     tbody.innerHTML = '';
     comparisonRoleComponents.clear();
     comparisonData.clear();
+    updateComparisonCounts(0, 0);
   }
 
   // Track current author/work folders from the global selector
   document.addEventListener('workSelected', e => {
+    currentAuthorId = e.detail?.authorId ?? null;
     currentAuthorFolder = e.detail?.author_folder || '';
     currentWorkFolder   = e.detail?.work_folder || '';
   });
@@ -1064,10 +1101,18 @@ function initComparisonsTable() {
         return;
       }
 
+      const totalCount = Array.isArray(comparisons) ? comparisons.length : 0;
+      const publishedCount = Array.isArray(comparisons)
+        ? comparisons.filter(comp => !!comp.published).length
+        : 0;
+
       if (!Array.isArray(comparisons) || comparisons.length === 0) {
+        updateComparisonCounts(publishedCount, totalCount);
         noComparisons.style.display = 'block';
         return;
       }
+
+      updateComparisonCounts(publishedCount, totalCount);
 
       comparisons.forEach(comp => {
         const tr = document.createElement('tr');
@@ -1181,6 +1226,8 @@ function initComparisonsTable() {
     } catch (err) {
       console.error('Erreur lors du chargement des comparaisons:', err);
       // Leave UI cleared; don't try to render an error page as JSON
+      updateComparisonCounts(0, 0);
+      noComparisons.style.display = 'block';
     } finally {
       if (requestToken === activeComparisonsRequest) {
         loading.style.display = 'none';
@@ -1396,7 +1443,10 @@ function initComparisonsTable() {
 
       // Remove row; if table is empty, show "no comparisons"
       btn.closest('tr')?.remove();
-      if (!tbody.querySelector('tr')) noComparisons.style.display = 'block';
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const publishedLeft = rows.filter(row => row.dataset.published === '1').length;
+      updateComparisonCounts(publishedLeft, rows.length);
+      if (!rows.length) noComparisons.style.display = 'block';
 
     } catch (err) {
       console.error('Erreur lors de la suppression de la comparaison:', err);

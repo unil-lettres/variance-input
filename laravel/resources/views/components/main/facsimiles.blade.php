@@ -1,6 +1,17 @@
 {{-- resources/views/components/main/facsimiles.blade.php --}}
 <div id="facsimiles-card" class="card mb-3">
-    <div class="card-header fw-semibold">fac-similés</div>
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center facsimiles-toggle"
+         role="button"
+         data-bs-toggle="collapse"
+         data-bs-target="#facsimilesCollapse"
+        aria-expanded="true"
+        aria-controls="facsimilesCollapse">
+        <div class="d-flex align-items-center gap-2">
+            <span class="collapse-chevron" aria-hidden="true"></span>
+            <span>Fac-similés</span>
+        </div>
+    </div>
+    <div id="facsimilesCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
             Choisissez une version pour parcourir son dossier d’images. Utilisez ensuite la « gestion du manifeste »
@@ -36,10 +47,25 @@
         <div id="gallery-meta" class="mt-2 text-center text-muted small"></div>
         <div id="gallery-pagination" class="mt-1 d-flex flex-wrap justify-content-center gap-1"></div>
     </div>
+    </div>
 </div>
 
 @push('styles')
 <style>
+    .facsimiles-toggle .collapse-chevron::before {
+        content: "\25BC";
+        display: inline-block;
+        transition: transform .2s ease;
+    }
+    .facsimiles-toggle[aria-expanded="false"] .collapse-chevron::before {
+        transform: rotate(-90deg);
+    }
+    #facsimilesCollapse,
+    #facsimilesCollapse *,
+    #facsimilesCollapse.show,
+    #facsimilesCollapse.show * {
+        visibility: visible !important;
+    }
     #manifest-manager {
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;

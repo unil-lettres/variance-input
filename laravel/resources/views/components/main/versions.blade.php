@@ -1128,7 +1128,8 @@ function updateVersionsCount(count) {
     pill.classList.add(count > 0 ? 'text-bg-success' : 'text-bg-danger');
     pill.classList.add('d-block');
 
-    const label = count === 1 ? '1 version' : `${count} versions`;
+    const numericCount = Number(count);
+    const label = Number.isFinite(numericCount) ? numericCount : 0;
     pill.textContent = label;
 }
 
@@ -1505,7 +1506,7 @@ async function fetchVersions(workId){
         facsimileRowState.clear();
         if(versions.length===0) {
             updateVersionsCount(0);
-            list.innerHTML='<div class="text-muted p-2">No versions available</div>';
+            list.innerHTML='<div class="text-muted p-2">Aucune version textuelle disponible pour cette oeuvre - cliquez "Téléverser une version" ci-dessous pour en ajouter une.</div>';
             facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
             lignesPollers.forEach((_, id) => stopLignesPolling(id));
             return;

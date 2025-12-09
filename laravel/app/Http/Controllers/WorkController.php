@@ -111,90 +111,29 @@ class WorkController extends Controller
     }
 
     public function update(Request $request, $id)
-{
-    $work = Work::with('versions')->findOrFail($id); // eager load versions
+    {
+        $work = Work::findOrFail($id);
 
-    $request->merge([
-        'short_title' => strtolower($request->input('short_title', '')),
-    ]);
+        $validated = $request->validate([
+            'title' => 'required|string|min:3|max:80',
+            'short_title' => 'sometimes|string',
+        ]);
 
-    $validated = $request->validate([
-        'title' => 'required|string|min:3|max:80',
-        'short_title' => [
-            'required',
-            'string',
-            'min:2',
-            'max:8',
-            'regex:/^[a-z]+$/',
-            function ($attribute, $value, $fail) use ($work) {
-                $exists = Work::where('author_id', $work->author_id)
-                    ->where('short_title', $value)
-                    ->where('id', '!=', $work->id)
-                    ->exists();
-                if ($exists) {
-                    $fail("Un autre travail utilise déjà le titre abrégé '$value' pour ce même auteur.");
-                }
-            }
-        ],
-    ]);
+        if ($request->has('short_title')) {
+            $incomingShort = strtolower($request->input('short_title', ''));
+            $currentShort  = strtolower($work->short_title ?? '');
 
-    $oldShort = $work->short_title;
-    $newShort = $validated['short_title'];
-
-    if ($oldShort !== $newShort) {
-        $work->loadMissing('author:id,folder');
-
-        // Prevent edits once versions exist (XML filenames depend on short title)
-        if ($work->versions()->exists()) {
-            return response()->json([
-                'error' => "Impossible de modifier le titre abrégé car des versions existent déjà pour cette œuvre."
-            ], 409);
-        }
-
-        if (!empty($work->image_url) || !empty($work->pdf_url)) {
-            return response()->json([
-                'error' => "Impossible de modifier le titre abrégé car des médias (vignette ou PDF) sont déjà associés à cette œuvre."
-            ], 409);
-        }
-
-        // Guard against comparisons linked to this work (future-proof)
-        $versionIds = $work->versions->pluck('id');
-        if ($versionIds->isNotEmpty()) {
-            $hasComparisons = DB::table('comparisons')
-                ->whereIn('source_id', $versionIds)
-                ->orWhereIn('target_id', $versionIds)
-                ->exists();
-
-            if ($hasComparisons) {
+            if ($incomingShort !== $currentShort) {
                 return response()->json([
-                    'error' => "Impossible de modifier le titre abrégé car des comparaisons existent déjà pour cette œuvre."
+                    'error' => "Le titre abrégé ne peut pas être modifié car il est utilisé pour les dossiers et fichiers liés à l'œuvre."
                 ], 409);
             }
         }
 
-        // Ensure uploads/<author>/<work>/ is empty before allowing rename
-        $authorFolder = $work->author->folder ?? null;
-        $workFolder   = $work->folder ?? null;
-        if ($authorFolder && $workFolder) {
-            $relativePath = $authorFolder . '/' . $workFolder;
-            $uploadsDisk  = Storage::disk('uploads');
-            if ($uploadsDisk->exists($relativePath)) {
-                $containsFiles = !empty($uploadsDisk->allFiles($relativePath));
-                $containsDirs  = !empty($uploadsDisk->directories($relativePath));
-                if ($containsFiles || $containsDirs) {
-                    return response()->json([
-                        'error' => "Impossible de modifier le titre abrégé car des fichiers sont déjà présents dans le dossier de l'œuvre."
-                    ], 409);
-                }
-            }
-        }
+        $work->update(['title' => $validated['title']]);
+
+        return response()->json($work);
     }
-
-    $work->update($validated);
-    $work->save();
-
-    return response()->json($work);
-}
 
     
     

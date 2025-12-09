@@ -92,10 +92,10 @@
           <input type="text" class="form-control" id="edit-work-title" placeholder="Titre">
         </div>
 
-        <div>
-          <label for="edit-work-short-title" class="form-label">Nom abrégé d'oeuvre</label>
-          <input type="text" class="form-control" id="edit-work-short-title" placeholder="Titre abrégé (lettres minuscules)" maxlength="10">
-        </div>
+        <p class="form-text mb-0">
+          Nom abrégé (non modifiable) :
+          <span id="edit-work-short-title-label" class="fw-semibold"></span>
+        </p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>

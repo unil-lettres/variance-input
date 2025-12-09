@@ -62,15 +62,113 @@
         padding-top: 0.4rem;
         padding-bottom: 0.4rem;
     }
+    .blade-disabled {
+        opacity: 0.55;
+        filter: grayscale(0.6);
+        pointer-events: none;
+    }
 </style>
 @endpush
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    /* Petit rappel : si vous souhaitez masquer/afficher des zones
-       en fonction de la sélection d’œuvre ou de version, ajoutez
-       votre logique ici. */
+    // Persist collapse state per work so deep links reopen cards as last seen
+    const PERSISTED_COLLAPSES = [
+        'descriptionCollapse',
+        'mediaCollapse',
+        'versionsCollapse',
+        'comparisonsCollapse',
+        'facsimilesCollapse',
+        'mediteCollapse',
+    ];
+    const STORAGE_PREFIX = 'variance:collapse-state:';
+    const DEFAULT_WORK_KEY = 'no-work';
+    const collapseInstances = new Map();
+    const adminMain = document.getElementById('admin-main');
+    let currentWorkId = (adminMain?.dataset?.initialWorkId || '').trim() || null;
+
+    const storageKey = (workId) => `${STORAGE_PREFIX}${workId ?? DEFAULT_WORK_KEY}`;
+
+    const readState = (workId) => {
+        try {
+            const raw = localStorage.getItem(storageKey(workId));
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (err) {
+            return {};
+        }
+    };
+
+    const writeState = (workId, state) => {
+        try {
+            localStorage.setItem(storageKey(workId), JSON.stringify(state || {}));
+        } catch (err) {
+            // Ignore storage failures (private mode, quotas…)
+        }
+    };
+
+    const getCollapse = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        if (!collapseInstances.has(id)) {
+            const instance = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+            collapseInstances.set(id, instance);
+        }
+        return collapseInstances.get(id);
+    };
+
+    const applyStateForWork = (workId) => {
+        const state = readState(workId);
+        PERSISTED_COLLAPSES.forEach((id) => {
+            const instance = getCollapse(id);
+            if (!instance) return;
+            const desired = state[id];
+            if (desired === false) {
+                instance.hide();
+            } else if (desired === true) {
+                instance.show();
+            } else {
+                instance.show();
+            }
+        });
+    };
+
+    const persistState = (collapseId, isOpen) => {
+        const state = readState(currentWorkId);
+        state[collapseId] = isOpen;
+        writeState(currentWorkId, state);
+    };
+
+    const toggleBladesDisabled = (disabled) => {
+        PERSISTED_COLLAPSES.forEach((id) => {
+            const card = document.getElementById(id)?.closest('.card');
+            if (card) {
+                card.classList.toggle('blade-disabled', disabled);
+            }
+            if (disabled) {
+                const instance = getCollapse(id);
+                instance?.hide();
+            }
+        });
+    };
+
+    PERSISTED_COLLAPSES.forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('shown.bs.collapse', () => persistState(id, true));
+        el.addEventListener('hidden.bs.collapse', () => persistState(id, false));
+    });
+
+    document.addEventListener('workSelected', (event) => {
+        currentWorkId = (event?.detail?.workId ?? '').toString().trim() || null;
+        toggleBladesDisabled(!currentWorkId);
+        applyStateForWork(currentWorkId);
+    });
+
+    toggleBladesDisabled(!currentWorkId);
+    applyStateForWork(currentWorkId);
 });
 </script>
 @endpush
