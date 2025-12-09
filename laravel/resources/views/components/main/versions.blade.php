@@ -695,6 +695,89 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
     }
 }
 
+function renderPaginationDoneState(versionId, data = null){
+    const id = Number(versionId);
+    const state = facsimileRowState.get(id);
+    if (!state) return;
+
+    const done = !!(data?.pagination_done ?? data?.done ?? data);
+    const doneAt = data?.pagination_done_at ?? null;
+    const doneByName = data?.pagination_done_by_name ?? data?.done_by ?? null;
+
+    if (state.completionToggle) {
+        state.completionToggle.checked = done;
+    }
+
+    if (state.completionMeta) {
+        if (done) {
+            const parts = [];
+            if (Number.isFinite(doneAt) && doneAt > 0) {
+                const label = formatTimestamp(doneAt);
+                if (label && label !== 'Date inconnue') {
+                    parts.push(label);
+                }
+            }
+            if (doneByName) {
+                parts.push(doneByName);
+            }
+            const suffix = parts.length ? ` — ${parts.join(' · ')}` : '';
+            state.completionMeta.textContent = `Terminé${suffix}`;
+            state.completionMeta.className = 'small text-success';
+        } else {
+            state.completionMeta.textContent = 'À cocher une fois la pagination validée.';
+            state.completionMeta.className = 'small text-muted';
+        }
+    }
+
+    if (versionsCache.has(id)) {
+        const cached = versionsCache.get(id) ?? {};
+        cached.pagination_done = done;
+        cached.pagination_done_at = done ? doneAt : null;
+        cached.pagination_done_by = done ? (data?.pagination_done_by ?? null) : null;
+        cached.pagination_done_by_name = done ? (doneByName ?? cached.pagination_done_by_name ?? null) : null;
+        versionsCache.set(id, cached);
+    }
+}
+
+async function togglePaginationDone(versionId, done){
+    const id = Number(versionId);
+    const state = facsimileRowState.get(id);
+    if (state?.completionToggle) {
+        state.completionToggle.disabled = true;
+    }
+    if (state?.completionMeta) {
+        state.completionMeta.textContent = done ? 'Marquage…' : 'Mise à jour…';
+    }
+
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/pagination/done`), {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ done })
+        });
+        const payload = await readJsonResponse(res);
+        renderPaginationDoneState(id, payload);
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Impossible de mettre à jour le statut de pagination.');
+        if (state?.completionToggle) {
+            state.completionToggle.checked = !done;
+        }
+        if (versionsCache.has(id)) {
+            renderPaginationDoneState(id, versionsCache.get(id));
+        }
+    } finally {
+        if (state?.completionToggle) {
+            state.completionToggle.disabled = false;
+        }
+    }
+}
+
 window.addEventListener('DOMContentLoaded',()=>{
     const openUploadBtn   = document.getElementById('open-upload-version-modal');
     const submitUploadBtn = document.getElementById('submit-upload-form');
@@ -1516,7 +1599,7 @@ async function fetchVersions(workId){
 
         const table = document.createElement('table');
         table.className='table table-bordered table-hover table-sm version-table';
-        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         versions.forEach(v=>{
@@ -1657,6 +1740,31 @@ async function fetchVersions(workId){
             tdFac.appendChild(progressWrap);
             tdFac.appendChild(statusNote);
 
+            const tdCompletion = document.createElement('td');
+            tdCompletion.className = 'align-middle text-center';
+            const completionSwitch = document.createElement('div');
+            completionSwitch.className = 'form-check form-switch d-inline-flex align-items-center justify-content-center gap-2 mb-1';
+            const completionToggle = document.createElement('input');
+            completionToggle.type = 'checkbox';
+            completionToggle.role = 'switch';
+            completionToggle.className = 'form-check-input';
+            completionToggle.id = `version-${v.id}-pagination-done`;
+            completionToggle.checked = !!v.pagination_done;
+            completionToggle.title = 'Cochez lorsque la pagination est terminée pour cette version';
+            completionToggle.setAttribute('aria-label', 'Marquer la pagination terminée');
+            completionToggle.addEventListener('change', () => togglePaginationDone(v.id, completionToggle.checked));
+            const completionLabel = document.createElement('label');
+            completionLabel.className = 'form-check-label small text-muted';
+            completionLabel.setAttribute('for', completionToggle.id);
+            completionLabel.textContent = 'Terminé';
+            completionSwitch.appendChild(completionToggle);
+            completionSwitch.appendChild(completionLabel);
+            const completionMeta = document.createElement('div');
+            completionMeta.className = 'small text-muted';
+            completionMeta.textContent = 'À cocher une fois la pagination validée.';
+            tdCompletion.appendChild(completionSwitch);
+            tdCompletion.appendChild(completionMeta);
+
             const rowState = {
                 viewBtn: btnFacView,
                 viewBadge,
@@ -1669,12 +1777,16 @@ async function fetchVersions(workId){
                 clearBtn: btnFacClear,
                 progressWrap,
                 progressBar,
+                completionToggle,
+                completionMeta,
             };
 
             facsimileRowState.set(Number(v.id), rowState);
 
             tr.appendChild(tdFac);
+            tr.appendChild(tdCompletion);
 
+            renderPaginationDoneState(v.id, v);
             renderFacsimileStatus(v.id, v.facsimiles ?? {
                 source_count: sourceCount,
                 published_count: publishedCount,

@@ -32,7 +32,7 @@ class VersionController extends Controller
             return response()->json(['error' => 'work_id is required'], 400);
         }
 
-        $versions = Version::with(['work.author'])
+        $versions = Version::with(['work.author', 'paginationDoneBy'])
             ->where('work_id', $workId)
             ->get()
             ->map(function (Version $version) {
@@ -46,6 +46,10 @@ class VersionController extends Controller
                     'name'       => $version->name,
                     'folder'     => $version->folder,
                     'work_id'    => $version->work_id,
+                    'pagination_done' => (bool) $version->pagination_done,
+                    'pagination_done_at' => $version->pagination_done_at?->getTimestamp(),
+                    'pagination_done_by' => $version->pagination_done_by,
+                    'pagination_done_by_name' => $version->paginationDoneBy?->name,
                     'pb_markers' => $this->pageMarkerService->countPbMarkers($version),
                     'facsimiles' => $this->facsimileStatus($version),
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
@@ -120,6 +124,32 @@ class VersionController extends Controller
         $version = Version::findOrFail($id);
         $version->update($req->validate(['name' => 'required|string|max:100']));
         return response()->json($version, 200);
+    }
+
+    public function togglePaginationDone(Request $request, Version $version): JsonResponse
+    {
+        $data = $request->validate([
+            'done' => 'required|boolean',
+        ]);
+
+        $done = (bool) $data['done'];
+
+        $version->update([
+            'pagination_done'    => $done,
+            'pagination_done_at' => $done ? now() : null,
+            'pagination_done_by' => $done ? (auth()->id() ?: null) : null,
+        ]);
+
+        $version->loadMissing('paginationDoneBy');
+
+        return response()->json([
+            'status'                  => 'ok',
+            'version_id'              => $version->id,
+            'pagination_done'         => $version->pagination_done,
+            'pagination_done_at'      => $version->pagination_done_at?->getTimestamp(),
+            'pagination_done_by'      => $version->pagination_done_by,
+            'pagination_done_by_name' => $version->paginationDoneBy?->name,
+        ]);
     }
 
     /** Delete version; tolerate missing files */

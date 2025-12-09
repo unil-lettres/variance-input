@@ -10,7 +10,19 @@ class Version extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'folder', 'work_id'];
+    protected $fillable = [
+        'name',
+        'folder',
+        'work_id',
+        'pagination_done',
+        'pagination_done_at',
+        'pagination_done_by',
+    ];
+
+    protected $casts = [
+        'pagination_done'    => 'boolean',
+        'pagination_done_at' => 'datetime',
+    ];
 
     /**
      * Relationship: Work of the Version
@@ -62,6 +74,11 @@ class Version extends Model
     public function status()
     {
         return $this->hasOne(VersionStatus::class);
+    }
+
+    public function paginationDoneBy()
+    {
+        return $this->belongsTo(User::class, 'pagination_done_by');
     }
 
     public function getXMLFilePath()

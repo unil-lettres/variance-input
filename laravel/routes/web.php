@@ -103,6 +103,7 @@ Route::delete('/api/works/{work}/media/{type}',        [MediaController::class, 
 Route::post('/api/versions', [VersionController::class, 'store']);
 Route::get('/api/versions', [VersionController::class, 'index']);
 Route::put('/api/versions/{id}', [VersionController::class, 'update']);
+Route::patch('/api/versions/{version}/pagination/done', [VersionController::class, 'togglePaginationDone']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
 Route::post('/api/facsimiles/publish', [VersionController::class, 'publishFacsimiles']);
 Route::post('/api/versions/{version}/page-markers', [VersionController::class, 'applyPageMarkers']);
