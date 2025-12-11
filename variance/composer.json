@@ -1,6 +1,7 @@
 {
     "name": "unil-lettres/variance",
     "type": "project",
+    "license": "AGPL-3.0-or-later",
     "require": {
         "neitanod/forceutf8": "^2.0",
         "php": "^7.4"

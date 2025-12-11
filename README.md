@@ -208,4 +208,8 @@ For deeper dives check:
 - `laravel/app/Jobs/InjectComparisonPaginationJob.php`
 - `medite/app/flask_app.py`
 
+## Ownership & License
+
+Variance & Medite Integration is developed by **SIER (Service Infrastructure Enseignement et Recherche)**, part of the Faculty of Arts at the University of Lausanne (<https://www.unil.ch/lettres/fr/home/menuinst/faculte/administration-du-decanat.html>). The project is released under the **GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)**; see `LICENSE` for details.
+
 Happy comparing! :)
