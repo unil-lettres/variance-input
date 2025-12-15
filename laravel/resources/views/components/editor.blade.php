@@ -78,12 +78,19 @@
               @if($urlToggleIgnored)
               <button
                   id="toggle-ignored-page"
-                  class="btn btn-outline-primary"
+                  class="btn btn-outline-danger"
                   data-bs-toggle="tooltip"
                   title="Ignorer / Restaurer la page sélectionnée"
                   disabled
-              ><i class="bi bi-file-earmark-x"></i></button>
+              ><i class="bi bi-eye-slash"></i></button>
               @endif
+              <button
+                  id="remove-page-marker"
+                  class="btn btn-outline-danger"
+                  data-bs-toggle="tooltip"
+                  title="Retirer le marqueur de page"
+                  disabled
+              ><i class="bi bi-file-earmark-x"></i></button>
         </div>
         <div class="overflow-auto mb-auto">
             <div id="buttons-container" class="row row-cols-3 px-1 py-2 g-1 align-items-start w-100">

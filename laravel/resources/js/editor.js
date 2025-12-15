@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleTagsBtn: document.getElementById('toggle-tags'),
         generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
         toggleIgnoredPageBtn: document.getElementById('toggle-ignored-page'),
+        removePageMarkerBtn: document.getElementById('remove-page-marker'),
         searchBtn: document.getElementById('search-btn'),
         italicOpenBtn: document.getElementById('italic-open-btn'),
         italicCloseBtn: document.getElementById('italic-close-btn'),
@@ -241,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.querySelector('span').textContent = pageNumber
         } else {
             const isIgnored = button.getAttribute('data-ignored') === 'true';
-            let iconClass = isIgnored ? 'bi-file-earmark-x' : 'bi-file-earmark';
+            let iconClass = isIgnored ? 'bi-eye-slash' : 'bi-file-earmark';
             
             const span = button.querySelector('span');
             const existingIcon = span.querySelector(`i.${iconClass}`);
@@ -281,6 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.imageName.style.display = 'none';
 
             elements.toggleIgnoredPageBtn.setAttribute('disabled', 'true');
+            elements.removePageMarkerBtn.setAttribute('disabled', 'true');
         }
     };
 
@@ -614,6 +616,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Remove page marker button
+    if (elements.removePageMarkerBtn) {
+        elements.removePageMarkerBtn.addEventListener('click', () => {
+            if (!activeButton) return;
+
+            const button = activeButton;
+            const filename = button.getAttribute('data-tag');
+
+            if (editor.isPageMarkerInserted(filename)) {
+                editor.removePageMarker(filename);
+                refreshButtonStates();
+            }
+        });
+    }
+
     // Insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
         const imgSrc = button.getAttribute('data-img-src');
@@ -671,8 +688,10 @@ document.addEventListener('DOMContentLoaded', () => {
               }
 
               if (isInserted) {
+                  elements.removePageMarkerBtn.removeAttribute('disabled');
                   editor.scrollToPageMarker(imageName);
               } else {
+                  elements.removePageMarkerBtn.setAttribute('disabled', 'true');
                   setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
                   refreshButtonName(button);
                   elements.editorContainer.classList.add('insert-page');
@@ -721,8 +740,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const isClickOnToggleIgnored = e.target.closest('#toggle-ignored-page');
             const isClickOnSearchBtn = e.target.closest('#search-btn');
             const isClickOnToggleTagsBtn = e.target.closest('#toggle-tags');
+            const isClickOnRemovePageMarkerBtn = e.target.closest('#remove-page-marker');
 
-            if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl && !isClickOnToggleIgnored && !isClickOnSearchBtn && !isClickOnToggleTagsBtn) {
+            if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl &&
+                !isClickOnToggleIgnored && !isClickOnSearchBtn && !isClickOnToggleTagsBtn && 
+                !isClickOnRemovePageMarkerBtn
+            ) {
                 deactivateActiveButton();
             }
         }
