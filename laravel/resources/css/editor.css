@@ -97,7 +97,6 @@
 .cm-page-number-mark.page-marker-highlight {
   animation: cmPageMarkerPulse 450ms ease-in-out;
   animation-iteration-count: 2;
-  border-radius: 4px;
 }
 
 .cm-editor {
