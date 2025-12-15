@@ -1,7 +1,7 @@
 import initEditor from './codemirror-editor';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const { xmlContent, urlFileSave, canEdit, markerType } = window.editorParams;
+    const { xmlContent, urlFileSave, urlToggleIgnored, canEdit, markerType } = window.editorParams;
 
     // Initialize Bootstrap tooltips.
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"], [data-bs-toggle="modal"]');
@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtn: document.getElementById('toggle-readonly'),
         toggleTagsBtn: document.getElementById('toggle-tags'),
         generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
+        toggleIgnoredPageBtn: document.getElementById('toggle-ignored-page'),
         searchBtn: document.getElementById('search-btn'),
         italicOpenBtn: document.getElementById('italic-open-btn'),
         italicCloseBtn: document.getElementById('italic-close-btn'),
@@ -239,13 +240,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pageNumber && pageNumber !== '?') {
             button.querySelector('span').textContent = pageNumber
         } else {
+            const isIgnored = button.getAttribute('data-ignored') === 'true';
+            let iconClass = isIgnored ? 'bi-file-earmark-x' : 'bi-file-earmark';
+            
             const span = button.querySelector('span');
-            const existingIcon = span.querySelector('i.bi-file-earmark');
+            const existingIcon = span.querySelector(`i.${iconClass}`);
             span.textContent = insertedPageNumber ? '?' : '';
 
             if (!existingIcon) {
               const i = document.createElement('i');
-              i.className = 'bi bi-file-earmark mr-1';
+              i.className = `bi ${iconClass} mr-1`;
               span.prepend(i);
             } else {
               span.prepend(existingIcon);
@@ -275,6 +279,8 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.noPreviewText.style.display = 'block';
             elements.previewImg.parentElement.style.display = 'none';
             elements.imageName.style.display = 'none';
+
+            elements.toggleIgnoredPageBtn.setAttribute('disabled', 'true');
         }
     };
 
@@ -522,20 +528,30 @@ document.addEventListener('DOMContentLoaded', () => {
         // Apply page numbers to all non-inserted buttons
         const { insertedMarkers } = editor.getAllMarkers();
         let currentPageNum = 0;
+        let ignoredCount = 0;
 
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
+            const isIgnored = button.getAttribute('data-ignored') === 'true';
+            
+            // Count position in the list (including ignored pages for startPageNum check)
             currentPageNum++;
+            
+            if (isIgnored) {
+                ignoredCount++;
+                return;
+            }
 
             const imageName = button.getAttribute('data-tag');
             const isInserted = insertedMarkers.has(imageName);
+            const effectivePosition = currentPageNum - ignoredCount;
 
-            if (startPageNum >= currentPageNum) {
+            if (startPageNum >= effectivePosition) {
                 if (!isInserted) {
                     button.setAttribute('data-tag-page-number', '?');
                 }
             } else {
                 if (!isInserted) {
-                    const pageNumber = String(currentPageNum - startPageNum).padStart(leadingZerosNum, '0');
+                    const pageNumber = String(effectivePosition - startPageNum).padStart(leadingZerosNum, '0');
                     button.setAttribute('data-tag-page-number', pageNumber);
                 }
             }
@@ -549,6 +565,55 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.hide();
     });
 
+    // Toggle ignored page button
+    if (elements.toggleIgnoredPageBtn && urlToggleIgnored) {
+        elements.toggleIgnoredPageBtn.addEventListener('click', async () => {
+            if (!activeButton) return;
+
+            const button = activeButton;
+            const filename = button.getAttribute('data-tag');
+            const buttonItem = button.closest('.button-item');
+
+            try {
+                const response = await fetch(urlToggleIgnored, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ filename })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'ok') {
+                    const isNowIgnored = data.ignored;
+                    button.setAttribute('data-ignored', isNowIgnored ? 'true' : 'false');
+                    
+                    if (buttonItem) {
+                        buttonItem.classList.toggle('page-ignored', isNowIgnored);
+                    }
+
+                    if (isNowIgnored) {
+                        button.removeAttribute('data-tag-page-number');
+                        if (editor.isPageMarkerInserted(filename)) {
+                            editor.removePageMarker(filename);
+                        }
+                        refreshButtonStates();
+                    } else {
+                        elements.toggleIgnoredPageBtn.classList.remove('active');
+                        refreshButtonName(button);
+                    }
+                } else {
+                    alert(data.error || 'Une erreur est survenue.');
+                }
+            } catch (error) {
+                alert('Une erreur est survenue lors de la mise à jour.');
+            }
+        });
+    }
+
     // Insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
         const imgSrc = button.getAttribute('data-img-src');
@@ -557,15 +622,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const tooltip = new bootstrapLib.Tooltip(button, {
             title: () => {
                 const isInserted = editor.isPageMarkerInserted(imageName);
+                const isIgnored = button.getAttribute('data-ignored') === 'true';
+
+                if (isIgnored) {
+                    return 'Cette page est ignorée';
+                }
+
                 if (isInserted) {
                     return 'Afficher ce marqueur de page dans l\'éditeur';
-                } else {
-                  if (activeButton === button) {
-                      return 'Cliquez dans le texte pour insérer ce marqueur de page';
-                  } else {
-                      return 'Cliquez pour sélectionner ce marqueur de page';
-                  }
                 }
+
+                if (activeButton === button) {
+                    return 'Cliquez dans le texte pour insérer ce marqueur de page';
+                }
+
+                return 'Cliquez pour sélectionner ce marqueur de page';
             },
             trigger: 'hover',
             delay: { "show": 300, "hide": 0 },
@@ -590,6 +661,14 @@ document.addEventListener('DOMContentLoaded', () => {
               activeButton = button;
               button.classList.add('btn-outlined');
               loadImage(imgSrc);
+              elements.toggleIgnoredPageBtn.removeAttribute('disabled');
+
+              const isIgnored = button.getAttribute('data-ignored') === 'true';
+              if (isIgnored) {
+                elements.toggleIgnoredPageBtn.classList.add('active');
+              } else {
+                elements.toggleIgnoredPageBtn.classList.remove('active');
+              }
 
               if (isInserted) {
                   editor.scrollToPageMarker(imageName);
@@ -609,6 +688,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeButton) {
             const imageName = activeButton.getAttribute('data-tag');
             const pageNumber = activeButton.getAttribute('data-tag-page-number') || '?';
+            const isIgnored = activeButton.getAttribute('data-ignored') === 'true';
+
+            if (isIgnored) {
+                alert('Cette page est ignorée. Désactivez l\'option "Ignorer" pour pouvoir l\'insérer.');
+                return;
+            }
 
             if (!editor.isPageMarkerInserted(imageName)) {
               const success = editor.insertPageMarker(imageName, pageNumber);
@@ -628,8 +713,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const isClickOnEditor = elements.editorContainer.contains(e.target);
             const isClickOnButton = e.target.closest('[data-tag]');
             const isClickOnImageUrl = e.target.id === 'image-name';
+            const isClickOnToggleIgnored = e.target.closest('#toggle-ignored-page');
 
-            if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl) {
+            if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl && !isClickOnToggleIgnored) {
                 deactivateActiveButton();
             }
         }

@@ -648,6 +648,25 @@ class VersionController extends Controller
         ], 200);
     }
 
+    /**
+     * Toggle the ignored status of a facsimile page.
+     */
+    public function toggleIgnoredPage(Version $version, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'filename' => 'required|string|max:255',
+        ]);
+
+        $filename = $validated['filename'];
+        $isNowIgnored = $version->toggleIgnoredPage($filename);
+
+        return response()->json([
+            'status'   => 'ok',
+            'filename' => $filename,
+            'ignored'  => $isNowIgnored,
+        ], 200);
+    }
+
     /* ──────────────────────────── HELPERS ──────────────────────────── */
 
     /** Detect + convert arbitrary bytes to UTF‑8 LF */

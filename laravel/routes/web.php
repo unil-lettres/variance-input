@@ -110,6 +110,7 @@ Route::post('/api/versions/{version}/page-markers', [VersionController::class, '
 Route::post('/api/versions/{version}/lignes', [VersionController::class, 'uploadLignes']);
 Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])->name('versions.lignes.download');
 Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
+Route::post('/versions/{version}/facsimiles/toggle-ignored', [VersionController::class, 'toggleIgnoredPage'])->middleware('auth');
 
 // Routes pour composant medite
 Route::post('/api/run_medite', [MediteController::class, 'runMedite']);

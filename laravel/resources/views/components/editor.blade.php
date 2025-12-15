@@ -1,4 +1,4 @@
-@props(['xmlContent', 'imagesData', 'urlFileSave', 'canEdit', 'markerType' => 'span'])
+@props(['xmlContent', 'imagesData', 'urlFileSave', 'canEdit', 'markerType' => 'span', 'urlToggleIgnored' => null])
 
 <div class="border border-top-0 p-3 row m-0 overflow-auto editor" style="height: calc(100vh - 200px);">
     <div class="col-md-6 col-12 order-last order-md-first h-100 d-flex flex-column">
@@ -67,21 +67,33 @@
         ></div>
     </div>
     <div class="col-md-2 col-12 h-100 d-flex flex-column justify-content-between gap-2">
-        <button
-            id="generate-page-numbers"
-            class="btn btn-outline-primary align-self-start"
-            data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
-            {{ !$canEdit ? 'disabled' : '' }}
-            title="Générer les numéros de page"
-        ><i class="bi bi-file-earmark mr-1"></i><i class="bi bi-123"></i></button>
+        <div class="d-flex gap-1 px-1" aria-label="Page tools buttons">
+            <button
+                id="generate-page-numbers"
+                class="btn btn-outline-primary"
+                data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
+                {{ !$canEdit ? 'disabled' : '' }}
+                title="Générer les numéros de page"
+            ><i class="bi bi-file-earmark mr-1"></i><i class="bi bi-123"></i></button>
+              @if($urlToggleIgnored)
+              <button
+                  id="toggle-ignored-page"
+                  class="btn btn-outline-primary"
+                  data-bs-toggle="tooltip"
+                  title="Ignorer / Restaurer la page sélectionnée"
+                  disabled
+              ><i class="bi bi-file-earmark-x"></i></button>
+              @endif
+        </div>
         <div class="overflow-auto mb-auto">
             <div id="buttons-container" class="row row-cols-3 px-1 py-2 g-1 align-items-start w-100">
                 @foreach ($imagesData ?? [] as $facsimile)
-                    <div class="col button-item" style="display: none;">
+                    <div class="col button-item {{ ($facsimile['ignored'] ?? false) ? 'page-ignored' : '' }}" style="display: none;" data-filename="{{ $facsimile['filename'] }}">
                         <button
                             class="h-100 w-100 btn btn-secondary btn-sm position-relative"
                             data-tag="{{ $markerType === 'pb' ? $facsimile['filename'] : $loop->iteration }}"
                             data-img-src="{{ $facsimile['big'] }}"
+                            data-ignored="{{ ($facsimile['ignored'] ?? false) ? 'true' : 'false' }}"
                             {{ !$canEdit ? 'disabled' : '' }}
                         >
                             <span></span>
@@ -178,6 +190,7 @@
             xmlContent: @json($xmlContent),
             canEdit: {{ $canEdit ? 'true' : 'false' }},
             urlFileSave: @json($urlFileSave),
+            urlToggleIgnored: @json($urlToggleIgnored),
             markerType: @json($markerType),
         };
     </script>

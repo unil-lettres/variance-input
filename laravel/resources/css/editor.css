@@ -108,6 +108,10 @@
     color: inherit;
 }
 
+.button-item.page-ignored {
+    opacity: 0.35;
+}
+
 /* Save animation */
 @keyframes save-spin-pulse {
     0% {

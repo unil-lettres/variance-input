@@ -12,6 +12,7 @@
         :xml-content="$xmlContent"
         :images-data="$imagesData"
         :url-file-save="$urlFileSave"
+        :url-toggle-ignored="$urlToggleIgnored"
         :can-edit="$canEdit"
         marker-type="pb"
     />

@@ -23,19 +23,23 @@ class EditorController extends Controller
             $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', $encoding);
         }
         $editorPath = 'version/' . $version->id . '/editor';
+        $ignoredPages = $version->getIgnoredPages();
 
         return view('components.main.editor.version', [
             'version' => $version,
             'xmlContent' => $xmlContent,
             'canEdit' => true,
-            'imagesData' => array_map(function ($item) {
+            'imagesData' => array_map(function ($item) use ($ignoredPages) {
+                $filename = basename($item['big']);
                 return [
                     'small' => $item['small'],
                     'big' => $item['big'],
-                    'filename' => basename($item['big']),
+                    'filename' => $filename,
+                    'ignored' => $ignoredPages->contains($filename),
                 ];
             }, $version->collectManifestEntries()),
             'urlFileSave' => admin_url($editorPath),
+            'urlToggleIgnored' => admin_url("versions/{$version->id}/facsimiles/toggle-ignored"),
         ]);
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 
 class Version extends Model
@@ -17,11 +18,13 @@ class Version extends Model
         'pagination_done',
         'pagination_done_at',
         'pagination_done_by',
+        'ignored_pages',
     ];
 
     protected $casts = [
         'pagination_done'    => 'boolean',
         'pagination_done_at' => 'datetime',
+        'ignored_pages'      => 'collection',
     ];
 
     /**
@@ -136,5 +139,34 @@ class Version extends Model
                 'big'   => $big,
             ];
         })->toArray();
+    }
+
+    /**
+     * Get the list of ignored page filenames.
+     *
+     * @return Collection<string>
+     */
+    public function getIgnoredPages(): Collection
+    {
+        return $this->ignored_pages ?? collect([]);
+    }
+
+    /**
+     * Toggle the ignored status of a page (by filename).
+     *
+     * @param string $filename The filename of the image to toggle
+     * @return bool The new ignored status (true = ignored, false = not ignored)
+     */
+    public function toggleIgnoredPage(string $filename): bool
+    {
+        $ignoredPages = $this->getIgnoredPages();
+        $wasIgnored = $ignoredPages->contains($filename);
+
+        $this->ignored_pages = $wasIgnored
+            ? $ignoredPages->reject(fn ($p) => $p === $filename)->values()->all()
+            : $ignoredPages->push($filename)->all();
+        $this->save();
+
+        return !$wasIgnored;
     }
 }

@@ -666,6 +666,18 @@ export default function (container, initialXml, markerType = 'span') {
       return markerCache.markerPositions.get(imageName) || null;
     },
 
+    removePageMarker(imageName) {
+      const result = this.getPageMarkerTag(imageName);
+      if (result) {
+        view.dispatch({
+          changes: { from: result.pos, to: result.pos + result.tag.length, insert: '' }
+        });
+        invalidateCache();
+        return true;
+      }
+      return false;
+    },
+
     scrollToPageMarker(imageName) {
       const result = this.getPageMarkerTag(imageName);
       if (result) {
