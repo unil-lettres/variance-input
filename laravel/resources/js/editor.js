@@ -684,6 +684,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Editor click to insert tag
     elements.editorContainer.addEventListener('click', (e) => {
+        // Ignore clicks on the search panel
+        if (e.target.closest('.cm-search')) {
+            return;
+        }
+
         // Only insert page marker if we have an active button in insert mode
         if (activeButton) {
             const imageName = activeButton.getAttribute('data-tag');
@@ -714,8 +719,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const isClickOnButton = e.target.closest('[data-tag]');
             const isClickOnImageUrl = e.target.id === 'image-name';
             const isClickOnToggleIgnored = e.target.closest('#toggle-ignored-page');
+            const isClickOnSearchBtn = e.target.closest('#search-btn');
+            const isClickOnToggleTagsBtn = e.target.closest('#toggle-tags');
 
-            if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl && !isClickOnToggleIgnored) {
+            if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl && !isClickOnToggleIgnored && !isClickOnSearchBtn && !isClickOnToggleTagsBtn) {
                 deactivateActiveButton();
             }
         }
