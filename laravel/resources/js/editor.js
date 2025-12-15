@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const elements = {
         saveBtn: document.getElementById('save-xml'),
+        fileStatus: document.getElementById('file-status'),
         toggleBtn: document.getElementById('toggle-readonly'),
         toggleTagsBtn: document.getElementById('toggle-tags'),
         generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
@@ -61,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const itemsPerPage = 39;
     let tagsWereHiddenBeforeEdit = true;
     let hasUnsavedChanges = false;
+    let isEditMode = false;
     let initialXmlContent = xmlContent;
 
     const editor = initEditor(document.getElementById('editor-container'), xmlContent, markerType);
@@ -80,6 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasUnsavedChanges) {
             elements.saveBtn.classList.remove('btn-success');
             elements.saveBtn.classList.add('btn-danger');
+            
+            // Auto save when in read-only mode
+            if (!isEditMode) {
+                saveFile();
+            }
         } else {
             elements.saveBtn.classList.remove('btn-danger');
             elements.saveBtn.classList.add('btn-success');
@@ -364,13 +371,30 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.toggleTagsBtn.classList.toggle('active', !tagsHidden);
     };
 
+    const updateSaveButtonUI = (isEditMode) => {
+        // Show manual save button only in edit mode
+        if (isEditMode) {
+            elements.saveBtn.classList.remove('d-none');
+            elements.fileStatus.classList.add('d-none');
+        } else {
+            elements.saveBtn.classList.add('d-none');
+            elements.fileStatus.classList.remove('d-none');
+        }
+    };
+
     // Event handlers
     elements.toggleBtn.addEventListener('click', () => {
         const isReadOnly = editor.toggleReadOnly();
+        isEditMode = !isReadOnly;
         elements.toggleBtn.classList.toggle('active', !isReadOnly);
         elements.toggleTagsBtn.disabled = !isReadOnly;
+        updateSaveButtonUI(!isReadOnly);
 
         if (isReadOnly) {
+            // Auto save when switching to read-only mode
+            if (hasUnsavedChanges) {
+                saveFile();
+            }
             refreshButtonStates();
             if (tagsWereHiddenBeforeEdit) {
                 if (!editor.getTagVisibility()) {
@@ -611,33 +635,84 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    elements.saveBtn.addEventListener('click', async () => {
+    const saveFile = async () => {
         const updatedXml = editor.view.state.doc.toString();
-        const response = await fetch(urlFileSave, {
-            method: 'PUT',
-            headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-            'Content-Type': 'application/xml',
-            'Accept': 'application/json'
-            },
-            body: updatedXml
-        });
+        
+        // Trigger saving animation
+        const animTarget = elements.fileStatus.classList.contains('d-none') ? elements.saveBtn : elements.fileStatus;
+        animTarget.classList.add('saving');
+        animTarget.addEventListener('animationend', () => {
+            animTarget.classList.remove('saving');
+        }, { once: true });
+        
+        // Update save status icon and tooltip
+        const updateFileStatus = (success, errorMessage = null) => {
+            const icon = elements.fileStatus.querySelector('i');
+            const tooltip = bootstrapLib.Tooltip.getInstance(elements.fileStatus);
+            
+            if (tooltip) {
+                tooltip.dispose();
+            }
+            
+            let tooltipMessage = '';
+            if (success) {
+                tooltipMessage = 'Le fichier a été sauvegardé et est à jour';
+                elements.fileStatus.classList.remove('btn-danger');
+                elements.fileStatus.classList.add('btn-success');
+                icon.className = 'bi bi-check-circle-fill';
+            } else {
+                tooltipMessage = errorMessage || 'Erreur lors de la sauvegarde';
+                elements.fileStatus.classList.remove('btn-success');
+                elements.fileStatus.classList.add('btn-danger');
+                icon.className = 'bi bi-x-circle-fill';
+                alert(tooltipMessage);
+            }
+            new bootstrapLib.Tooltip(elements.fileStatus, {
+                title: tooltipMessage,
+                delay: { "show": 500, "hide": 100 },
+                trigger: 'hover',
+                offset: [0, 6],
+            });
+        };
+        
+        try {
+            const response = await fetch(urlFileSave, {
+                method: 'PUT',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Content-Type': 'application/xml',
+                    'Accept': 'application/json'
+                },
+                body: updatedXml
+            });
 
-        const data = await response.json();
+            const data = await response.json();
 
-        if (response.status === 403) {
-            alert(data.error || 'Modification non autorisée : cette comparaison est publiée.');
-        } else if (response.ok) {
-            alert(data.message || 'Fichier sauvegardé avec succès !');
-            hasUnsavedChanges = false;
-            initialXmlContent = updatedXml;
+            if (response.status === 403) {
+                updateFileStatus(false, data.error || 'Modification non autorisée : cette comparaison est publiée.');
+                return false;
+            } else if (response.ok) {
+                hasUnsavedChanges = false;
+                initialXmlContent = updatedXml;
 
-            // Reset button to success state
-            elements.saveBtn.classList.remove('btn-danger');
-            elements.saveBtn.classList.add('btn-success');
-        } else {
-            alert(data.error || 'Une erreur est survenue lors de la sauvegarde.');
+                // Reset button to success state
+                elements.saveBtn.classList.remove('btn-danger');
+                elements.saveBtn.classList.add('btn-success');
+                updateFileStatus(true);
+                return true;
+            } else {
+                updateFileStatus(false, data.error || 'Une erreur est survenue lors de la sauvegarde.');
+                return false;
+            }
+        } catch (error) {
+            console.error('Error saving file:', error);
+            updateFileStatus(false, 'Une erreur est survenue lors de la sauvegarde.');
+            return false;
         }
+    };
+
+    elements.saveBtn.addEventListener('click', async () => {
+        await saveFile();
     });
 
     // Warn user before leaving page if there are unsaved changes

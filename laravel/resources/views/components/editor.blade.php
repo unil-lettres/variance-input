@@ -3,9 +3,16 @@
 <div class="border border-top-0 p-3 row m-0 overflow-auto editor" style="height: calc(100vh - 200px);">
     <div class="col-md-6 col-12 order-last order-md-first h-100 d-flex flex-column">
         <div>
+            <span
+                id="file-status"
+                class="btn btn-success mb-2"
+                style="cursor: default;"
+                data-bs-toggle="tooltip"
+                title="Le fichier a été sauvegardé et est à jour"
+            ><i class="bi bi-check-circle-fill"></i></span>
             <button
                 id="save-xml"
-                class="btn btn-success mb-2"
+                class="btn btn-success mb-2 d-none"
                 {{ !$canEdit ? 'disabled' : '' }}
                 data-bs-toggle="tooltip"
                 title="Sauvegarder les modifications"
