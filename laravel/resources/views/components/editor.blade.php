@@ -106,7 +106,7 @@
                             <span></span>
                             <span
                                 class="position-absolute top-0 start-75 translate-middle badge rounded-pill bg-danger"
-                                data-tag-count="{{ $loop->iteration }}"
+                                data-tag-count="{{ $markerType === 'pb' ? $facsimile['filename'] : $loop->iteration }}"
                                 style="display: none; font-size: 0.65rem;"
                             ></span>
                         </button>
