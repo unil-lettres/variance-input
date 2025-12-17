@@ -67,7 +67,7 @@
         ></div>
     </div>
     <div class="col-md-2 col-12 h-100 d-flex flex-column justify-content-between gap-2">
-        <div class="d-flex gap-1 px-1" aria-label="Page tools buttons">
+        <div class="d-flex align-items-center gap-1 px-1" aria-label="Page tools buttons">
             <button
                 id="generate-page-numbers"
                 class="btn btn-outline-primary"
@@ -91,6 +91,13 @@
                   title="Retirer le marqueur de page"
                   disabled
               ><i class="bi bi-file-earmark-x"></i></button>
+              <i
+                  id="page-number-warning"
+                  class="bi bi-exclamation-triangle-fill text-warning ms-2"
+                  style="font-size: 1.1rem; display: none;"
+                  data-bs-toggle="tooltip"
+                  title="Certains numéros de page ne sont pas encore insérés dans le document. Si vous quittez cette page, ces numéros seront perdus."
+              ></i>
         </div>
         <div class="overflow-auto mb-auto">
             <div id="buttons-container" class="row row-cols-3 px-1 py-2 g-1 align-items-start w-100">

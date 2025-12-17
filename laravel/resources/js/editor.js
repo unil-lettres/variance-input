@@ -350,14 +350,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { insertedMarkers } = editor.getAllMarkers();
 
+        let hasTagNumberNotInserted = false;
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
             const imageName = button.getAttribute('data-tag');
             const isInserted = insertedMarkers.has(imageName);
             const pageNumber = editor.getPageNumber(imageName);
+            const buttonPageNumber = button.getAttribute('data-tag-page-number');
 
-            if (isInserted) {
-                const isNamed = pageNumber && pageNumber !== '?';
-                setButtonState(button, isNamed ? BUTTON_STATES.INSERTED : BUTTON_STATES.NOT_NAMED);
+            if (buttonPageNumber && buttonPageNumber !== '?' && !isInserted) {
+                hasTagNumberNotInserted = true;
+            }
             } else {
                 setButtonState(button, BUTTON_STATES.INACTIVE);
             }
@@ -370,6 +372,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.removeAttribute('data-inserted');
             }
         });
+
+        // Show/hide warning icon for unsaved page numbers
+        const warningIcon = document.getElementById('page-number-warning');
+        if (warningIcon) {
+            warningIcon.style.display = hasTagNumberNotInserted ? 'inline' : 'none';
+        }
+
         updateTagCountBadges();
         updatePaginationColors();
         editor.resumeEnsureCacheUpdate();
@@ -829,13 +838,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.saveBtn.addEventListener('click', async () => {
         await saveFile();
-    });
-
-    // Warn user before leaving page if there are unsaved changes
-    window.addEventListener('beforeunload', (e) => {
-        if (hasUnsavedChanges) {
-            e.preventDefault();
-        }
     });
 
     // Image zoom on mouse hover
