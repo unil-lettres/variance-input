@@ -625,6 +625,28 @@ export default function (container, initialXml, markerType = 'span') {
     insertPageMarker(imageName, pageNumber = '?') {
       const { head } = view.state.selection.main;
 
+      if (!this.canInsertAtPosition(head)) {
+          alert("Impossible de placer le marqueur de page dans une balise XML.");
+          return false;
+      }
+
+      if (!pageNumber || pageNumber === '?') {
+          const newPageNumber = prompt("Entrez le nouveau numéro de page :");
+
+          if (newPageNumber === null) return false;
+
+          if (newPageNumber.length > 6) {
+            alert("Le numéro de page ne peut pas faire plus de 6 caractères.");
+            return false;
+          }
+
+          pageNumber = newPageNumber;
+      }
+
+      if (pageNumber.trim() === '') {
+          return false;
+      }
+
       // Build the page marker tag
       let pageMarkerTag;
       if (markerType === 'pb') {
@@ -633,20 +655,15 @@ export default function (container, initialXml, markerType = 'span') {
           pageMarkerTag = `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">${pageNumber}</span><img src="/img/settings/page_right.svg" /></span>`;
       }
 
-      if (!this.canInsertAtPosition(head)) {
-        alert("Impossible de placer le marqueur de page dans une balise XML.");
-        return false;
-      }
 
-      // Insert at cursor position
       view.dispatch({
-        changes: { from: head, insert: pageMarkerTag },
-        selection: { anchor: head + pageMarkerTag.length }
+          changes: { from: head, insert: pageMarkerTag },
+          selection: { anchor: head + pageMarkerTag.length }
       });
 
       invalidateCache();
-
       view.focus();
+
       return true;
     },
 
