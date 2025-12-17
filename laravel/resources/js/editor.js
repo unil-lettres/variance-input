@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const BUTTON_STATES = {
         INACTIVE: 'btn-secondary',
-        ACTIVE_INSERT: 'btn-insert',
+        INSERT: 'btn-insert',
         INSERTED: 'btn-success',
         NOT_NAMED: 'btn-warning',
     };
@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Utility functions
-    const setButtonState = (button, state) => {
+    const setButtonState = (button, state, active = false) => {
         // Remove all button state classes.
         const btnClasses = new Set(Object.values(BUTTON_STATES));
         btnClasses.add('btn-outlined');
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         button.classList.add(state);
 
-        if (state === BUTTON_STATES.ACTIVE_INSERT) {
+        if (active) {
             button.classList.add('btn-outlined');
         }
     };
@@ -334,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-tag-count]').forEach(badge => {
             const imageName = badge.getAttribute('data-tag-count');
             const count = markerCounts.get(imageName) || 0;
+
             if (count > 1) {
                 badge.textContent = `×${count}`;
                 badge.style.display = 'inline';
@@ -346,22 +347,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const refreshButtonStates = () => {
         editor.stopEnsureCacheUpdate();
-        deactivateActiveButton();
 
         const { insertedMarkers } = editor.getAllMarkers();
 
         let hasTagNumberNotInserted = false;
+
         document.querySelectorAll('.editor [data-tag]').forEach(button => {
             const imageName = button.getAttribute('data-tag');
             const isInserted = insertedMarkers.has(imageName);
+            const isIgnored = button.getAttribute('data-ignored') === 'true';
             const pageNumber = editor.getPageNumber(imageName);
             const buttonPageNumber = button.getAttribute('data-tag-page-number');
 
             if (buttonPageNumber && buttonPageNumber !== '?' && !isInserted) {
                 hasTagNumberNotInserted = true;
             }
+
+            if (activeButton === button) {
+
+                if (isInserted) {
+                    setButtonState(button, BUTTON_STATES.INSERTED, true);
+                    elements.removePageMarkerBtn.removeAttribute('disabled');
+                } else {
+                    setButtonState(button, BUTTON_STATES.INSERT, true);
+                    elements.removePageMarkerBtn.setAttribute('disabled', 'true');
+                }
+
+                if (isIgnored) {
+                    elements.toggleIgnoredPageBtn.classList.add('active');
+                } else {
+                    elements.toggleIgnoredPageBtn.classList.remove('active');
+                }
             } else {
-                setButtonState(button, BUTTON_STATES.INACTIVE);
+                if (isInserted) {
+                    const isNamed = pageNumber && pageNumber !== '?';
+                    setButtonState(button, isNamed ? BUTTON_STATES.INSERTED : BUTTON_STATES.NOT_NAMED);
+                } else {
+                    setButtonState(button, BUTTON_STATES.INACTIVE);
+                }
             }
 
             refreshButtonName(button);
@@ -612,6 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             editor.removePageMarker(filename);
                         }
                         refreshButtonStates();
+                        deactivateActiveButton();
                     } else {
                         elements.toggleIgnoredPageBtn.classList.remove('active');
                         refreshButtonName(button);
@@ -685,7 +709,6 @@ document.addEventListener('DOMContentLoaded', () => {
               }
 
               activeButton = button;
-              button.classList.add('btn-outlined');
               loadImage(imgSrc);
               elements.toggleIgnoredPageBtn.removeAttribute('disabled');
 
@@ -699,9 +722,10 @@ document.addEventListener('DOMContentLoaded', () => {
               if (isInserted) {
                   elements.removePageMarkerBtn.removeAttribute('disabled');
                   editor.scrollToPageMarker(imageName);
+                  setButtonState(button, BUTTON_STATES.INSERTED, true);
               } else {
                   elements.removePageMarkerBtn.setAttribute('disabled', 'true');
-                  setButtonState(button, BUTTON_STATES.ACTIVE_INSERT);
+                  setButtonState(button, BUTTON_STATES.INSERT, true);
                   refreshButtonName(button);
                   elements.editorContainer.classList.add('insert-page');
               }
@@ -732,10 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const success = editor.insertPageMarker(imageName, pageNumber);
               if (success) {
                   refreshButtonStates();
-                  deactivateActiveButton();
               }
-            } else {
-              deactivateActiveButton();
             }
         }
     });
@@ -750,10 +771,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const isClickOnSearchBtn = e.target.closest('#search-btn');
             const isClickOnToggleTagsBtn = e.target.closest('#toggle-tags');
             const isClickOnRemovePageMarkerBtn = e.target.closest('#remove-page-marker');
+            const isClickOnToggleReadonlyBtn = e.target.closest('#toggle-readonly');
 
             if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl &&
                 !isClickOnToggleIgnored && !isClickOnSearchBtn && !isClickOnToggleTagsBtn && 
-                !isClickOnRemovePageMarkerBtn
+                !isClickOnRemovePageMarkerBtn && !isClickOnToggleReadonlyBtn
             ) {
                 deactivateActiveButton();
             }
