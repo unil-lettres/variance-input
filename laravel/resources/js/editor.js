@@ -114,8 +114,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         pageButtons.forEach(button => {
             const imageName = button.getAttribute('data-tag');
+            const isIgnored = button.getAttribute('data-ignored') === 'true';
 
-            if (!insertedMarkers.has(imageName)) {
+            if (!insertedMarkers.has(imageName) && !isIgnored) {
                 allInserted = false;
             }
 
@@ -125,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const pageNum = editor.getPageNumber(imageName);
-            if (!pageNum || pageNum === '?') {
+            if ((!pageNum || pageNum === '?') && !isIgnored) {
                 hasPageWithoutNumber = true;
             }
         });
@@ -639,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         elements.toggleIgnoredPageBtn.classList.remove('active');
                         refreshButtonName(button);
+                        updatePaginationColors();
                     }
                 } else {
                     alert(data.error || 'Une erreur est survenue.');
