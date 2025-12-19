@@ -28,7 +28,6 @@ class EditorController extends Controller
         return view('components.main.editor.version', [
             'version' => $version,
             'xmlContent' => $xmlContent,
-            'canEdit' => true,
             'imagesData' => array_map(function ($item) use ($ignoredPages) {
                 $filename = basename($item['big']);
                 return [

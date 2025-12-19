@@ -197,7 +197,7 @@ class PageNumberWidget extends WidgetType {
 const toggleTagVisibility = StateEffect.define();
 
 // State field to track whether tags should be hidden
-const createHideTagsField = (markerType) => StateField.define({
+const createHideTagsField = () => StateField.define({
   create() {
     return false; // Start with tags VISIBLE for performance reasons
   },
@@ -233,7 +233,7 @@ const createHideTagsField = (markerType) => StateField.define({
         }
 
         // Handle <pb> tags with pagination attribute - hide parts around the number
-        if (markerType === 'pb' && tag.startsWith('<pb') && originalTag.includes('pagination="')) {
+        if (tag.startsWith('<pb') && originalTag.includes('pagination="')) {
              const paginationAttr = 'pagination="';
              const paginationIndex = originalTag.indexOf(paginationAttr);
 
@@ -393,9 +393,9 @@ const createPageNumberPlugin = (getClickedCallback, getCacheFunction) => ViewPlu
   })
 });
 
-export default function (container, initialXml, markerType = 'span') {
+export default function (container, initialXml) {
 
-  const hideTagsField = createHideTagsField(markerType);
+  const hideTagsField = createHideTagsField();
 
   // Create compartments for dynamic reconfiguration
   const readOnlyCompartment = new Compartment();
@@ -439,24 +439,13 @@ export default function (container, initialXml, markerType = 'span') {
     markerCache.pageNumbers.clear();
     markerCache.pageNumberPositions.clear();
 
-    let regex;
-    if (markerType === 'pb') {
-        regex = /<pb facs="([^"]+)" pagination="([^"]*)"\/>/g;
-    } else {
-        regex = /<span class="page-marker" data-image-name="([^"]+)"><span class="page-number">([^<]*)<\/span><img[^>]*><\/span>/g;
-    }
-
+    let regex = /<pb facs="([^"]+)" pagination="([^"]*)"\/>/g;
     let match;
 
     while ((match = regex.exec(content)) !== null) {
       const fullMatch = match[0];
 
-      let imageName;
-      if (markerType === 'pb') {
-          imageName = match[1];
-      } else {
-          imageName = String(parseInt(match[1], 10));
-      }
+      let imageName = match[1];
 
       const pageNumber = match[2];
       const tag = match[0];
@@ -474,16 +463,10 @@ export default function (container, initialXml, markerType = 'span') {
 
         let contentStart, contentEnd;
 
-        if (markerType === 'pb') {
-             const paginationAttr = 'pagination="';
-             const paginationIndex = fullMatch.indexOf(paginationAttr);
-             if (paginationIndex !== -1) {
-                 contentStart = pos + paginationIndex + paginationAttr.length;
-                 contentEnd = contentStart + pageNumber.length;
-             }
-        } else {
-            const pageNumberTagStart = fullMatch.indexOf('<span class="page-number">');
-            contentStart = pos + pageNumberTagStart + '<span class="page-number">'.length;
+        const paginationAttr = 'pagination="';
+        const paginationIndex = fullMatch.indexOf(paginationAttr);
+        if (paginationIndex !== -1) {
+            contentStart = pos + paginationIndex + paginationAttr.length;
             contentEnd = contentStart + pageNumber.length;
         }
 
@@ -648,13 +631,7 @@ export default function (container, initialXml, markerType = 'span') {
       }
 
       // Build the page marker tag
-      let pageMarkerTag;
-      if (markerType === 'pb') {
-          pageMarkerTag = `<pb facs="${imageName}" pagination="${pageNumber}"/>`;
-      } else {
-          pageMarkerTag = `<span class="page-marker" data-image-name="${imageName}"><span class="page-number">${pageNumber}</span><img src="/img/settings/page_right.svg" /></span>`;
-      }
-
+      let pageMarkerTag = `<pb facs="${imageName}" pagination="${pageNumber}"/>`;
 
       view.dispatch({
           changes: { from: head, insert: pageMarkerTag },

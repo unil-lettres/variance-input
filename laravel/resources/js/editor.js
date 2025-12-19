@@ -1,7 +1,7 @@
 import initEditor from './codemirror-editor';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const { xmlContent, urlFileSave, urlToggleIgnored, canEdit, markerType } = window.editorParams;
+    const { xmlContent, urlFileSave, urlToggleIgnored } = window.editorParams;
 
     // Initialize Bootstrap tooltips.
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"], [data-bs-toggle="modal"]');
@@ -67,11 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isEditMode = false;
     let initialXmlContent = xmlContent;
 
-    const editor = initEditor(document.getElementById('editor-container'), xmlContent, markerType);
-
-    if (!canEdit) {
-        editor.setReadOnly(true);
-    }
+    const editor = initEditor(document.getElementById('editor-container'), xmlContent);
 
     // Track changes in the editor
     editor.onContentChanged(() => {
