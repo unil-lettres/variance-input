@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let hasUnsavedChanges = false;
     let isEditMode = false;
     let initialXmlContent = xmlContent;
+    let refreshButtonStatesTimeout = null;
 
     const editor = initEditor(document.getElementById('editor-container'), xmlContent);
 
@@ -74,7 +75,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentContent = editor.view.state.doc.toString();
         hasUnsavedChanges = currentContent !== initialXmlContent;
 
-        refreshButtonStates();
+        // Debounce refreshButtonStates to avoid too many calls during rapid changes
+        if (refreshButtonStatesTimeout) {
+            clearTimeout(refreshButtonStatesTimeout);
+        }
+        refreshButtonStatesTimeout = setTimeout(() => {
+            refreshButtonStates();
+        }, 200);
 
         // Update save button appearance
         if (hasUnsavedChanges) {
