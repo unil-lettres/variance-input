@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => ({
         'resources/js/app.js',
         'resources/css/app.css',
         'resources/js/editor.js',
+        'resources/js/editor-comparison.js',
       ],
       refresh: true,          // harmless in prod builds; useful if you run `vite` in dev
       buildDirectory: 'build' // outputs to public/build (default), explicit for clarity

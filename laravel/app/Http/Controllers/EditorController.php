@@ -64,45 +64,40 @@ class EditorController extends Controller
 
     public function comparisonEditor(Comparison $comparison, Request $request)
     {
-        $request->validate([
-            'type' => 'in:source,target'
-        ]);
+        $infos = [];
+        
+        foreach ([
+            'source' => [$comparison->getSourceFilePath(), $comparison->sourceVersion],
+            'target' => [$comparison->getTargetFilePath(), $comparison->targetVersion]
+        ] as $type => $comparisonData) {
+            $filePath = $comparisonData[0];
+            $version = $comparisonData[1];
 
-        $type = $request->query('type', 'source');
-        $isTarget = $type === 'target';
+            $xmlContent = file_get_contents($filePath);
 
-        if ($isTarget) {
-          $version = $comparison->targetVersion;
-          $path = $comparison->getTargetFilePath();
-        } else {
-          $version = $comparison->sourceVersion;
-          $path = $comparison->getSourceFilePath();
+            if (!file_exists($filePath)) {
+                abort(404, "Fichier introuvable: {$filePath}");
+            }
+
+            $encoding = $this->detectEncoding($xmlContent);
+            if ($encoding !== 'UTF-8') {
+                $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', $encoding);
+            }
+
+            $publicationInfo = $this->getPublicationInfo($comparison, $type);
+            $infos[$type] = collect([
+                "version" => $version,
+                "xmlContent" => $xmlContent,
+                "urlFileSave" => admin_url('comparison/' . $comparison->id . '/editor?type=' . $type),
+                "isPublished" => $publicationInfo['is_published'],
+                "canEdit" => $publicationInfo['can_edit'],
+                "hasImages" => !empty($publicationInfo['images_data']),
+            ]);
         }
-
-        if (!file_exists($path)) {
-            abort(404, "Fichier introuvable: {$path}");
-        }
-    
-        $xmlContent = file_get_contents($path);
-        $encoding = $this->detectEncoding($xmlContent);
-        if ($encoding !== 'UTF-8') {
-            $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', $encoding);
-        }
-        $editorPath = 'comparison/' . $comparison->id . '/editor';
-
-        $publicationInfo = $this->getPublicationInfo($comparison, $type);
-
+            
         return view('components.main.editor.comparison', [
             'comparison' => $comparison,
-            'version' => $version,
-            'xmlContent' => $xmlContent,
-            'isSource' => !$isTarget,
-            'isPublished' => $publicationInfo['is_published'],
-            'canEdit' => $publicationInfo['can_edit'],
-            'imagesData' => $publicationInfo['images_data'],
-            'sourceTabUrl' => admin_url($editorPath . '?type=source'),
-            'targetTabUrl' => admin_url($editorPath . '?type=target'),
-            'urlFileSave' => admin_url($editorPath . '?' . http_build_query(['type' => $type])),
+            ...$infos,
         ]);
     }
     

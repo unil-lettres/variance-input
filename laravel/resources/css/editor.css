@@ -128,8 +128,7 @@
     }
 }
 
-#file-status.saving i,
-#save-xml.saving i {
+.saving i {
     display: inline-block;
     animation: save-spin-pulse 0.6s ease-in-out;
 }
