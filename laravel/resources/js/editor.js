@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fileStatus: document.getElementById('file-status'),
         toggleBtn: document.getElementById('toggle-readonly'),
         toggleTagsBtn: document.getElementById('toggle-tags'),
+        toggleLineNumbersBtn: document.getElementById('toggle-line-numbers'),
         generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
         toggleIgnoredPageBtn: document.getElementById('toggle-ignored-page'),
         removePageMarkerBtn: document.getElementById('remove-page-marker'),
@@ -462,6 +463,12 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTagsButtonUI(tagsHidden);
     });
 
+    elements.toggleLineNumbersBtn.addEventListener('click', () => {
+        const lineNumbersShown = editor.toggleLineNumbers();
+        localStorage.setItem('editor-line-numbers', lineNumbersShown);
+        elements.toggleLineNumbersBtn.classList.toggle('active', lineNumbersShown);
+    });
+
     elements.searchBtn.addEventListener('click', () => {
         editor.toggleSearch();
     });
@@ -888,6 +895,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initPagination();
     refreshButtonStates();
+
+    // Initialize line numbers button state from localStorage
+    const initialLineNumbersState = localStorage.getItem('editor-line-numbers') === 'true';
+    elements.toggleLineNumbersBtn.classList.toggle('active', initialLineNumbersState);
 
     // Use CodeMirror's ready event to hide tags after initial render
     // This fixes Firefox's slow rendering when tags are hidden from the start

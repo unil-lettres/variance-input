@@ -37,6 +37,12 @@
                         class="btn btn-outline-primary mb-2"
                         title="Afficher / Masquer les balises"
                     ><i class="bi bi-code-square"></i></button>
+                    <button
+                        id="toggle-line-numbers"
+                        data-bs-toggle="tooltip"
+                        class="btn btn-outline-primary mb-2"
+                        title="Afficher / Masquer les numéros de ligne"
+                    ><i class="bi bi-list-ol"></i></button>
                 </div>
                 <div class="btn-group" role="group" aria-label="Editor italic buttons">
                     <button

@@ -1,5 +1,5 @@
 import { EditorState, Compartment, StateField, StateEffect } from "@codemirror/state";
-import { EditorView, drawSelection, Decoration, WidgetType, ViewPlugin, MatchDecorator, keymap } from "@codemirror/view";
+import { EditorView, lineNumbers, drawSelection, Decoration, WidgetType, ViewPlugin, MatchDecorator, keymap } from "@codemirror/view";
 import { standardKeymap } from "@codemirror/commands";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -400,6 +400,7 @@ export default function (container, initialXml) {
   // Create compartments for dynamic reconfiguration
   const readOnlyCompartment = new Compartment();
   const editableCompartment = new Compartment();
+  const lineNumbersCompartment = new Compartment();
 
   let onPageNumberClickedCallback = null;
   let onEditorReadyCallback = null;
@@ -409,6 +410,7 @@ export default function (container, initialXml) {
   let editorReady = false;
   let searchPanelOpen = false;
   let skipCacheUpdate = false;
+  let lineNumbersVisible = localStorage.getItem('editor-line-numbers') === 'true';
 
   let markerCache = {
     content: null,
@@ -492,6 +494,7 @@ export default function (container, initialXml) {
       xml(),
       search(),
       oneDark,
+      lineNumbersCompartment.of(lineNumbersVisible ? lineNumbers() : []),
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField,
@@ -603,6 +606,14 @@ export default function (container, initialXml) {
 
     getTagVisibility() {
       return view.state.field(hideTagsField);
+    },
+
+    toggleLineNumbers() {
+      lineNumbersVisible = !lineNumbersVisible;
+      view.dispatch({
+        effects: lineNumbersCompartment.reconfigure(lineNumbersVisible ? lineNumbers() : [])
+      });
+      return lineNumbersVisible;
     },
 
     insertPageMarker(imageName, pageNumber = '?') {
