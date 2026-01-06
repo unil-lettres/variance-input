@@ -16,8 +16,11 @@ function resolveBasePath() {
   return `/${withoutSlashes}/`
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: resolveBasePath(),
+  build: {
+    sourcemap: mode === 'development',
+  },
   plugins: [
     laravel({
       input: [
@@ -31,4 +34,4 @@ export default defineConfig({
   ],
   // If you ever run the dev server inside Docker, uncomment:
   // server: { host: '0.0.0.0', port: 5173, strictPort: true }
-})
+}))
