@@ -51,8 +51,8 @@ define('DIR_REL', $baseUrl);
  * This <strong>MUST NOT</strong> contain the trailing slash
  * @var string
  */
-define('RELATIVE_UPLOAD_ROOT', '/dev/uploads');
-define('UPLOAD_ROOT', '/var/www' . RELATIVE_UPLOAD_ROOT);
+define('RELATIVE_UPLOAD_ROOT', '/uploads');
+define('UPLOAD_ROOT', realpath(__DIR__ . '/../../uploads'));
 
 
 /**
@@ -112,6 +112,89 @@ try {
     exit($e->getMessage());
 }
 
-function getOeuvreUrl($authorFolder, $workFolder, $comparisonFolder) {
-    return '/dev/' . $authorFolder . '/' . $workFolder . '/comparaison/' . $comparisonFolder;
+function getOeuvreUrl($authorFolder, $workFolder, $comparisonId) {
+    return '/dev/' . $authorFolder . '/' . $workFolder . '/comparaison/' . $comparisonId;
+}
+
+define('COMPARISON_COMPONENTS', [
+    'd.xhtml',
+    'i.xhtml',
+    'r.xhtml',
+    's.xhtml',
+    'source.xhtml',
+    'target.xhtml',
+]);
+
+function comparisonHasComponents($baseDir)
+{
+    foreach (COMPARISON_COMPONENTS as $file) {
+        if (!is_file($baseDir . '/' . $file)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function comparisonIsPublished($authorFolder, $workFolder, $comparisonFolder)
+{
+    if (!$authorFolder || !$workFolder || !$comparisonFolder) {
+        return false;
+    }
+
+    $baseDir = UPLOAD_ROOT . '/' . $authorFolder . '/' . $workFolder . '/' . $comparisonFolder;
+    return comparisonHasComponents($baseDir);
+}
+
+function comparisonIsDraft($authorFolder, $workFolder, $comparisonId, $comparisonFolder)
+{
+    if (!$authorFolder || !$workFolder || !$comparisonId) {
+        return false;
+    }
+
+    $draftDir = UPLOAD_ROOT . '/' . $authorFolder . '/' . $workFolder . '/comparisons/' . $comparisonId;
+    if (!comparisonHasComponents($draftDir)) {
+        return false;
+    }
+
+    if ($comparisonFolder && comparisonIsPublished($authorFolder, $workFolder, $comparisonFolder)) {
+        return false;
+    }
+
+    return true;
+}
+
+function getWorkIdsWithDraftComparisons()
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    global $cnx;
+    $cache = [];
+    $stmt = $cnx->query(
+        'SELECT c.id as comparison_id,
+                c.folder as comparison_folder,
+                w.id as work_id,
+                w.folder as work_folder,
+                a.folder as author_folder
+         FROM comparisons c
+         INNER JOIN versions s ON c.source_id = s.id
+         INNER JOIN works w ON s.work_id = w.id
+         INNER JOIN authors a ON w.author_id = a.id'
+    );
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (comparisonIsDraft(
+            $row['author_folder'],
+            $row['work_folder'],
+            (int)$row['comparison_id'],
+            $row['comparison_folder']
+        )) {
+            $cache[(int)$row['work_id']] = true;
+        }
+    }
+
+    $cache = array_keys($cache);
+    return $cache;
 }

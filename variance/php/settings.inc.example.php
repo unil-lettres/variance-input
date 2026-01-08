@@ -115,3 +115,62 @@ try {
 function getOeuvreUrl($authorFolder, $workFolder, $comparisonFolder) {
     return '/' . $authorFolder . '/' . $workFolder . '/comparaison/' . $comparisonFolder;
 }
+
+define('COMPARISON_COMPONENTS', [
+    'd.xhtml',
+    'i.xhtml',
+    'r.xhtml',
+    's.xhtml',
+    'source.xhtml',
+    'target.xhtml',
+]);
+
+function comparisonHasComponents($baseDir)
+{
+    foreach (COMPARISON_COMPONENTS as $file) {
+        if (!is_file($baseDir . '/' . $file)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function comparisonIsPublished($authorFolder, $workFolder, $comparisonFolder)
+{
+    if (!$authorFolder || !$workFolder || !$comparisonFolder) {
+        return false;
+    }
+
+    $baseDir = UPLOAD_ROOT . '/' . $authorFolder . '/' . $workFolder . '/' . $comparisonFolder;
+    return comparisonHasComponents($baseDir);
+}
+
+function getWorkIdsWithPublishedComparisons()
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    global $cnx;
+    $cache = [];
+    $stmt = $cnx->query(
+        'SELECT c.folder as comparison_folder,
+                w.id as work_id,
+                w.folder as work_folder,
+                a.folder as author_folder
+         FROM comparisons c
+         INNER JOIN versions s ON c.source_id = s.id
+         INNER JOIN works w ON s.work_id = w.id
+         INNER JOIN authors a ON w.author_id = a.id'
+    );
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (comparisonIsPublished($row['author_folder'], $row['work_folder'], $row['comparison_folder'])) {
+            $cache[(int)$row['work_id']] = true;
+        }
+    }
+
+    $cache = array_keys($cache);
+    return $cache;
+}

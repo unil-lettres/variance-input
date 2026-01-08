@@ -11,5 +11,5 @@
 
     RewriteRule ^([0-9a-zA-Z_]+)$ index_filtered.php?author=$1
     RewriteRule ^([-0-9a-zA-Z_]+)/([-0-9a-zA-Z_]+)$ index_filtered.php?author=$1&oeuvre=$2
-    RewriteRule ^([-0-9a-zA-Z_]+)/([-0-9a-zA-Z_]+)/comparaison/([0-9a-zA-Z_-]+)(/([0-9]+))?$ display.php?author=$1&work=$2&comparison=$1/$2/$3&chapter=$4
+    RewriteRule ^([-0-9a-zA-Z_]+)/([-0-9a-zA-Z_]+)/comparaison/([0-9]+)(/([0-9]+))?$ display.php?author=$1&work=$2&comparison=$3&chapter=$4
 </IfModule>

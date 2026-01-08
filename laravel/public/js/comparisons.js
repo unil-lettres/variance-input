@@ -1147,6 +1147,11 @@ function initComparisonsTable() {
           const origin = window.location.origin;
           return `${origin}/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.folder}`;
         })();
+        const devUrl = (function() {
+          if (!currentAuthorFolder || !currentWorkFolder || !comp?.id) return null;
+          const origin = window.location.origin;
+          return `${origin}/dev/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.id}`;
+        })();
         const editorUrl = typeof withBasePath === 'function'
           ? withBasePath(`/comparison/${comp.id}/editor`)
           : `/comparison/${comp.id}/editor`;
@@ -1183,6 +1188,7 @@ function initComparisonsTable() {
           <td class="text-center">
             <div class="btn-group-vertical" role="group" aria-label="Action buttons">
               ${(legacyUrl && published) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
+              ${(devUrl && !published) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
               ${(!isRunning && ready && !published) ? `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
               <a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>
               <a href="${exportUrl}" data-bs-toggle="tooltip" title="Exporter le pack legacy" class="btn btn-outline-secondary" target="_blank"><i class="bi bi-download"></i></a>

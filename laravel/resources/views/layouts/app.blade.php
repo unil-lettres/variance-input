@@ -70,6 +70,7 @@
                     @endif
 
                     <a href="{{ legacy_url() }}" class="btn btn-outline-light btn-sm me-2">Aller au site public</a>
+                    <a href="{{ legacy_url('dev') }}" class="btn btn-outline-light btn-sm me-2">Aller au site dev</a>
 
                     <form action="{{ admin_path('logout') }}" method="POST" style="display: inline;">
                         @csrf

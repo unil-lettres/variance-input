@@ -83,8 +83,12 @@ require_once 'php/settings.inc.php';
                     </h2>
 					<?php
 					$perPage = 40;
+                    $workIds = array_map('intval', getWorkIdsWithDraftComparisons());
+                    $workFilterSql = empty($workIds)
+                        ? 'WHERE 1=0'
+                        : 'WHERE w.id IN (' . implode(',', $workIds) . ')';
 					$previous = array('a_id' => 0, 'a_name' => 0, 'a_folder' => 0, 'w_id' => 0, 'w_title' => 0, 'w_folder' => 0, 'w_desc' => 0);
-					$query = 'SELECT SQL_CALC_FOUND_ROWS a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.title as w_title, w.folder as w_folder, w.desc as w_desc FROM `authors` a INNER JOIN works w ON w.author_id = a.id ORDER BY a.order ASC, w_id ASC LIMIT :limit OFFSET :offset';
+					$query = 'SELECT SQL_CALC_FOUND_ROWS a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.title as w_title, w.folder as w_folder, w.desc as w_desc FROM `authors` a INNER JOIN works w ON w.author_id = a.id ' . $workFilterSql . ' ORDER BY a.order ASC, w_id ASC LIMIT :limit OFFSET :offset';
 					$page = (!empty($_GET['page']) ? intval($_GET['page']) : 1);
 					$offset = ($page -1) * $perPage;
 
@@ -94,6 +98,7 @@ require_once 'php/settings.inc.php';
 					$queryStatement->execute();
 					$total = $cnx->query('SELECT found_rows()')->fetchColumn();
 					$nbPages = ceil($total / $perPage);
+					$hasResults = false;
 					if ($nbPages > 1):?>
                         <div class="catalogue__pagination pull-right">
                             <span class="smaller-1">pages</span>
@@ -103,7 +108,8 @@ require_once 'php/settings.inc.php';
                         </div>
 					<?php endif; ?>
                 </div><!--END ROW TITLE + PAGINATION-->
-				<?php while ($element = $queryStatement->fetch(PDO::FETCH_ASSOC)): ?>
+				<?php while ($element = $queryStatement->fetch(PDO::FETCH_ASSOC)):
+                    $hasResults = true; ?>
                     <div class="catalogue__item row<?php echo (($element['a_id'] === $previous['a_id']) ? ' author_'.$element['a_id'].'" style="display:none"' : '"'); ?>>
 						<?php if ($element['a_id'] != $previous['a_id']):
 							$authorName = $element['a_name'];
@@ -122,7 +128,7 @@ require_once 'php/settings.inc.php';
                             </h4>
                             <div class="work_<?php echo $element['w_id']; ?>" style="display:none">
                                 <div class="img col-sm-4">
-                                    <img class="img-responsive" src="<?= DIR_REL ?>/uploads_images/<?php echo $element['w_image'] ?>" alt="<?php echo $element['w_image'] ?>" />
+                                    <img class="img-responsive" src="/uploads_images/<?php echo $element['w_image'] ?>" alt="<?php echo $element['w_image'] ?>" />
                                 </div>
 						<?php endif; ?>
 
@@ -137,11 +143,21 @@ require_once 'php/settings.inc.php';
 
 									?>
                                 </div>
-								<?php $query = 'SELECT c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
+								<?php $query = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
 								$comparisonStatement = $cnx->prepare($query);
 								$comparisonStatement->bindValue(':id', $element['w_id'], PDO::PARAM_INT);
 								$comparisonStatement->execute();
-								$comparisons = $comparisonStatement->fetchAll(PDO::FETCH_ASSOC);
+								$comparisons = array_values(array_filter(
+                                    $comparisonStatement->fetchAll(PDO::FETCH_ASSOC),
+                                    function ($comparison) use ($element) {
+                                        return comparisonIsDraft(
+                                            $element['a_folder'],
+                                            $element['w_folder'],
+                                            $comparison['c_id'],
+                                            $comparison['c_folder']
+                                        );
+                                    }
+                                ));
 								$isPlural = count($comparisons) > 1;
 								if (!empty($comparisons)): ?>
                                     <p><strong>Comparaison<?php echo (($isPlural) ? 's' : ''); ?></strong></p>
@@ -188,7 +204,7 @@ require_once 'php/settings.inc.php';
                                     <?php $displayIndex = 1; ?>
                                     <?php foreach ($comparisons as $version): ?>
                                         <a class="wrapper_menu_a" title="cliquez pour comparer"
-                                           href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); ?>">
+                                           href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_id']); ?>">
                                             <div class="wrapper_flex">
 
                                                 <?php
@@ -239,6 +255,9 @@ require_once 'php/settings.inc.php';
 					<?php
 					$previous = $element;
 				endwhile;
+                if (!$hasResults): ?>
+                    <div class="text-muted" style="padding: 10px 0;">Aucune comparaison en cours pour le moment.</div>
+                <?php endif;
 				if ($nbPages > 1):?>
                     <div class="catalogue__pagination pull-right">
                         <span class="smaller-1">pages</span>

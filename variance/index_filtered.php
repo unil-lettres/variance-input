@@ -88,7 +88,11 @@ error_reporting(E_ALL);
 					$previous = array('a_id' => 0, 'a_name' => 0, 'a_folder' => 0, 'w_id' => 0, 'w_title' => 0, 'w_folder' => 0, 'w_desc' => 0);
 					$authorFiltered = isset($_GET['author']) && trim($_GET['author']) != '' ? " AND a.folder='".htmlspecialchars($_GET['author'])."'" : '';
           $oeuvreFiltered = isset($_GET['oeuvre']) && trim($_GET['oeuvre']) != '' ? " AND w.folder='".htmlspecialchars($_GET['oeuvre'])."'" : '';
-          $query = 'SELECT SQL_CALC_FOUND_ROWS a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.title as w_title, w.folder as w_folder, w.desc as w_desc FROM `authors` a INNER JOIN works w ON w.author_id = a.id WHERE 1=1 '.$authorFiltered.' '.$oeuvreFiltered.' ORDER BY a_name ASC, w_title ASC LIMIT :limit OFFSET :offset';
+                    $workIds = array_map('intval', getWorkIdsWithPublishedComparisons());
+                    $workFilterSql = empty($workIds)
+                        ? ' AND 1=0'
+                        : ' AND w.id IN (' . implode(',', $workIds) . ')';
+          $query = 'SELECT SQL_CALC_FOUND_ROWS a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.title as w_title, w.folder as w_folder, w.desc as w_desc FROM `authors` a INNER JOIN works w ON w.author_id = a.id WHERE 1=1 '.$authorFiltered.' '.$oeuvreFiltered.' '.$workFilterSql.' ORDER BY a_name ASC, w_title ASC LIMIT :limit OFFSET :offset';
 					$page = (!empty($_GET['page']) ? intval($_GET['page']) : 1);
 					$offset = ($page -1) * $perPage;
 
@@ -98,6 +102,7 @@ error_reporting(E_ALL);
 					$queryStatement->execute();
 					$total = $cnx->query('SELECT found_rows()')->fetchColumn();
 					$nbPages = ceil($total / $perPage);
+					$hasResults = false;
 					if ($nbPages > 1):?>
                         <div class="catalogue__pagination pull-right">
                             <span class="smaller-1">pages</span>
@@ -107,7 +112,8 @@ error_reporting(E_ALL);
                         </div>
 					<?php endif; ?>
                 </div><!--END ROW TITLE + PAGINATION-->
-				<?php while ($element = $queryStatement->fetch(PDO::FETCH_ASSOC)): ?>
+				<?php while ($element = $queryStatement->fetch(PDO::FETCH_ASSOC)):
+                    $hasResults = true; ?>
                     <div class="catalogue__item row">
 						<?php if ($element['a_id'] != $previous['a_id']):
 							$authorName = $element['a_name'];
@@ -143,28 +149,41 @@ error_reporting(E_ALL);
 								$comparisonStatement = $cnx->prepare($query);
 								$comparisonStatement->bindValue(':id', $element['w_id'], PDO::PARAM_INT);
 								$comparisonStatement->execute();
-								$version = $comparisonStatement->fetch();
-								if ($version): ?>
+                                $comparisons = array_values(array_filter(
+                                    $comparisonStatement->fetchAll(PDO::FETCH_ASSOC),
+                                    function ($comparison) use ($element) {
+                                        return comparisonIsPublished(
+                                            $element['a_folder'],
+                                            $element['w_folder'],
+                                            $comparison['c_folder']
+                                        );
+                                    }
+                                ));
+								if (!empty($comparisons)):
+                                    $version = $comparisons[0];
+                                    $url = getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); ?>
                                     <p><strong>Comparaisons</strong></p>
                                     <ul class="catalogue-versions">
-                                        <li><a title="cliquez pour comparer" href="<?php
-											ob_start(); echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); $url = ob_get_clean(); echo $url; ?>"><?php echo '<span>'. $version['c_number'].'. '.$version['s_name'] . ' </span><span class="arrow-versions">&rarr;</span> ' . $version['t_name']; ?></a></li><?php
-										while ($version = $comparisonStatement->fetch()):
-											?>
+                                        <li><a title="cliquez pour comparer" href="<?php echo $url; ?>"><?php echo '<span>'. $version['c_number'].'. '.$version['s_name'] . ' </span><span class="arrow-versions">&rarr;</span> ' . $version['t_name']; ?></a></li><?php
+										for ($i = 1; $i < count($comparisons); $i++):
+                                            $version = $comparisons[$i]; ?>
                                             <li><a href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_folder']); ?>"><?php echo '<span>'. $version['c_number'].'. '.$version['s_name'] . ' </span><span class="arrow-versions">&rarr;</span> ' . $version['t_name']; ?></a></li><?php
-										endwhile; ?>
+										endfor; ?>
                                     </ul>
 
-								<?php endif;?>
-                                <div class="dia_btn align-right primary small">
-                                    <a href="<?php echo $url; ?>">Comparer</a>
-                                </div>
+                                    <div class="dia_btn align-right primary small">
+                                        <a href="<?php echo $url; ?>">Comparer</a>
+                                    </div>
+								<?php endif; ?>
                             </div>
 						<?php endif; ?>
                     </div>
 					<?php
 					$previous = $element;
 				endwhile;
+                if (!$hasResults): ?>
+                    <div class="text-muted" style="padding: 10px 0;">Aucune comparaison publiée pour le moment.</div>
+                <?php endif;
 				if ($nbPages > 1):?>
                     <div class="catalogue__pagination pull-right">
                         <span class="smaller-1">pages</span>

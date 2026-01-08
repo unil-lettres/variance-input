@@ -2,6 +2,54 @@
 
 require_once 'php/settings.inc.php';
 require_once 'backoff/includes/chapter_functions.php';
+$authorFolder = isset($_GET['author']) ? $_GET['author'] : '';
+$workFolder = isset($_GET['work']) ? $_GET['work'] : '';
+$comparisonId = isset($_GET['comparison']) ? (int)$_GET['comparison'] : 0;
+
+$comparisonRow = null;
+$comparisonFolder = '';
+$path = '';
+$pathForImages = '';
+$versions = ['', ''];
+$workId = null;
+
+if ($authorFolder !== '' && $workFolder !== '' && $comparisonId > 0) {
+    $comparisonStatement = $cnx->prepare(
+        'SELECT c.id,
+                c.folder,
+                s.folder AS source_folder,
+                t.folder AS target_folder,
+                w.id AS work_id
+         FROM comparisons c
+         INNER JOIN versions s ON c.source_id = s.id
+         INNER JOIN versions t ON c.target_id = t.id
+         INNER JOIN works w ON s.work_id = w.id
+         INNER JOIN authors a ON w.author_id = a.id
+         WHERE c.id = :comparison_id
+           AND w.folder = :work_folder
+           AND a.folder = :author_folder'
+    );
+    $comparisonStatement->execute([
+        'comparison_id' => $comparisonId,
+        'work_folder' => $workFolder,
+        'author_folder' => $authorFolder,
+    ]);
+    $comparisonRow = $comparisonStatement->fetch(PDO::FETCH_ASSOC);
+
+    if ($comparisonRow && comparisonIsDraft($authorFolder, $workFolder, $comparisonRow['id'], $comparisonRow['folder'])) {
+        $comparisonFolder = $comparisonRow['folder'];
+        $path = $authorFolder . '/' . $workFolder . '/comparisons/' . $comparisonRow['id'];
+        $pathForImages = $authorFolder . '/' . $workFolder;
+        $versions = [
+            $comparisonRow['source_folder'],
+            $comparisonRow['target_folder'],
+        ];
+        $workId = (int)$comparisonRow['work_id'];
+    } else {
+        $comparisonRow = null;
+    }
+}
+
 $params = array(
     'size' => 'font-medium',
     'leading' => 'lineheight-medium',
@@ -118,7 +166,6 @@ if (!empty($_COOKIE['viewer_params'])) {
                                         echo $name;
                                         ?><input type="hidden" name="author"
                                                  value="<?php echo $_GET['author']; ?>" /><?php
-                                        $path = $_GET['author'];
                                     }
                                 endif; ?></span>
                         </div>
@@ -132,7 +179,6 @@ if (!empty($_COOKIE['viewer_params'])) {
                                     if ($work = $workStatement->fetch(PDO::FETCH_ASSOC)) {
                                         echo $work['title'];
                                         ?><input type="hidden" name="work" value="<?php echo $_GET['work']; ?>" /><?php
-                                        $path .= '/' . $_GET['work'];
                                     }
                                 endif; ?></span>
                         </div>
@@ -140,68 +186,62 @@ if (!empty($_COOKIE['viewer_params'])) {
 
                         <div class="book_settings__item comparison pull-left">
                             <span class="label">Comparaisons</span>
-                            <?php if (!empty($_GET['work']) && ($content = glob(UPLOAD_ROOT . '/' . $path . '/*-*', GLOB_ONLYDIR))): 
+                            <?php
+                            if (!empty($_GET['work']) && !empty($work) && $authorFolder !== '' && $workFolder !== ''):
+                                $comparisonsStatement = $cnx->prepare(
+                                    'SELECT c.id as c_id,
+                                            c.number as c_number,
+                                            c.prefix_label as c_prefix_label,
+                                            c.folder as c_folder,
+                                            s.name as s_name,
+                                            t.name as t_name
+                                     FROM comparisons c
+                                     INNER JOIN versions s ON c.source_id = s.id
+                                     INNER JOIN versions t ON c.target_id = t.id
+                                     WHERE s.work_id = :work_id
+                                     ORDER BY c.number ASC'
+                                );
+                                $comparisonsStatement->execute(['work_id' => $work['id']]);
 
+                                $comparisons = array_values(array_filter(
+                                    $comparisonsStatement->fetchAll(PDO::FETCH_ASSOC),
+                                    function ($comparison) use ($authorFolder, $workFolder) {
+                                        return comparisonIsDraft(
+                                            $authorFolder,
+                                            $workFolder,
+                                            $comparison['c_id'],
+                                            $comparison['c_folder']
+                                        );
+                                    }
+                                ));
 
+                                if (!empty($comparisons)):
                             ?>
-
                                 <select name="comparison" id="comparisonId" class="form-control">
-                                    <?php $versionNames = array(); ?>
-                                    <?php $optionEntries = array(); ?>
-                                    <?php foreach ($content as $element): ?>
-                                        <?php
-
-                                        $folders = explode('-', substr(strrchr($element, '/'), 1));
-
-                                        $comparisonName = implode('-', $folders);
-
-                                        $foldersSql = '"' . implode('","', $folders) . '"';
-                                        $foldersStatement = $cnx->prepare('SELECT c.number as c_number, c.folder as c_folder, c.prefix_label as c_prefix_label, v.name as name, v.folder folder FROM versions v, comparisons c WHERE v.folder IN (' . $foldersSql . ') AND work_id = :workid AND c.folder LIKE :folder ORDER BY c.number ASC');
-
-                                        $foldersStatement->execute(array('workid' => $work['id'], 'folder' => $comparisonName));
-
-
-                                        while ($folderName = $foldersStatement->fetch(PDO::FETCH_ASSOC)) {
-                                            $prefix = isset($folderName['c_prefix_label'])
-                                                ? trim($folderName['c_prefix_label'])
-                                                : '';
-                                            if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
-                                                $prefix = '';
-                                            }
-                                            if ($prefix !== '' && substr($prefix, -1) !== ' ') {
-                                                $prefix .= ' ';
-                                            }
-
-                                            $versionNames[$folderName['folder']] = array(
-                                                $folderName['c_number'],
-                                                $prefix,
-                                                $folderName['name']
-                                            );
-
+                                    <?php
+                                    $optionEntries = array();
+                                    foreach ($comparisons as $comparison) {
+                                        $prefix = isset($comparison['c_prefix_label'])
+                                            ? trim($comparison['c_prefix_label'])
+                                            : '';
+                                        if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
+                                            $prefix = '';
+                                        }
+                                        if ($prefix !== '' && substr($prefix, -1) !== ' ') {
+                                            $prefix .= ' ';
                                         }
 
-                                        $sourceLabel = isset($versionNames[$folders[0]])
-                                            ? trim($versionNames[$folders[0]][1] . $versionNames[$folders[0]][2])
-                                            : '';
-                                        $targetLabel = isset($versionNames[$folders[1]][2])
-                                            ? $versionNames[$folders[1]][2]
-                                            : '';
-
-                                        $isSelected = !empty($_GET['comparison']) && (UPLOAD_ROOT . '/' . $_GET['comparison'] == $element);
-                                        if ($isSelected) {
-                                            $path = $_GET['comparison'];
-                                        }
+                                        $sourceLabel = trim($prefix . ($comparison['s_name'] ?? ''));
+                                        $targetLabel = $comparison['t_name'] ?? '';
 
                                         $optionEntries[] = array(
-                                            'order'    => isset($versionNames[$folders[0]][0]) ? (int)$versionNames[$folders[0]][0] : PHP_INT_MAX,
+                                            'order'    => isset($comparison['c_number']) ? (int)$comparison['c_number'] : PHP_INT_MAX,
                                             'label'    => trim($sourceLabel) . ' -> ' . $targetLabel,
-                                            'value'    => getOeuvreUrl($_GET['author'], $_GET['work'], substr(strrchr($element, '/'), 1)),
-                                            'selected' => $isSelected,
+                                            'value'    => getOeuvreUrl($_GET['author'], $_GET['work'], $comparison['c_id']),
+                                            'selected' => ($comparisonId === (int)$comparison['c_id']),
                                         );
+                                    }
 
-                                        ?>
-                                    <?php endforeach; ?>
-                                    <?php
                                     usort($optionEntries, function ($a, $b) {
                                         if ($a['order'] === $b['order']) {
                                             return strcmp($a['label'], $b['label']);
@@ -221,7 +261,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                                     }
                                     ?>
                                 </select>
-                            <?php endif; ?>
+                            <?php endif; endif; ?>
                         </div>
 
                         <div class="book_settings__item book-info pull-left">
@@ -335,14 +375,13 @@ if (!empty($_COOKIE['viewer_params'])) {
                                                                                        title="Table des matières"
                                                                                        alt="Table des matières"/></a>
 
-            <?php $versions = explode('-', substr(strrchr($path, '/'), 1));
-            $pathForImages = substr($path, 0, strrpos($path, '/')); ?>
+            <?php $pathForImages = $pathForImages ?: ''; ?>
             <section id="content" class="interface__content clearfix">
                 <div id="js-workarea-left" class="col-sm-6 workarea workarea--left">
                     <div class="paging-image">
                         <div class="paging-image__wrapper"
-                             data-src="<?php echo DIR_REL . RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[0] . '/img_' . $versions[0]; ?>_001.jpg"
-                             data-high-res-src="<?php echo DIR_REL . RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[0] . '/img_' . $versions[0]; ?>_001.jpg">
+                             data-src="<?php echo RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[0] . '/img_' . $versions[0]; ?>_001.jpg"
+                             data-high-res-src="<?php echo RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[0] . '/img_' . $versions[0]; ?>_001.jpg">
                         </div>
                         <a href="#" class="closer"><i class="fa fa-times" aria-hidden="true"></i></a>
                         <a href="#" class="prev" title="Page précédente"><i class="fa fa-caret-up"
@@ -361,8 +400,8 @@ if (!empty($_COOKIE['viewer_params'])) {
                 <div id="js-workarea-right" class="col-sm-6 workarea workarea--right">
                     <div class="paging-image">
                         <div class="paging-image__wrapper"
-                             data-src="<?php echo DIR_REL . RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[1] . '/img_' . $versions[1]; ?>_001.jpg"
-                             data-high-res-src="<?php echo DIR_REL . RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[1] . '/img_' . $versions[1]; ?>_001.jpg">
+                             data-src="<?php echo RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[1] . '/img_' . $versions[1]; ?>_001.jpg"
+                             data-high-res-src="<?php echo RELATIVE_UPLOAD_ROOT . '/' . $pathForImages . '/' . $versions[1] . '/img_' . $versions[1]; ?>_001.jpg">
                         </div>
                         <a href="#" class="closer"><i class="fa fa-times" aria-hidden="true"></i></a>
                         <a href="#" class="prev" title="Page précédente"><i class="fa fa-caret-up"
@@ -387,25 +426,26 @@ if (!empty($_COOKIE['viewer_params'])) {
     <a href="#" id="chapters-btn_close"><img src="/img/close.svg" alt="Fermer"/></a>
     <div id="Chapters">
         <?php
-        $workId = getWorkIdByWorkName($_GET['work']);
-        $versions = explode('-', substr(strrchr($path, '/'), 1));
-        $folder = substr(strrchr($_GET['comparison'], '/'), 1);
+        $resolvedWorkId = $workId ?: (!empty($_GET['work']) ? getWorkIdByWorkName($_GET['work']) : null);
+        $sourceVersion = $versions[0] ?? '';
+        $targetVersion = $versions[1] ?? '';
+        $folder = $comparisonFolder;
         ?>
         <div class="container">
             <div class="row titleChapters">
                 <div class="col-lg-6 chptrs_v-title">
-                    <?php echo displayNameVersion($workId, $versions[0]); ?>
+                    <?php echo $resolvedWorkId ? displayNameVersion($resolvedWorkId, $sourceVersion) : ''; ?>
                 </div>
                 <div class="col-lg-6 chptrs_v-title">
-                    <?php echo displayNameVersion($workId, $versions[1]); ?>
+                    <?php echo $resolvedWorkId ? displayNameVersion($resolvedWorkId, $targetVersion) : ''; ?>
                 </div>
             </div>
             <div class="row">
                 <div class="col-lg-6 chptrs_list">
-                    <?php displayChapters($folder, 'source'); ?>
+                    <?php if ($folder) { displayChapters($folder, 'source'); } ?>
                 </div>
                 <div class="col-lg-6 chptrs_list">
-                    <?php displayChapters($folder, 'target'); ?>
+                    <?php if ($folder) { displayChapters($folder, 'target'); } ?>
                 </div>
             </div>
         </div>
@@ -608,20 +648,15 @@ if (!empty($_COOKIE['viewer_params'])) {
         var viewerB = ImageViewer('#js-workarea-right .paging-image__wrapper');
 
         <?php
-        if (!empty($_GET['comparison'])) {
-
-        $expldedPath = explode('/', $_GET['comparison']);
-
-        $baseName = implode('--', $expldedPath);
-        $chainedPaths = explode('-', array_pop($expldedPath));
-
-        $jsonPath = implode('/', $expldedPath);
-
-
-
+        if ($comparisonRow) {
+            $baseName = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparisonFolder));
+            $sourceJsonPath = UPLOAD_ROOT . '/' . $authorFolder . '/' . $workFolder . '/' . $versions[0] . '/images_source_' . $baseName . '.json';
+            $targetJsonPath = UPLOAD_ROOT . '/' . $authorFolder . '/' . $workFolder . '/' . $versions[1] . '/images_target_' . $baseName . '.json';
+            $sourceJson = is_file($sourceJsonPath) ? file_get_contents($sourceJsonPath) : '[]';
+            $targetJson = is_file($targetJsonPath) ? file_get_contents($targetJsonPath) : '[]';
         ?>
-        var imagesSource = <?php echo file_get_contents(UPLOAD_ROOT . '/' . $jsonPath . '/' . $chainedPaths[0] . '/' . 'images_source_' . $baseName . '.json'); ?>;
-        var imagesTarget = <?php echo file_get_contents(UPLOAD_ROOT . '/' . $jsonPath . '/' . $chainedPaths[1] . '/' . 'images_target_' . $baseName . '.json'); ?>;
+        var imagesSource = <?php echo $sourceJson; ?>;
+        var imagesTarget = <?php echo $targetJson; ?>;
 
         var currentSourceIdx = 0;
         var currentTargetIdx = 0;

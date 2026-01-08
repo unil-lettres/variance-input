@@ -581,7 +581,7 @@ require_once 'php/settings.inc.php';
 			<section id="content" class="interface__content clearfix">
 				<div id="js-workarea-left"  class="col-sm-6 workarea workarea--left">
 					<div class="paging-image">
-						<div class="paging-image__wrapper" data-src="uploads_images/img1.jpg" data-high-res-src="uploads_images/img1.jpg">
+						<div class="paging-image__wrapper" data-src="/uploads_images/img1.jpg" data-high-res-src="/uploads_images/img1.jpg">
 						</div>
 					</div>
 					<div class="workarea--left__container mCustomScrollbar" dir="rtl" data-mcs-theme="minimal-dark">
