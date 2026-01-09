@@ -25,6 +25,8 @@ Guidance for running the Variance stack outside the default development setup.
 - In production, terminate TLS either in `variance-proxy` or via an upstream load balancer.
 - Update `nginx/default.conf` to match your hostnames, SSL certificates, and desired routes.
 - Optionally expose Medite on a separate hostname or keep it internal-only.
+- If TLS is terminated upstream (e.g. Apache), forward `X-Forwarded-Proto` so Laravel
+  generates HTTPS URLs correctly (or you will see http:// redirects from `/admin`).
 
 ## Scaling
 
@@ -49,6 +51,18 @@ Guidance for running the Variance stack outside the default development setup.
 - Protect `variance-proxy` with appropriate auth/IP restrictions if exposed.
 - Rotate application keys and database credentials regularly.
 - Disable or restrict direct container shell access on production hosts.
+
+## Legacy (PHP) setup checklist
+
+- Copy `/var/www/variance-input/variance/php/settings.inc.example.php` to
+  `/var/www/variance-input/variance/php/settings.inc.php` on the host. This file is
+  git-ignored and required by public comparison pages.
+- Ensure legacy PHP dependencies exist (needed for `vendor/autoload.php`). If missing,
+  run:
+  ```bash
+  docker compose -f docker-compose.vm.yml exec -T variance-app \
+    sh -lc 'cd /var/www && composer install --no-dev --optimize-autoloader'
+  ```
 
 ---
 
