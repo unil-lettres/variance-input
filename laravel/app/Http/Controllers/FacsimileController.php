@@ -35,6 +35,11 @@ class FacsimileController extends Controller
         $version = Version::with('work.author')->find($validated['version_id']);
         $work    = $version->work;
         $author  = $work->author;
+        if ($version->is_legacy || $work->is_legacy) {
+            return response()->json([
+                'error' => 'Les versions legacy sont en lecture seule.',
+            ], 403);
+        }
 
         $dirRel  = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
         $disk    = Storage::disk('public');           // = storage/app/public

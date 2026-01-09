@@ -9,6 +9,10 @@ class WorkPolicy
 {
     public function edit(User $user, Work $work)
     {
+        if ($work->is_legacy) {
+            return false;
+        }
+
         if ($user->is_admin) {
             return true;
         }

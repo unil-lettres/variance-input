@@ -15,6 +15,7 @@ class Version extends Model
         'name',
         'folder',
         'work_id',
+        'is_legacy',
         'pagination_done',
         'pagination_done_at',
         'pagination_done_by',
@@ -22,6 +23,7 @@ class Version extends Model
     ];
 
     protected $casts = [
+        'is_legacy'          => 'boolean',
         'pagination_done'    => 'boolean',
         'pagination_done_at' => 'datetime',
         'ignored_pages'      => 'collection',

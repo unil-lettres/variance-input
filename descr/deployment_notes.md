@@ -64,6 +64,29 @@ Guidance for running the Variance stack outside the default development setup.
     sh -lc 'cd /var/www && composer install --no-dev --optimize-autoloader'
   ```
 
+## Legacy data import (one-time)
+
+- Copy legacy assets to the new host (exclude any deprecated folders):
+  ```bash
+  rsync -a --exclude 'deprecated' user@legacy-host:/var/www/variance/uploads/ /var/www/variance-input/variance/uploads/
+  rsync -a user@legacy-host:/var/www/variance/uploads_images/ /var/www/variance-input/variance/uploads_images/
+  rsync -a user@legacy-host:/var/www/variance/uploads/pdf/ /var/www/variance-input/variance/uploads/pdf/
+  ```
+- Ensure the upload directories are writable by the deployment user:
+  ```bash
+  sudo chown -R deployer:www-data /var/www/variance-input/variance/uploads \
+    /var/www/variance-input/variance/uploads_images \
+    /var/www/variance-input/variance/uploads/pdf
+  ```
+- Copy the legacy SQL dump into the Laravel container and import it:
+  ```bash
+  docker compose exec -T laravel \
+    php artisan variance:import-legacy storage/app/private/legacy_import/legacy.dump.sql
+  ```
+- The import command writes a work ID map to
+  `laravel/storage/app/private/legacy_import/work_id_map.json` for reference and
+  copies legacy PDFs to the new work IDs when available.
+
 ---
 
 These notes should complement your organisation’s deployment standards; adapt paths and practices to your infrastructure.

@@ -46,6 +46,7 @@ class VersionController extends Controller
                     'name'       => $version->name,
                     'folder'     => $version->folder,
                     'work_id'    => $version->work_id,
+                    'is_legacy'  => (bool) $version->is_legacy,
                     'pagination_done' => (bool) $version->pagination_done,
                     'pagination_done_at' => $version->pagination_done_at?->getTimestamp(),
                     'pagination_done_by' => $version->pagination_done_by,
@@ -74,6 +75,7 @@ class VersionController extends Controller
 
         /* 2. Context */
         $work        = Work::findOrFail($validated['work_id']);
+        $this->assertWorkEditable($work);
         $shortTitle  = $work->short_title;
         $nextNumber  = Version::where('work_id', $work->id)->count() + 1;
         $baseName    = "{$nextNumber}{$shortTitle}";
@@ -122,12 +124,14 @@ class VersionController extends Controller
     public function update(Request $req, $id)
     {
         $version = Version::findOrFail($id);
+        $this->assertVersionEditable($version);
         $version->update($req->validate(['name' => 'required|string|max:100']));
         return response()->json($version, 200);
     }
 
     public function togglePaginationDone(Request $request, Version $version): JsonResponse
     {
+        $this->assertVersionEditable($version);
         $data = $request->validate([
             'done' => 'required|boolean',
         ]);
@@ -156,6 +160,7 @@ class VersionController extends Controller
     public function destroy($id)
     {
         $version = Version::with('work.author')->findOrFail($id);
+        $this->assertVersionEditable($version);
 
         // Prevent deletion if used in a comparison
         $inUse = Comparison::where('source_id', $version->id)
@@ -226,6 +231,7 @@ class VersionController extends Controller
 
     public function cancelFacsimiles(Version $version): JsonResponse
     {
+        $this->assertVersionEditable($version);
         $version->loadMissing('work.author');
         $removed    = $this->purgeFacsimileStorage($version, includePublished: true);
         $facsimiles = $this->facsimileStatus($version);
@@ -241,6 +247,7 @@ class VersionController extends Controller
 
     public function cancelLignes(Version $version): JsonResponse
     {
+        $this->assertVersionEditable($version);
         $version->loadMissing('work.author');
         $this->pageMarkerService->markCancelled($version->id, 'Annulé par l\'utilisateur');
         $this->pageMarkerService->resetProgress($version->id);
@@ -261,6 +268,7 @@ class VersionController extends Controller
 
     public function deleteLignesFile(Version $version): JsonResponse
     {
+        $this->assertVersionEditable($version);
         $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
         $status = strtolower((string) ($progress['status'] ?? ''));
         if (in_array($status, ['queued', 'running'], true)) {
@@ -443,6 +451,7 @@ class VersionController extends Controller
         ]);
 
         $version = Version::with('work.author')->findOrFail($validated['version_id']);
+        $this->assertVersionEditable($version);
         $paths   = $this->facsimilePaths($version);
 
         if (!$paths['source_exists'] || empty($paths['source_files'])) {
@@ -477,6 +486,7 @@ class VersionController extends Controller
 
     public function applyPageMarkers(Request $request, Version $version)
     {
+        $this->assertVersionEditable($version);
         $validated = $request->validate([
             'lignes'         => 'required|file|max:4096',
             'clear_existing' => 'sometimes|boolean',
@@ -522,6 +532,7 @@ class VersionController extends Controller
 
     public function uploadLignes(Request $request, Version $version)
     {
+        $this->assertVersionEditable($version);
         $request->validate([
             'lignes' => 'required|file|max:4096',
         ]);
@@ -631,6 +642,7 @@ class VersionController extends Controller
     /** Build pagination sidecar from <pb> tags present in the version TEI. */
     public function createPaginationFromPb(Version $version): JsonResponse
     {
+        $this->assertVersionEditable($version);
         $result = $this->pageMarkerService->createSidecarFromPb($version);
 
         if ($result['count'] === 0) {
@@ -653,6 +665,7 @@ class VersionController extends Controller
      */
     public function toggleIgnoredPage(Version $version, Request $request): JsonResponse
     {
+        $this->assertVersionEditable($version);
         $validated = $request->validate([
             'filename' => 'required|string|max:255',
         ]);
@@ -1101,5 +1114,21 @@ class VersionController extends Controller
     private function isThumbnail(string $filename): bool
     {
         return str_contains(strtolower($filename), '_thumb');
+    }
+
+    private function assertWorkEditable(Work $work): void
+    {
+        if ($work->is_legacy) {
+            abort(403, 'Cette œuvre est en lecture seule.');
+        }
+    }
+
+    private function assertVersionEditable(Version $version): void
+    {
+        $version->loadMissing('work');
+
+        if ($version->is_legacy || $version->work?->is_legacy) {
+            abort(403, 'Cette version est en lecture seule.');
+        }
     }
 }

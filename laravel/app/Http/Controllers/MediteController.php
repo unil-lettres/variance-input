@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\Models\Comparison;
+use App\Models\Version;
+use App\Models\Work;
 
 class MediteController extends Controller
 {
@@ -34,6 +36,8 @@ class MediteController extends Controller
         ]);
 
         Log::debug('createComparison payload', $data);
+
+        $this->assertVersionsEditable((int) $data['source_id'], (int) $data['target_id']);
 
         $sep = array_key_exists('sep', $data) ? $data['sep'] : null;
         if ($sep === '') {
@@ -86,6 +90,12 @@ class MediteController extends Controller
             'sep'            => 'nullable|string',
             'comparison_id'  => 'nullable|exists:comparisons,id',
         ]);
+
+        $this->assertVersionsEditable(
+            (int) $validated['source_version'],
+            (int) $validated['target_version'],
+            (int) $validated['work_id']
+        );
 
         $caseSensitive   = $request->has('case_sensitive');
         $diacriSensitive = true;
@@ -331,5 +341,25 @@ class MediteController extends Controller
         }
 
         return [$folder, $number];
+    }
+
+    private function assertVersionsEditable(int $sourceId, int $targetId, ?int $workId = null): void
+    {
+        $versions = Version::with('work')
+            ->whereIn('id', [$sourceId, $targetId])
+            ->get();
+
+        foreach ($versions as $version) {
+            if ($version->is_legacy || $version->work?->is_legacy) {
+                abort(403, 'Les comparaisons legacy sont en lecture seule.');
+            }
+        }
+
+        if ($workId !== null) {
+            $work = Work::find($workId);
+            if ($work?->is_legacy) {
+                abort(403, 'Les comparaisons legacy sont en lecture seule.');
+            }
+        }
     }
 }

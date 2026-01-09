@@ -11,7 +11,11 @@ class Author extends Model
     use HasFactory;
 
     /** Mass‑assignable; `folder` is set automatically via events */
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'folder', 'order', 'is_legacy'];
+
+    protected $casts = [
+        'is_legacy' => 'boolean',
+    ];
 
     /* ---------------------------------------------------------------------
      |  Boot callbacks:     slug ▸ mkdir ▸ rmdir on delete                  |

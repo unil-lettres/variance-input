@@ -45,6 +45,11 @@ class AuthorController extends Controller
         ]);
 
         $author = Author::findOrFail($id);
+        if ($author->is_legacy) {
+            return response()->json([
+                'error' => 'Les auteurs legacy sont en lecture seule.',
+            ], 403);
+        }
         $author->name = $request->input('name');
         $author->save();
 
@@ -54,6 +59,12 @@ class AuthorController extends Controller
     public function destroy($id)
     {
         $author = Author::findOrFail($id);
+
+        if ($author->is_legacy) {
+            return response()->json([
+                'error' => 'Les auteurs legacy ne peuvent pas être supprimés.',
+            ], 403);
+        }
 
         if ($author->works()->exists()) {
             return response()->json(['error' => 'Impossible de supprimer cet auteur car des oeuvres lui sont associées.'], 409);

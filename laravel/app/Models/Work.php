@@ -22,6 +22,13 @@ class Work extends Model
         'author_id',
         'desc',
         'image_url',
+        'pdf_url',
+        'folder',
+        'is_legacy',
+    ];
+
+    protected $casts = [
+        'is_legacy' => 'boolean',
     ];
 
     /* ---------------------------------------------------------------------

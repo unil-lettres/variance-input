@@ -126,6 +126,7 @@ class ComparisonController extends Controller
             'sourceVersion.work.author',
             'targetVersion.work.author',
         ])->findOrFail($id);
+        $this->assertComparisonEditable($comparison);
 
         $destInfo = $this->resolvePublicationPaths($comparison);
 
@@ -243,6 +244,7 @@ class ComparisonController extends Controller
 
     public function applyPageMarkers(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonEditable($comparison);
         $validated = $request->validate([
             'clear_existing'   => 'sometimes|boolean',
             'replace_existing' => 'sometimes|boolean',
@@ -321,6 +323,7 @@ class ComparisonController extends Controller
      */
     public function buildPaginationFromXhtml(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonEditable($comparison);
         $validated = $request->validate([
             'role' => 'nullable|in:source,target',
         ]);
@@ -363,6 +366,7 @@ class ComparisonController extends Controller
 
     public function restorePageMarkers(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonEditable($comparison);
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
         try {
@@ -398,6 +402,7 @@ class ComparisonController extends Controller
 
     public function cancelPageMarkers(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonEditable($comparison);
         $comparison->loadMissing('sourceVersion', 'targetVersion');
 
         $roleParam = strtolower((string) $request->input('role', ''));
@@ -744,6 +749,22 @@ class ComparisonController extends Controller
         }
 
         return [$workInfo->author_folder, $workInfo->work_folder];
+    }
+
+    private function assertComparisonEditable(Comparison $comparison): void
+    {
+        $comparison->loadMissing('sourceVersion.work', 'targetVersion.work');
+
+        $sourceVersion = $comparison->sourceVersion;
+        $targetVersion = $comparison->targetVersion;
+
+        if ($comparison->is_legacy
+            || $sourceVersion?->is_legacy
+            || $targetVersion?->is_legacy
+            || $sourceVersion?->work?->is_legacy
+            || $targetVersion?->work?->is_legacy) {
+            abort(403, 'Cette comparaison est en lecture seule.');
+        }
     }
 
     public function showManifest(Comparison $comparison, string $role)

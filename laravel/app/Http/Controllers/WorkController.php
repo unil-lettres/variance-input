@@ -46,6 +46,13 @@ class WorkController extends Controller
             ],
             'author_id' => 'required|exists:authors,id',
         ]);
+
+        $author = \App\Models\Author::findOrFail($validated['author_id']);
+        if ($author->is_legacy) {
+            return response()->json([
+                'error' => 'Les auteurs legacy sont en lecture seule.',
+            ], 403);
+        }
     
         $work = Work::create($validated);
     
@@ -76,6 +83,11 @@ class WorkController extends Controller
         //]);
 
         $work = Work::findOrFail($workId);
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy sont en lecture seule.',
+            ], 403);
+        }
         $work->desc = $request->desc;
         $work->save();
 
@@ -94,6 +106,12 @@ class WorkController extends Controller
     public function updateStatus(Request $request, $workId)
     {
         $status = WorkStatus::where('work_id', $workId)->firstOrFail();
+        $work = Work::findOrFail($workId);
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy sont en lecture seule.',
+            ], 403);
+        }
 
         $status->desc_status = $request->input('desc_status', $status->desc_status);
         $status->notice_status = $request->input('notice_status', $status->notice_status);
@@ -113,6 +131,11 @@ class WorkController extends Controller
     public function update(Request $request, $id)
     {
         $work = Work::findOrFail($id);
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy sont en lecture seule.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'title' => 'required|string|min:3|max:80',
@@ -141,6 +164,11 @@ class WorkController extends Controller
     public function destroy($id)
     {
         $work = Work::findOrFail($id);
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy ne peuvent pas être supprimées.',
+            ], 403);
+        }
     
         //  Prevent deletion if work has versions
         if ($work->versions()->exists()) {

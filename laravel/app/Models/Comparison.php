@@ -14,6 +14,7 @@ class Comparison extends Model
     protected $casts = [
         'case_sensitive'   => 'boolean',
         'diacri_sensitive' => 'boolean',
+        'is_legacy'        => 'boolean',
     ];
 
     /**

@@ -26,6 +26,7 @@ class PublishController extends Controller
         // 1. Récupération de la comparaison --------------------------------
         /** @var Comparison $comparison */
         $comparison = Comparison::findOrFail($request->input('comparison_id'));
+        $this->assertComparisonEditable($comparison);
 
         // 2. Récupérer l’œuvre via la version source ------------------------
         try {
@@ -89,6 +90,7 @@ class PublishController extends Controller
                 'error' => 'Comparaison introuvable ou déjà supprimée.',
             ], 404);
         }
+        $this->assertComparisonEditable($comparison);
 
         try {
             $paths = $this->resolvePaths($comparison);
@@ -314,6 +316,22 @@ class PublishController extends Controller
         }
 
         return null;
+    }
+
+    private function assertComparisonEditable(Comparison $comparison): void
+    {
+        $comparison->loadMissing('sourceVersion.work', 'targetVersion.work');
+
+        $sourceVersion = $comparison->sourceVersion;
+        $targetVersion = $comparison->targetVersion;
+
+        if ($comparison->is_legacy
+            || $sourceVersion?->is_legacy
+            || $targetVersion?->is_legacy
+            || $sourceVersion?->work?->is_legacy
+            || $targetVersion?->work?->is_legacy) {
+            abort(403, 'Cette comparaison est en lecture seule.');
+        }
     }
 
     private function collectManifestEntries(string $authorFolder, string $workFolder, string $versionFolder): array

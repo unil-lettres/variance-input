@@ -32,6 +32,12 @@ class MediaController extends Controller
      */
     public function store(Request $request, Work $work)
     {
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy sont en lecture seule.',
+            ], 403);
+        }
+
         $shortTitle = $request->query('short_title', $work->short_title);
         if (!$shortTitle) {
             return response()->json(['error' => 'Short title is required'], 400);
@@ -89,6 +95,12 @@ class MediaController extends Controller
      */
     public function destroy(Work $work, string $type)
     {
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy sont en lecture seule.',
+            ], 403);
+        }
+
         if ($type === 'vignette' && $work->image_url) {
             Storage::disk('uploads_images')->delete($work->image_url);
             $this->deleteLegacyImage($work->image_url);
