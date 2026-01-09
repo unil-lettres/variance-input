@@ -68,6 +68,7 @@ class ComparisonController extends Controller
 
                 $destDir   = "{$destBase}/{$cmp->folder}";
                 $fullDir   = storage_path("app/public/{$destDir}");
+                $publicDir = public_path($destDir);
                 $sourceDir = storage_path("app/public/{$destBase}/comparisons/{$cmp->id}");
                 if (!is_dir($sourceDir)) {
                     $legacy = public_path("{$destBase}/comparisons/{$cmp->id}");
@@ -75,11 +76,13 @@ class ComparisonController extends Controller
                         $sourceDir = $legacy;
                     }
                 }
+                $publishedDir = is_dir($fullDir) ? $fullDir : (is_dir($publicDir) ? $publicDir : null);
+                $componentDir = is_dir($sourceDir) ? $sourceDir : $publishedDir;
 
                 $missing = [];
-                if (is_dir($sourceDir)) {
+                if ($componentDir && is_dir($componentDir)) {
                     foreach ($required as $file) {
-                        if (!is_file($sourceDir . DIRECTORY_SEPARATOR . $file)) {
+                        if (!is_file($componentDir . DIRECTORY_SEPARATOR . $file)) {
                             $missing[] = $file;
                         }
                     }
@@ -88,16 +91,18 @@ class ComparisonController extends Controller
                 }
 
                 $alreadyPublished = 0;
-                foreach ($required as $file) {
-                    if (is_file($fullDir . DIRECTORY_SEPARATOR . $file)) {
-                        $alreadyPublished++;
+                if ($publishedDir) {
+                    foreach ($required as $file) {
+                        if (is_file($publishedDir . DIRECTORY_SEPARATOR . $file)) {
+                            $alreadyPublished++;
+                        }
                     }
                 }
 
                 $cmp->published = ($alreadyPublished === count($required));
                 $cmp->publish_missing = $missing;
                 $cmp->publish_dest = $destDir;
-                $cmp->publish_source = $sourceDir;
+                $cmp->publish_source = is_dir($sourceDir) ? $sourceDir : null;
                 $cmp->components_ready = empty($missing);
 
                 Log::debug('Comparison components status', [
