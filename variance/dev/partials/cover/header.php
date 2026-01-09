@@ -30,6 +30,24 @@ $currentPage = basename($_SERVER['REQUEST_URI']) ;
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+  <style>
+    .cover_section--dev #General-Wrapper .header-cover {
+      background:
+        linear-gradient(rgba(107, 59, 59, 0.6), rgba(107, 59, 59, 0.6)),
+        url("<?php echo DIR_REL ?>/img/cover_site/bkg_cover.jpg");
+      background-color: #6b3b3b;
+    }
+    .cover_section--dev #General-Wrapper .header-cover nav ul li a {
+      padding-bottom: 5px;
+      border-bottom: 3px solid transparent;
+    }
+    .cover_section--dev #General-Wrapper .header-cover nav ul li a.active,
+    .cover_section--dev #General-Wrapper .header-cover nav ul li a:hover,
+    .cover_section--dev #General-Wrapper .header-cover nav ul li a:focus {
+      border-bottom-color: #fff;
+    }
+  </style>
+
 	<!--[if IE]>
 	<script src="https://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
 	<![endif]-->
@@ -38,7 +56,7 @@ $currentPage = basename($_SERVER['REQUEST_URI']) ;
 	<script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
 	<![endif]-->
 </head>
-<body class="cover_section">
+<body class="cover_section cover_section--dev">
 
 <!--[if lt IE 9]>
 <div style="background: #ffff76; padding: 20px;">
