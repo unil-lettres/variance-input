@@ -455,7 +455,21 @@ document.addEventListener("DOMContentLoaded", () => {
       .then(authors => {
         authorSelector.innerHTML = '<option value="" disabled selected>Sélectionner un auteur</option>';
 
-        authors.forEach(author => {
+        const authorSortKey = (name) => {
+          const cleaned = String(name || '').trim();
+          if (!cleaned) return '';
+          const parts = cleaned.split(/\s+/);
+          const last = parts[parts.length - 1] || cleaned;
+          return `${last} ${cleaned}`;
+        };
+
+        const sortedAuthors = [...authors].sort((a, b) => {
+          const keyA = authorSortKey(a?.name);
+          const keyB = authorSortKey(b?.name);
+          return keyA.localeCompare(keyB, 'fr', { sensitivity: 'base' });
+        });
+
+        sortedAuthors.forEach(author => {
           const opt = document.createElement('option');
           opt.value = author.id;
           opt.textContent = author.name;
@@ -501,7 +515,21 @@ document.addEventListener("DOMContentLoaded", () => {
       .then(works => {
         resetWorksUI(authorId, selectedWorkId);
 
-        works.forEach(work => {
+        const workSortKey = (title) => {
+          const cleaned = String(title || '').trim();
+          if (!cleaned) return '';
+          let stripped = cleaned.replace(/^l['’]\s*/i, '');
+          stripped = stripped.replace(/^(le|la|les|un|une|des)\s+/i, '');
+          return `${stripped} ${cleaned}`;
+        };
+
+        const sortedWorks = [...works].sort((a, b) => {
+          const keyA = workSortKey(a?.title);
+          const keyB = workSortKey(b?.title);
+          return keyA.localeCompare(keyB, 'fr', { sensitivity: 'base' });
+        });
+
+        sortedWorks.forEach(work => {
           const opt = document.createElement('option');
           opt.value = work.id;
           opt.textContent = work.short_title
