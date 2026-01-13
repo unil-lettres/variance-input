@@ -14,7 +14,7 @@
     <div id="mediteCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
-            Choisissez deux versions et paramétrez Medite pour générer un alignement. Une fois le traitement terminé, les résultats alimentent la liste des comparaisons ci-dessous et la partie publique.
+            Choisissez deux versions et paramétrez Medite (optionnel) pour générer un alignement. Une fois le traitement terminé, les résultats alimentent la liste des comparaisons et la partie publique sous /dev.
         </p>
         <form id="medite-form">
             @csrf
@@ -102,6 +102,7 @@
 const $srcSel  = document.getElementById('source_version');
 const $tgtSel  = document.getElementById('target_version');
 const $form    = document.getElementById('medite-form');
+const $submitBtn = $form ? $form.querySelector('button[type="submit"]') : null;
 const $progress= document.getElementById('progress-indicator');
 const $results = document.getElementById('results');
 const $sepInput = document.getElementById('sep');
@@ -146,6 +147,14 @@ function notifyComparison(eventName, comparisonId) {
     }));
 }
 
+function updateSubmitState() {
+  if (!$submitBtn || !$srcSel || !$tgtSel) return;
+  const src = $srcSel.value;
+  const tgt = $tgtSel.value;
+  const canRun = !!src && !!tgt && src !== tgt;
+  $submitBtn.disabled = !canRun;
+}
+
 /*------------------------------------------------------------*
  | 1) Populate dropdowns when a work is selected               |
  *------------------------------------------------------------*/
@@ -153,15 +162,41 @@ async function refreshVersions(workId){
     $srcSel.innerHTML = '<option value="">Choisir la version source</option>';
     $tgtSel.innerHTML = '<option value="">Choisir la version cible</option>';
     const res = await fetch(withBasePath(`/api/versions?work_id=${workId}`));
-    if(!res.ok) return;
+    if(!res.ok) {
+      updateSubmitState();
+      return;
+    }
     const vers = await res.json();
-    vers.forEach(v=>{
+    const available = Array.isArray(vers)
+        ? vers.filter(v => v && v.text_available)
+        : [];
+    if (available.length < 2) {
+        const message = 'Deux versions au minimum doivent être disponibles pour réaliser une comparaison Medite.';
+        $srcSel.innerHTML = '';
+        $tgtSel.innerHTML = '';
+        const emptyOptSrc = new Option(message, '');
+        emptyOptSrc.disabled = true;
+        emptyOptSrc.selected = true;
+        const emptyOptTgt = new Option(message, '');
+        emptyOptTgt.disabled = true;
+        emptyOptTgt.selected = true;
+        $srcSel.add(emptyOptSrc);
+        $tgtSel.add(emptyOptTgt);
+        $srcSel.disabled = true;
+        $tgtSel.disabled = true;
+        updateSubmitState();
+        return;
+    }
+    $srcSel.disabled = false;
+    $tgtSel.disabled = false;
+    available.forEach(v=>{
         const opt1 = new Option(v.name, v.id);
         const opt2 = new Option(v.name, v.id);
         opt1.dataset.short = v.folder;   // e.g. "1pda"
         opt2.dataset.short = v.folder;
         $srcSel.add(opt1); $tgtSel.add(opt2);
     });
+    updateSubmitState();
 }
 
 /* workSelected comes from outer UI */
@@ -177,6 +212,13 @@ document.addEventListener('workSelected', e=>{
 document.addEventListener('versionsUpdated', e=>{
     if(e.detail.workId) refreshVersions(e.detail.workId);
 });
+
+if ($srcSel) {
+  $srcSel.addEventListener('change', updateSubmitState);
+}
+if ($tgtSel) {
+  $tgtSel.addEventListener('change', updateSubmitState);
+}
 
 /*------------------------------------------------------------*
  | 2) On submit → add silent params then POST to backend       |

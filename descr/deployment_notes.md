@@ -87,6 +87,68 @@ Guidance for running the Variance stack outside the default development setup.
   `laravel/storage/app/private/legacy_import/work_id_map.json` for reference and
   copies legacy PDFs to the new work IDs when available.
 
+## Legacy PDF notices (work ID remap)
+
+If notices point to the wrong PDF after import, overwrite the new-ID PDFs with
+the legacy PDFs using the work ID map. Run on the VM (no access to legacy prod
+required):
+
+```bash
+python3 - <<'PY'
+import json, os, shutil, hashlib, datetime
+map_path = '/var/www/variance-input/var/laravel_storage/app/private/legacy_import/work_id_map.json'
+pdf_dir = '/var/www/variance-input/var/uploads_pdf'
+backup_dir = '/var/www/variance-input/var/uploads_pdf_backup_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+os.makedirs(backup_dir, exist_ok=True)
+
+def md5(path):
+    h = hashlib.md5()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+updated = skipped = missing = 0
+with open(map_path, 'r', encoding='utf-8') as f:
+    data = json.load(f)
+
+for entry in data:
+    legacy_id = str(entry['legacy_id'])
+    new_id = str(entry['new_id'])
+    legacy_pdf = os.path.join(pdf_dir, legacy_id + '.pdf')
+    new_pdf = os.path.join(pdf_dir, new_id + '.pdf')
+    if not os.path.isfile(legacy_pdf):
+        missing += 1
+        continue
+    if os.path.isfile(new_pdf) and md5(legacy_pdf) == md5(new_pdf):
+        skipped += 1
+        continue
+    if os.path.isfile(new_pdf):
+        shutil.copy2(new_pdf, os.path.join(backup_dir, new_id + '.pdf'))
+    shutil.copy2(legacy_pdf, new_pdf)
+    updated += 1
+
+print(f"updated={updated} skipped_identical={skipped} missing_legacy={missing}")
+print(f"backup_dir={backup_dir}")
+PY
+```
+
+## Disk space recovery (VM)
+
+If `/var` fills up during large legacy syncs, reclaim space from unused Docker
+artifacts first:
+
+```bash
+docker image prune -a -f
+docker builder prune -a -f
+docker volume ls -qf dangling=true
+docker volume rm $(docker volume ls -qf dangling=true)
+df -h /var
+```
+
+Avoid pruning non-dangling volumes unless you have confirmed they are not used
+by MariaDB/Redis.
+
 ---
 
 These notes should complement your organisation’s deployment standards; adapt paths and practices to your infrastructure.

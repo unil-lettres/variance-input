@@ -52,6 +52,8 @@ class VersionController extends Controller
                     'pagination_done_by' => $version->pagination_done_by,
                     'pagination_done_by_name' => $version->paginationDoneBy?->name,
                     'pb_markers' => $this->pageMarkerService->countPbMarkers($version),
+                    'xml_available' => is_file($version->getXMLFilePath()),
+                    'text_available' => is_file(storage_path("app/public/uploads/versions/{$version->folder}.txt")),
                     'facsimiles' => $this->facsimileStatus($version),
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
                     'page_marker_progress' => $this->pageMarkerService->getProgressSnapshot($version->id),
@@ -351,6 +353,8 @@ class VersionController extends Controller
             'images' => 'array',
             'images.*' => 'string',
         ]);
+
+        $this->assertVersionEditable($version);
 
         $role = $data['role'];
         if (($role === 'source' && $comparison->source_id !== $version->id) ||
@@ -725,8 +729,14 @@ class VersionController extends Controller
     private function facsimileStatus(Version $version): array
     {
         $paths = $this->facsimilePaths($version);
+        $sourceFiles = $paths['source_files'];
+        $legacyDir = base_path('../variance/' . $paths['source_prefix']);
 
-        $sourceCount = collect($paths['source_files'])
+        if (empty($sourceFiles) && $version->is_legacy && File::isDirectory($legacyDir)) {
+            $sourceFiles = $this->listLegacyFacsimileFiles($legacyDir);
+        }
+
+        $sourceCount = collect($sourceFiles)
             ->reject(fn ($file) => $this->isThumbnail($file))
             ->count();
 
@@ -744,6 +754,11 @@ class VersionController extends Controller
                 ->filter(fn ($path) => preg_match('/\.(jpe?g|png)$/i', basename($path)))
                 ->count()
             : 0;
+
+        if ($version->is_legacy && $sourceCount > 0) {
+            $publishedCount = $sourceCount;
+            $queuedCount = 0;
+        }
 
         $totalExpected = $sourceCount + $queuedCount;
 
@@ -792,6 +807,19 @@ class VersionController extends Controller
             'source_files'  => $files,
             'dest_dir'      => $destDir,
         ];
+    }
+
+    private function listLegacyFacsimileFiles(string $dir): array
+    {
+        if (!File::isDirectory($dir)) {
+            return [];
+        }
+
+        return collect(File::files($dir))
+            ->map(fn ($file) => $file->getFilename())
+            ->filter(fn ($name) => preg_match('/\.(jpe?g|png)$/i', $name))
+            ->values()
+            ->toArray();
     }
 
     private function purgeFacsimileStorage(Version $version, bool $includePublished = true): bool
@@ -914,6 +942,7 @@ class VersionController extends Controller
             'comparison_folder' => $comparison->folder,
             'role'              => $role,
             'role_label'        => $roleLabel,
+            'read_only'         => (bool) ($version->is_legacy || $version->work?->is_legacy || $comparison->is_legacy),
             'selected'          => $meta['selected'],
             'count'             => $meta['count'],
             'exists'            => $meta['exists'],

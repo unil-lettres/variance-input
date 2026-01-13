@@ -150,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let manifestActiveKey    = null;
     let manifestSelectedSet  = new Set();
     let manifestOriginalSet  = new Set();
+    let manifestReadOnly     = false;
     let manifestBusy         = false;
     let manifestRequestToken = 0;
     let pendingManifestFocus = null;
@@ -203,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         manifestActiveKey = null;
         manifestSelectedSet = new Set();
         manifestOriginalSet = new Set();
+        manifestReadOnly = false;
         manifestOptionElements.clear();
         if (manifestSelect) {
             manifestSelect.innerHTML = '<option value="">Associer une comparaison…</option>';
@@ -231,10 +233,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasActive = !!manifestActiveKey;
         const hasChanges = hasActive && !setsEqual(manifestSelectedSet, manifestOriginalSet);
         if (manifestSaveBtn) {
-            manifestSaveBtn.disabled = !hasActive || !hasChanges || manifestBusy;
+            manifestSaveBtn.disabled = manifestReadOnly || !hasActive || !hasChanges || manifestBusy;
+            manifestSaveBtn.title = manifestReadOnly
+                ? 'Lecture seule (legacy) — modifications désactivées'
+                : '';
         }
         if (manifestCancelBtn) {
-            manifestCancelBtn.disabled = !hasActive || !hasChanges || manifestBusy;
+            manifestCancelBtn.disabled = manifestReadOnly || !hasActive || !hasChanges || manifestBusy;
+            manifestCancelBtn.title = manifestReadOnly
+                ? 'Lecture seule (legacy) — modifications désactivées'
+                : '';
         }
     }
 
@@ -252,6 +260,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (option.updated_at) {
             const date = new Date(option.updated_at * 1000);
             message += ` Dernière mise à jour : ${date.toLocaleString('fr-FR', { hour12: false })}.`;
+        }
+        if (manifestReadOnly) {
+            message += ' Mode lecture seule (legacy).';
         }
         manifestSummary.textContent = message;
     }
@@ -298,12 +309,14 @@ document.addEventListener('DOMContentLoaded', () => {
             manifestActiveKey = null;
             manifestSelectedSet = new Set();
             manifestOriginalSet = new Set();
+            manifestReadOnly = false;
             renderManifestList(null);
             updateGallery();
             updateManifestSummary(null);
             updateManifestButtons();
             return;
         }
+        manifestReadOnly = !!option.read_only;
         manifestActiveKey = key;
         const selected = Array.isArray(option.selected) ? option.selected : [];
         manifestSelectedSet = new Set(selected);
@@ -321,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function attachManifestEvents() {
-        if (!manifestActiveKey) return;
+        if (!manifestActiveKey || manifestReadOnly) return;
         const option = getManifestOption(manifestActiveKey);
         if (!option) return;
 
@@ -410,11 +423,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             manifestOptions = Array.isArray(data) ? data : [];
             manifestOptionElements.clear();
+            manifestReadOnly = manifestOptions.some(opt => opt?.read_only);
 
             if (!manifestOptions.length) {
                 manifestActiveKey = null;
                 manifestSelectedSet = new Set();
                 manifestOriginalSet = new Set();
+                manifestReadOnly = false;
                 if (manifestSelect) {
                     manifestSelect.innerHTML = '<option value="">Aucune comparaison disponible</option>';
                     manifestSelect.value = '';
@@ -453,11 +468,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 manifestActiveKey = null;
                 manifestSelectedSet = new Set();
                 manifestOriginalSet = new Set();
+                manifestReadOnly = manifestOptions.some(opt => opt?.read_only);
                 if (manifestSelect) manifestSelect.value = '';
                 updateGallery();
                 updateManifestSummary(null);
                 if (manifestSummary) {
-                    manifestSummary.textContent = 'Sélectionnez une comparaison pour personnaliser son manifeste.';
+                    const baseSummary = 'Sélectionnez une comparaison pour personnaliser son manifeste.';
+                    manifestSummary.textContent = manifestReadOnly
+                        ? `${baseSummary} Mode lecture seule (legacy).`
+                        : baseSummary;
                 }
                 renderManifestList(null);
                 updateManifestButtons();
@@ -479,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function saveManifestSelection() {
-        if (!manifestActiveKey || !currentVersionId) {
+        if (manifestReadOnly || !manifestActiveKey || !currentVersionId) {
             return;
         }
         const option = getManifestOption(manifestActiveKey);
@@ -597,6 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pageItems  = galleryFiles.slice(startIndex, startIndex + GALLERY_PAGE_SIZE);
 
         const manifestActive = !!manifestActiveKey;
+        const manifestEditable = manifestActive && !manifestReadOnly;
 
         const markup = pageItems.map((f, idx) => {
             const metaParts = [];
@@ -622,13 +642,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const checkbox = manifestActive
                 ? `<div class="form-check form-check-sm position-absolute top-0 start-0 m-1">
-                        <input class="form-check-input manifest-toggle" type="checkbox" id="${checkboxId}" data-file="${name}" ${isSelected ? 'checked' : ''}>
+                        <input class="form-check-input manifest-toggle" type="checkbox" id="${checkboxId}" data-file="${name}" ${isSelected ? 'checked' : ''} ${manifestReadOnly ? 'disabled' : ''}>
                         <label class="visually-hidden" for="${checkboxId}">Associer ${name}</label>
                    </div>`
                 : '';
 
             return `
-            <div class="fac-item d-flex flex-column align-items-center ${manifestActive ? 'fac-item-selectable' : ''} ${isSelected ? 'fac-item-selected' : ''}" data-file="${name}">
+            <div class="fac-item d-flex flex-column align-items-center ${manifestEditable ? 'fac-item-selectable' : ''} ${isSelected ? 'fac-item-selected' : ''}" data-file="${name}">
                 <div class="position-relative mb-1">
                     ${checkbox}
                     <a href="${f.big}" target="_blank" rel="noopener" class="d-block">

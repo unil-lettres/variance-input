@@ -25,14 +25,14 @@
     <!-- ROW 1 : Dropzones -->
     <div class="row g-4 mb-3">
       <div class="col-md-6">
-        <label class="form-label">Vignette (jpg/png/webp ≤ 2 Mo)</label>
+        <label class="form-label">Vignette (jpg/png/webp, max. Mo)</label>
         <div id="vignette-dropzone" class="dropzone rounded-3 border border-2 text-center disabled" role="button" aria-label="Charger une vignette">
           <p class="mb-0">Glissez une image ici ou cliquez pour sélectionner un fichier</p>
           <input type="file" id="vignette-input" accept="image/*" class="d-none" />
         </div>
       </div>
       <div class="col-md-6">
-        <label class="form-label">Fichier PDF (≤ 10 Mo)</label>
+        <label class="form-label">Notice (PDF, max. 10 Mo)</label>
         <div id="pdf-dropzone" class="dropzone rounded-3 border border-2 text-center disabled" role="button" aria-label="Charger un PDF">
           <p class="mb-0">Glissez un PDF ici ou cliquez pour sélectionner un fichier</p>
           <input type="file" id="pdf-input" accept="application/pdf" class="d-none" />
@@ -129,7 +129,7 @@
   let currentWorkId = null;
   let currentShortTitle = null;
 
-  const statusLabels = { vignette: 'VIGNETTE', pdf: 'PDF' };
+  const statusLabels = { vignette: 'VIGNETTE', pdf: 'NOTICE' };
   const statusPills = {
     vignette: document.getElementById('media-status-vignette'),
     pdf: document.getElementById('media-status-pdf')

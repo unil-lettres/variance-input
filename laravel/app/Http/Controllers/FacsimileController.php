@@ -182,48 +182,107 @@ class FacsimileController extends Controller
         // Dossier relatif (dans storage/app/public)
         $dirRel = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
         $disk   = Storage::disk('public');
+        $legacyDir = base_path('../variance/' . $dirRel);
+        $useLegacy = false;
 
-        if (! $disk->exists($dirRel)) {
+        if ($disk->exists($dirRel)) {
+            $all = collect($disk->files($dirRel))
+                ->map(fn ($path) => [
+                    'name' => basename($path),
+                    'path' => $path,
+                    'absolute' => $disk->path($path),
+                ]);
+        } elseif (File::isDirectory($legacyDir)) {
+            $useLegacy = true;
+            $all = collect(File::files($legacyDir))
+                ->map(fn ($file) => [
+                    'name' => $file->getFilename(),
+                    'path' => $file->getFilename(),
+                    'absolute' => $file->getPathname(),
+                ]);
+        } else {
             return response()->json([]);          // aucun fichier
         }
 
-        // Liste des fichiers
-        $all = collect($disk->files($dirRel));
-
         $images = $all
-            ->filter(fn ($p) => preg_match('/\.(jpe?g|png)$/i', $p) && ! str_contains($p, '_thumb'))
+            ->filter(fn ($entry) => preg_match('/\.(jpe?g|png)$/i', $entry['name']) && ! str_contains($entry['name'], '_thumb'))
             ->values()
-            ->map(function ($p) use ($disk) {
+            ->map(function ($entry) use ($disk, $dirRel, $legacyDir, $useLegacy) {
 
                 // chemin miniature : img_*_thumb.jpg
-                $thumbPath  = preg_replace('/(\.\w+)$/', '_thumb$1', $p);
-                $thumbExist = $disk->exists($thumbPath);
+                $thumbName  = preg_replace('/(\.\w+)$/', '_thumb$1', $entry['name']);
+                $thumbPath  = $useLegacy ? $legacyDir . '/' . $thumbName : $dirRel . '/' . $thumbName;
+                $thumbExist = $useLegacy ? is_file($thumbPath) : $disk->exists($thumbPath);
 
-                $sizeBytes = $disk->size($p);
+                $sizeBytes = is_file($entry['absolute']) ? filesize($entry['absolute']) : 0;
                 $width     = null;
                 $height    = null;
-                $absolute  = $disk->path($p);
-                if (is_file($absolute)) {
-                    $info = @getimagesize($absolute);
+                if (is_file($entry['absolute'])) {
+                    $info = @getimagesize($entry['absolute']);
                     if (is_array($info)) {
                         $width  = $info[0] ?? null;
                         $height = $info[1] ?? null;
                     }
                 }
 
+                $bigUrl = $useLegacy
+                    ? legacy_url($dirRel . '/' . $entry['name'])
+                    : admin_url('storage/' . ltrim($entry['path'], '/'));
+                $thumbUrl = null;
+                if ($thumbExist) {
+                    $thumbUrl = $useLegacy
+                        ? legacy_url($dirRel . '/' . $thumbName)
+                        : admin_url('storage/' . ltrim($thumbPath, '/'));
+                }
+
                 return [
-                    'name'       => basename($p),
-                    'big'        => admin_url('storage/'.ltrim($p, '/')),
-                    'thumb'      => $thumbExist ? admin_url('storage/'.ltrim($thumbPath, '/')) : null,
+                    'name'       => $entry['name'],
+                    'big'        => $bigUrl,
+                    'thumb'      => $thumbUrl,
                     'hasThumb'   => $thumbExist,
-                    'size_bytes' => $sizeBytes,
-                    'size_human' => $this->humanReadableSize($sizeBytes),
+                    'size_bytes' => (int) $sizeBytes,
+                    'size_human' => $this->humanReadableSize((int) $sizeBytes),
                     'width'      => $width,
                     'height'     => $height,
                 ];
             });
 
         return response()->json($images);
+    }
+
+    /**
+     * GET /api/facsimiles/space
+     */
+    public function freeSpace(Request $request)
+    {
+        $required = (int) $request->query('required_bytes', 0);
+        $required = max(0, $required);
+
+        $path = storage_path('app');
+        $free = @disk_free_space($path);
+        $total = @disk_total_space($path);
+
+        if ($free === false || $total === false) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Impossible de calculer l’espace disque disponible.',
+            ], 500);
+        }
+
+        $minFree = 1024 * 1024 * 1024; // 1 GiB safety margin
+        $remaining = $free - $required;
+        $ok = $remaining >= $minFree;
+
+        return response()->json([
+            'status' => 'ok',
+            'path' => $path,
+            'free_bytes' => $free,
+            'total_bytes' => $total,
+            'required_bytes' => $required,
+            'min_free_bytes' => $minFree,
+            'remaining_bytes' => $remaining,
+            'ok' => $ok,
+        ]);
     }
 
     private function humanReadableSize(int $bytes): string

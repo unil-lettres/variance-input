@@ -104,6 +104,18 @@ function initComparisonsTable() {
     return el;
   }
 
+  function registerTooltip(element, options = {}) {
+    if (!element || !window.bootstrap || !bootstrap.Tooltip) return null;
+    const tooltip = new bootstrap.Tooltip(element, {
+      trigger: 'hover',
+      delay: { show: 300, hide: 0 },
+      placement: 'left',
+      ...options
+    });
+    initComparisonsTable.initializedTooltips.push(tooltip);
+    return tooltip;
+  }
+
   function pendingStatusKey(comparisonId, role) {
     if (!role) return null;
     return `${comparisonId}:${role}`;
@@ -145,8 +157,13 @@ function initComparisonsTable() {
     if (pending) {
       if (!roleEntry || roleEntry.status === undefined) {
         usePending = true;
-      } else if (pendingUpdatedAt && roleUpdatedAt < pendingUpdatedAt && progressUpdatedAt < pendingUpdatedAt) {
-        usePending = true;
+      } else {
+        const roleStatusNow = normalizeStatus(roleEntry.status ?? '');
+        if (!TERMINAL_STATUSES.has(roleStatusNow)) {
+          usePending = pendingUpdatedAt
+            ? (roleUpdatedAt < pendingUpdatedAt && progressUpdatedAt < pendingUpdatedAt)
+            : false;
+        }
       }
 
       if (!usePending) {
@@ -329,9 +346,9 @@ function initComparisonsTable() {
         const roleStatuses = Object.values(roles).map(roleInfo => normalizeStatus(roleInfo?.status ?? globalStatus));
         const rolesKnown = roleStatuses.length > 0;
         const allRolesTerminal = rolesKnown && roleStatuses.every(status => TERMINAL_STATUSES.has(status));
-        const isTerminal = !progress
-          || (globalStatus && TERMINAL_STATUSES.has(globalStatus))
-          || allRolesTerminal;
+        const isTerminal = rolesKnown
+          ? allRolesTerminal
+          : (!progress || (globalStatus && TERMINAL_STATUSES.has(globalStatus)));
 
         if (isTerminal) {
           if (!currentEntry.completed && typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
@@ -359,9 +376,25 @@ function initComparisonsTable() {
   }
 
   function renderComparisonRole(comp, role, versionName) {
+    const isLegacy = !!comp.is_legacy;
+    const legacyNote = 'La pagination des comparaisons legacy est en lecture seule.';
     const data = (comp.pagination && comp.pagination[role]) || {};
     const container = document.createElement('div');
     container.className = 'small text-start d-flex flex-column gap-2';
+    const applyLegacyButtonState = (btn) => {
+      if (!btn) return;
+      btn.classList.add('legacy-disabled');
+      btn.setAttribute('aria-disabled', 'true');
+      btn.setAttribute('data-legacy-disabled', '1');
+      btn.title = legacyNote;
+      registerTooltip(btn);
+    };
+    const applyLegacyDisabledState = (ctrl) => {
+      if (!ctrl) return;
+      ctrl.disabled = true;
+      ctrl.setAttribute('aria-disabled', 'true');
+      ctrl.title = legacyNote;
+    };
 
     const badges = document.createElement('div');
     const markersBadge = createBadge({
@@ -585,7 +618,7 @@ function initComparisonsTable() {
     registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
 
     const hasSidecar = data.lignes_available ?? false;
-    if (!hasSidecar) {
+    if (!hasSidecar && !isLegacy) {
       runBtn.disabled = true;
       feedback.textContent = 'Associez un fichier _lignes ou générez le sidecar depuis les balises <pb>.';
     }
@@ -593,11 +626,12 @@ function initComparisonsTable() {
     const currentRoleStatus = normalizeStatus(
       (progressSnapshot?.roles?.[role]?.status ?? progressSnapshot?.status) || ''
     );
-    if (!['queued', 'running'].includes(currentRoleStatus)) {
+    if (!isLegacy && !['queued', 'running'].includes(currentRoleStatus)) {
       cancelBtn.disabled = true;
     }
 
     runBtn.addEventListener('click', () => {
+      if (isLegacy) return;
       const clearExisting = clearToggle ? clearToggle.checked : true;
       const replaceExisting = replaceToggle ? replaceToggle.checked : true;
       cancelBtn.disabled = false;
@@ -612,11 +646,13 @@ function initComparisonsTable() {
     });
 
     uploadLignesBtn.addEventListener('click', () => {
+      if (isLegacy) return;
       lignesInput.value = '';
       lignesInput.click();
     });
 
     lignesInput.addEventListener('change', async () => {
+      if (isLegacy) return;
       if (!lignesInput.files || !lignesInput.files.length) return;
       const file = lignesInput.files[0];
       const versionId = role === 'source' ? comp.source_id : comp.target_id;
@@ -669,6 +705,7 @@ function initComparisonsTable() {
     });
 
     buildSidecarBtn.addEventListener('click', () => {
+      if (isLegacy) return;
       buildSidecarFromXhtml(comp, {
         role,
         button: buildSidecarBtn,
@@ -681,6 +718,7 @@ function initComparisonsTable() {
     });
 
     restoreBtn.addEventListener('click', () => {
+      if (isLegacy) return;
       if (!confirm('Les fichiers originaux de sortie Medite vont être restaurés; tous les marqueurs de pagination seront supprimés.')) {
         return;
       }
@@ -693,6 +731,7 @@ function initComparisonsTable() {
     });
 
     cancelBtn.addEventListener('click', () => {
+      if (isLegacy) return;
       if (!confirm('Annuler la pagination en cours pour cette version ?')) {
         return;
       }
@@ -704,6 +743,13 @@ function initComparisonsTable() {
       });
     });
 
+    if (isLegacy) {
+      applyLegacyDisabledState(clearToggle);
+      applyLegacyDisabledState(replaceToggle);
+      applyLegacyDisabledState(lignesInput);
+      [uploadLignesBtn, buildSidecarBtn, runBtn, restoreBtn, cancelBtn].forEach(applyLegacyButtonState);
+    }
+
     return {
       element: container,
       statusRef,
@@ -713,6 +759,9 @@ function initComparisonsTable() {
   }
 
   function renderMediteParams(comp) {
+    if (comp?.is_legacy) {
+      return '<span class="text-muted">n/a</span>';
+    }
     const chips = [];
 
     const addNumeric = (label, raw) => {
@@ -736,7 +785,7 @@ function initComparisonsTable() {
     addBoolean('Sensibilité diacritiques', comp.diacri_sensitive);
 
     if (!chips.length) {
-      return '<span class="text-muted">—</span>';
+      return '<span class="text-muted">n/a</span>';
     }
 
     return `<div class="comparison-params">${chips.join('')}</div>`;
@@ -1089,8 +1138,8 @@ function initComparisonsTable() {
     comparisonData.clear();
     noComparisons.style.display = 'none';
 
-    this.initializedTooltips?.forEach(tooltip => tooltip.dispose());
-    this.initializedTooltips = [];
+    initComparisonsTable.initializedTooltips?.forEach(tooltip => tooltip.dispose());
+    initComparisonsTable.initializedTooltips = [];
 
     try {
       const res = await fetch(withBasePath(`/comparisons/by-work?work_id=${workId}`), { headers: JSON_HEADERS });
@@ -1123,6 +1172,7 @@ function initComparisonsTable() {
         const missing = Array.isArray(comp.publish_missing) ? comp.publish_missing : [];
         const ready = comp.components_ready && missing.length === 0;
         const published = comp.published;
+        const isLegacy = !!comp.is_legacy;
         const publishedTitle = published
           ? 'Fichiers publiés disponibles'
           : 'Comparaison non publiée';
@@ -1148,6 +1198,7 @@ function initComparisonsTable() {
           return `${origin}/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.folder}`;
         })();
         const devUrl = (function() {
+          if (isLegacy) return null;
           if (!currentAuthorFolder || !currentWorkFolder || !comp?.id) return null;
           const origin = window.location.origin;
           return `${origin}/dev/${currentAuthorFolder}/${currentWorkFolder}/comparaison/${comp.id}`;
@@ -1187,10 +1238,10 @@ function initComparisonsTable() {
           <td>${comp.created_at ? new Date(comp.created_at).toLocaleString() : ''}</td>
           <td class="text-center">
             <div class="btn-group-vertical" role="group" aria-label="Action buttons">
-              ${(legacyUrl && published) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
-              ${(devUrl && !published) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
-              ${(!isRunning && ready && !published) ? `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
-              <a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>
+              ${(legacyUrl && (published || isLegacy)) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
+              ${(devUrl && !published && !isLegacy) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
+              ${(!isRunning && ready && !published && !isLegacy) ? `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
+              ${comp.xml_available ? `<a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>` : `<span class="d-inline-block" data-bs-toggle="tooltip" title="Pas de fichier XML disponible pour cette comparaison"><span class="btn btn-outline-secondary disabled" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`}
               <a href="${exportUrl}" data-bs-toggle="tooltip" title="Exporter le pack legacy" class="btn btn-outline-secondary" target="_blank"><i class="bi bi-download"></i></a>
               <button data-bs-toggle="tooltip" title="Supprimer la comparaison" class="btn btn-outline-danger delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
             </div>
@@ -1199,7 +1250,7 @@ function initComparisonsTable() {
 
         // Initialize Bootstrap tooltips.
         const tooltipTriggerList = tr.querySelectorAll('[data-bs-toggle="tooltip"]');
-        this.initializedTooltips.push(...Array.from(tooltipTriggerList).map(tooltipTriggerEl => {
+        initComparisonsTable.initializedTooltips.push(...Array.from(tooltipTriggerList).map(tooltipTriggerEl => {
           return new bootstrap.Tooltip(
             tooltipTriggerEl,
             {

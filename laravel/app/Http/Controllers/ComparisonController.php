@@ -76,8 +76,25 @@ class ComparisonController extends Controller
                         $sourceDir = $legacy;
                     }
                 }
+
+                $legacyDir = null;
+                if ($authorFolder && $workFolder && $cmp->folder) {
+                    $candidate = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$cmp->folder}");
+                    if (is_dir($candidate)) {
+                        $legacyDir = $candidate;
+                    }
+                }
+
                 $publishedDir = is_dir($fullDir) ? $fullDir : (is_dir($publicDir) ? $publicDir : null);
+                if ($cmp->is_legacy && $legacyDir) {
+                    $publishedDir = $legacyDir;
+                }
+
                 $componentDir = is_dir($sourceDir) ? $sourceDir : $publishedDir;
+                if ($cmp->is_legacy && $legacyDir) {
+                    $componentDir = $legacyDir;
+                    $sourceDir = $legacyDir;
+                }
 
                 $missing = [];
                 if ($componentDir && is_dir($componentDir)) {
@@ -104,6 +121,10 @@ class ComparisonController extends Controller
                 $cmp->publish_dest = $destDir;
                 $cmp->publish_source = is_dir($sourceDir) ? $sourceDir : null;
                 $cmp->components_ready = empty($missing);
+                if ($cmp->is_legacy) {
+                    $cmp->publish_source = null;
+                }
+                $cmp->xml_available = is_file(storage_path("app/public/uploads/comparisons/{$cmp->id}.xml"));
 
                 Log::debug('Comparison components status', [
                     'comparison_id' => $cmp->id,

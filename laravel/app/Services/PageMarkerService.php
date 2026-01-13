@@ -370,18 +370,22 @@ class PageMarkerService
                 'paths'    => [],
                 'total'    => 0,
             ];
+            $snapshot = $this->getComparisonProgressSnapshot($comparison->id) ?? [];
+            $rolesProgress = $snapshot['roles'] ?? [];
+            $rolesProgress[$role] = [
+                'status'   => $result['status'],
+                'reason'   => $result['reason'],
+                'total'    => 0,
+                'inserted' => 0,
+                'missed'   => 0,
+            ];
+            $summary = $snapshot['summary'] ?? [];
+            $summary[$role] = $result;
+            $status = $this->summarizeComparisonStatus($rolesProgress, $snapshot['status'] ?? null);
             $this->finishComparisonProgress($comparison->id, [
-                'status' => 'done',
-                'roles'  => [
-                    $role => [
-                        'status'   => $result['status'],
-                        'reason'   => $result['reason'],
-                        'total'    => 0,
-                        'inserted' => 0,
-                        'missed'   => 0,
-                    ],
-                ],
-                'summary' => [$role => $result],
+                'status'     => $status,
+                'roles'      => $rolesProgress,
+                'summary'    => $summary,
                 'updated_at' => time(),
             ]);
             return $result;
@@ -431,18 +435,22 @@ class PageMarkerService
             'paths'    => $result['paths'] ?? [],
         ]);
 
+        $snapshot = $this->getComparisonProgressSnapshot($comparison->id) ?? [];
+        $rolesProgress = $snapshot['roles'] ?? [];
+        $rolesProgress[$role] = [
+            'status'   => $result['status'],
+            'total'    => $totalMarkers,
+            'inserted' => $result['inserted'],
+            'missed'   => count($result['misses']),
+        ];
+        $summary = $snapshot['summary'] ?? [];
+        $summary[$role] = $result + ['total' => $totalMarkers];
+        $status = $this->summarizeComparisonStatus($rolesProgress, $snapshot['status'] ?? null);
         $this->finishComparisonProgress($comparison->id, [
-            'status'        => 'done',
-            'roles'         => [
-                $role => [
-                    'status'   => $result['status'],
-                    'total'    => $totalMarkers,
-                    'inserted' => $result['inserted'],
-                    'missed'   => count($result['misses']),
-                ],
-            ],
-            'summary'       => [$role => $result + ['total' => $totalMarkers]],
-            'updated_at'    => time(),
+            'status'     => $status,
+            'roles'      => $rolesProgress,
+            'summary'    => $summary,
+            'updated_at' => time(),
         ]);
 
         return $result + ['total' => $totalMarkers];

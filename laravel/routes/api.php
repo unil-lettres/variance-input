@@ -10,6 +10,7 @@ Route::post('/publish_xhtml', [PublishController::class, 'publish']);
 Route::delete('/publish_xhtml/{comparison}', [PublishController::class, 'unpublish']);
 Route::post('/upload_facsimiles', [FacsimileController::class, 'store']);
 Route::get('/facsimiles', [FacsimileController::class, 'index']);
+Route::get('/facsimiles/space', [FacsimileController::class, 'freeSpace']);
 Route::get('/versions/{version}/page-markers/progress', [VersionController::class, 'pageMarkersProgress']);
 Route::get('/versions/{version}/pagination-info', [VersionController::class, 'paginationInfo']);
 Route::delete('/versions/{version}/lignes', [VersionController::class, 'cancelLignes']);

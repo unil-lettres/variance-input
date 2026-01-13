@@ -109,6 +109,10 @@
   .comparison-param-chip strong {
     color: #1d2340;
   }
+  .legacy-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
   .source-cell .role-wrapper,
   .target-cell .role-wrapper {
     margin-top: 0.5rem;

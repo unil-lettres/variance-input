@@ -173,6 +173,10 @@
   #versionsCollapse.show * {
     visibility: visible !important;
   }
+  .legacy-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 </style>
 @endpush
 
@@ -211,6 +215,8 @@ let facModalInstance = null;
 let facTotalSizeEl   = null;
 let facVersionId     = null;
 let facVersionName   = '';
+let facSpaceOk       = true;
+let facSpaceCheckToken = 0;
 let selectedAuthorLabel = '';
 let selectedWorkLabel   = '';
 const UPLOAD_MODAL_BASE_TITLE = 'Ajouter une version';
@@ -389,6 +395,53 @@ function renderFacsimileStatus(versionId, facsimileData){
     const id = Number(versionId);
     const state = facsimileRowState.get(id);
     if (!state) return;
+    const isLegacy = !!(versionsCache.get(id)?.is_legacy);
+    const legacyTooltip = 'La collection de facsimilés est en lecture seule pour les collections legacy';
+    const attachLegacyTooltip = (btn) => {
+        if (!btn) return;
+        btn.title = legacyTooltip;
+        if (!window.bootstrap || !bootstrap.Tooltip) {
+            return;
+        }
+        const existing = btn._legacyTooltipInstance;
+        btn.setAttribute('data-bs-toggle', 'tooltip');
+        btn.setAttribute('data-bs-placement', 'top');
+        if (existing) {
+            if (typeof existing.setContent === 'function') {
+                existing.setContent({ '.tooltip-inner': legacyTooltip });
+            } else {
+                btn.setAttribute('data-bs-original-title', legacyTooltip);
+            }
+            return;
+        }
+        const tooltip = new bootstrap.Tooltip(btn);
+        btn._legacyTooltipInstance = tooltip;
+        actionButtonsTooltips.push(tooltip);
+    };
+    const detachLegacyTooltip = (btn) => {
+        if (!btn) return;
+        const existing = btn._legacyTooltipInstance;
+        if (existing) {
+            existing.dispose();
+            delete btn._legacyTooltipInstance;
+        }
+        btn.removeAttribute('data-bs-toggle');
+        btn.removeAttribute('data-bs-placement');
+        btn.removeAttribute('data-bs-original-title');
+    };
+    const applyLegacyState = (btn) => {
+        if (!btn) return;
+        btn.disabled = false;
+        btn.classList.add('legacy-disabled');
+        btn.setAttribute('aria-disabled', 'true');
+        attachLegacyTooltip(btn);
+    };
+    const clearLegacyState = (btn) => {
+        if (!btn) return;
+        btn.classList.remove('legacy-disabled');
+        btn.removeAttribute('aria-disabled');
+        detachLegacyTooltip(btn);
+    };
 
     const ready = Math.max(0, Number(facsimileData?.source_count ?? 0));
     const published = Math.max(0, Number(facsimileData?.published_count ?? 0));
@@ -409,31 +462,45 @@ function renderFacsimileStatus(versionId, facsimileData){
 
     if (state.publishBadge) state.publishBadge.textContent = published;
     if (state.publishBtn) {
-        const disablePublish = queued > 0 || ready === 0;
-        state.publishBtn.disabled = disablePublish;
-        if (disablePublish && queued > 0) {
-            state.publishBtn.title = 'Traitement en cours — publication indisponible';
-        } else if (ready === 0) {
-            state.publishBtn.title = 'Aucune image à publier';
-        } else if (outstanding > 0) {
-            state.publishBtn.title = `${outstanding} image(s) en attente de publication`;
+        if (isLegacy) {
+            applyLegacyState(state.publishBtn);
         } else {
-            state.publishBtn.title = 'Toutes les images sont publiées';
+            clearLegacyState(state.publishBtn);
+            const disablePublish = queued > 0 || ready === 0;
+            state.publishBtn.disabled = disablePublish;
+            if (disablePublish && queued > 0) {
+                state.publishBtn.title = 'Traitement en cours — publication indisponible';
+            } else if (ready === 0) {
+                state.publishBtn.title = 'Aucune image à publier';
+            } else if (outstanding > 0) {
+                state.publishBtn.title = `${outstanding} image(s) en attente de publication`;
+            } else {
+                state.publishBtn.title = 'Toutes les images sont publiées';
+            }
         }
     }
 
     if (state.uploadBtn) {
-        state.uploadBtn.disabled = queued > 0;
-        state.uploadBtn.title = queued > 0
-            ? 'Traitement en cours — veuillez patienter avant de téléverser'
-            : 'Importer de nouveaux fac-similés';
+        if (isLegacy) {
+            applyLegacyState(state.uploadBtn);
+        } else {
+            clearLegacyState(state.uploadBtn);
+            state.uploadBtn.disabled = queued > 0;
+            state.uploadBtn.title = queued > 0
+                ? 'Traitement en cours — veuillez patienter avant de téléverser'
+                : 'Importer de nouveaux fac-similés';
+        }
     }
     if (state.clearBtn) {
         const hasAnyFacsimiles = ready > 0 || published > 0 || queued > 0;
-        if (queued > 0) {
+        if (isLegacy) {
+            applyLegacyState(state.clearBtn);
+        } else if (queued > 0) {
+            clearLegacyState(state.clearBtn);
             state.clearBtn.disabled = true;
             state.clearBtn.title = 'Traitement en cours — utilisez plutôt l’annulation ci-dessous';
         } else {
+            clearLegacyState(state.clearBtn);
             state.clearBtn.disabled = !hasAnyFacsimiles;
             state.clearBtn.title = hasAnyFacsimiles
                 ? 'Supprimer tous les fac-similés'
@@ -831,6 +898,8 @@ window.addEventListener('DOMContentLoaded',()=>{
         facModalEl.addEventListener('hidden.bs.modal', () => {
             facVersionId = null;
             facVersionName = '';
+            facSpaceOk = true;
+            facSpaceCheckToken += 1;
             if (facFileInput) facFileInput.value = '';
             if (facUploadBtn) facUploadBtn.disabled = true;
             if (facLog) facLog.textContent = '';
@@ -882,6 +951,10 @@ window.addEventListener('DOMContentLoaded',()=>{
         facFileInput.addEventListener('change', () => {
             const allFiles = facFileInput.files ? facFileInput.files.length : 0;
             const images = collectSelectedImages();
+            if (facSummary) {
+                facSummary.className = 'small text-muted';
+                facSummary.textContent = '';
+            }
             if (facFolderLabel) {
                 const firstPath = images.length ? (images[0].webkitRelativePath || images[0].name || '') : '';
                 facFolderLabel.textContent = firstPath ? (firstPath.split('/')[0] || firstPath) : 'Aucun dossier';
@@ -890,11 +963,12 @@ window.addEventListener('DOMContentLoaded',()=>{
                 if (images.length) {
                     const totalBytes = images.reduce((sum, file) => sum + (file.size || 0), 0);
                     facTotalSizeEl.textContent = `Volume total estimé : ${formatBytes(totalBytes)}`;
+                    checkFacsimileSpace(totalBytes, images.length);
                 } else {
                     facTotalSizeEl.textContent = '';
                 }
             }
-            if (facUploadBtn) facUploadBtn.disabled = images.length === 0;
+            updateFacUploadButtonState(images.length);
             if (facLog) {
                 if (!allFiles) {
                     facLog.textContent = '';
@@ -918,6 +992,10 @@ window.addEventListener('DOMContentLoaded',()=>{
             const files = collectSelectedImages();
             if (!files.length) {
                 alert(totalSelected ? 'Aucun fichier image valide détecté dans ce dossier.' : 'Sélectionnez un dossier contenant des images.');
+                return;
+            }
+            if (!facSpaceOk) {
+                alert('Espace disque insuffisant pour importer ces fac-similés. Réduisez le volume ou libérez de la place.');
                 return;
             }
 
@@ -1232,6 +1310,8 @@ function openFacsimileUploadModal(version) {
     const versionShort = version.folder || '';
     const infoLabel = versionShort ? `${facVersionName} [${versionShort}]` : facVersionName;
     if (facModalInfo) facModalInfo.innerHTML = `Les fichiers seront importés dans l'ordre alphabétique-numérique de leur nom d'origine.<br><strong>Version cible :</strong> ${infoLabel}`;
+    facSpaceOk = true;
+    facSpaceCheckToken += 1;
     if (facFileInput) facFileInput.value = '';
     if (facLog) facLog.textContent = '';
     if (facSummary) facSummary.textContent = '';
@@ -1250,6 +1330,57 @@ function collectSelectedImages() {
         if (file.type && file.type.startsWith('image/')) return true;
         return /\.(jpe?g|png)$/i.test(file.name || '');
     });
+}
+
+function updateFacUploadButtonState(imageCount) {
+    if (!facUploadBtn) return;
+    facUploadBtn.disabled = imageCount === 0 || !facSpaceOk;
+}
+
+async function checkFacsimileSpace(totalBytes, imageCount) {
+    const token = ++facSpaceCheckToken;
+    if (!totalBytes || totalBytes <= 0) {
+        facSpaceOk = true;
+        updateFacUploadButtonState(imageCount);
+        return;
+    }
+    if (facTotalSizeEl) {
+        facTotalSizeEl.textContent = `Volume total estimé : ${formatBytes(totalBytes)} — vérification de l’espace disque…`;
+    }
+    try {
+        const res = await fetch(withBasePath(`/api/facsimiles/space?required_bytes=${encodeURIComponent(totalBytes)}`), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await readJsonResponse(res);
+        if (data.status && data.status !== 'ok') {
+            throw new Error(data.message || 'Impossible de vérifier l’espace disque.');
+        }
+        if (token !== facSpaceCheckToken) return;
+        const free = Number(data.free_bytes ?? 0);
+        const remaining = Number(data.remaining_bytes ?? (free - totalBytes));
+        const minFree = Number(data.min_free_bytes ?? 0);
+        const ok = (data.ok !== undefined) ? !!data.ok : remaining >= minFree;
+        facSpaceOk = ok;
+        if (facTotalSizeEl) {
+            facTotalSizeEl.textContent = `Volume total estimé : ${formatBytes(totalBytes)} — espace libre ${formatBytes(free)} (reste ${formatBytes(remaining)} après import)`;
+        }
+        if (!ok && facSummary) {
+            facSummary.className = 'small text-danger';
+            facSummary.textContent = `⚠️ Espace disque insuffisant. Il faut conserver au moins ${formatBytes(minFree)} libres après import.`;
+        } else if (ok && facSummary && facSummary.textContent.startsWith('⚠️ Espace disque insuffisant')) {
+            facSummary.className = 'small text-muted';
+            facSummary.textContent = '';
+        }
+        updateFacUploadButtonState(imageCount);
+    } catch (err) {
+        if (token !== facSpaceCheckToken) return;
+        facSpaceOk = false;
+        updateFacUploadButtonState(imageCount);
+        if (facSummary) {
+            facSummary.className = 'small text-danger';
+            facSummary.textContent = `⚠️ ${err.message || 'Impossible de vérifier l’espace disque.'}`;
+        }
+    }
 }
 
 async function readJsonResponse(res) {
@@ -1679,7 +1810,9 @@ async function fetchVersions(workId){
             btnFacUpload.textContent = 'Téléverser';
             btnFacUpload.title = 'Importer de nouveaux fac-similés';
             btnFacUpload.addEventListener('click', () => {
-                openFacsimileUploadModal(v);
+                if (!v.is_legacy) {
+                    openFacsimileUploadModal(v);
+                }
             });
             facButtons.appendChild(btnFacUpload);
 
@@ -1692,8 +1825,14 @@ async function fetchVersions(workId){
             btnFacPublish.appendChild(publishBadge);
             btnFacPublish.appendChild(document.createTextNode(' Publier'));
             btnFacPublish.disabled = sourceCount === 0;
-            btnFacPublish.title = sourceCount === 0 ? 'Aucune image à publier' : (sourceCount > publishedCount ? `${sourceCount - publishedCount} image(s) en attente` : 'Toutes les images sont publiées');
-            btnFacPublish.addEventListener('click', () => { publishFacsimiles(v); });
+            btnFacPublish.title = sourceCount === 0
+                ? 'Aucune image à publier'
+                : (sourceCount > publishedCount ? `${sourceCount - publishedCount} image(s) en attente` : 'Toutes les images sont publiées');
+            btnFacPublish.addEventListener('click', () => {
+                if (!v.is_legacy) {
+                    publishFacsimiles(v);
+                }
+            });
             facButtons.appendChild(btnFacPublish);
 
             const btnFacClear = document.createElement('button');
@@ -1707,7 +1846,9 @@ async function fetchVersions(workId){
                 : 'Aucune image à supprimer';
             btnFacClear.setAttribute('aria-label', 'Supprimer les fac-similés');
             btnFacClear.addEventListener('click', () => {
-                purgeFacsimiles(v.id, { reason: 'clear' });
+                if (!v.is_legacy) {
+                    purgeFacsimiles(v.id, { reason: 'clear' });
+                }
             });
             facButtons.appendChild(btnFacClear);
 
@@ -1806,21 +1947,46 @@ async function fetchVersions(workId){
             tdActions.className='text-center align-middle';
             const editorUrl = withBasePath(`/version/${v.id}/editor`);
 
-            const btnEditor = document.createElement('a');
-            btnEditor.href = editorUrl;
-            btnEditor.setAttribute('data-bs-toggle', 'tooltip');
-            btnEditor.className = 'btn btn-outline-primary';
-            btnEditor.innerHTML = '<i class="bi bi-pencil-square"></i>';
-            const tooltipEditor = new bootstrap.Tooltip(
-                btnEditor,
-                {
-                    title: 'Éditer la version',
-                    delay: { show: 500, hide: 0 },
-                    trigger: 'hover'
-                }
-            );
-            actionButtonsTooltips.push(tooltipEditor);
-            tdActions.appendChild(btnEditor);
+            const canEditXml = (typeof v.xml_available === 'boolean') ? v.xml_available : true;
+            let editorControl = null;
+            if (canEditXml) {
+                const btnEditor = document.createElement('a');
+                btnEditor.href = editorUrl;
+                btnEditor.setAttribute('data-bs-toggle', 'tooltip');
+                btnEditor.className = 'btn btn-outline-primary';
+                btnEditor.innerHTML = '<i class="bi bi-pencil-square"></i>';
+                const tooltipEditor = new bootstrap.Tooltip(
+                    btnEditor,
+                    {
+                        title: 'Éditer la version',
+                        delay: { show: 500, hide: 0 },
+                        trigger: 'hover'
+                    }
+                );
+                actionButtonsTooltips.push(tooltipEditor);
+                editorControl = btnEditor;
+            } else {
+                const wrapper = document.createElement('span');
+                wrapper.className = 'd-inline-block';
+                wrapper.setAttribute('data-bs-toggle', 'tooltip');
+                wrapper.setAttribute('title', 'Fichier texte non disponible pour cette version.');
+                const disabledBtn = document.createElement('span');
+                disabledBtn.className = 'btn btn-outline-secondary disabled';
+                disabledBtn.setAttribute('tabindex', '-1');
+                disabledBtn.setAttribute('aria-disabled', 'true');
+                disabledBtn.innerHTML = '<i class="bi bi-pencil-square"></i>';
+                wrapper.appendChild(disabledBtn);
+                const tooltipEditor = new bootstrap.Tooltip(
+                    wrapper,
+                    {
+                        title: 'Fichier texte non disponible pour cette version.',
+                        delay: { show: 500, hide: 0 },
+                        trigger: 'hover'
+                    }
+                );
+                actionButtonsTooltips.push(tooltipEditor);
+                editorControl = wrapper;
+            }
 
             const btnDel = document.createElement('button');
             btnDel.className = 'btn btn-outline-danger';
@@ -1843,7 +2009,9 @@ async function fetchVersions(workId){
             btnGroup.role = 'group';
             btnGroup.ariaLabel = 'Version utility buttons';
 
-            btnGroup.appendChild(btnEditor);
+            if (editorControl) {
+                btnGroup.appendChild(editorControl);
+            }
             btnGroup.appendChild(btnDel);
             tdActions.appendChild(btnGroup);
 
