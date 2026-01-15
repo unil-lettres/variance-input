@@ -41,6 +41,16 @@ class VersionController extends Controller
                     $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
                 }
                 $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
+                $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
+                $textLength = null;
+                if (is_file($textPath)) {
+                    try {
+                        $contents = File::get($textPath);
+                        $textLength = mb_strlen($contents, 'UTF-8');
+                    } catch (\Throwable $e) {
+                        $textLength = null;
+                    }
+                }
                 return [
                     'id'         => $version->id,
                     'name'       => $version->name,
@@ -54,6 +64,7 @@ class VersionController extends Controller
                     'pb_markers' => $this->pageMarkerService->countPbMarkers($version),
                     'xml_available' => is_file($version->getXMLFilePath()),
                     'text_available' => is_file(storage_path("app/public/uploads/versions/{$version->folder}.txt")),
+                    'text_length' => $textLength,
                     'facsimiles' => $this->facsimileStatus($version),
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
                     'page_marker_progress' => $this->pageMarkerService->getProgressSnapshot($version->id),
@@ -446,6 +457,27 @@ class VersionController extends Controller
         $path    = storage_path("app/public/uploads/versions/{$version->folder}.xml");
         file_exists($path) || abort(404);
         return response(file_get_contents($path), 200)->header('Content-Type', 'application/xml');
+    }
+
+    /** Download version text */
+    public function downloadText(Version $version)
+    {
+        $path = storage_path("app/public/uploads/versions/{$version->folder}.txt");
+        if (!is_file($path)) {
+            abort(404);
+        }
+
+        return response()->download($path, "{$version->folder}.txt");
+    }
+
+    public function downloadXml(Version $version)
+    {
+        $path = storage_path("app/public/uploads/versions/{$version->folder}.xml");
+        if (!is_file($path)) {
+            abort(404);
+        }
+
+        return response()->download($path, "{$version->folder}.xml");
     }
 
     public function publishFacsimiles(Request $request)

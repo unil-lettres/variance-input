@@ -63,6 +63,7 @@ def run_diff_script(
         return '\n'.join(filtered).strip()
 
     try:
+        started_at = time.perf_counter()
         command = [
             sys.executable,
             str(SCRIPT_DIFF),
@@ -85,14 +86,18 @@ def run_diff_script(
 
         print(f"[run_diff_script] Running command: {' '.join(command)}")
 
-        # Run the script and capture stdout/stderr
         result = subprocess.run(
             command,
-            check=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             cwd=str(SCRIPT_DIFF.parent.parent),
         )
+        runtime_seconds = time.perf_counter() - started_at
+
+        stdout, stderr = result.stdout, result.stderr
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, command, output=stdout, stderr=stderr)
 
         import shutil
 
@@ -231,9 +236,13 @@ def run_diff_script(
             "output": produced_files,
             "public_urls": public_urls,
             "shared_files": shared_files,
-            "stdout": _compact(result.stdout),
-            "stderr": _compact(result.stderr),
+            "stdout": _compact(stdout),
+            "stderr": _compact(stderr),
             "meta": meta,
+            "metrics": {
+                "runtime_seconds": runtime_seconds,
+                "comparison_id": comparison_id,
+            },
         }
 
     except subprocess.CalledProcessError as e:
@@ -243,7 +252,10 @@ def run_diff_script(
         print("[run_diff_script] ERROR:", error_output)
         return {
             "status": "error",
-            "error": error_output
+            "error": error_output,
+            "metrics": {
+                "comparison_id": comparison_id,
+            },
         }
 
 

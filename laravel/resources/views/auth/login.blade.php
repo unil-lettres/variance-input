@@ -1,10 +1,12 @@
 @extends('layouts.app')
 
 @section('title', 'Login')
+@section('body-class', 'login-page login-bg')
+@section('main-class', 'justify-content-center')
 
 @section('content')
-    <div class="container d-flex flex-column justify-content-start align-items-center vh-100" style="padding-top: 15vh;">
-        <div class="row w-100" style="max-width: 1000px;">
+    <div class="container d-flex flex-column align-items-center">
+        <div class="row w-100 justify-content-center" style="max-width: 1000px;">
             <div class="col-md-6">
                 <div class="card shadow-sm mb-3" style="max-width: 95%;">
                     <div class="card-header text-center bg-light text-muted" style="font-size: 1.25rem;">
@@ -60,5 +62,8 @@
                 </div>
             </div>
         </div>
+        <p class="text-center text-muted mt-2 mb-0" style="font-size: 0.9rem; max-width: 1000px;">
+            La connexion SWITCHaai est indisponible pour l'instant, merci d'utiliser la connexion locale.
+        </p>
     </div>
 @endsection

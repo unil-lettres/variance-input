@@ -185,6 +185,19 @@
     /* Keep table headers visually consistent with card header */
     .version-table th { font-weight: normal; font-size: 1rem; color: #333; }
     .version-table td { vertical-align: middle; }
+    .version-table .download-btn {
+      line-height: 1;
+      padding-top: 0.25rem;
+      padding-bottom: 0.2rem;
+      min-width: 2.2rem;
+    }
+    .version-table .download-btn .download-icon {
+      font-size: 0.95rem;
+    }
+    .version-table .download-btn .download-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.04em;
+    }
 </style>
 
 <script>
@@ -1729,8 +1742,8 @@ async function fetchVersions(workId){
         updateVersionsCount(versions.length);
 
         const table = document.createElement('table');
-        table.className='table table-bordered table-hover table-sm version-table';
-        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
+        table.className='table table-bordered table-sm version-table';
+        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Signes</th><th>Dossier</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         versions.forEach(v=>{
@@ -1742,13 +1755,9 @@ async function fetchVersions(workId){
             tr.appendChild(tdId);
 
             const tdName = document.createElement('td');
-            const viewUrl = withBasePath(`/view-version/${v.id}`);
-            const link = document.createElement('a');
-            link.href = viewUrl;
-            link.target = '_blank';
-            link.rel = 'noopener';
-            link.textContent = v.name;
-            tdName.appendChild(link);
+            const nameText = document.createElement('span');
+            nameText.textContent = v.name;
+            tdName.appendChild(nameText);
 
             const editTrigger = document.createElement('button');
             editTrigger.type = 'button';
@@ -1766,6 +1775,17 @@ async function fetchVersions(workId){
             tdName.appendChild(pbBadge);
 
             tr.appendChild(tdName);
+
+            const tdChars = document.createElement('td');
+            tdChars.className = 'text-muted';
+            if (typeof v.text_length === 'number') {
+                tdChars.textContent = v.text_length.toLocaleString('fr-FR');
+                tdChars.title = 'Nombre de signes dans la version';
+            } else {
+                tdChars.textContent = 'n/a';
+                tdChars.title = 'Fichier texte indisponible';
+            }
+            tr.appendChild(tdChars);
 
             const folderCell = document.createElement('td');
             folderCell.textContent = shortFolder;
@@ -1795,6 +1815,11 @@ async function fetchVersions(workId){
                 document.dispatchEvent(new CustomEvent('facsimiles:select', {
                     detail: { versionId: v.id, versionName: v.name }
                 }));
+                const collapseEl = document.getElementById('facsimilesCollapse');
+                if (collapseEl && !collapseEl.classList.contains('show')) {
+                    const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
+                    collapse.show();
+                }
                 const facsimilesCard = document.getElementById('facsimiles-card');
                 if (facsimilesCard) {
                     setTimeout(() => {
@@ -1988,6 +2013,46 @@ async function fetchVersions(workId){
                 editorControl = wrapper;
             }
 
+            let downloadControl = null;
+            if (v.text_available) {
+                const btnDownload = document.createElement('a');
+                btnDownload.href = withBasePath(`/versions/${v.id}/download`);
+                btnDownload.className = 'btn btn-outline-secondary d-flex flex-column align-items-center justify-content-center download-btn';
+                btnDownload.innerHTML = '<i class="bi bi-download download-icon"></i><span class="download-label">TXT</span>';
+                btnDownload.setAttribute('data-bs-toggle', 'tooltip');
+                btnDownload.setAttribute('download', '');
+                const tooltipDownload = new bootstrap.Tooltip(
+                    btnDownload,
+                    {
+                        title: 'Télécharger la version (TXT)',
+                        delay: { show: 500, hide: 0 },
+                        trigger: 'hover'
+                    }
+                );
+                actionButtonsTooltips.push(tooltipDownload);
+                downloadControl = btnDownload;
+            }
+
+            let downloadXmlControl = null;
+            if (v.xml_available) {
+                const btnDownloadXml = document.createElement('a');
+                btnDownloadXml.href = withBasePath(`/versions/${v.id}/download-xml`);
+                btnDownloadXml.className = 'btn btn-outline-secondary d-flex flex-column align-items-center justify-content-center download-btn';
+                btnDownloadXml.innerHTML = '<i class="bi bi-download download-icon"></i><span class="download-label">XML</span>';
+                btnDownloadXml.setAttribute('data-bs-toggle', 'tooltip');
+                btnDownloadXml.setAttribute('download', '');
+                const tooltipDownloadXml = new bootstrap.Tooltip(
+                    btnDownloadXml,
+                    {
+                        title: 'Télécharger la version (XML)',
+                        delay: { show: 500, hide: 0 },
+                        trigger: 'hover'
+                    }
+                );
+                actionButtonsTooltips.push(tooltipDownloadXml);
+                downloadXmlControl = btnDownloadXml;
+            }
+
             const btnDel = document.createElement('button');
             btnDel.className = 'btn btn-outline-danger';
             btnDel.innerHTML = '<i class="bi bi-trash3"></i>';
@@ -2011,6 +2076,12 @@ async function fetchVersions(workId){
 
             if (editorControl) {
                 btnGroup.appendChild(editorControl);
+            }
+            if (downloadControl) {
+                btnGroup.appendChild(downloadControl);
+            }
+            if (downloadXmlControl) {
+                btnGroup.appendChild(downloadXmlControl);
             }
             btnGroup.appendChild(btnDel);
             tdActions.appendChild(btnGroup);

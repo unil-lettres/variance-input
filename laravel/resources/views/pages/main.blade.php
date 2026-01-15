@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Home')
+@section('body-class', 'admin-loading')
 
 @section('content')
 @php
@@ -178,6 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     toggleBladesDisabled(!currentWorkId);
     applyStateForWork(currentWorkId);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            document.body.classList.remove('admin-loading');
+        });
+    });
 });
 </script>
 @endpush

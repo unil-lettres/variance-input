@@ -25,29 +25,49 @@
     @endif
 
     <div class="card mb-4">
-        <div class="card-header fw-semibold">Créer un administrateur</div>
+        <div class="card-header fw-semibold">Créer un utilisateur</div>
         <div class="card-body">
             <p class="text-muted small mb-3">
-                Les comptes créés via cet écran disposent des droits d’administration.
+                Cochez "Administrateur" pour accorder les droits d’administration.
             </p>
-            <form method="POST" action="{{ admin_path('users') }}">
+            <form method="POST" action="{{ admin_path('users') }}" autocomplete="off">
                 @csrf
+                <input type="hidden" name="is_admin" value="0">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Nom complet</label>
-                        <input type="text" name="full_name" class="form-control" value="{{ old('full_name') }}" required>
+                        <input type="text" name="full_name" class="form-control" value="{{ old('full_name') }}" autocomplete="off" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Nom d'utilisateur</label>
+                        <input type="text" name="username" class="form-control" value="{{ old('username') }}" autocomplete="off" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" value="{{ old('email') }}" required>
+                        <input type="email" name="email" class="form-control" value="{{ old('email') }}" autocomplete="off" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Mot de passe</label>
-                        <input type="password" name="password" class="form-control" required>
+                        <input type="password" name="password" class="form-control" autocomplete="new-password" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Confirmation</label>
-                        <input type="password" name="password_confirmation" class="form-control" required>
+                        <input type="password" name="password_confirmation" class="form-control" autocomplete="new-password" required>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <div class="form-check">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="is_admin"
+                                id="create-is-admin"
+                                value="1"
+                                {{ old('is_admin', '1') === '1' ? 'checked' : '' }}
+                            >
+                            <label class="form-check-label" for="create-is-admin">
+                                Administrateur
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -58,10 +78,10 @@
     </div>
 
     <div class="card">
-        <div class="card-header fw-semibold">Administrateurs</div>
+        <div class="card-header fw-semibold">Utilisateurs</div>
         <div class="card-body">
-            @if($admins->isEmpty())
-                <div class="text-muted">Aucun administrateur enregistré.</div>
+            @if($users->isEmpty())
+                <div class="text-muted">Aucun utilisateur enregistré.</div>
             @else
                 <div class="table-responsive">
                     <table class="table table-sm align-middle">
@@ -69,33 +89,62 @@
                             <tr>
                                 <th>Nom</th>
                                 <th>Email</th>
+                                <th>Rôle</th>
                                 <th>Créé le</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($admins as $admin)
+                            @foreach($users as $user)
                                 <tr>
                                     <td>
-                                        <div class="fw-semibold">{{ $admin->display_name }}</div>
-                                        @if($admin->full_name && $admin->full_name !== $admin->name)
-                                            <div class="text-muted small">{{ $admin->name }}</div>
+                                        <div class="fw-semibold">{{ $user->display_name }}</div>
+                                        @if($user->full_name && $user->full_name !== $user->name)
+                                            <div class="text-muted small">{{ $user->name }}</div>
                                         @endif
                                     </td>
-                                    <td>{{ $admin->email }}</td>
-                                    <td class="text-muted small">{{ optional($admin->created_at)->format('d/m/Y') }}</td>
+                                    <td>{{ $user->email }}</td>
+                                    <td>
+                                        @if($user->is_admin)
+                                            <span class="badge text-bg-primary">Administrateur</span>
+                                        @else
+                                            <span class="text-muted small">Utilisateur</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-muted small">{{ optional($user->created_at)->format('d/m/Y') }}</td>
                                     <td class="text-end">
-                                        <button
-                                            type="button"
-                                            class="btn btn-outline-primary btn-sm"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#editUserModal"
-                                            data-action="{{ admin_path('users/' . $admin->id) }}"
-                                            data-full-name="{{ $admin->full_name ?? $admin->name }}"
-                                            data-email="{{ $admin->email }}"
-                                        >
-                                            Modifier
-                                        </button>
+                                        <div class="d-flex justify-content-end gap-2">
+                                            <button
+                                                type="button"
+                                                class="btn btn-outline-primary btn-sm"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editUserModal"
+                                                data-action="{{ admin_path('users/' . $user->id) }}"
+                                                data-full-name="{{ $user->full_name ?? $user->name }}"
+                                                data-username="{{ $user->name }}"
+                                                data-email="{{ $user->email }}"
+                                                data-is-admin="{{ $user->is_admin ? '1' : '0' }}"
+                                            >
+                                                Modifier
+                                            </button>
+                                            @if(auth()->id() === $user->id)
+                                                <button type="button" class="btn btn-outline-danger btn-sm" disabled>
+                                                    Supprimer
+                                                </button>
+                                            @else
+                                                <form
+                                                    method="POST"
+                                                    action="{{ admin_path('users/' . $user->id) }}"
+                                                    onsubmit="return confirm('Supprimer cet utilisateur ?');"
+                                                >
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                        Supprimer
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
@@ -114,17 +163,28 @@
                 @csrf
                 @method('PATCH')
                 <div class="modal-header">
-                    <h5 class="modal-title" id="editUserModalLabel">Modifier un administrateur</h5>
+                    <h5 class="modal-title" id="editUserModalLabel">Modifier un utilisateur</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <input type="hidden" name="is_admin" value="0">
                     <div class="mb-3">
                         <label class="form-label">Nom complet</label>
                         <input type="text" name="full_name" class="form-control" required>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">Nom d'utilisateur</label>
+                        <input type="text" name="username" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Email</label>
                         <input type="email" name="email" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_admin" id="edit-is-admin" value="1">
+                            <label class="form-check-label" for="edit-is-admin">Administrateur</label>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Nouveau mot de passe</label>
@@ -158,11 +218,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const action = button.getAttribute('data-action');
         const fullName = button.getAttribute('data-full-name') || '';
+        const username = button.getAttribute('data-username') || '';
         const email = button.getAttribute('data-email') || '';
+        const isAdmin = button.getAttribute('data-is-admin') === '1';
 
         form.action = action;
         form.querySelector('input[name="full_name"]').value = fullName;
+        form.querySelector('input[name="username"]').value = username;
         form.querySelector('input[name="email"]').value = email;
+        const isAdminInput = form.querySelector('input[name="is_admin"][type="checkbox"]');
+        if (isAdminInput) {
+            isAdminInput.checked = isAdmin;
+        }
         form.querySelector('input[name="password"]').value = '';
         form.querySelector('input[name="password_confirmation"]').value = '';
     });

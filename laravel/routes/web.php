@@ -62,6 +62,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/users', [UserManagementController::class, 'index'])->name('admin.users.index');
     Route::post('/users', [UserManagementController::class, 'store'])->name('admin.users.store');
     Route::patch('/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
+    Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])->name('admin.users.destroy');
 });
 
 // MAIN PAGE COMPONENTS
@@ -117,6 +118,8 @@ Route::post('/api/versions/{version}/page-markers', [VersionController::class, '
 Route::post('/api/versions/{version}/lignes', [VersionController::class, 'uploadLignes']);
 Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])->name('versions.lignes.download');
 Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
+Route::get('/versions/{version}/download', [VersionController::class, 'downloadText'])->name('versions.text.download');
+Route::get('/versions/{version}/download-xml', [VersionController::class, 'downloadXml'])->name('versions.xml.download');
 Route::post('/versions/{version}/facsimiles/toggle-ignored', [VersionController::class, 'toggleIgnoredPage'])->middleware('auth');
 
 // Routes pour composant medite

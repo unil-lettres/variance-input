@@ -18,7 +18,7 @@
     <div id="descriptionCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
-            Saisissez ici un texte décrivant l'oeuvre. Il apparaîtra dans la partie publique du site lorsqu'une oeuvre y est sélectionnée.
+            Saisissez ici la description de l'oeuvre qui sera visible dans la fiche d'oeuvre du catalogue public.
         </p>
         <!-- CKEditor textarea -->
         <textarea id="desc-editor" rows="10"></textarea>

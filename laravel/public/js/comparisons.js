@@ -55,6 +55,22 @@ function initComparisonsTable() {
     }
     return `${val.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
   };
+  const formatDuration = ms => {
+    const value = Number(ms);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    const totalSeconds = Math.round(value / 1000);
+    if (totalSeconds < 60) {
+      return `${totalSeconds}s`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes < 60) {
+      return `${minutes}m ${seconds}s`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
+  };
   const normalizeCount = value => {
     const num = Number(value);
     return Number.isFinite(num) && num >= 0 ? num : 0;
@@ -778,11 +794,25 @@ function initComparisonsTable() {
       chips.push(`<span class="comparison-param-chip ${stateClass}"><strong>${label}</strong> ${active ? 'oui' : 'non'}</span>`);
     };
 
+    const addDuration = (label, rawMs) => {
+      const formatted = formatDuration(rawMs);
+      if (!formatted) return;
+      chips.push(`<span class="comparison-param-chip"><strong>${label}</strong> ${formatted}</span>`);
+    };
+
+    const addMemory = (label, rawKb) => {
+      const kb = Number(rawKb);
+      if (!Number.isFinite(kb) || kb <= 0) return;
+      chips.push(`<span class="comparison-param-chip"><strong>${label}</strong> ${formatBytes(kb * 1024)}</span>`);
+    };
+
     addNumeric('Pivot', comp.lg_pivot);
     addNumeric('Ratio', comp.ratio);
     addNumeric('Seuil', comp.seuil);
     addBoolean('Sensibilité casse', comp.case_sensitive);
     addBoolean('Sensibilité diacritiques', comp.diacri_sensitive);
+    addDuration('Durée', comp.medite_runtime_ms);
+    addMemory('Pic mémoire', comp.medite_peak_rss_kb);
 
     if (!chips.length) {
       return '<span class="text-muted">n/a</span>';

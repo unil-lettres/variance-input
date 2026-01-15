@@ -250,7 +250,26 @@ class MediteController extends Controller
     {
         try {
             $r = Http::get("http://medite:5000/task_status/{$taskId}");
-            return response()->json($r->json(), $r->successful() ? 200 : 500);
+            $payload = $r->json();
+            if (($payload['status'] ?? null) === 'completed') {
+                $metrics = $payload['result']['metrics'] ?? null;
+                $comparisonId = $metrics['comparison_id'] ?? $payload['result']['comparison_id'] ?? null;
+                if ($comparisonId) {
+                    $updates = [];
+                    $runtimeSeconds = $metrics['runtime_seconds'] ?? null;
+                    $peakRssKb = $metrics['peak_rss_kb'] ?? null;
+                    if (is_numeric($runtimeSeconds)) {
+                        $updates['medite_runtime_ms'] = (int) round(((float) $runtimeSeconds) * 1000);
+                    }
+                    if (is_numeric($peakRssKb)) {
+                        $updates['medite_peak_rss_kb'] = (int) round((float) $peakRssKb);
+                    }
+                    if ($updates) {
+                        Comparison::whereKey($comparisonId)->update($updates);
+                    }
+                }
+            }
+            return response()->json($payload, $r->successful() ? 200 : 500);
         } catch (\Exception $e) {
             return response()->json([
                 'status'  => 'failed',

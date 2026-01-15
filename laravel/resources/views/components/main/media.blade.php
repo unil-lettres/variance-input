@@ -20,19 +20,19 @@
   <div id="mediaCollapse" class="collapse show">
     <div class="card-body">
     <p class="fst-italic text-muted small mb-3">
-      Téléversez ici une vignette qui illustrera l'œuvre dans la partie publique, ainsi qu'un PDF consultable et téléchargeable depuis la fiche œuvre et les pages de comparaison.
+      Téléversez ici la vignette et la notice d'oeuvre qui seront visibles dans la fiche d'oeuvre du catalogue public.
     </p>
     <!-- ROW 1 : Dropzones -->
     <div class="row g-4 mb-3">
       <div class="col-md-6">
-        <label class="form-label">Vignette (jpg/png/webp, max. Mo)</label>
+        <label class="form-label">Vignette (format jpg/png/webp, max. 2&nbsp;Mo)</label>
         <div id="vignette-dropzone" class="dropzone rounded-3 border border-2 text-center disabled" role="button" aria-label="Charger une vignette">
           <p class="mb-0">Glissez une image ici ou cliquez pour sélectionner un fichier</p>
           <input type="file" id="vignette-input" accept="image/*" class="d-none" />
         </div>
       </div>
       <div class="col-md-6">
-        <label class="form-label">Notice (PDF, max. 10 Mo)</label>
+        <label class="form-label">Notice d'oeuvre (format PDF, max. 10&nbsp;Mo)</label>
         <div id="pdf-dropzone" class="dropzone rounded-3 border border-2 text-center disabled" role="button" aria-label="Charger un PDF">
           <p class="mb-0">Glissez un PDF ici ou cliquez pour sélectionner un fichier</p>
           <input type="file" id="pdf-input" accept="application/pdf" class="d-none" />
@@ -104,6 +104,15 @@
   }
   .preview-box.pdf {
     height: var(--media-preview-max-height-pdf);
+  }
+  .preview-box.pdf .pdf-preview-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    text-decoration: none;
+    cursor: pointer;
   }
   .media-toggle .collapse-chevron::before {
     content: "\25BC";
@@ -197,10 +206,18 @@
       img.src = fileUrl;
       preview.appendChild(img);
     } else {
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.className = 'pdf-preview-link';
+      link.setAttribute('aria-label', 'Voir le PDF');
+      link.title = 'Voir le PDF';
       const canvas = document.createElement('canvas');
       canvas.style.maxWidth = '100%';
       canvas.style.maxHeight = '100%';
-      preview.appendChild(canvas);
+      link.appendChild(canvas);
+      preview.appendChild(link);
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.8.162/pdf.worker.min.js';
       pdfjsLib.GlobalWorkerOptions.useWorkerFetch = true;
       pdfjsLib.getDocument({ url: fileUrl, useWorkerFetch: true }).promise
@@ -229,7 +246,7 @@
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'btn btn-sm btn-danger mt-2';
-    del.textContent = `Supprimer ${type}`;
+    del.textContent = type === 'vignette' ? 'Supprimer la vignette' : 'Supprimer la notice';
     del.addEventListener('click', () => deleteMedia(type));
     btnHolder.appendChild(del);
   }

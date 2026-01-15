@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 
     <link rel="icon" href="{{ asset('favicon.svg') }}">
+    <link rel="preload" as="image" href="{{ asset('images/admin_banner.jpg') }}">
 
     <!-- Custom Font -->
     <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
@@ -53,11 +54,43 @@
     <!-- Vite Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
+    @php
+        $adminBannerColor = '#8a8f92';
+        $adminBannerStyle = 'background-color: ' . $adminBannerColor . ';'
+            . ' background-image: url("' . asset('images/admin_banner.jpg') . '");'
+            . ' background-repeat: repeat;';
+    @endphp
     <style>
         .admin-banner {
-            background-color: rgb(66, 71, 74);
+            background-color: {{ $adminBannerColor }};
             background-image: url("{{ asset('images/admin_banner.jpg') }}");
             background-repeat: repeat;
+        }
+        .login-bg {
+            background-color: #f4f1ed;
+            background-image:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.88)),
+                url("{{ legacy_url('uploads_images/assommoir_emile_zola_couv.jpg') }}"),
+                url("{{ legacy_url('uploads_images/la_vendetta.png') }}"),
+                url("{{ legacy_url('uploads_images/peau_de_chagrin.jpg') }}"),
+                url("{{ legacy_url('uploads_images/les_signes_parmi_nous.jpg') }}"),
+                url("{{ legacy_url('uploads_images/colonel_chabert.jpg') }}"),
+                url("{{ legacy_url('uploads_images/rene_boylesve.jpg') }}"),
+                url("{{ legacy_url('uploads_images/sarrasine_couv.jpeg') }}"),
+                url("{{ legacy_url('uploads_images/mysteres_de_marseille_couv.jpeg') }}");
+            background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat;
+            background-size: auto, 220px auto, 200px auto, 240px auto, 210px auto, 190px auto, 230px auto, 205px auto, 215px auto;
+            background-position: center, 0 0, 120px 40px, 40px 140px, 180px 220px, 80px 260px, 200px 320px, 30px 360px, 140px 420px;
+            background-attachment: scroll, fixed, fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+        }
+        .login-page main {
+            background: transparent;
+        }
+        .login-page #admin-sites-menu {
+            font-size: 1rem;
+        }
+        .login-page .admin-user-menu {
+            font-size: 0.95rem;
         }
         .admin-user-toggle {
             border: 0;
@@ -72,35 +105,64 @@
         .admin-user-menu {
             font-size: 0.85rem;
         }
+        .admin-user-menu .dropdown-item:hover,
+        .admin-user-menu .dropdown-item:focus {
+            background-color: rgba(0, 0, 0, 0.08);
+        }
+        .admin-loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 2000;
+        }
+        .admin-loading header,
+        .admin-loading main,
+        .admin-loading footer {
+            visibility: hidden;
+        }
+        .admin-loading .admin-loading-overlay {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .admin-loading .collapse,
+        .admin-loading .collapsing {
+            transition: none !important;
+        }
     </style>
 </head>
-<body>
+<body class="d-flex flex-column min-vh-100 @yield('body-class')">
     <header class="mb-4">
-        <div class="admin-banner container py-3 d-flex justify-content-between align-items-center text-white shadow-sm">
+        <div class="admin-banner container py-3 d-flex justify-content-between align-items-center text-white shadow-sm"
+             style="{{ $adminBannerStyle }}">
             <a href="{{ admin_path() }}">
                 <img src="{{ admin_asset('images/full_logo_white.svg') }}" alt="Variance Logo" style="height: 48px;">
             </a>
 
-            @auth
-                <div class="d-flex align-items-center gap-3">
-                    <div class="dropdown">
-                        <button class="admin-user-toggle dropdown-toggle"
-                                type="button"
-                                id="admin-sites-menu"
-                                data-bs-toggle="dropdown"
-                                aria-expanded="false">
-                            Sites
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
-                            <li>
-                                <a class="dropdown-item" href="{{ legacy_url() }}">Site public</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{{ legacy_url('dev') }}">Site dev</a>
-                            </li>
-                        </ul>
-                    </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="dropdown">
+                    <button class="admin-user-toggle dropdown-toggle"
+                            type="button"
+                            id="admin-sites-menu"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                        Sites
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
+                        <li>
+                            <a class="dropdown-item" href="{{ legacy_url() }}">Site public</a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ legacy_url('dev') }}">Site dev</a>
+                        </li>
+                    </ul>
+                </div>
 
+                @auth
                     <div class="dropdown">
                         <button class="admin-user-toggle dropdown-toggle"
                                 type="button"
@@ -112,10 +174,12 @@
                         <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-user-menu">
                             @if(Auth::user()->is_admin)
                                 <li>
+                                    <span class="dropdown-item-text text-muted fst-italic">Administrateur</span>
+                                </li>
+                                <li>
                                     <a class="dropdown-item" href="{{ admin_path('users') }}">Gérer les utilisateurs</a>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><span class="dropdown-item-text text-muted fst-italic">Administrateur</span></li>
                             @endif
                             <li>
                                 <form action="{{ admin_path('logout') }}" method="POST">
@@ -125,19 +189,26 @@
                             </li>
                         </ul>
                     </div>
-                </div>
-            @endauth
+                @endauth
+            </div>
         </div>
     </header>
 
-    <main class="container-fluid">
+    <main class="container-fluid flex-grow-1 d-flex flex-column @yield('main-class')">
         @yield('content')
     </main>
     <footer class="mt-4">
-        <div class="admin-banner container py-2 text-center small text-white shadow-sm">
-            &copy; UNIL/SIER 2026 · Laravel {{ app()->version() }}
+        <div class="admin-banner container py-2 text-center small text-white shadow-sm"
+             style="{{ $adminBannerStyle }}">
+            Variance-Input &copy; UNIL/SIER 2026 · Laravel {{ app()->version() }} · sier@unil.ch
         </div>
     </footer>
+    <div class="admin-loading-overlay" aria-hidden="true">
+        <div class="text-center text-muted">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+            <div class="mt-2 small">Chargement…</div>
+        </div>
+    </div>
 
     <!-- Bootstrap JavaScript Bundle with Popper.js -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
