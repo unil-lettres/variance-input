@@ -11,6 +11,7 @@ use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
 use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\EditorController;
+use App\Http\Controllers\UserManagementController;
 use App\Models\Author;
 use App\Models\Work;
 
@@ -56,6 +57,12 @@ Route::post('/login', [LoginController::class, 'login']);
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('/register', [RegisterController::class, 'register']);
+
+Route::middleware(['auth', 'admin'])->group(function () {
+    Route::get('/users', [UserManagementController::class, 'index'])->name('admin.users.index');
+    Route::post('/users', [UserManagementController::class, 'store'])->name('admin.users.store');
+    Route::patch('/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
+});
 
 // MAIN PAGE COMPONENTS
 

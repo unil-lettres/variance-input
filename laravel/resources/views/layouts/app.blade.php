@@ -53,29 +53,78 @@
     <!-- Vite Styles -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
+    <style>
+        .admin-banner {
+            background-color: rgb(66, 71, 74);
+            background-image: url("{{ asset('images/admin_banner.jpg') }}");
+            background-repeat: repeat;
+        }
+        .admin-user-toggle {
+            border: 0;
+            background: transparent;
+            color: #fff;
+            padding: 0 0.25rem;
+            font-size: 0.875rem;
+        }
+        .admin-user-toggle:focus {
+            box-shadow: none;
+        }
+        .admin-user-menu {
+            font-size: 0.85rem;
+        }
+    </style>
 </head>
 <body>
-    <header class="bg-dark text-white shadow-sm mb-4">
-        <div class="container py-3 d-flex justify-content-between align-items-center">
+    <header class="mb-4">
+        <div class="admin-banner container py-3 d-flex justify-content-between align-items-center text-white shadow-sm">
             <a href="{{ admin_path() }}">
                 <img src="{{ admin_asset('images/full_logo_white.svg') }}" alt="Variance Logo" style="height: 48px;">
             </a>
 
             @auth
-                <div class="d-flex align-items-center">
-                    <span class="me-3">{{ Auth::user()->display_name }}</span>
-                    
-                    @if(Auth::user()->is_admin)
-                        <span class="badge bg-success me-3">Admin</span>
-                    @endif
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dropdown">
+                        <button class="admin-user-toggle dropdown-toggle"
+                                type="button"
+                                id="admin-sites-menu"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                            Sites
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
+                            <li>
+                                <a class="dropdown-item" href="{{ legacy_url() }}">Site public</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ legacy_url('dev') }}">Site dev</a>
+                            </li>
+                        </ul>
+                    </div>
 
-                    <a href="{{ legacy_url() }}" class="btn btn-outline-light btn-sm me-2">Aller au site public</a>
-                    <a href="{{ legacy_url('dev') }}" class="btn btn-outline-light btn-sm me-2">Aller au site dev</a>
-
-                    <form action="{{ admin_path('logout') }}" method="POST" style="display: inline;">
-                        @csrf
-                        <button type="submit" class="btn btn-outline-light btn-sm">Se déconnecter</button>
-                    </form>
+                    <div class="dropdown">
+                        <button class="admin-user-toggle dropdown-toggle"
+                                type="button"
+                                id="admin-user-menu"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                            {{ Auth::user()->display_name }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-user-menu">
+                            @if(Auth::user()->is_admin)
+                                <li>
+                                    <a class="dropdown-item" href="{{ admin_path('users') }}">Gérer les utilisateurs</a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><span class="dropdown-item-text text-muted fst-italic">Administrateur</span></li>
+                            @endif
+                            <li>
+                                <form action="{{ admin_path('logout') }}" method="POST">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item">Se déconnecter</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             @endauth
         </div>
@@ -84,6 +133,11 @@
     <main class="container-fluid">
         @yield('content')
     </main>
+    <footer class="mt-4">
+        <div class="admin-banner container py-2 text-center small text-white shadow-sm">
+            &copy; UNIL/SIER 2026 · Laravel {{ app()->version() }}
+        </div>
+    </footer>
 
     <!-- Bootstrap JavaScript Bundle with Popper.js -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
