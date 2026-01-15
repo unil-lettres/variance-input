@@ -1,6 +1,6 @@
 <!-- work_selector.blade.php -->
 
-<div class="card mb-3" id ="container-work-selector">
+<div class="card" id ="container-work-selector">
     <div class="card-header fw-semibold">Oeuvre</div>
     <div class="card-body">
         <div class="row g-3 align-items-center">

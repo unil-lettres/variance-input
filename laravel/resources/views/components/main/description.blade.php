@@ -1,6 +1,6 @@
 <!-- resources/views/components/main/description.blade.php -->
 
-<div class="card mb-3">
+<div class="card">
     <div
         class="card-header d-flex justify-content-between align-items-center fw-semibold description-toggle"
         role="button"

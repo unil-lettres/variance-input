@@ -1,5 +1,5 @@
 {{-- resources/views/components/main/facsimiles.blade.php --}}
-<div id="facsimiles-card" class="card mb-3">
+<div id="facsimiles-card" class="card">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center facsimiles-toggle"
          role="button"
          data-bs-toggle="collapse"

@@ -1,4 +1,4 @@
-<div class="card mb-3" id="work-container" data-current-work-id="">
+<div class="card" id="work-container" data-current-work-id="">
     <div class="row g-0">
         <div class="col-md-6">
             <div class="card-header d-flex align-items-center fw-semibold">

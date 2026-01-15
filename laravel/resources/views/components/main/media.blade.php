@@ -1,5 +1,5 @@
 <!-- resources/views/components/main/media.blade.php -->
-<div class="card mb-3" id="media-panel">
+<div class="card" id="media-panel">
   <div
       class="media-toggle card-header fw-semibold d-flex justify-content-between align-items-center" 
       role="button"
@@ -57,6 +57,7 @@
       </div>
       <div class="col-md-6 text-center">
         <div id="pdf-btn"></div>
+      </div>
     </div>
   </div>
 </div>

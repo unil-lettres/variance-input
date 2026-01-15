@@ -8,49 +8,49 @@
 @endphp
 
 <div id="admin-main"
-     class="container mt-4"
+     class="container mt-4 admin-main-stack"
      data-initial-author-id="{{ $initialSelection['authorId'] ?? '' }}"
      data-initial-author-slug="{{ $initialSelection['authorSlug'] ?? '' }}"
      data-initial-work-id="{{ $initialSelection['workId'] ?? '' }}"
      data-initial-work-slug="{{ $initialSelection['workSlug'] ?? '' }}">
 
     {{-- Sélecteur d’œuvre --}}
-    <div id="zone-0" class="mb-4">
+    <div id="zone-0">
         @include('components.main.work_selector')
     </div>
 
     {{-- Statut (masqué par défaut) --}}
-    <div id="zone-1" class="mb-4" style="display:none;">
+    <div id="zone-1" style="display:none;">
         @include('components.main.status')
     </div>
 
     {{-- Description --}}
-    <div id="zone-2" class="mb-4">
+    <div id="zone-2">
         @include('components.main.description')
     </div>
 
     {{-- Médias --}}
-    <div id="zone-3" class="mb-4">
+    <div id="zone-3">
         @include('components.main.media')
     </div>
 
     {{-- Versions --}}
-    <div id="zone-4" class="mb-4">
+    <div id="zone-4">
         @include('components.main.versions')
     </div>
 
     {{-- Comparaisons --}}
-    <div id="zone-5" class="mb-4">
+    <div id="zone-5">
         @include('components.main.comparisons')
     </div>
 
     {{-- Fac-similés --}}
-    <div id="zone-4b" class="mb-4">
+    <div id="zone-4b">
         @include('components.main.facsimiles')
     </div>
 
     {{-- Lancement de MEDITE --}}
-    <div id="zone-6" class="mb-4">
+    <div id="zone-6">
         @include('components.main.medite')
     </div>
 
@@ -58,9 +58,18 @@
 
 @push('styles')
 <style>
-    #admin-main .card-header {
-        padding-top: 0.4rem;
-        padding-bottom: 0.4rem;
+    .admin-main-stack {
+        display: grid;
+        row-gap: 24px;
+    }
+    .admin-main-stack > [id^="zone-"] {
+        margin: 0;
+    }
+    #admin-main .card-header[role="button"] {
+        padding-top: 0;
+        padding-bottom: 0;
+        height: 2rem;
+        min-height: 2rem;
     }
     .blade-disabled {
         opacity: 0.55;
