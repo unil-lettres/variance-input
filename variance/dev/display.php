@@ -14,9 +14,10 @@ $versions = ['', ''];
 $workId = null;
 
 if ($authorFolder !== '' && $workFolder !== '' && $comparisonId > 0) {
-    $comparisonStatement = $cnx->prepare(
-        'SELECT c.id,
+        $comparisonStatement = $cnx->prepare(
+            'SELECT c.id,
                 c.folder,
+                c.publication_scope,
                 s.folder AS source_folder,
                 t.folder AS target_folder,
                 w.id AS work_id
@@ -28,7 +29,7 @@ if ($authorFolder !== '' && $workFolder !== '' && $comparisonId > 0) {
          WHERE c.id = :comparison_id
            AND w.folder = :work_folder
            AND a.folder = :author_folder'
-    );
+        );
     $comparisonStatement->execute([
         'comparison_id' => $comparisonId,
         'work_folder' => $workFolder,
@@ -36,7 +37,7 @@ if ($authorFolder !== '' && $workFolder !== '' && $comparisonId > 0) {
     ]);
     $comparisonRow = $comparisonStatement->fetch(PDO::FETCH_ASSOC);
 
-    if ($comparisonRow && comparisonIsDraft($authorFolder, $workFolder, $comparisonRow['id'], $comparisonRow['folder'])) {
+    if ($comparisonRow && comparisonIsDraft($authorFolder, $workFolder, $comparisonRow['id'], $comparisonRow['folder'], $comparisonRow['publication_scope'] ?? null)) {
         $comparisonFolder = $comparisonRow['folder'];
         $path = $authorFolder . '/' . $workFolder . '/comparisons/' . $comparisonRow['id'];
         $pathForImages = $authorFolder . '/' . $workFolder;
@@ -193,6 +194,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                                             c.number as c_number,
                                             c.prefix_label as c_prefix_label,
                                             c.folder as c_folder,
+                                            c.publication_scope as c_scope,
                                             s.name as s_name,
                                             t.name as t_name
                                      FROM comparisons c
@@ -210,7 +212,8 @@ if (!empty($_COOKIE['viewer_params'])) {
                                             $authorFolder,
                                             $workFolder,
                                             $comparison['c_id'],
-                                            $comparison['c_folder']
+                                            $comparison['c_folder'],
+                                            $comparison['c_scope'] ?? null
                                         );
                                     }
                                 ));

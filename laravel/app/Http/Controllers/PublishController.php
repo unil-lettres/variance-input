@@ -21,7 +21,11 @@ class PublishController extends Controller
 
     public function publish(Request $request)
     {
-        $request->validate(['comparison_id' => 'required|integer']);
+        $request->validate([
+            'comparison_id' => 'required|integer',
+            'destination'   => 'nullable|string|in:prod,dev',
+        ]);
+        $destination = $request->input('destination', 'prod');
 
         // 1. Récupération de la comparaison --------------------------------
         /** @var Comparison $comparison */
@@ -41,11 +45,6 @@ class PublishController extends Controller
         $destDir   = $paths['dest_dir'];
         $destPath  = $paths['dest_path'];
 
-        if (!is_dir($destPath)) {
-            Storage::disk('public')->makeDirectory($destDir);
-        }
-
-        // 5. Copier uniquement les composants XHTML nécessaires -----------
         if (!is_dir($sourceDir)) {
             return response()->json([
                 'error' => 'Dossier source introuvable pour cette comparaison.',
@@ -53,12 +52,36 @@ class PublishController extends Controller
             ], 404);
         }
 
-        $copied = [];
         $missing = [];
         foreach (self::COMPONENTS as $name) {
             $srcFile = $sourceDir . DIRECTORY_SEPARATOR . $name;
             if (!is_file($srcFile)) {
                 $missing[] = $name;
+            }
+        }
+
+        if ($destination === 'dev') {
+            $this->deletePublishedFiles($destDir);
+            $comparison->publication_scope = 'dev';
+            $comparison->save();
+
+            return response()->json([
+                'status'        => 'ok',
+                'published_to'  => 'dev',
+                'copied_files'  => [],
+                'missing_files' => $missing,
+                'manifests'     => [],
+            ]);
+        }
+
+        if (!is_dir($destPath)) {
+            Storage::disk('public')->makeDirectory($destDir);
+        }
+
+        $copied = [];
+        foreach (self::COMPONENTS as $name) {
+            $srcFile = $sourceDir . DIRECTORY_SEPARATOR . $name;
+            if (!is_file($srcFile)) {
                 continue;
             }
 
@@ -72,6 +95,8 @@ class PublishController extends Controller
         }
 
         $manifestInfo = $this->publishManifests($comparison, $paths);
+        $comparison->publication_scope = 'prod';
+        $comparison->save();
 
         return response()->json([
             'status'        => 'ok',
@@ -105,35 +130,14 @@ class PublishController extends Controller
         $destDir   = $paths['dest_dir'];
         $destPath  = $paths['dest_path'];
 
-        if (!is_dir($destPath)) {
-            return response()->json([
-                'status' => 'ok',
-                'deleted_files' => [],
-                'not_found' => self::COMPONENTS,
-            ]);
-        }
-
         $deleted = [];
-        $notFound = [];
-        foreach (self::COMPONENTS as $name) {
-            $relative = "{$destDir}/{$name}";
-            if (Storage::disk('public')->exists($relative)) {
-                Storage::disk('public')->delete($relative);
-                $deleted[] = $name;
-            } else {
-                $notFound[] = $name;
-            }
+        $notFound = self::COMPONENTS;
+        if (is_dir($destPath)) {
+            ['deleted' => $deleted, 'not_found' => $notFound] = $this->deletePublishedFiles($destDir);
         }
 
-        if (empty(Storage::disk('public')->files($destDir))
-            && empty(Storage::disk('public')->directories($destDir))) {
-            Storage::disk('public')->deleteDirectory($destDir);
-        }
-
-        $legacyDir = base_path('../variance/' . $destDir);
-        if (is_dir($legacyDir)) {
-            File::deleteDirectory($legacyDir);
-        }
+        $comparison->publication_scope = null;
+        $comparison->save();
 
         return response()->json([
             'status'        => 'ok',
@@ -208,6 +212,34 @@ class PublishController extends Controller
         // break the layout by prematurely closing surrounding containers.
         // The \b after <p> prevents stripping inline tags like <pb>.
         return preg_replace('#</?(?:div|p)\b[^>]*>#i', '', $contents);
+    }
+
+    private function deletePublishedFiles(string $destDir): array
+    {
+        $deleted = [];
+        $notFound = [];
+
+        foreach (self::COMPONENTS as $name) {
+            $relative = "{$destDir}/{$name}";
+            if (Storage::disk('public')->exists($relative)) {
+                Storage::disk('public')->delete($relative);
+                $deleted[] = $name;
+            } else {
+                $notFound[] = $name;
+            }
+        }
+
+        if (empty(Storage::disk('public')->files($destDir))
+            && empty(Storage::disk('public')->directories($destDir))) {
+            Storage::disk('public')->deleteDirectory($destDir);
+        }
+
+        $legacyDir = base_path('../variance/' . $destDir);
+        if (is_dir($legacyDir)) {
+            File::deleteDirectory($legacyDir);
+        }
+
+        return ['deleted' => $deleted, 'not_found' => $notFound];
     }
 
     private function publishManifests(Comparison $comparison, array $paths): array

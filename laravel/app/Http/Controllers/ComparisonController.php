@@ -61,6 +61,7 @@ class ComparisonController extends Controller
                 $cmp->published = false;
                 $cmp->publish_missing = $required;
                 $cmp->publish_dest = null;
+                $publicationScope = $cmp->publication_scope ?? null;
 
                 if (!$destBase) {
                     return $cmp;
@@ -116,7 +117,15 @@ class ComparisonController extends Controller
                     }
                 }
 
-                $cmp->published = ($alreadyPublished === count($required));
+                if (!$publicationScope && $cmp->is_legacy) {
+                    $publicationScope = 'prod';
+                }
+                if (!$publicationScope && $alreadyPublished === count($required)) {
+                    $publicationScope = 'prod';
+                }
+
+                $cmp->publication_scope = $publicationScope;
+                $cmp->published = $publicationScope !== null;
                 $cmp->publish_missing = $missing;
                 $cmp->publish_dest = $destDir;
                 $cmp->publish_source = is_dir($sourceDir) ? $sourceDir : null;
@@ -522,11 +531,19 @@ class ComparisonController extends Controller
         $sourceDir = storage_path("app/public/{$basePath}/comparisons/{$comparison->id}");
         $destDir   = "uploads/{$authorFolder}/{$workInfo->work_folder}/{$comparison->folder}";
 
-        $published = true;
-        foreach (PublishController::COMPONENTS as $file) {
-            if (!Storage::disk('public')->exists("{$destDir}/{$file}")) {
-                $published = false;
-                break;
+        $scope = $comparison->publication_scope ?? null;
+        if (!$scope && $comparison->is_legacy) {
+            $scope = 'prod';
+        }
+
+        $published = $scope !== null;
+        if (!$published) {
+            $published = true;
+            foreach (PublishController::COMPONENTS as $file) {
+                if (!Storage::disk('public')->exists("{$destDir}/{$file}")) {
+                    $published = false;
+                    break;
+                }
             }
         }
 

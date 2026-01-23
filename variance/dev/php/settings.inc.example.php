@@ -52,7 +52,11 @@ define('DIR_REL', $baseUrl);
  * @var string
  */
 define('RELATIVE_UPLOAD_ROOT', '/uploads');
-define('UPLOAD_ROOT', realpath(__DIR__ . '/../../uploads'));
+$legacyUploadRoot = realpath(__DIR__ . '/../../uploads');
+if (is_dir('/app/uploads')) {
+    $legacyUploadRoot = '/app/uploads';
+}
+define('UPLOAD_ROOT', $legacyUploadRoot ?: (ROOT . RELATIVE_UPLOAD_ROOT));
 
 
 /**
@@ -145,9 +149,13 @@ function comparisonIsPublished($authorFolder, $workFolder, $comparisonFolder)
     return comparisonHasComponents($baseDir);
 }
 
-function comparisonIsDraft($authorFolder, $workFolder, $comparisonId, $comparisonFolder)
+function comparisonIsDraft($authorFolder, $workFolder, $comparisonId, $comparisonFolder, $publicationScope = null)
 {
     if (!$authorFolder || !$workFolder || !$comparisonId) {
+        return false;
+    }
+
+    if ($publicationScope !== 'dev') {
         return false;
     }
 
@@ -177,7 +185,8 @@ function getWorkIdsWithDraftComparisons()
                 c.folder as comparison_folder,
                 w.id as work_id,
                 w.folder as work_folder,
-                a.folder as author_folder
+                a.folder as author_folder,
+                c.publication_scope as publication_scope
          FROM comparisons c
          INNER JOIN versions s ON c.source_id = s.id
          INNER JOIN works w ON s.work_id = w.id
@@ -189,7 +198,8 @@ function getWorkIdsWithDraftComparisons()
             $row['author_folder'],
             $row['work_folder'],
             (int)$row['comparison_id'],
-            $row['comparison_folder']
+            $row['comparison_folder'],
+            $row['publication_scope'] ?? null
         )) {
             $cache[(int)$row['work_id']] = true;
         }

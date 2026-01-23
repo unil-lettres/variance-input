@@ -117,6 +117,16 @@
   .target-cell .role-wrapper {
     margin-top: 0.5rem;
   }
+  .publish-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .publish-scope .btn {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.45rem;
+  }
 </style>
 @endpush
 

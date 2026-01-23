@@ -1182,7 +1182,7 @@ function initComparisonsTable() {
 
       const totalCount = Array.isArray(comparisons) ? comparisons.length : 0;
       const publishedCount = Array.isArray(comparisons)
-        ? comparisons.filter(comp => !!comp.published).length
+        ? comparisons.filter(comp => !!comp.publication_scope || !!comp?.is_legacy).length
         : 0;
 
       if (!Array.isArray(comparisons) || comparisons.length === 0) {
@@ -1196,16 +1196,19 @@ function initComparisonsTable() {
       comparisons.forEach(comp => {
         const tr = document.createElement('tr');
         tr.dataset.id = comp.id;
-        tr.dataset.published = comp.published ? '1' : '0';
-        tr.dataset.publishDest = comp.publish_dest || '';
 
         const missing = Array.isArray(comp.publish_missing) ? comp.publish_missing : [];
         const ready = comp.components_ready && missing.length === 0;
-        const published = comp.published;
         const isLegacy = !!comp.is_legacy;
-        const publishedTitle = published
-          ? 'Fichiers publiés disponibles'
+        const scope = comp.publication_scope || (isLegacy ? 'prod' : null);
+        const isPublished = !!scope;
+        const isPublishedProd = scope === 'prod';
+        const isPublishedDev = scope === 'dev';
+        const publishedTitle = isPublished
+          ? `Publié sur ${isPublishedProd ? '/' : '/dev'}`
           : 'Comparaison non publiée';
+        tr.dataset.published = isPublished ? '1' : '0';
+        tr.dataset.publishDest = comp.publish_dest || '';
         const isRunning = runningComparisons.has(Number(comp.id));
         let statusHtml;
         if (isRunning) {
@@ -1242,6 +1245,10 @@ function initComparisonsTable() {
 
         comparisonData.set(comp.id, comp);
         const mediteParamsHtml = renderMediteParams(comp);
+        const scopeName = `publish-scope-${comp.id}`;
+        const defaultScope = scope || (isLegacy ? 'prod' : 'dev');
+        const publishDisabled = !comp.publish_source || isLegacy;
+        const scopeDisabled = isLegacy;
 
         tr.innerHTML = `
           <td>${comp.id}</td>
@@ -1256,21 +1263,36 @@ function initComparisonsTable() {
           <td>${comp.folder ?? ''}</td>
           <td class="align-top">${mediteParamsHtml}</td>
           <td class="text-center components-status">${statusHtml}</td>
-          <td class="text-center published-status">${published ? `<span class="text-success" title="${publishedTitle}">✔</span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
+          <td class="text-center published-status">${isPublished ? `<span class="text-success" title="${publishedTitle}">✔</span>` : `<span class="text-muted" title="${publishedTitle}">—</span>`}</td>
           <td class="text-center">
-            <input type="checkbox" class="form-check-input publish-toggle"
-                   data-id="${comp.id}"
-                   data-missing='${JSON.stringify(comp.publish_missing ?? [])}'
-                   data-source='${comp.publish_source ?? ''}'
-                   ${comp.published ? 'checked' : ''}
-                   ${comp.publish_source ? '' : 'disabled'}>
+            <div class="publish-control">
+              <input type="checkbox" class="form-check-input publish-toggle"
+                     data-id="${comp.id}"
+                     data-missing='${JSON.stringify(comp.publish_missing ?? [])}'
+                     data-source='${comp.publish_source ?? ''}'
+                     data-scope="${scope || ''}"
+                     ${isPublished ? 'checked' : ''}
+                     ${publishDisabled ? 'disabled' : ''}>
+              <div class="btn-group btn-group-sm publish-scope" role="group" aria-label="Destination de publication">
+                <input type="radio" class="btn-check publish-scope-toggle"
+                       name="${scopeName}" id="${scopeName}-prod" value="prod"
+                       data-id="${comp.id}" ${defaultScope === 'prod' ? 'checked' : ''}
+                       ${scopeDisabled ? 'disabled' : ''}>
+                <label class="btn btn-outline-secondary" for="${scopeName}-prod" title="Publier sur /">/</label>
+                <input type="radio" class="btn-check publish-scope-toggle"
+                       name="${scopeName}" id="${scopeName}-dev" value="dev"
+                       data-id="${comp.id}" ${defaultScope === 'dev' ? 'checked' : ''}
+                       ${scopeDisabled ? 'disabled' : ''}>
+                <label class="btn btn-outline-secondary" for="${scopeName}-dev" title="Publier sur /dev">/dev</label>
+              </div>
+            </div>
           </td>
           <td>${comp.created_at ? new Date(comp.created_at).toLocaleString() : ''}</td>
           <td class="text-center">
             <div class="btn-group-vertical" role="group" aria-label="Action buttons">
-              ${(legacyUrl && (published || isLegacy)) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
-              ${(devUrl && !published && !isLegacy) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
-              ${(!isRunning && ready && !published && !isLegacy) ? `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
+              ${(legacyUrl && (isPublishedProd || isLegacy)) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
+              ${(devUrl && isPublishedDev && !isLegacy) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
+              ${(!isRunning && ready && !isPublishedProd && !isLegacy) ? `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>` : ''}
               ${comp.xml_available ? `<a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>` : `<span class="d-inline-block" data-bs-toggle="tooltip" title="Pas de fichier XML disponible pour cette comparaison"><span class="btn btn-outline-secondary disabled" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`}
               <a href="${exportUrl}" data-bs-toggle="tooltip" title="Exporter le pack legacy" class="btn btn-outline-secondary" target="_blank"><i class="bi bi-download"></i></a>
               <button data-bs-toggle="tooltip" title="Supprimer la comparaison" class="btn btn-outline-danger delete-comparison-btn" data-id="${comp.id}"><i class="bi bi-trash3"></i></button>
@@ -1409,6 +1431,18 @@ function initComparisonsTable() {
     }
   });
 
+  const getSelectedScope = (row) => {
+    if (!row) return '';
+    const selected = row.querySelector('.publish-scope-toggle:checked');
+    return selected ? selected.value : '';
+  };
+
+  const setSelectedScope = (row, scope) => {
+    if (!row || !scope) return;
+    const input = row.querySelector(`.publish-scope-toggle[value="${scope}"]`);
+    if (input) input.checked = true;
+  };
+
   document.addEventListener('change', async event => {
     const toggle = event.target.closest('.publish-toggle');
     if (!toggle) return;
@@ -1416,15 +1450,24 @@ function initComparisonsTable() {
     const comparisonId = toggle.dataset.id;
     if (!comparisonId) return;
 
+    const row = toggle.closest('tr');
     const shouldPublish = toggle.checked;
     toggle.disabled = true;
 
     const sourceDir = toggle.dataset.source || '';
+    const scope = getSelectedScope(row);
     let knownMissing = [];
     try {
       knownMissing = JSON.parse(toggle.dataset.missing || '[]');
     } catch {
       knownMissing = [];
+    }
+
+    if (shouldPublish && !scope) {
+      alert('Choisissez une destination de publication (/ ou /dev) avant de publier.');
+      toggle.checked = false;
+      toggle.disabled = false;
+      return;
     }
 
     if (shouldPublish && !sourceDir) {
@@ -1455,7 +1498,7 @@ function initComparisonsTable() {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ comparison_id: comparisonId })
+          body: JSON.stringify({ comparison_id: comparisonId, destination: scope })
         });
 
         const text = await res.text();
@@ -1499,6 +1542,61 @@ function initComparisonsTable() {
       toggle.checked = !shouldPublish;
     } finally {
       toggle.disabled = false;
+    }
+  });
+
+  document.addEventListener('change', async event => {
+    const scopeToggle = event.target.closest('.publish-scope-toggle');
+    if (!scopeToggle) return;
+
+    const row = scopeToggle.closest('tr');
+    const publishToggle = row?.querySelector('.publish-toggle');
+    if (!publishToggle || !publishToggle.checked) {
+      return;
+    }
+
+    const comparisonId = publishToggle.dataset.id;
+    const previousScope = publishToggle.dataset.scope || '';
+    const nextScope = scopeToggle.value;
+    if (!comparisonId || nextScope === previousScope) {
+      return;
+    }
+
+    const proceed = confirm('Changer la destination de publication ? La comparaison sera republiée.');
+    if (!proceed) {
+      setSelectedScope(row, previousScope || 'prod');
+      return;
+    }
+
+    publishToggle.disabled = true;
+
+    try {
+      const res = await fetch(withBasePath('/api/publish_xhtml'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ comparison_id: comparisonId, destination: nextScope })
+      });
+
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      if (!res.ok || data.error || data.status !== 'ok') {
+        const reason = data.error || data.message || data.raw || `Statut HTTP ${res.status}`;
+        throw new Error(`Publication échouée : ${reason}`);
+      }
+
+      if (currentWorkId) {
+        await loadComparisons(currentWorkId);
+      }
+    } catch (err) {
+      console.error(err);
+      alert((err && err.message) ? err.message : 'Erreur lors de la mise à jour de la publication');
+      setSelectedScope(row, previousScope || 'prod');
+    } finally {
+      publishToggle.disabled = false;
     }
   });
 

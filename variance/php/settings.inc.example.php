@@ -52,7 +52,11 @@ define('DIR_REL', $baseUrl);
  * @var string
  */
 define('RELATIVE_UPLOAD_ROOT', '/uploads');
-define('UPLOAD_ROOT', ROOT . RELATIVE_UPLOAD_ROOT);
+$legacyUploadRoot = ROOT . RELATIVE_UPLOAD_ROOT;
+if (is_dir('/app/uploads')) {
+    $legacyUploadRoot = '/app/uploads';
+}
+define('UPLOAD_ROOT', $legacyUploadRoot);
 
 
 /**

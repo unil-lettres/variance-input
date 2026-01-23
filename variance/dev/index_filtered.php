@@ -142,18 +142,19 @@ error_reporting(E_ALL);
 
 									?>
                                 </div>
-								<?php $query = 'SELECT c.id as c_id, c.number as c_number, c.folder AS c_folder, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
+								<?php $query = 'SELECT c.id as c_id, c.number as c_number, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
 								$comparisonStatement = $cnx->prepare($query);
 								$comparisonStatement->bindValue(':id', $element['w_id'], PDO::PARAM_INT);
 								$comparisonStatement->execute();
-                                $comparisons = array_values(array_filter(
+								$comparisons = array_values(array_filter(
                                     $comparisonStatement->fetchAll(PDO::FETCH_ASSOC),
                                     function ($comparison) use ($element) {
                                         return comparisonIsDraft(
                                             $element['a_folder'],
                                             $element['w_folder'],
                                             $comparison['c_id'],
-                                            $comparison['c_folder']
+                                            $comparison['c_folder'],
+                                            $comparison['c_scope'] ?? null
                                         );
                                     }
                                 ));

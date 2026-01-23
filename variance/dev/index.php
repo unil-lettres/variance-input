@@ -143,7 +143,7 @@ require_once 'php/settings.inc.php';
 
 									?>
                                 </div>
-								<?php $query = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
+								<?php $query = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
 								$comparisonStatement = $cnx->prepare($query);
 								$comparisonStatement->bindValue(':id', $element['w_id'], PDO::PARAM_INT);
 								$comparisonStatement->execute();
@@ -154,7 +154,8 @@ require_once 'php/settings.inc.php';
                                             $element['a_folder'],
                                             $element['w_folder'],
                                             $comparison['c_id'],
-                                            $comparison['c_folder']
+                                            $comparison['c_folder'],
+                                            $comparison['c_scope'] ?? null
                                         );
                                     }
                                 ));
