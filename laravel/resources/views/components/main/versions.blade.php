@@ -15,7 +15,7 @@
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
-            Les versions textuelles alimentent Medite. Ajoutez vos balises <code>&lt;pb&gt;</code> via l’éditeur (icône crayon) puis gérez toute la pagination (sidecar, injection, restauration) depuis le tableau des comparaisons. Pour les fac-similés, le bouton «&nbsp;Téléverser&nbsp;» importe l’ensemble des images; l’onglet Fac-similés permet ensuite de choisir, par comparaison, le sous-ensemble publié (manifeste JSON).
+            Les versions textuelles alimentent Medite. Ajoutez vos balises <code>&lt;pb&gt;</code> via l’éditeur (icône crayon) puis gérez toute la pagination (sidecar, injection, restauration) depuis le tableau des comparaisons. Pour les fac-similés, le bouton «&nbsp;Téléverser&nbsp;» importe l’ensemble des images; l’onglet Fac-similés permet ensuite de choisir, par comparaison, le sous-ensemble publié (manifeste JSON). Les fac-similés sont publiés automatiquement lors de la publication d’une comparaison.
         </p>
 
         <!-- ────────────── Versions list  ────────────── -->
@@ -471,26 +471,6 @@ function renderFacsimileStatus(versionId, facsimileData){
         state.viewBtn.title = disableView
             ? (queued > 0 ? 'Traitement en cours — affichage indisponible' : 'Aucune image à afficher')
             : 'Afficher la galerie de fac-similés';
-    }
-
-    if (state.publishBadge) state.publishBadge.textContent = published;
-    if (state.publishBtn) {
-        if (isLegacy) {
-            applyLegacyState(state.publishBtn);
-        } else {
-            clearLegacyState(state.publishBtn);
-            const disablePublish = queued > 0 || ready === 0;
-            state.publishBtn.disabled = disablePublish;
-            if (disablePublish && queued > 0) {
-                state.publishBtn.title = 'Traitement en cours — publication indisponible';
-            } else if (ready === 0) {
-                state.publishBtn.title = 'Aucune image à publier';
-            } else if (outstanding > 0) {
-                state.publishBtn.title = `${outstanding} image(s) en attente de publication`;
-            } else {
-                state.publishBtn.title = 'Toutes les images sont publiées';
-            }
-        }
     }
 
     if (state.uploadBtn) {
@@ -1443,29 +1423,6 @@ async function readJsonResponse(res) {
     }
 }
 
-async function publishFacsimiles(version) {
-    if (!version || !version.id) return;
-    if (!confirm(`Publier les fac-similés pour "${version.name}" ?`)) return;
-    try {
-        const res = await fetch(withBasePath('/api/facsimiles/publish'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify({ version_id: version.id })
-        });
-        const payload = await readJsonResponse(res);
-        alert(payload.message || 'Fac-similés publiés.');
-        document.dispatchEvent(new CustomEvent('facsimilesUploaded', { detail: { versionId: version.id } }));
-        fetchVersions(selectedWorkId);
-    } catch (err) {
-        console.error(err);
-        alert(err.message || 'Erreur lors de la publication des fac-similés.');
-    }
-}
-
 async function purgeFacsimiles(versionId, { reason = 'clear' } = {}){
     const id = Number(versionId);
     if (!Number.isFinite(id)) return;
@@ -1841,25 +1798,6 @@ async function fetchVersions(workId){
             });
             facButtons.appendChild(btnFacUpload);
 
-            const btnFacPublish = document.createElement('button');
-            btnFacPublish.type = 'button';
-            btnFacPublish.className = 'btn btn-outline-success d-inline-flex align-items-center gap-1';
-            const publishBadge = document.createElement('span');
-            publishBadge.className = 'badge bg-light text-muted border';
-            publishBadge.textContent = publishedCount;
-            btnFacPublish.appendChild(publishBadge);
-            btnFacPublish.appendChild(document.createTextNode(' Publier'));
-            btnFacPublish.disabled = sourceCount === 0;
-            btnFacPublish.title = sourceCount === 0
-                ? 'Aucune image à publier'
-                : (sourceCount > publishedCount ? `${sourceCount - publishedCount} image(s) en attente` : 'Toutes les images sont publiées');
-            btnFacPublish.addEventListener('click', () => {
-                if (!v.is_legacy) {
-                    publishFacsimiles(v);
-                }
-            });
-            facButtons.appendChild(btnFacPublish);
-
             const btnFacClear = document.createElement('button');
             btnFacClear.type = 'button';
             btnFacClear.className = 'btn btn-outline-danger';
@@ -1934,8 +1872,6 @@ async function fetchVersions(workId){
             const rowState = {
                 viewBtn: btnFacView,
                 viewBadge,
-                publishBtn: btnFacPublish,
-                publishBadge,
                 uploadBtn: btnFacUpload,
                 statusNote,
                 statusText,

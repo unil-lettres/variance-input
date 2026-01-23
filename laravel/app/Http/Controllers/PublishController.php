@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use App\Models\Comparison;
+use App\Models\Version;
 
 class PublishController extends Controller
 {
@@ -24,8 +25,10 @@ class PublishController extends Controller
         $request->validate([
             'comparison_id' => 'required|integer',
             'destination'   => 'nullable|string|in:prod,dev',
+            'insert_default_marker' => 'sometimes|boolean',
         ]);
         $destination = $request->input('destination', 'prod');
+        $insertDefaultMarker = $request->boolean('insert_default_marker', false);
 
         // 1. Récupération de la comparaison --------------------------------
         /** @var Comparison $comparison */
@@ -52,6 +55,11 @@ class PublishController extends Controller
             ], 404);
         }
 
+        $defaultMarkerInfo = null;
+        if ($insertDefaultMarker) {
+            $defaultMarkerInfo = $this->insertDefaultMarkers($comparison, $sourceDir);
+        }
+
         $missing = [];
         foreach (self::COMPONENTS as $name) {
             $srcFile = $sourceDir . DIRECTORY_SEPARATOR . $name;
@@ -65,12 +73,19 @@ class PublishController extends Controller
             $comparison->publication_scope = 'dev';
             $comparison->save();
 
+            $manifestInfo = $this->publishManifests($comparison, $paths);
+            $facsimiles = $this->publishFacsimilesForComparison($comparison);
+            $draftMirror = $this->mirrorDraftComparisonToLegacy($comparison, $paths, $sourceDir);
+
             return response()->json([
                 'status'        => 'ok',
                 'published_to'  => 'dev',
                 'copied_files'  => [],
                 'missing_files' => $missing,
-                'manifests'     => [],
+                'manifests'     => $manifestInfo,
+                'facsimiles'    => $facsimiles,
+                'default_marker' => $defaultMarkerInfo,
+                'draft_mirror'  => $draftMirror,
             ]);
         }
 
@@ -95,6 +110,7 @@ class PublishController extends Controller
         }
 
         $manifestInfo = $this->publishManifests($comparison, $paths);
+        $facsimiles = $this->publishFacsimilesForComparison($comparison);
         $comparison->publication_scope = 'prod';
         $comparison->save();
 
@@ -104,6 +120,8 @@ class PublishController extends Controller
             'copied_files'  => $copied,
             'missing_files' => $missing,
             'manifests'     => $manifestInfo,
+            'facsimiles'    => $facsimiles,
+            'default_marker' => $defaultMarkerInfo,
         ]);
     }
 
@@ -240,6 +258,262 @@ class PublishController extends Controller
         }
 
         return ['deleted' => $deleted, 'not_found' => $notFound];
+    }
+
+    private function publishFacsimilesForComparison(Comparison $comparison): array
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $results = [];
+
+        $sourceVersion = $comparison->sourceVersion;
+        if ($sourceVersion instanceof Version) {
+            $results['source'] = $this->publishFacsimilesForVersion($sourceVersion);
+        }
+
+        $targetVersion = $comparison->targetVersion;
+        if ($targetVersion instanceof Version) {
+            $results['target'] = $this->publishFacsimilesForVersion($targetVersion);
+        }
+
+        return $results;
+    }
+
+    private function publishFacsimilesForVersion(Version $version): array
+    {
+        $version->loadMissing('work.author');
+
+        if ($version->is_legacy || $version->work?->is_legacy) {
+            return ['status' => 'skipped', 'reason' => 'legacy'];
+        }
+
+        $paths = $this->facsimilePaths($version);
+        if (!$paths['source_exists'] || empty($paths['source_files'])) {
+            return ['status' => 'skipped', 'reason' => 'empty'];
+        }
+
+        File::ensureDirectoryExists($paths['dest_dir']);
+        // Preserve existing manifest JSON files while refreshing published images.
+        foreach (File::files($paths['dest_dir']) as $file) {
+            $name = $file->getFilename();
+            if (preg_match('/\.(jpe?g|png)$/i', $name)) {
+                File::delete($file->getPathname());
+            }
+        }
+
+        $copied = 0;
+        $disk = Storage::disk('public');
+        foreach ($paths['source_files'] as $fileName) {
+            $contents = $disk->get($paths['source_prefix'] . '/' . $fileName);
+            File::put($paths['dest_dir'] . '/' . $fileName, $contents);
+            $copied++;
+        }
+
+        return [
+            'status' => 'ok',
+            'copied' => $copied,
+            'dest_dir' => $paths['dest_dir'],
+        ];
+    }
+
+    private function facsimilePaths(Version $version): array
+    {
+        $authorFolder  = $version->work->author->folder;
+        $workFolder    = $version->work->folder;
+        $versionFolder = $version->folder;
+
+        $sourcePrefix = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $disk = Storage::disk('public');
+
+        $files = $disk->exists($sourcePrefix)
+            ? collect($disk->files($sourcePrefix))
+                ->map(fn ($path) => basename($path))
+                ->filter(fn ($name) => preg_match('/\.(jpe?g|png)$/i', $name))
+                ->values()
+                ->toArray()
+            : [];
+
+        $destDir = "/var/www/variance/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+
+        return [
+            'source_prefix' => $sourcePrefix,
+            'source_exists' => $disk->exists($sourcePrefix),
+            'source_files'  => $files,
+            'dest_dir'      => $destDir,
+        ];
+    }
+
+    private function insertDefaultMarkers(Comparison $comparison, string $sourceDir): array
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $results = [];
+        $inserted = 0;
+
+        foreach ([
+            'source' => $comparison->sourceVersion,
+            'target' => $comparison->targetVersion,
+        ] as $role => $version) {
+            $results[$role] = $this->insertDefaultMarkerForRole($comparison, $version, $role, $sourceDir);
+            if (($results[$role]['status'] ?? null) === 'inserted') {
+                $inserted++;
+            }
+        }
+
+        return [
+            'inserted' => $inserted,
+            'details'  => $results,
+        ];
+    }
+
+    private function insertDefaultMarkerForRole(Comparison $comparison, ?Version $version, string $role, string $sourceDir): array
+    {
+        if (!$version) {
+            return ['status' => 'skipped', 'reason' => 'missing_version'];
+        }
+
+        $fileName = $role === 'source' ? 'source.xhtml' : 'target.xhtml';
+        $filePath = $sourceDir . DIRECTORY_SEPARATOR . $fileName;
+        if (!is_file($filePath)) {
+            return ['status' => 'skipped', 'reason' => 'missing_file'];
+        }
+
+        $paths = [$filePath];
+        $authorFolder = $version->work->author->folder ?? null;
+        $workFolder = $version->work->folder ?? null;
+        if ($authorFolder && $workFolder) {
+            $legacyPath = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}/{$fileName}");
+            if (is_file($legacyPath) && $legacyPath !== $filePath) {
+                $paths[] = $legacyPath;
+            }
+        }
+
+        $imageNumber = $this->findFirstFacsimileImageNumber($version);
+        if ($imageNumber === null) {
+            return ['status' => 'skipped', 'reason' => 'no_images'];
+        }
+
+        $marker = $this->buildDefaultMarker($imageNumber, $role);
+        $updated = [];
+        foreach ($paths as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $html = File::get($path);
+            if (preg_match('/<span\s+class="page-marker"/i', $html)) {
+                continue;
+            }
+            $backupName = $role === 'source' ? 'source.original.xhtml' : 'target.original.xhtml';
+            $backupPath = dirname($path) . DIRECTORY_SEPARATOR . $backupName;
+            if (!is_file($backupPath)) {
+                File::ensureDirectoryExists(dirname($backupPath));
+                File::put($backupPath, $html);
+            }
+            File::put($path, $marker . "\n" . ltrim($html));
+            $updated[] = $path;
+        }
+
+        if (empty($updated)) {
+            return ['status' => 'skipped', 'reason' => 'already_has_marker'];
+        }
+
+        return [
+            'status' => 'inserted',
+            'image'  => $imageNumber,
+            'files'  => $updated,
+        ];
+    }
+
+    private function findFirstFacsimileImageNumber(Version $version): ?int
+    {
+        $version->loadMissing('work.author');
+        $authorFolder = $version->work?->author?->folder;
+        $workFolder   = $version->work?->folder;
+        $versionFolder = $version->folder;
+
+        if (!$authorFolder || !$workFolder || !$versionFolder) {
+            return null;
+        }
+
+        $numbers = [];
+        $sourcePrefix = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $disk = Storage::disk('public');
+        if ($disk->exists($sourcePrefix)) {
+            foreach ($disk->files($sourcePrefix) as $path) {
+                $name = basename($path);
+                if (str_contains(strtolower($name), '_thumb')) {
+                    continue;
+                }
+                if (preg_match('/_(\d+)\.(?:jpe?g|png)$/i', $name, $m)) {
+                    $numbers[] = (int) $m[1];
+                }
+            }
+        }
+
+        if (empty($numbers)) {
+            $legacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}");
+            if (is_dir($legacyDir)) {
+                foreach (File::files($legacyDir) as $file) {
+                    $name = $file->getFilename();
+                    if (str_contains(strtolower($name), '_thumb')) {
+                        continue;
+                    }
+                    if (preg_match('/_(\d+)\.(?:jpe?g|png)$/i', $name, $m)) {
+                        $numbers[] = (int) $m[1];
+                    }
+                }
+            }
+        }
+
+        if (empty($numbers)) {
+            return null;
+        }
+
+        sort($numbers, SORT_NUMERIC);
+        return $numbers[0];
+    }
+
+    private function buildDefaultMarker(int $imageNumber, string $role): string
+    {
+        $orientation = $role === 'source' ? 'right' : 'left';
+        $padded = str_pad((string) $imageNumber, 3, '0', STR_PAD_LEFT);
+
+        return sprintf(
+            '<span class="page-marker" data-image-name="%1$s"><span class="page-number">%1$s</span><img src="/img/settings/page_%2$s.svg" /></span>',
+            $padded,
+            $orientation
+        );
+    }
+
+    private function mirrorDraftComparisonToLegacy(Comparison $comparison, array $paths, string $sourceDir): array
+    {
+        $authorFolder = $paths['author_folder'] ?? null;
+        $workFolder = $paths['work_folder'] ?? null;
+        if (!$authorFolder || !$workFolder || !is_dir($sourceDir)) {
+            return ['status' => 'skipped'];
+        }
+
+        $legacyRoot = base_path('../variance/uploads');
+        $legacyDir = $legacyRoot . DIRECTORY_SEPARATOR . $authorFolder . DIRECTORY_SEPARATOR . $workFolder . DIRECTORY_SEPARATOR . 'comparisons' . DIRECTORY_SEPARATOR . $comparison->id;
+
+        $sourceReal = realpath($sourceDir);
+        $legacyRootReal = realpath($legacyRoot);
+        if ($sourceReal && $legacyRootReal && str_starts_with($sourceReal, $legacyRootReal)) {
+            return ['status' => 'skipped', 'reason' => 'already_legacy'];
+        }
+
+        File::ensureDirectoryExists($legacyDir);
+        $copied = [];
+        foreach (File::files($sourceDir) as $file) {
+            $name = $file->getFilename();
+            $dest = $legacyDir . DIRECTORY_SEPARATOR . $name;
+            File::copy($file->getPathname(), $dest);
+            $copied[] = $name;
+        }
+
+        return [
+            'status' => 'ok',
+            'dir'    => $legacyDir,
+            'files'  => $copied,
+        ];
     }
 
     private function publishManifests(Comparison $comparison, array $paths): array

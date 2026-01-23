@@ -57,6 +57,28 @@
     </div>
 </div>
 
+<div class="modal fade" id="pagination-warning-modal" tabindex="-1" aria-labelledby="paginationWarningLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="paginationWarningLabel">Pagination manquante</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        La comparaison que vous allez publier ne contient aucune marque de pagination, les facsimilés ne s'afficheront pas dans la partie publique. Voulez-vous insérer un marqueur par défaut de manière à ce que les facsimilés s'affichent?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-pagination-choice="continue">
+          Non, continuer sans affichage des facsimilés
+        </button>
+        <button type="button" class="btn btn-primary" data-pagination-choice="insert">
+          Oui, ajouter un marqueur
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @push('styles')
 <style>
   .comparisons-toggle .collapse-chevron::before {
