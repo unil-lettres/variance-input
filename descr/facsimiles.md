@@ -8,7 +8,7 @@ This note documents the lifecycle of facsimile images in the Variance stack, fro
 
 1. From the **Versions** card, click “Téléverser des fac-similés” (or use the dedicated button inside the facsimile blade).
 2. Pick the JPEG/PNG files to ingest; the UI posts them to `FacsimileController::store`.
-3. The controller writes each file to `storage/app/private/facsimile_queue/{author}/{work}/{version}` and dispatches a `ProcessFacsimileImage` job for further processing.
+3. The controller writes each file to `storage/app/facsimile_queue/{author}/{work}/{version}` and dispatches a `ProcessFacsimileImage` job for further processing.
 
 ## 2. Batch Processing
 
@@ -27,12 +27,14 @@ This note documents the lifecycle of facsimile images in the Variance stack, fro
 - Laravel persists the manifest under `storage/app/public/uploads/{author}/{work}/{version}/images_{role}_{author--work--comparison}.json` and emits `comparisonManifestUpdated`, keeping the comparisons table badge (`JSON …`) in sync.
 - Only images present in this manifest are published/exported for that comparison.
 
-## 4. Publication
+## 4. Publication (automatic)
 
-When processing and selection are complete:
+Facsimiles are published automatically when a comparison is published (prod or dev):
 
-1. Click “Publier” on the version row.
-2. `VersionController::publishFacsimiles` copies the processed images (and manifests) into the legacy tree `variance/uploads/{author}/{work}/{version}` for public consumption.
+1. The comparison publish endpoint calls `PublishController` to:
+   - copy images to `variance/uploads/{author}/{work}/{version}`;
+   - ensure a manifest JSON exists for the comparison/role.
+2. The public viewer loads the manifest JSON from the version folder to display the images.
 
 ## 5. Export Bundle
 

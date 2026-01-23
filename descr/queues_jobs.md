@@ -38,8 +38,8 @@ php artisan queue:work --queue=facsimiles,page-markers
 - **Queue**: `facsimiles`
 - **Triggered by**: Facsimile upload (`FacsimileController::store`).
 - **Task**: Save the uploaded file, normalise the final name, generate thumbnails, and mirror draft assets into `storage/app/public/uploads/{author}/{work}/{version}`.
-
-Publication (`VersionController::publishFacsimiles`) runs synchronously – it copies processed images and manifests into the legacy tree without queuing extra jobs.
+ 
+Publication runs synchronously during comparison publish (`PublishController::publish`) – it copies processed images and ensures manifest JSONs exist for the comparison. No separate job is queued.
 
 ---
 

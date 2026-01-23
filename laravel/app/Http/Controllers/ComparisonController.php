@@ -135,6 +135,8 @@ class ComparisonController extends Controller
                 }
                 $cmp->xml_available = is_file(storage_path("app/public/uploads/comparisons/{$cmp->id}.xml"));
 
+                $cmp->medite_component_counts = $this->countMediteComponentEntries($componentDir);
+
                 Log::debug('Comparison components status', [
                     'comparison_id' => $cmp->id,
                     'source_dir'    => $sourceDir,
@@ -149,6 +151,77 @@ class ComparisonController extends Controller
             });
 
         return response()->json($comparisons);
+    }
+
+    private function countMediteComponentEntries(?string $componentDir): array
+    {
+        if (!$componentDir || !is_dir($componentDir)) {
+            return [];
+        }
+
+        $files = [
+            'd' => 'd.xhtml',
+            'i' => 'i.xhtml',
+            'r' => 'r.xhtml',
+            's' => 's.xhtml',
+        ];
+
+        $counts = [];
+        foreach ($files as $key => $filename) {
+            $path = $componentDir . DIRECTORY_SEPARATOR . $filename;
+            if (!is_file($path)) {
+                continue;
+            }
+            $counts[$key] = $this->countFileOccurrences($path, '<li');
+        }
+
+        return $counts;
+    }
+
+    private function countFileOccurrences(string $path, string $needle): int
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return 0;
+        }
+
+        $count = 0;
+        $carry = '';
+        $needleLen = strlen($needle);
+        $carryLen = max($needleLen - 1, 0);
+
+        try {
+            while (!feof($handle)) {
+                $chunk = fread($handle, 1024 * 1024);
+                if ($chunk === false) {
+                    break;
+                }
+                $buffer = $carry . $chunk;
+                $count += substr_count($buffer, $needle);
+                $carry = $carryLen > 0 ? substr($buffer, -$carryLen) : '';
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return $count;
+    }
+
+    /**
+     * Return comparison publication counts for prod/dev.
+     */
+    public function publicationCounts()
+    {
+        $prodCount = Comparison::where('publication_scope', 'prod')->count();
+        $devCount = Comparison::where('publication_scope', 'dev')->count();
+        $legacyProd = Comparison::whereNull('publication_scope')
+            ->where('is_legacy', true)
+            ->count();
+
+        return response()->json([
+            'prod' => $prodCount + $legacyProd,
+            'dev'  => $devCount,
+        ]);
     }
 
     /**

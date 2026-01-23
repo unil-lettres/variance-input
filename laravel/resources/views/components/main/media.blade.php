@@ -243,6 +243,21 @@
         .catch(() => { preview.textContent = 'Prévisualisation indisponible'; });
     }
 
+    if (type === 'vignette') {
+      const meta = document.createElement('div');
+      meta.className = 'small text-muted text-center mb-1';
+      meta.textContent = 'Image';
+      btnHolder.appendChild(meta);
+      updateVignetteMeta(meta, fileUrl);
+    }
+    if (type === 'pdf') {
+      const meta = document.createElement('div');
+      meta.className = 'small text-muted text-center mb-1';
+      meta.textContent = 'PDF';
+      btnHolder.appendChild(meta);
+      updatePdfMeta(meta, fileUrl);
+    }
+
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'btn btn-sm btn-danger mt-2';
@@ -287,10 +302,154 @@
     } else preview.textContent = file.name;
   }
 
+  const formatBytes = (size) => {
+    const value = Number(size);
+    if (!Number.isFinite(value) || value <= 0) return '';
+    const units = ['o','Ko','Mo','Go'];
+    let idx = 0;
+    let current = value;
+    while (current >= 1024 && idx < units.length - 1) {
+      current /= 1024;
+      idx++;
+    }
+    const precision = idx === 0 ? 0 : 1;
+    return `${current.toFixed(precision)} ${units[idx]}`;
+  };
+
+  const detectImageFormat = (contentType, fileUrl) => {
+    const type = (contentType || '').toLowerCase();
+    if (type.includes('jpeg') || type.includes('jpg')) return 'JPG';
+    if (type.includes('png')) return 'PNG';
+    if (type.includes('webp')) return 'WEBP';
+    const extMatch = (fileUrl || '').toLowerCase().match(/\.([a-z0-9]+)(?:\?|#|$)/);
+    if (!extMatch) return 'Image';
+    return extMatch[1].toUpperCase();
+  };
+
+  async function updateVignetteMeta(metaEl, fileUrl) {
+    if (!metaEl) return;
+    try {
+      const res = await fetch(fileUrl, { method: 'HEAD' });
+      if (!res.ok) {
+        metaEl.textContent = detectImageFormat('', fileUrl);
+        return;
+      }
+      const bytes = Number(res.headers.get('content-length') || 0);
+      const format = detectImageFormat(res.headers.get('content-type'), fileUrl);
+      const sizeLabel = formatBytes(bytes);
+      metaEl.textContent = sizeLabel ? `${format} · ${sizeLabel}` : format;
+    } catch (err) {
+      metaEl.textContent = detectImageFormat('', fileUrl);
+    }
+  }
+
+  async function updatePdfMeta(metaEl, fileUrl) {
+    if (!metaEl) return;
+    try {
+      const res = await fetch(fileUrl, { method: 'HEAD' });
+      if (!res.ok) {
+        metaEl.textContent = 'PDF';
+        return;
+      }
+      const bytes = Number(res.headers.get('content-length') || 0);
+      const sizeLabel = formatBytes(bytes);
+      metaEl.textContent = sizeLabel ? `PDF · ${sizeLabel}` : 'PDF';
+    } catch (err) {
+      metaEl.textContent = 'PDF';
+    }
+  }
+
+  async function compressImageToJpeg(file, maxBytes) {
+    const img = await loadImageBitmap(file);
+    let scale = 1;
+    let quality = 0.85;
+    const minQuality = 0.5;
+    const minScale = 0.5;
+    let blob = null;
+
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+      if (blob && blob.size <= maxBytes) {
+        break;
+      }
+
+      if (quality > minQuality) {
+        quality = Math.max(minQuality, quality - 0.1);
+      } else if (scale > minScale) {
+        scale = Math.max(minScale, scale - 0.1);
+        quality = 0.85;
+      } else {
+        break;
+      }
+    }
+
+    if (!blob || blob.size > maxBytes) {
+      throw new Error('compression_failed');
+    }
+
+    const baseName = file.name.replace(/\.[^.]+$/, '') || 'vignette';
+    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+  }
+
+  function loadImageBitmap(file) {
+    if (window.createImageBitmap) {
+      return createImageBitmap(file);
+    }
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      const reader = new FileReader();
+      reader.onload = () => { img.src = reader.result; };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleVignetteSelection(file) {
+    const max = 2 * 1024 * 1024;
+    let uploadFile = file;
+    if (file.size > max) {
+      try {
+        uploadFile = await compressImageToJpeg(file, max);
+      } catch (err) {
+        alert('Impossible de réduire la vignette sous 2 Mo. Veuillez choisir une image plus légère.');
+        return;
+      }
+    }
+    localPreview('vignette', uploadFile);
+    upload(uploadFile, 'vignette');
+  }
+
+  function handlePdfSelection(file) {
+    const max = 10 * 1024 * 1024;
+    if (file.size > max) {
+      const preview = document.getElementById('pdf-preview');
+      if (preview) preview.innerHTML = '';
+      alert('Notice PDF trop volumineuse (max. 10 Mo). Merci de compresser le fichier avant de téléverser.');
+      return;
+    }
+    localPreview('pdf', file);
+    upload(file, 'pdf');
+  }
+
   function upload(file, field) {
     if(!currentWorkId || !currentShortTitle) return alert('Sélectionnez d\'abord une œuvre');
     const max = field==='vignette'?2*1024*1024:10*1024*1024;
-    if(file.size>max) return alert('Fichier trop volumineux');
+    if(file.size>max) {
+      if (field === 'pdf') {
+        alert('Notice PDF trop volumineuse (max. 10 Mo). Merci de compresser le fichier avant de téléverser.');
+      } else {
+        alert('Fichier trop volumineux');
+      }
+      return;
+    }
     const fd = new FormData(); fd.append(field,file);
     fetch(withBasePath(`/api/works/${currentWorkId}/media?short_title=${encodeURIComponent(currentShortTitle)}`),{
       method:'POST', headers:{ 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content }, credentials:'same-origin', body:fd
@@ -331,8 +490,8 @@
   }
 
   document.addEventListener('DOMContentLoaded',()=>{
-    setupDropzone('vignette-dropzone','vignette-input','image/', f=>{ localPreview('vignette',f); upload(f,'vignette'); });
-    setupDropzone('pdf-dropzone','pdf-input','application/pdf', f=>{ localPreview('pdf',f); upload(f,'pdf'); });
+    setupDropzone('vignette-dropzone','vignette-input','image/', f=>{ handleVignetteSelection(f); });
+    setupDropzone('pdf-dropzone','pdf-input','application/pdf', f=>{ handlePdfSelection(f); });
     updateDropzonesEnabled();
     document.addEventListener('workSelected', e=>{
       currentWorkId=e.detail.workId;

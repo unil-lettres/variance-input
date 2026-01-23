@@ -154,10 +154,10 @@
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
                         <li>
-                            <a class="dropdown-item" href="{{ legacy_url() }}">Site public</a>
+                            <a class="dropdown-item" href="{{ legacy_url() }}" data-site-scope="prod" data-site-label="Site public">Site public</a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="{{ legacy_url('dev') }}">Site dev</a>
+                            <a class="dropdown-item" href="{{ legacy_url('dev') }}" data-site-scope="dev" data-site-label="Site dev">Site dev</a>
                         </li>
                     </ul>
                 </div>
@@ -215,5 +215,42 @@
 
     <!-- Page-specific JS -->
     @stack('scripts')
+
+    <script>
+        (function () {
+            const buildLabel = (base, count) => {
+                const total = Number(count) || 0;
+                const suffix = total === 1 ? ' comparaison' : ' comparaisons';
+                return `${base} (${total}${suffix})`;
+            };
+
+            const updateCounts = async () => {
+                const prodLink = document.querySelector('[data-site-scope="prod"]');
+                const devLink = document.querySelector('[data-site-scope="dev"]');
+                if (!prodLink || !devLink) {
+                    return;
+                }
+                const prodLabel = prodLink.dataset.siteLabel || 'Site public';
+                const devLabel = devLink.dataset.siteLabel || 'Site dev';
+
+                try {
+                    const res = await fetch(withBasePath('/api/comparisons/publication-counts'), {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!res.ok) {
+                        return;
+                    }
+                    const data = await res.json();
+                    prodLink.textContent = buildLabel(prodLabel, data.prod);
+                    devLink.textContent = buildLabel(devLabel, data.dev);
+                } catch (err) {
+                    console.warn('Could not refresh publication counts', err);
+                }
+            };
+
+            document.addEventListener('DOMContentLoaded', updateCounts);
+            document.addEventListener('publicationCountsChanged', updateCounts);
+        })();
+    </script>
 </body>
 </html>

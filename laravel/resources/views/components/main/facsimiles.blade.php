@@ -146,6 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentVersionId  = null;
     let currentVersionName= '';
 
+    const facsimilesCollapse = document.getElementById('facsimilesCollapse');
+    const facsimilesCard     = facsimilesCollapse ? facsimilesCollapse.closest('.card') : null;
     let manifestOptions      = [];
     let manifestActiveKey    = null;
     let manifestSelectedSet  = new Set();
@@ -153,6 +155,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let manifestReadOnly     = false;
     let manifestBusy         = false;
     let manifestRequestToken = 0;
+
+    function openFacsimilesPanel() {
+        if (facsimilesCollapse && window.bootstrap?.Collapse) {
+            const collapse = bootstrap.Collapse.getOrCreateInstance(facsimilesCollapse, { toggle: false });
+            collapse.show();
+        }
+        if (facsimilesCard) {
+            facsimilesCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
     let pendingManifestFocus = null;
 
     function manifestOptionKey(comparisonId, role) {
@@ -806,6 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!Number.isFinite(versionId) || !Number.isFinite(comparisonId)) {
             return;
         }
+        openFacsimilesPanel();
         const key = manifestOptionKey(comparisonId, role);
         pendingManifestFocus = key;
         if (currentVersionId !== versionId) {

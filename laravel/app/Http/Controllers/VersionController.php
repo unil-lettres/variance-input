@@ -188,6 +188,7 @@ class VersionController extends Controller
         $paths = [
             "uploads/versions/{$base}.xml",
             "uploads/versions/{$base}.txt",
+            "uploads/versions/{$base}.medite.txt",
         ];
 
         $missing = [];

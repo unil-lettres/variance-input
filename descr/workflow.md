@@ -60,10 +60,10 @@ markers into comparison outputs.
    Upload facsimile batches from the Versions card or use the manifest manager in the facsimile carousel to curate existing images.
 
 2. **Processing**  
-   `FacsimileController` dispatches `ProcessFacsimileImage` jobs on the `facsimiles` queue. Each job normalises filenames (`img_*` convention), generates thumbnails, and stores the assets under `storage/app/public/uploads/{author}/{work}/{version}` (mirrored for preview).
+   `FacsimileController` dispatches `ProcessFacsimileImage` jobs on the `facsimiles` queue. Each job normalises filenames (`img_*` convention), generates thumbnails, and stores the assets under `storage/app/public/uploads/{author}/{work}/{version}`.
 
 3. **Manifest curation**  
-   The facsimile blade lists all comparisons for the selected version via `/api/versions/{version}/comparisons`. Saving a selection (`PUT /api/versions/{version}/manifests/{comparison}`) writes `images_{role}_{author--work--comparison}.json` alongside the images and updates the “JSON” badge in the comparisons table.
+   The facsimile blade lists all comparisons for the selected version via `/api/versions/{version}/comparisons`. Saving a selection (`PUT /api/versions/{version}/manifests/{comparison}`) writes `images_{role}_{author--work--comparison}.json` alongside the images and updates the “JSON” badge in the comparisons table. If no curated manifest exists when publishing, Laravel generates one that includes all images.
 
 4. **Events**  
    Successive uploads/fire-and-save actions emit `facsimilesUploaded` and `comparisonManifestUpdated` browser events so the gallery and comparisons table stay in sync without a reload.
@@ -126,11 +126,23 @@ The comparisons table exposes an “Exporter” button. Clicking it calls
 
 This produces a zip matching the legacy Variance folder layout without shipping unused images.
 
-## 7. Optional Publication
+## 7. Publication (prod/dev)
 
-When the comparison is ready, the user can publish the components (copies them
-to `public/uploads/{author}/{work}/{folder}`) via the “Publier” button. This step
-remains independent of pagination and export.
+Comparisons are **unpublished by default**. The admin toggles “Publier” and
+selects a scope (`prod` or `dev`):
+
+- **prod**: copies the comparison components to
+  `storage/app/public/uploads/{author}/{work}/{folder}` and mirrors them to
+  `variance/uploads/{author}/{work}/{folder}` for the legacy site.  
+- **dev**: keeps the components in the comparison draft directory
+  `storage/app/public/uploads/{author}/{work}/comparisons/{id}` and mirrors that
+  folder to `variance/uploads/{author}/{work}/comparisons/{id}` so `/dev` can
+  read them.
+
+On publish, Laravel also:
+  - Ensures facsimiles are copied into the legacy tree.
+  - Writes/refreshes the manifest JSON for the comparison.
+  - Optionally inserts a single default page marker if the admin requests it.
 
 ---
 
@@ -158,7 +170,8 @@ remains independent of pagination and export.
 | Version progress                | `storage/app/tmp/pager/{version_id}.json`                         |
 | Comparison progress             | `storage/app/tmp/pager/comparisons/{comparison_id}.json`          |
 | Comparison XHTML/TEI            | `storage/app/public/uploads/{author}/{work}/comparisons/{id}`     |
-| Published comparison (optional) | `public/uploads/{author}/{work}/{comparison_folder}`              |
+| Published comparison (prod)     | `storage/app/public/uploads/{author}/{work}/{comparison_folder}` + mirror in `variance/uploads/...` |
+| Published comparison (dev)      | `storage/app/public/uploads/{author}/{work}/comparisons/{id}` + mirror in `variance/uploads/.../comparisons/{id}` |
 | Exported legacy zip             | Delivered via `/comparisons/{comparison}/export`                  |
 
 This flow keeps the canonical TEI untouched, stores pagination metadata as a

@@ -128,8 +128,23 @@
     color: #44566c;
     font-weight: 500;
   }
+  .comparison-param-chip--input {
+    background: #eef2f6;
+    color: #2f3d4f;
+  }
+  .comparison-param-chip--output {
+    background: #e7f4ea;
+    color: #1f4d2f;
+  }
   .comparison-param-chip strong {
     color: #1d2340;
+  }
+  .manifest-json-pill {
+    cursor: pointer;
+  }
+  .manifest-json-pill:focus-visible {
+    outline: 2px solid rgba(13, 110, 253, 0.4);
+    outline-offset: 2px;
   }
   .legacy-disabled {
     opacity: 0.6;

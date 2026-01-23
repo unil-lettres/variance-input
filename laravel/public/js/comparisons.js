@@ -531,9 +531,11 @@ function initComparisonsTable() {
             ? `${safeInfo.file} — ${displayCount} fac-similé${countValue === 1 ? '' : 's'} + miniature${countValue === 1 ? '' : 's'}`
             : 'Manifeste JSON — fac-similés et miniatures'
         });
-        manifestBadge.addEventListener('click', evt => {
-          evt.preventDefault();
-          evt.stopPropagation();
+        const focusManifest = (evt) => {
+          if (evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+          }
           document.dispatchEvent(new CustomEvent('facsimiles:focusManifest', {
             detail: {
               versionId,
@@ -542,6 +544,14 @@ function initComparisonsTable() {
               role,
             },
           }));
+        };
+        manifestBadge.setAttribute('role', 'button');
+        manifestBadge.tabIndex = 0;
+        manifestBadge.addEventListener('click', focusManifest);
+        manifestBadge.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            focusManifest(event);
+          }
         });
         manifestBadgeWrapper.appendChild(manifestBadge);
       } else {
@@ -816,39 +826,77 @@ function initComparisonsTable() {
     }
     const chips = [];
 
+    const pushChip = (html, variant) => {
+      const variantClass = variant === 'output'
+        ? 'comparison-param-chip--output'
+        : 'comparison-param-chip--input';
+      chips.push(`<span class="comparison-param-chip ${variantClass}">${html}</span>`);
+    };
+
+    const escapeHtml = (value) => {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
     const addNumeric = (label, raw) => {
       if (raw === null || raw === undefined || raw === '') return;
       const num = Number(raw);
       const display = Number.isFinite(num) ? num : raw;
-      chips.push(`<span class="comparison-param-chip"><strong>${label}</strong> ${display}</span>`);
+      pushChip(`<strong>${label}</strong> ${display}`, 'input');
     };
 
     const addBoolean = (label, raw) => {
       if (raw === null || raw === undefined) return;
       const active = raw === true || raw === 1 || raw === '1';
       const stateClass = active ? 'text-bg-primary text-white border-0' : 'text-bg-light text-muted';
-      chips.push(`<span class="comparison-param-chip ${stateClass}"><strong>${label}</strong> ${active ? 'oui' : 'non'}</span>`);
+      pushChip(`<strong>${label}</strong> <span class="${stateClass} px-2 rounded-pill">${active ? 'oui' : 'non'}</span>`, 'input');
     };
 
     const addDuration = (label, rawMs) => {
       const formatted = formatDuration(rawMs);
       if (!formatted) return;
-      chips.push(`<span class="comparison-param-chip"><strong>${label}</strong> ${formatted}</span>`);
+      pushChip(`<strong>${label}</strong> ${formatted}`, 'output');
     };
 
     const addMemory = (label, rawKb) => {
       const kb = Number(rawKb);
       if (!Number.isFinite(kb) || kb <= 0) return;
-      chips.push(`<span class="comparison-param-chip"><strong>${label}</strong> ${formatBytes(kb * 1024)}</span>`);
+      pushChip(`<strong>${label}</strong> ${formatBytes(kb * 1024)}`, 'output');
+    };
+
+    const addCount = (raw, singular, plural) => {
+      if (raw === null || raw === undefined) return;
+      const num = Number(raw);
+      if (!Number.isFinite(num)) return;
+      const label = num === 1 ? singular : plural;
+      pushChip(`<strong>${formatNumber(num)}</strong> ${label}`, 'output');
+    };
+
+    const addSeparators = (rawSep) => {
+      const trimmed = rawSep === null || rawSep === undefined ? '' : String(rawSep).trim();
+      if (!trimmed) {
+        pushChip('<strong>Séparateurs</strong> défaut', 'input');
+        return;
+      }
+      pushChip(`<strong>Séparateurs</strong> ${escapeHtml(trimmed)}`, 'input');
     };
 
     addNumeric('Pivot', comp.lg_pivot);
     addNumeric('Ratio', comp.ratio);
     addNumeric('Seuil', comp.seuil);
     addBoolean('Sensibilité casse', comp.case_sensitive);
-    addBoolean('Sensibilité diacritiques', comp.diacri_sensitive);
+    addSeparators(comp.sep);
     addDuration('Durée', comp.medite_runtime_ms);
     addMemory('Pic mémoire', comp.medite_peak_rss_kb);
+    const counts = comp.medite_component_counts || comp.component_counts || {};
+    addCount(counts.d ?? counts['d.xhtml'], 'déplacement', 'déplacements');
+    addCount(counts.i ?? counts['i.xhtml'], 'insertion', 'insertions');
+    addCount(counts.r ?? counts['r.xhtml'], 'remplacement', 'remplacements');
+    addCount(counts.s ?? counts['s.xhtml'], 'suppression', 'suppressions');
 
     if (!chips.length) {
       return '<span class="text-muted">n/a</span>';
@@ -1601,6 +1649,7 @@ function initComparisonsTable() {
       if (currentWorkId) {
         await loadComparisons(currentWorkId);
         document.dispatchEvent(new CustomEvent('versionsUpdated', { detail: { workId: currentWorkId } }));
+        document.dispatchEvent(new CustomEvent('publicationCountsChanged'));
       }
 
     } catch (err) {
@@ -1658,6 +1707,7 @@ function initComparisonsTable() {
       if (currentWorkId) {
         await loadComparisons(currentWorkId);
         document.dispatchEvent(new CustomEvent('versionsUpdated', { detail: { workId: currentWorkId } }));
+        document.dispatchEvent(new CustomEvent('publicationCountsChanged'));
       }
     } catch (err) {
       console.error(err);

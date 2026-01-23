@@ -27,3 +27,4 @@ Route::post('/versions/{version}/pagination/from-pb', [VersionController::class,
 Route::get('/comparisons/{comparison}/manifests/{role}', [ComparisonController::class, 'showManifest'])
     ->where('role', 'source|target')
     ->name('comparisons.manifest');
+Route::get('/comparisons/publication-counts', [ComparisonController::class, 'publicationCounts']);
