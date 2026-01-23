@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Home')
-@section('body-class', 'admin-loading')
+@section('body-class', 'admin-loading admin-main-page')
 
 @section('content')
 @php
@@ -9,7 +9,7 @@
 @endphp
 
 <div id="admin-main"
-     class="container mt-4 admin-main-stack"
+     class="container admin-main-stack"
      data-initial-author-id="{{ $initialSelection['authorId'] ?? '' }}"
      data-initial-author-slug="{{ $initialSelection['authorSlug'] ?? '' }}"
      data-initial-work-id="{{ $initialSelection['workId'] ?? '' }}"
@@ -57,11 +57,18 @@
 
 </div>
 
+<div class="admin-banner container py-2 text-center small text-white shadow-sm mt-4 admin-bottom-banner">
+    Variance-Input &copy; UNIL/SIER 2026 · Laravel {{ app()->version() }} · sier@unil.ch
+</div>
+
 @push('styles')
 <style>
     .admin-main-stack {
         display: grid;
         row-gap: 24px;
+    }
+    .admin-main-page .admin-bottom-banner {
+        margin-top: 1.5rem;
     }
     .admin-main-stack > [id^="zone-"] {
         margin: 0;

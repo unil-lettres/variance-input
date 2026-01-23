@@ -109,6 +109,9 @@
         .admin-user-menu .dropdown-item:focus {
             background-color: rgba(0, 0, 0, 0.08);
         }
+        .admin-main-page footer {
+            display: none;
+        }
         .admin-loading-overlay {
             position: fixed;
             inset: 0;

@@ -1,0 +1,85 @@
+# Legacy texts and _lignes files
+
+Base path: `/Users/jganivet/Développement/variance2/variance/uploads`
+
+- Text files (non-_lignes): 40
+- _lignes-related files: 35
+
+## Text files
+- `benjamin_constant/adolphe/1ado.txt`
+- `benjamin_constant/adolphe/3ado.txt`
+- `charles_ferdinand_ramuz/les_signes_parmi_nous/1spn.txt`
+- `charles_ferdinand_ramuz/les_signes_parmi_nous/2spn.txt`
+- `charles_perrault/histoire_ou_contes_du_temps_passe/1ms.txt`
+- `charles_perrault/histoire_ou_contes_du_temps_passe/2barbin1.txt`
+- `emile_guillaumin/la_vie_d-un_simple/1vds.txt`
+- `emile_guillaumin/la_vie_d-un_simple/2vds.txt`
+- `emile_guillaumin/la_vie_d-un_simple/3vds.txt`
+- `emile_guillaumin/la_vie_d-un_simple/4vds.txt`
+- `emile_zola/l-assommoir/1ass.txt`
+- `emile_zola/l-assommoir/2ass.txt`
+- `emile_zola/les_mysteres_de_marseille/1mdm.txt`
+- `emile_zola/les_mysteres_de_marseille/2mdm.txt`
+- `gustave_flaubert/l-education_sentimentale/1es1869.txt`
+- `gustave_flaubert/l-education_sentimentale/2es1879.txt`
+- `guy_de_maupassant/le_horla/1lh.txt`
+- `guy_de_maupassant/le_horla/2lh.txt`
+- `guy_de_maupassant/le_horla/3lh.txt`
+- `honore_de_balzac/albert_savarus/1as.txt`
+- `honore_de_balzac/albert_savarus/2as.txt`
+- `honore_de_balzac/la_vendetta/1vndtt.txt`
+- `honore_de_balzac/la_vendetta/2vndtt.txt`
+- `honore_de_balzac/la_vendetta/3vndtt.txt`
+- `honore_de_balzac/la_vieille_fille/1vf.txt`
+- `honore_de_balzac/la_vieille_fille/2vf.txt`
+- `honore_de_balzac/la_vieille_fille/3vf.txt`
+- `honore_de_balzac/le_bal_de_sceaux/1bds.txt`
+- `honore_de_balzac/le_bal_de_sceaux/2bds.txt`
+- `honore_de_balzac/le_bal_de_sceaux/3bds.txt`
+- `honore_de_balzac/le_colonel_chabert/1chabert1832.txt`
+- `honore_de_balzac/le_colonel_chabert/2chabert1835.txt`
+- `honore_de_balzac/le_colonel_chabert/3chabert1839.txt`
+- `honore_de_balzac/sarrasine/1sar.txt`
+- `honore_de_balzac/sarrasine/2sar.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/1pib1898.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/2pib1898.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/3pib1902.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/4pib1908.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/5pib1923.txt`
+
+## _lignes files
+- `benjamin_constant/adolphe/1ado_lignes.txt`
+- `benjamin_constant/adolphe/3ado_lignes.txt`
+- `charles_ferdinand_ramuz/les_signes_parmi_nous/1spn_lignes.txt`
+- `charles_ferdinand_ramuz/les_signes_parmi_nous/2spn_lignes.txt`
+- `charles_perrault/histoire_ou_contes_du_temps_passe/lignes.txt`
+- `emile_guillaumin/la_vie_d-un_simple/1vds_lignes.txt`
+- `emile_guillaumin/la_vie_d-un_simple/2vds_lignes.txt`
+- `emile_guillaumin/la_vie_d-un_simple/3vds_lignes.txt`
+- `emile_guillaumin/la_vie_d-un_simple/4vds_lignes.txt`
+- `emile_zola/l-assommoir/1ass_lignes.txt`
+- `emile_zola/l-assommoir/2ass_lignes.txt`
+- `emile_zola/les_mysteres_de_marseille/1mdm_lignes.txt`
+- `emile_zola/les_mysteres_de_marseille/2mdm_lignes.txt`
+- `gustave_flaubert/l-education_sentimentale/lignes.txt`
+- `guy_de_maupassant/le_horla/1lh_lignes.txt`
+- `guy_de_maupassant/le_horla/2lh_lignes.txt`
+- `guy_de_maupassant/le_horla/3lh_lignes.txt`
+- `honore_de_balzac/albert_savarus/lignes.txt`
+- `honore_de_balzac/la_vendetta/1vndtt_lignes.txt`
+- `honore_de_balzac/la_vendetta/2vndtt_lignes.txt`
+- `honore_de_balzac/la_vendetta/3vndtt_lignes.txt`
+- `honore_de_balzac/la_vieille_fille/1vf_lignes.txt`
+- `honore_de_balzac/la_vieille_fille/2vf_lignes.txt`
+- `honore_de_balzac/la_vieille_fille/3vf_lignes.txt`
+- `honore_de_balzac/le_bal_de_sceaux/1bds_lignes.txt`
+- `honore_de_balzac/le_bal_de_sceaux/2bds_lignes.txt`
+- `honore_de_balzac/le_bal_de_sceaux/3bds_lignes.txt`
+- `honore_de_balzac/le_colonel_chabert/lignes.txt`
+- `honore_de_balzac/le_colonel_chabert/lignes2.txt`
+- `honore_de_balzac/sarrasine/1sar_lignes.txt`
+- `honore_de_balzac/sarrasine/2sar_lignes.txt`
+- `honore_de_balzac/sarrasine_(1830-1844)/lignes.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/lignes.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/lignes1.txt`
+- `rene_boylesve/le_parfum_des_iles_borromees/lignes2.txt`
