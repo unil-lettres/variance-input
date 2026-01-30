@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, send_from_directory
+from flask import Flask, request, jsonify, redirect, url_for, send_from_directory
 from celery import Celery
 import subprocess
 import redis
@@ -6,7 +6,12 @@ import os
 import sys
 import time
 import html
+import json
+from datetime import datetime
 from pathlib import Path
+import tempfile
+import platform
+import importlib.metadata
 
 SCRIPT_DIFF = Path(__file__).resolve().parent / "variance" / "scripts" / "diff.py"
 
@@ -260,9 +265,232 @@ def run_diff_script(
 
 
 
+def _iter_task_meta(limit=20):
+    keys = []
+    cursor = 0
+    pattern = 'celery-task-meta-*'
+    while True:
+        cursor, batch = redis_conn.scan(cursor=cursor, match=pattern, count=200)
+        keys.extend(batch)
+        if cursor == 0 or len(keys) >= limit * 5:
+            break
+    items = []
+    for key in keys:
+        try:
+            raw = redis_conn.get(key)
+            if not raw:
+                continue
+            payload = json.loads(raw)
+        except Exception:
+            continue
+        task_id = key.decode().replace('celery-task-meta-', '') if isinstance(key, (bytes, bytearray)) else str(key).replace('celery-task-meta-', '')
+        result = payload.get('result') or {}
+        metrics = result.get('metrics') or {}
+        date_done = payload.get('date_done') or metrics.get('date_done')
+        try:
+            parsed_date = datetime.fromisoformat(date_done.replace('Z', '+00:00')) if isinstance(date_done, str) else None
+        except Exception:
+            parsed_date = None
+        items.append({
+            'task_id': task_id,
+            'status': payload.get('status') or '',
+            'comparison_id': metrics.get('comparison_id'),
+            'runtime_seconds': metrics.get('runtime_seconds'),
+            'date_done': date_done,
+            'parsed_date': parsed_date,
+            'error': payload.get('traceback') or (result.get('error') if isinstance(result, dict) else None),
+        })
+    items.sort(key=lambda x: x['parsed_date'] or datetime.min, reverse=True)
+    return items[:limit]
+
 @app.route('/')
 def home():
-    return render_template('index.html')
+    items = _iter_task_meta(limit=20)
+    rows = []
+    for item in items:
+        runtime = item['runtime_seconds']
+        runtime_label = f"{runtime:.2f}s" if isinstance(runtime, (int, float)) else ''
+        rows.append(
+            f"<tr><td><code>{html.escape(str(item['task_id']))}</code></td>"
+            f"<td>{html.escape(str(item['status']))}</td>"
+            f"<td>{html.escape(str(item['comparison_id'] or ''))}</td>"
+            f"<td>{html.escape(runtime_label)}</td>"
+            f"<td>{html.escape(str(item['date_done'] or ''))}</td></tr>"
+        )
+    table = "".join(rows) if rows else "<tr><td colspan='5'>Aucune tâche récente.</td></tr>"
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Medite status</title>
+<style>
+body{{font-family:system-ui,Arial,sans-serif;margin:24px;color:#222}}
+table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #ddd;padding:8px;font-size:14px}}
+th{{background:#f4f4f4;text-align:left}}
+.btn-link{{display:inline-block;padding:6px 12px;border:1px solid #adb5bd;border-radius:6px;color:#495057;text-decoration:none;font-size:13px}}
+.btn-link:hover{{background:#f8f9fa}}
+.top-bar{{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}}
+.page-title{{margin:0;font-size:24px}}
+</style>
+</head><body>
+<div class="top-bar">
+  <h1 class="page-title">Medite — dernières tâches</h1>
+  <a class="btn-link" href="http://localhost:8080/admin/">Retour</a>
+</div>
+<p>Affiche les tâches récentes présentes dans Redis (backend Celery).</p>
+<table>
+<thead><tr><th>Task ID</th><th>Statut</th><th>Comparaison</th><th>Durée</th><th>Terminé</th></tr></thead>
+<tbody>{table}</tbody>
+</table>
+</body></html>"""
+
+
+@app.route('/health')
+def health():
+    checks = {}
+    status = 'ok'
+    http_status = 200
+
+    checks['versions'] = {
+        'python': platform.python_version(),
+        'flask': getattr(Flask, '__version__', None) or getattr(__import__('flask'), '__version__', None),
+        'celery': getattr(Celery, '__version__', None) or getattr(__import__('celery'), '__version__', None),
+        'redis_py': getattr(redis, '__version__', None),
+        'variance': None,
+    }
+    try:
+        checks['versions']['variance'] = importlib.metadata.version('variance')
+    except Exception:
+        pass
+
+    try:
+        upload_root = Path(app.config['UPLOAD_FOLDER'])
+        upload_root.mkdir(parents=True, exist_ok=True)
+        probe = upload_root / '.healthcheck'
+        probe.write_text('ok', encoding='utf-8')
+        probe.unlink(missing_ok=True)
+        checks['filesystem'] = {'ok': True, 'path': str(upload_root)}
+    except Exception as exc:
+        checks['filesystem'] = {'ok': False, 'error': str(exc)}
+        status = 'degraded'
+        http_status = 503
+
+    checks['diff_script'] = {
+        'ok': SCRIPT_DIFF.exists(),
+        'path': str(SCRIPT_DIFF),
+    }
+    if not SCRIPT_DIFF.exists():
+        status = 'degraded'
+        http_status = 503
+
+    try:
+        ping_responses = celery.control.ping(timeout=1.0)
+        worker_count = len(ping_responses) if ping_responses else 0
+        checks['celery'] = {
+            'ok': worker_count > 0,
+            'workers': worker_count,
+        }
+        if worker_count == 0:
+            status = 'degraded'
+            http_status = 503
+    except Exception as exc:
+        checks['celery'] = {'ok': False, 'error': str(exc)}
+        status = 'degraded'
+        http_status = 503
+
+    try:
+        redis_ok = bool(redis_conn.ping())
+        redis_info = None
+        try:
+            redis_info = redis_conn.info()
+        except Exception:
+            redis_info = None
+        checks['redis'] = {
+            'ok': redis_ok,
+            'server_version': redis_info.get('redis_version') if isinstance(redis_info, dict) else None,
+        }
+        if not redis_ok:
+            status = 'degraded'
+            http_status = 503
+    except Exception as exc:
+        checks['redis'] = {'ok': False, 'error': str(exc)}
+        status = 'degraded'
+        http_status = 503
+
+    try:
+        recent_tasks = _iter_task_meta(limit=5)
+        checks['tasks'] = {'recent': len(recent_tasks)}
+    except Exception as exc:
+        checks['tasks'] = {'error': str(exc)}
+        if status != 'fail':
+            status = 'degraded'
+            http_status = 503
+
+    if request.args.get('probe') == '1':
+        probe_ok = False
+        probe_error = None
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                src_path = Path(tmpdir) / "source.xml"
+                tgt_path = Path(tmpdir) / "target.xml"
+                out_path = Path(tmpdir) / "out.xml"
+                xhtml_dir = Path(tmpdir) / "xhtml"
+                header = (
+                    "<teiHeader>"
+                    "<fileDesc>"
+                    "<titleStmt><title>Probe</title></titleStmt>"
+                    "<publicationStmt><p>Probe</p></publicationStmt>"
+                    "<sourceDesc><p>Probe</p></sourceDesc>"
+                    "</fileDesc>"
+                    "</teiHeader>"
+                )
+                src_path.write_text(
+                    f"<TEI xml:id=\"probe-src\">{header}<text><body><div>Bonjour le monde.</div></body></text></TEI>\n",
+                    encoding="utf-8",
+                )
+                tgt_path.write_text(
+                    f"<TEI xml:id=\"probe-tgt\">{header}<text><body><div>Bonjour le monde !</div></body></text></TEI>\n",
+                    encoding="utf-8",
+                )
+
+                command = [
+                    sys.executable,
+                    str(SCRIPT_DIFF),
+                    str(src_path),
+                    str(tgt_path),
+                    "--lg_pivot", "7",
+                    "--ratio", "15",
+                    "--seuil", "50",
+                    "--no-case-sensitive",
+                    "--diacri-sensitive",
+                    "--output-xml", str(out_path),
+                    "--xhtml-output-dir", str(xhtml_dir),
+                ]
+                result = subprocess.run(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=str(SCRIPT_DIFF.parent.parent),
+                    timeout=20,
+                )
+                probe_ok = result.returncode == 0 and out_path.exists()
+                if not probe_ok:
+                    probe_error = (result.stderr or result.stdout)[:500]
+        except Exception as exc:
+            probe_error = str(exc)
+
+        checks['probe'] = {
+            'ok': probe_ok,
+            'error': probe_error,
+        }
+        if not probe_ok:
+            status = 'degraded'
+            http_status = 503
+
+    return jsonify({
+        'status': status,
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'checks': checks,
+    }), http_status
 
 
 @app.route('/run_diff', methods=['POST'])

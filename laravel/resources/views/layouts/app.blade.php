@@ -59,6 +59,7 @@
         $adminBannerStyle = 'background-color: ' . $adminBannerColor . ';'
             . ' background-image: url("' . asset('images/admin_banner.jpg') . '");'
             . ' background-repeat: repeat;';
+        $mediteStatusUrl = env('MEDITE_STATUS_URL', 'http://localhost:5000/');
     @endphp
     <style>
         .admin-banner {
@@ -136,10 +137,24 @@
         .admin-loading .collapsing {
             transition: none !important;
         }
+        .admin-health header {
+            margin-bottom: 0.5rem;
+        }
+        .admin-health main {
+            margin-top: 0 !important;
+        }
+        .health-status-badge {
+            font-size: 0.7rem;
+            line-height: 1;
+            padding: 0.3rem 0.5rem;
+        }
+        .admin-health .admin-banner-shell {
+            margin-bottom: 0.5rem !important;
+        }
     </style>
 </head>
 <body class="d-flex flex-column min-vh-100 @yield('body-class')">
-    <header class="mb-4">
+    <header class="mb-4 admin-banner-shell">
         <div class="admin-banner container py-3 d-flex justify-content-between align-items-center text-white shadow-sm"
              style="{{ $adminBannerStyle }}">
             <a href="{{ admin_path() }}">
@@ -147,6 +162,26 @@
             </a>
 
             <div class="d-flex align-items-center gap-3">
+                <div class="dropdown">
+                    <button class="admin-user-toggle dropdown-toggle"
+                            type="button"
+                            id="admin-tasks-menu"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                        Système
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-tasks-menu">
+                        <li>
+                            <a class="dropdown-item" href="{{ $mediteStatusUrl }}" target="_blank" rel="noopener">Tâches Medite</a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ admin_path('tasks') }}">Tâches Laravel</a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ admin_path('health/report') }}">État système</a>
+                        </li>
+                    </ul>
+                </div>
                 <div class="dropdown">
                     <button class="admin-user-toggle dropdown-toggle"
                             type="button"
@@ -220,6 +255,13 @@
     @stack('scripts')
 
     <script>
+        (function () {
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach((tooltipTriggerEl) => {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })();
+
         (function () {
             const buildLabel = (base, count) => {
                 const total = Number(count) || 0;

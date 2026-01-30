@@ -19,6 +19,8 @@ if ! [[ "${WORKER_COUNT}" =~ ^[0-9]+$ ]] || [ "${WORKER_COUNT}" -lt 1 ]; then
 fi
 
 WORKER_MEMORY="${QUEUE_WORKER_MEMORY:-512}"
+HEARTBEAT_FILE="${QUEUE_WORKER_HEARTBEAT_FILE:-/var/www/html/storage/app/private/queue_workers.json}"
+HEARTBEAT_INTERVAL="${QUEUE_WORKER_HEARTBEAT_INTERVAL:-30}"
 
 if [[ -n "${QUEUE_WORKER_ARGS:-}" ]]; then
   # shellcheck disable=SC2206 # intentional splitting to preserve custom flags
@@ -33,6 +35,18 @@ if [[ " ${ARGS[*]} " != *" --memory"* ]]; then
 fi
 
 pids=()
+heartbeat_pid=""
+
+write_heartbeat() {
+  local ts
+  ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  local pid_list=""
+  if [ "${#pids[@]}" -gt 0 ]; then
+    pid_list="$(printf '%s\n' "${pids[@]}" | paste -sd, -)"
+  fi
+  printf '{"count":%s,"timestamp":"%s","interval":%s,"pids":[%s]}\n' \
+    "${WORKER_COUNT}" "${ts}" "${HEARTBEAT_INTERVAL}" "${pid_list}" > "${HEARTBEAT_FILE}"
+}
 
 cleanup() {
   echo "Stopping queue workers..." >&2
@@ -41,6 +55,10 @@ cleanup() {
       kill "${pid}" 2>/dev/null || true
     fi
   done
+  if [ -n "${heartbeat_pid}" ] && kill -0 "${heartbeat_pid}" 2>/dev/null; then
+    kill "${heartbeat_pid}" 2>/dev/null || true
+  fi
+  rm -f "${HEARTBEAT_FILE}" 2>/dev/null || true
   wait || true
 }
 
@@ -53,5 +71,14 @@ for i in $(seq 1 "${WORKER_COUNT}"); do
   "${PHP_BIN}" "${PHP_INI_ARGS[@]}" artisan queue:work "${ARGS[@]}" --name="${worker_name}" &
   pids+=("$!")
 done
+
+write_heartbeat
+(
+  while true; do
+    sleep "${HEARTBEAT_INTERVAL}"
+    write_heartbeat
+  done
+) &
+heartbeat_pid="$!"
 
 wait

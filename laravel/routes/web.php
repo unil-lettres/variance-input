@@ -11,9 +11,13 @@ use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
 use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\EditorController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\TaskMonitorController;
 use App\Models\Author;
 use App\Models\Work;
+
+Route::get('/health', [HealthController::class, 'index']);
 
 Route::get('/', function () {
     if (! auth()->check()) {
@@ -63,6 +67,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('/users', [UserManagementController::class, 'store'])->name('admin.users.store');
     Route::patch('/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
     Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])->name('admin.users.destroy');
+    Route::get('/tasks', [TaskMonitorController::class, 'index'])->name('admin.tasks.index');
+    Route::get('/health/report', [HealthController::class, 'page'])->name('admin.health.report');
 });
 
 // MAIN PAGE COMPONENTS
