@@ -64,6 +64,7 @@ class EditorController extends Controller
 
     public function comparisonEditor(Comparison $comparison, Request $request)
     {
+        $this->assertComparisonOwnership($comparison);
         $infos = [];
         
         foreach ([
@@ -103,6 +104,7 @@ class EditorController extends Controller
     
     public function comparisonUpdate(Comparison $comparison, Request $request)
     {
+        $this->assertComparisonOwnership($comparison);
         $request->validate([
             'type' => 'in:source,target'
         ]);
@@ -225,5 +227,21 @@ class EditorController extends Controller
         $detected = mb_detect_encoding($content, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
 
         return $detected ?: 'UTF-8';
+    }
+
+    private function assertComparisonOwnership(Comparison $comparison): void
+    {
+        $user = auth()->user();
+        if (! $user || $user->is_admin) {
+            return;
+        }
+
+        if ($comparison->is_legacy && request()->isMethod('get')) {
+            return;
+        }
+
+        if ((int) $comparison->created_by !== (int) $user->id) {
+            abort(403, 'Accès limité aux comparaisons personnelles.');
+        }
     }
 }

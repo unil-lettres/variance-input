@@ -20,7 +20,7 @@
   <div id="mediaCollapse" class="collapse show">
     <div class="card-body">
     <p class="fst-italic text-muted small mb-3">
-      Téléversez ici la vignette et la notice d'oeuvre qui seront visibles dans la fiche d'oeuvre du catalogue public.
+      Téléversez ici la vignette (visible dans la fiche d'oeuvre du catalogue public) et la notice d'oeuvre (téléchargeable depuis la fiche).
     </p>
     <!-- ROW 1 : Dropzones -->
     <div class="row g-4 mb-3">
@@ -138,6 +138,11 @@
   'use strict';
   let currentWorkId = null;
   let currentShortTitle = null;
+  const setMediaLoading = (state) => {
+    if (typeof window.setBladeLoading === 'function') {
+      window.setBladeLoading('mediaCollapse', state);
+    }
+  };
 
   const statusLabels = { vignette: 'VIGNETTE', pdf: 'NOTICE' };
   const statusPills = {
@@ -472,12 +477,15 @@
       clearMedia();
       updateMediaStatus('vignette', false, true);
       updateMediaStatus('pdf', false, true);
+      setMediaLoading(false);
       return;
     }
+    setMediaLoading(true);
     fetch(withBasePath(`/works/${currentWorkId}/media`),{ credentials:'same-origin' })
       .then(res=>res.json())
       .then(d=>{ renderMedia('vignette', d.image_url); renderMedia('pdf', d.pdf_url); })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(()=>{ setMediaLoading(false); });
   }
 
   const dropzoneIds = ['vignette-dropzone','pdf-dropzone'];

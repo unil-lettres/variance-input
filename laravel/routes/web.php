@@ -14,6 +14,7 @@ use App\Http\Controllers\EditorController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\TaskMonitorController;
+use App\Http\Controllers\AccountController;
 use App\Models\Author;
 use App\Models\Work;
 
@@ -71,6 +72,11 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/health/report', [HealthController::class, 'page'])->name('admin.health.report');
 });
 
+Route::middleware(['auth'])->group(function () {
+    Route::get('/account/password', [AccountController::class, 'editPassword'])->name('account.password.edit');
+    Route::post('/account/password', [AccountController::class, 'updatePassword'])->name('account.password.update');
+});
+
 // MAIN PAGE COMPONENTS
 
 // Route pour déterminer la permission de l'utilisateur relativement à cette oeuvre
@@ -116,6 +122,7 @@ Route::delete('/api/works/{work}/media/{type}',        [MediaController::class, 
 // Versions
 Route::post('/api/versions', [VersionController::class, 'store']);
 Route::get('/api/versions', [VersionController::class, 'index']);
+Route::get('/api/versions/{version}/text-length', [VersionController::class, 'textLength'])->middleware('auth');
 Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::patch('/api/versions/{version}/pagination/done', [VersionController::class, 'togglePaginationDone']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
@@ -138,6 +145,7 @@ Route::post('/api/comparisons/{comparison}/pagination/from-xhtml', [ComparisonCo
 
 // Comparisons
 Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
+Route::get('/comparisons/{comparison}/details', [ComparisonController::class, 'details']);
 Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->name('comparisons.destroy');
 Route::get('/comparisons/{comparison}/export', [ComparisonController::class, 'exportPublishedLegacy'])
     ->middleware('auth')

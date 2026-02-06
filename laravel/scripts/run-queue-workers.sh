@@ -35,7 +35,13 @@ if [[ " ${ARGS[*]} " != *" --memory"* ]]; then
 fi
 
 pids=()
+worker_pids=()
 heartbeat_pid=""
+shutdown_requested=0
+
+log() {
+  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*"
+}
 
 write_heartbeat() {
   local ts
@@ -49,7 +55,13 @@ write_heartbeat() {
 }
 
 cleanup() {
+  shutdown_requested=1
   echo "Stopping queue workers..." >&2
+  for pid in "${worker_pids[@]:-}"; do
+    if kill -0 "${pid}" 2>/dev/null; then
+      kill "${pid}" 2>/dev/null || true
+    fi
+  done
   for pid in "${pids[@]:-}"; do
     if kill -0 "${pid}" 2>/dev/null; then
       kill "${pid}" 2>/dev/null || true
@@ -64,11 +76,38 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
+start_worker() {
+  local index="$1"
+  local worker_name="laravel-queue-${index}"
+  local restart_delay="${QUEUE_WORKER_RESTART_DELAY:-2}"
+
+  while true; do
+    if [ "${shutdown_requested}" -eq 1 ]; then
+      break
+    fi
+
+    log "Starting ${worker_name}..."
+    "${PHP_BIN}" "${PHP_INI_ARGS[@]}" artisan queue:work "${ARGS[@]}" --name="${worker_name}" &
+    local wp="$!"
+    worker_pids[$index]="${wp}"
+
+    wait "${wp}"
+    local status=$?
+
+    if [ "${shutdown_requested}" -eq 1 ]; then
+      break
+    fi
+
+    log "Worker ${worker_name} exited with status ${status}. Restarting in ${restart_delay}s..."
+    sleep "${restart_delay}"
+  done
+}
+
 echo "Starting ${WORKER_COUNT} queue worker(s)..." >&2
 for i in $(seq 1 "${WORKER_COUNT}"); do
   worker_name="laravel-queue-${i}"
   echo " -> ${worker_name}" >&2
-  "${PHP_BIN}" "${PHP_INI_ARGS[@]}" artisan queue:work "${ARGS[@]}" --name="${worker_name}" &
+  start_worker "${i}" &
   pids+=("$!")
 done
 

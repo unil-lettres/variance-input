@@ -56,6 +56,14 @@ class Comparison extends Model
         return $this->hasOne(ComparisonStatus::class);
     }
 
+    /**
+     * Relationship: User who created the comparison.
+     */
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
     public function getSourceFilePath()
     {
         return $this->getFilePath('source');

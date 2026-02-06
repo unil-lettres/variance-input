@@ -126,6 +126,15 @@
   </div>
 </div>
 
+@push('styles')
+<style>
+  #container-work-selector .legacy-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+</style>
+@endpush
+
 @push('scripts')
 
 <script>

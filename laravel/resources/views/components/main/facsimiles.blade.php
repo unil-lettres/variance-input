@@ -145,6 +145,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentWorkId     = null;
     let currentVersionId  = null;
     let currentVersionName= '';
+    let facsimilesLoadingCount = 0;
+    const setFacsimilesLoading = (state) => {
+        if (typeof window.setBladeLoading === 'function') {
+            window.setBladeLoading('facsimilesCollapse', state);
+        }
+    };
+    const bumpFacsimilesLoading = (delta) => {
+        facsimilesLoadingCount = Math.max(0, facsimilesLoadingCount + delta);
+        setFacsimilesLoading(facsimilesLoadingCount > 0);
+    };
 
     const facsimilesCollapse = document.getElementById('facsimilesCollapse');
     const facsimilesCard     = facsimilesCollapse ? facsimilesCollapse.closest('.card') : null;
@@ -409,8 +419,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!versionId) {
             resetManifestControls({ hideManager: true });
+            setFacsimilesLoading(false);
             return;
         }
+        bumpFacsimilesLoading(1);
 
         if (manifestManager) {
             manifestManager.classList.remove('d-none');
@@ -506,6 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (requestId === manifestRequestToken) {
                 updateManifestButtons();
             }
+            bumpFacsimilesLoading(-1);
         }
     }
 
@@ -720,11 +733,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadGallery(versionId, versionName = '') {
         if (!versionId) {
             resetGallery();
+            setFacsimilesLoading(false);
             return;
         }
 
         setStatus(`Chargement des fac-similés pour ${versionName || 'cette version'}…`);
         resetGallery('<div class="text-muted">Chargement…</div>');
+        bumpFacsimilesLoading(1);
 
         try {
             const res = await fetch(withBasePath(`/api/facsimiles?version_id=${versionId}`), {
@@ -745,6 +760,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const detail = err?.message ? ` (${err.message})` : '';
             setStatus(`Erreur lors du chargement des fac-similés${detail}.`, 'danger');
             resetGallery('Impossible de charger les fac-similés.');
+        } finally {
+            bumpFacsimilesLoading(-1);
         }
     }
 
@@ -755,6 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resetManifestControls({ hideManager: true });
         setStatus('Sélectionnez une version pour afficher les fac-similés.');
         resetGallery();
+        setFacsimilesLoading(false);
     });
 
     document.addEventListener('facsimiles:select', e => {
@@ -831,6 +849,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    const clearInitialLoading = () => {
+        facsimilesLoadingCount = 0;
+        setFacsimilesLoading(false);
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', clearInitialLoading);
+    } else {
+        clearInitialLoading();
+    }
 
     function renderPagination(totalPages) {
         if (totalPages <= 1) {

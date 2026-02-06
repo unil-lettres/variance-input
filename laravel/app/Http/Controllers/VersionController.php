@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use App\Services\PageMarkerService;
 
 class VersionController extends Controller
@@ -32,7 +33,20 @@ class VersionController extends Controller
             return response()->json(['error' => 'work_id is required'], 400);
         }
 
-        $versions = Version::with(['work.author', 'paginationDoneBy'])
+        $forceFresh = $request->boolean('fresh');
+        $cacheKey = "versions:index:work:{$workId}";
+        $cacheTtl = now()->addSeconds(8);
+
+        $versions = $forceFresh
+            ? $this->buildVersionsList((int) $workId)
+            : Cache::remember($cacheKey, $cacheTtl, fn () => $this->buildVersionsList((int) $workId));
+
+        return response()->json($versions, 200);
+    }
+
+    private function buildVersionsList(int $workId): array
+    {
+        return Version::with(['work.author', 'paginationDoneBy'])
             ->where('work_id', $workId)
             ->get()
             ->map(function (Version $version) {
@@ -41,16 +55,14 @@ class VersionController extends Controller
                     $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
                 }
                 $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
-                $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
-                $textLength = null;
-                if (is_file($textPath)) {
-                    try {
-                        $contents = File::get($textPath);
-                        $textLength = mb_strlen($contents, 'UTF-8');
-                    } catch (\Throwable $e) {
-                        $textLength = null;
-                    }
-                }
+                $textLength = null; // lazy-loaded via /api/versions/{id}/text-length
+                $facsimileCacheKey = "versions:facsimiles:{$version->id}";
+                $facsimileCacheTtl = now()->addSeconds(20);
+                $facsimiles = Cache::remember(
+                    $facsimileCacheKey,
+                    $facsimileCacheTtl,
+                    fn () => $this->facsimileStatus($version)
+                );
                 return [
                     'id'         => $version->id,
                     'name'       => $version->name,
@@ -65,15 +77,41 @@ class VersionController extends Controller
                     'xml_available' => is_file($version->getXMLFilePath()),
                     'text_available' => is_file(storage_path("app/public/uploads/versions/{$version->folder}.txt")),
                     'text_length' => $textLength,
-                    'facsimiles' => $this->facsimileStatus($version),
+                    'facsimiles' => $facsimiles,
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
                     'page_marker_progress' => $this->pageMarkerService->getProgressSnapshot($version->id),
                     'lignes' => $lignesInfo,
                     'pagination' => $paginationInfo,
                 ];
-            });
+            })
+            ->values()
+            ->all();
+    }
 
-        return response()->json($versions, 200);
+    public function textLength(Version $version): JsonResponse
+    {
+        $path = storage_path("app/public/uploads/versions/{$version->folder}.txt");
+        if (!is_file($path)) {
+            return response()->json([
+                'version_id' => $version->id,
+                'text_available' => false,
+                'text_length' => null,
+            ], 200);
+        }
+
+        $mtime = @filemtime($path) ?: 0;
+        $cacheKey = "versions:text_length:{$version->id}:{$mtime}";
+
+        $length = Cache::remember($cacheKey, now()->addHours(6), function () use ($path) {
+            $contents = File::get($path);
+            return mb_strlen($contents, 'UTF-8');
+        });
+
+        return response()->json([
+            'version_id' => $version->id,
+            'text_available' => true,
+            'text_length' => $length,
+        ], 200);
     }
 
     /** Upload → save .txt untouched → generate TEI (UTF‑8 LF) */
@@ -126,6 +164,7 @@ class VersionController extends Controller
             'name'    => $validated['name'],
             'folder'  => $baseName,
         ]);
+        Cache::forget("versions:index:work:{$work->id}");
 
         return response()->json([
             'message' => 'Version uploaded successfully!',
@@ -139,6 +178,7 @@ class VersionController extends Controller
         $version = Version::findOrFail($id);
         $this->assertVersionEditable($version);
         $version->update($req->validate(['name' => 'required|string|max:100']));
+        Cache::forget("versions:index:work:{$version->work_id}");
         return response()->json($version, 200);
     }
 
@@ -158,6 +198,7 @@ class VersionController extends Controller
         ]);
 
         $version->loadMissing('paginationDoneBy');
+        Cache::forget("versions:index:work:{$version->work_id}");
 
         return response()->json([
             'status'                  => 'ok',
@@ -225,6 +266,7 @@ class VersionController extends Controller
 
         // Remove DB record regardless of file presence
         $version->delete();
+        Cache::forget("versions:index:work:{$version->work_id}");
 
         $message = 'Version supprimée avec succès';
         if ($missing) {
@@ -339,9 +381,22 @@ class VersionController extends Controller
         }
         $defaultNames = array_values(array_unique($defaultNames));
 
-        $comparisons = Comparison::with(['sourceVersion', 'targetVersion'])
-            ->where('source_id', $version->id)
-            ->orWhere('target_id', $version->id)
+        $user = auth()->user();
+
+        $comparisonsQuery = Comparison::with(['sourceVersion', 'targetVersion'])
+            ->where(function ($query) use ($version) {
+                $query->where('source_id', $version->id)
+                    ->orWhere('target_id', $version->id);
+            });
+
+        if ($user && ! $user->is_admin) {
+            $comparisonsQuery->where(function ($inner) use ($user) {
+                $inner->where('created_by', $user->id)
+                    ->orWhere('is_legacy', true);
+            });
+        }
+
+        $comparisons = $comparisonsQuery
             ->orderByDesc('created_at')
             ->get();
 
@@ -367,6 +422,7 @@ class VersionController extends Controller
         ]);
 
         $this->assertVersionEditable($version);
+        $this->assertComparisonOwnership($comparison);
 
         $role = $data['role'];
         if (($role === 'source' && $comparison->source_id !== $version->id) ||
@@ -694,6 +750,40 @@ class VersionController extends Controller
             'count'      => $result['count'],
             'relative'   => $result['relative'],
             'version_id' => $version->id,
+        ], 200);
+    }
+
+    /** Merge <pb> markers from the editor into the pagination sidecar. */
+    public function mergePaginationFromPb(Version $version): JsonResponse
+    {
+        $this->assertVersionEditable($version);
+        $result = $this->pageMarkerService->mergeSidecarFromPb($version);
+
+        if (($result['count'] ?? 0) === 0) {
+            return response()->json([
+                'status'  => 'empty',
+                'message' => 'Aucune balise <pb> trouvée dans cette version.',
+            ], 404);
+        }
+
+        $added = (int) ($result['added'] ?? 0);
+        $total = (int) ($result['total'] ?? $result['count'] ?? 0);
+        $created = (bool) ($result['created'] ?? false);
+
+        if ($created) {
+            $message = "Données de pagination créées depuis l’éditeur ({$total} marqueur(s)).";
+        } elseif ($added > 0) {
+            $message = "Données de pagination mises à jour : +{$added} marqueur(s) (total {$total}).";
+        } else {
+            $message = 'Aucun nouveau marqueur détecté depuis l’éditeur.';
+        }
+
+        return response()->json([
+            'status'     => 'ok',
+            'added'      => $added,
+            'total'      => $total,
+            'version_id' => $version->id,
+            'message'    => $message,
         ], 200);
     }
 
@@ -1191,6 +1281,22 @@ class VersionController extends Controller
 
         if ($version->is_legacy || $version->work?->is_legacy) {
             abort(403, 'Cette version est en lecture seule.');
+        }
+    }
+
+    private function assertComparisonOwnership(Comparison $comparison): void
+    {
+        $user = auth()->user();
+        if (! $user || $user->is_admin) {
+            return;
+        }
+
+        if ($comparison->is_legacy && request()->isMethod('get')) {
+            return;
+        }
+
+        if ((int) $comparison->created_by !== (int) $user->id) {
+            abort(403, 'Accès limité aux comparaisons personnelles.');
         }
     }
 }

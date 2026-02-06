@@ -28,7 +28,7 @@
         <div class="card-header fw-semibold">Créer un utilisateur</div>
         <div class="card-body">
             <p class="text-muted small mb-3">
-                Cochez "Administrateur" pour accorder les droits d’administration.
+                Cochez "Admin" pour accorder les droits d’administration. Sinon, l’utilisateur aura le rôle de chercheur.
             </p>
             <form method="POST" action="{{ admin_path('users') }}" autocomplete="off">
                 @csrf
@@ -65,7 +65,7 @@
                                 {{ old('is_admin', '1') === '1' ? 'checked' : '' }}
                             >
                             <label class="form-check-label" for="create-is-admin">
-                                Administrateur
+                                Admin
                             </label>
                         </div>
                     </div>
@@ -106,9 +106,9 @@
                                     <td>{{ $user->email }}</td>
                                     <td>
                                         @if($user->is_admin)
-                                            <span class="badge text-bg-primary">Administrateur</span>
+                                            <span class="badge text-bg-primary">Admin</span>
                                         @else
-                                            <span class="text-muted small">Utilisateur</span>
+                                            <span class="badge text-bg-secondary">Chercheur</span>
                                         @endif
                                     </td>
                                     <td class="text-muted small">{{ optional($user->created_at)->format('d/m/Y') }}</td>
@@ -183,7 +183,7 @@
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="is_admin" id="edit-is-admin" value="1">
-                            <label class="form-check-label" for="edit-is-admin">Administrateur</label>
+                            <label class="form-check-label" for="edit-is-admin">Admin</label>
                         </div>
                     </div>
                     <div class="mb-3">

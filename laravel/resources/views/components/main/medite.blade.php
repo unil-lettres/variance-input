@@ -14,7 +14,7 @@
     <div id="mediteCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
-            Choisissez deux versions et paramétrez Medite (optionnel) pour générer un alignement. Une fois le traitement terminé, les résultats alimentent la liste des comparaisons et la partie publique sous /dev.
+            Choisissez deux versions et, si besoin, paramétrez Medite pour lancer un alignement. Une fois le traitement terminé, la comparaison apparaît dans la liste&nbsp;; elle peut ensuite être publiée en dev ou prod en utilisant les boutons de publication de la liste des comparaisons.
         </p>
         <form id="medite-form">
             @csrf
@@ -110,6 +110,11 @@ const $useDefaultSep = document.getElementById('use_default_sep');
 const CSRF     = document.querySelector('meta[name="csrf-token"]').content;
 const DEFAULT_SEP_VALUE = ($sepInput && $sepInput.dataset.defaultExample) ? $sepInput.dataset.defaultExample : ',.;?!';
 let cachedCustomSep = $sepInput ? $sepInput.value : DEFAULT_SEP_VALUE;
+const setMediteLoading = (state) => {
+  if (typeof window.setBladeLoading === 'function') {
+    window.setBladeLoading('mediteCollapse', state);
+  }
+};
 
 function fillHidden(id,val){ document.getElementById(id).value = val; }
 
@@ -158,15 +163,33 @@ function updateSubmitState() {
 /*------------------------------------------------------------*
  | 1) Populate dropdowns when a work is selected               |
  *------------------------------------------------------------*/
-async function refreshVersions(workId){
+async function refreshVersions(workId, { force = false } = {}){
+    if (!workId) {
+        $srcSel.innerHTML = '<option value="">Choisir la version source</option>';
+        $tgtSel.innerHTML = '<option value="">Choisir la version cible</option>';
+        $srcSel.disabled = true;
+        $tgtSel.disabled = true;
+        updateSubmitState();
+        setMediteLoading(false);
+        return;
+    }
+    setMediteLoading(true);
     $srcSel.innerHTML = '<option value="">Choisir la version source</option>';
     $tgtSel.innerHTML = '<option value="">Choisir la version cible</option>';
-    const res = await fetch(withBasePath(`/api/versions?work_id=${workId}`));
-    if(!res.ok) {
+    let vers = [];
+    try {
+      if (typeof window.varianceGetVersionsForWork === 'function') {
+        vers = await window.varianceGetVersionsForWork(workId, { force });
+      } else {
+        const res = await fetch(withBasePath(`/api/versions?work_id=${workId}${force ? '&fresh=1' : ''}`));
+        if (!res.ok) throw new Error(res.statusText || `HTTP ${res.status}`);
+        vers = await res.json();
+      }
+    } catch (err) {
       updateSubmitState();
+      setMediteLoading(false);
       return;
     }
-    const vers = await res.json();
     const available = Array.isArray(vers)
         ? vers.filter(v => v && v.text_available)
         : [];
@@ -185,6 +208,7 @@ async function refreshVersions(workId){
         $srcSel.disabled = true;
         $tgtSel.disabled = true;
         updateSubmitState();
+        setMediteLoading(false);
         return;
     }
     $srcSel.disabled = false;
@@ -197,6 +221,7 @@ async function refreshVersions(workId){
         $srcSel.add(opt1); $tgtSel.add(opt2);
     });
     updateSubmitState();
+    setMediteLoading(false);
 }
 
 /* workSelected comes from outer UI */
@@ -210,7 +235,7 @@ document.addEventListener('workSelected', e=>{
 });
 
 document.addEventListener('versionsUpdated', e=>{
-    if(e.detail.workId) refreshVersions(e.detail.workId);
+    if(e.detail.workId) refreshVersions(e.detail.workId, { force: true });
 });
 
 if ($srcSel) {

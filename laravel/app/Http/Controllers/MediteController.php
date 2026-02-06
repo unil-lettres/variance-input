@@ -67,6 +67,10 @@ class MediteController extends Controller
             'number'           => $sequence,
         ];
 
+        if (Schema::hasColumn('comparisons', 'created_by')) {
+            $payload['created_by'] = $this->resolveCreatorId();
+        }
+
         if (Schema::hasColumn('comparisons', 'sep')) {
             $payload['sep'] = $sep;
         }
@@ -133,6 +137,7 @@ class MediteController extends Controller
 
         if ($comparisonId) {
             $cmp = Comparison::findOrFail($comparisonId);
+            $this->assertComparisonOwnership($cmp);
             $cmp->fill($comparisonPayload);
 
             if (empty($cmp->folder)) {
@@ -168,11 +173,17 @@ class MediteController extends Controller
                 (int) $validated['target_version']
             );
 
-            $cmp = Comparison::create($comparisonPayload + [
+            $createPayload = $comparisonPayload + [
                 'folder'       => $folder,
                 'prefix_label' => 'Auto Run',
                 'number'       => $sequence,
-            ]);
+            ];
+
+            if (Schema::hasColumn('comparisons', 'created_by')) {
+                $createPayload['created_by'] = $this->resolveCreatorId();
+            }
+
+            $cmp = Comparison::create($createPayload);
         }
 
         /* ───── Paths for Flask outputs ───── */
@@ -379,6 +390,27 @@ class MediteController extends Controller
             if ($work?->is_legacy) {
                 abort(403, 'Les comparaisons legacy sont en lecture seule.');
             }
+        }
+    }
+
+    private function resolveCreatorId(): ?int
+    {
+        return auth()->id();
+    }
+
+    private function assertComparisonOwnership(Comparison $comparison): void
+    {
+        $user = auth()->user();
+        if (!$user || $user->is_admin) {
+            return;
+        }
+
+        if ($comparison->is_legacy && request()->isMethod('get')) {
+            return;
+        }
+
+        if ((int) $comparison->created_by !== (int) $user->id) {
+            abort(403, 'Accès limité aux comparaisons personnelles.');
         }
     }
 }

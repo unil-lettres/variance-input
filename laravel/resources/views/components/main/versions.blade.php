@@ -15,7 +15,7 @@
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
-            Les versions textuelles alimentent Medite. Ajoutez vos balises <code>&lt;pb&gt;</code> via l’éditeur (icône crayon) puis gérez toute la pagination (sidecar, injection, restauration) depuis le tableau des comparaisons. Pour les fac-similés, le bouton «&nbsp;Téléverser&nbsp;» importe l’ensemble des images; l’onglet Fac-similés permet ensuite de choisir, par comparaison, le sous-ensemble publié (manifeste JSON). Les fac-similés sont publiés automatiquement lors de la publication d’une comparaison.
+            Les versions textuelles alimentent Medite. La pagination se prépare au niveau des versions, puis s’injecte dans chaque comparaison. Ajoutez vos balises <code>&lt;pb&gt;</code> dans l’éditeur (icône crayon), puis cliquez sur «&nbsp;Importer depuis l’éditeur&nbsp;» pour alimenter les données de pagination de la version. Si vous disposez d’un fichier <code>_lignes</code>, importez‑le ici ; si vous combinez <code>_lignes</code> et marqueurs manuels, importez d’abord <code>_lignes</code>, puis «&nbsp;Importer depuis l’éditeur&nbsp;». Une fois les données prêtes, allez dans Comparaisons pour injecter la pagination. Pour les fac‑similés, le bouton «&nbsp;Téléverser&nbsp;» importe l’ensemble des images; l’onglet Fac‑similés permet ensuite de choisir, par comparaison, le sous‑ensemble publié (manifeste JSON). Les fac‑similés sont publiés automatiquement lors de la publication d’une comparaison.
         </p>
 
         <!-- ────────────── Versions list  ────────────── -->
@@ -212,6 +212,14 @@ let authorId         = null;
 let versionToDelete  = null;
 let detectedEncoding = 'Unknown';
 let versionsCache    = new Map();
+const versionsFetchCache = new Map();
+const textLengthFetches = new Map();
+const setVersionsLoading = (state) => {
+    if (typeof window.setBladeLoading === 'function') {
+        window.setBladeLoading('versionsCollapse', state);
+    }
+};
+const VERSIONS_FETCH_TTL = 8000;
 const facsimileRowState = new Map();
 const facsimilePollers  = new Map();
 const lignesPollers     = new Map();
@@ -257,6 +265,90 @@ const formatTimestamp = (seconds) => {
     const timePart = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     return `${datePart} ${timePart}`;
 };
+function requestTextLength(versionId, cell) {
+    const id = Number(versionId);
+    if (!Number.isFinite(id) || !cell) return;
+    const existing = textLengthFetches.get(id);
+    if (existing) {
+        existing.then(length => {
+            if (!cell || cell.dataset.versionId !== String(id)) return;
+            if (typeof length === 'number') {
+                cell.textContent = length.toLocaleString('fr-FR');
+                cell.title = 'Nombre de signes dans la version';
+            } else {
+                cell.textContent = 'n/a';
+                cell.title = 'Fichier texte indisponible';
+            }
+        });
+        return;
+    }
+
+    const promise = fetch(withBasePath(`/api/versions/${id}/text-length`), { headers: { 'Accept': 'application/json' } })
+        .then(res => res.ok ? res.json() : null)
+        .then(payload => {
+            const length = payload && typeof payload.text_length === 'number' ? payload.text_length : null;
+            return length;
+        })
+        .catch(() => null);
+
+    textLengthFetches.set(id, promise);
+    promise.then(length => {
+        if (!cell || cell.dataset.versionId !== String(id)) return;
+        if (typeof length === 'number') {
+            cell.textContent = length.toLocaleString('fr-FR');
+            cell.title = 'Nombre de signes dans la version';
+        } else {
+            cell.textContent = 'n/a';
+            cell.title = 'Fichier texte indisponible';
+        }
+    });
+}
+const buildVersionsUrl = (workId, force = false) => {
+    const suffix = force ? '&fresh=1' : '';
+    return withBasePath(`/api/versions?work_id=${workId}${suffix}`);
+};
+function getVersionsForWork(workId, { force = false } = {}) {
+    const id = Number(workId);
+    if (!Number.isFinite(id) || id <= 0) {
+        return Promise.resolve([]);
+    }
+    if (force) {
+        versionsFetchCache.delete(id);
+    }
+    const now = Date.now();
+    const cached = versionsFetchCache.get(id);
+    if (!force && cached?.data && (now - cached.ts) < VERSIONS_FETCH_TTL) {
+        return Promise.resolve(cached.data);
+    }
+    if (!force && cached?.promise) {
+        return cached.promise;
+    }
+    const fetchPromise = fetch(buildVersionsUrl(id, force), { headers: { 'Accept': 'application/json' } })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(res.statusText || `HTTP ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(data => {
+            versionsFetchCache.set(id, { data, ts: Date.now(), promise: null });
+            return data;
+        })
+        .catch(err => {
+            versionsFetchCache.delete(id);
+            throw err;
+        })
+        .finally(() => {
+            const entry = versionsFetchCache.get(id);
+            if (entry?.promise === fetchPromise) {
+                entry.promise = null;
+                versionsFetchCache.set(id, entry);
+            }
+        });
+    versionsFetchCache.set(id, { ...(cached ?? {}), promise: fetchPromise });
+    return fetchPromise;
+}
+window.varianceGetVersionsForWork = getVersionsForWork;
 function detectEncodingBOM(file){
     return new Promise(resolve=>{
         const r = new FileReader();
@@ -456,6 +548,42 @@ function renderFacsimileStatus(versionId, facsimileData){
         detachLegacyTooltip(btn);
     };
 
+    if (facsimileData?.loading) {
+        if (state.viewBadge) state.viewBadge.textContent = '…';
+        if (state.viewBtn) {
+            state.viewBtn.disabled = false;
+            state.viewBtn.title = 'Charger les fac-similés';
+            state.viewBtn.dataset.facsimileLoading = '1';
+        }
+        if (state.uploadBtn) {
+            if (isLegacy) {
+                applyLegacyState(state.uploadBtn);
+            } else {
+                clearLegacyState(state.uploadBtn);
+                state.uploadBtn.disabled = false;
+                state.uploadBtn.title = 'Importer de nouveaux fac-similés';
+            }
+        }
+        if (state.clearBtn) {
+            if (isLegacy) {
+                applyLegacyState(state.clearBtn);
+            } else {
+                clearLegacyState(state.clearBtn);
+                state.clearBtn.disabled = true;
+                state.clearBtn.title = 'Chargement des fac-similés…';
+            }
+        }
+        if (state.statusNote && state.statusText) {
+            state.statusText.textContent = 'Chargement des fac-similés…';
+            state.statusNote.className = 'small mt-2 d-flex align-items-center gap-2 flex-wrap text-muted';
+        }
+        return;
+    }
+
+    if (state.viewBtn) {
+        state.viewBtn.dataset.facsimileLoading = '';
+    }
+
     const ready = Math.max(0, Number(facsimileData?.source_count ?? 0));
     const published = Math.max(0, Number(facsimileData?.published_count ?? 0));
     const queued = Math.max(0, Number(facsimileData?.queue_count ?? 0));
@@ -533,15 +661,16 @@ function renderFacsimileStatus(versionId, facsimileData){
                 state.progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
             }
         } else if (outstanding > 0) {
-            state.statusText.textContent = `📦 ${ready} image(s) prêtes — ${outstanding} en attente de publication.`;
-            state.statusNote.className = `${baseClass} text-warning`;
+            const totalReady = outstanding;
+            state.statusText.textContent = `✅ ${totalReady} fac-similé(s) prêt(s) à publier.`;
+            state.statusNote.className = `${baseClass} text-success`;
             if (state.cancelBtn) state.cancelBtn.hidden = true;
             if (state.progressWrap && state.progressBar) {
                 state.progressWrap.hidden = true;
                 state.progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
             }
         } else {
-            state.statusText.textContent = `✅ ${ready} fac-similé(s) prêt(s) et publiés.`;
+            state.statusText.textContent = `✅ ${ready} fac-similé(s) publiés.`;
             state.statusNote.className = `${baseClass} text-success`;
             if (state.cancelBtn) state.cancelBtn.hidden = true;
             if (state.progressWrap && state.progressBar) {
@@ -567,9 +696,11 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
     const id = Number(versionId);
     const state = facsimileRowState.get(id);
     if (!state) return;
+    const isLegacy = !!state.isLegacy;
 
     const hasFile = lignesInfo && typeof lignesInfo === 'object';
     const hasSidecar = paginationInfo && typeof paginationInfo === 'object';
+    const hasData = hasFile || hasSidecar;
     const progressData = progress ?? null;
     const status = progressData?.status ?? null;
     const stage = progressData?.stage ?? null;
@@ -599,7 +730,7 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
         cssClass = `${baseClass} text-info`;
         showSpinner();
     } else if (stage === 'preparing') {
-        message = '🔧 Création du sidecar pagination…';
+        message = 'Création du fichier de données de pagination';
         cssClass = `${baseClass} text-info`;
         showSpinner();
     } else if (status === 'running') {
@@ -629,24 +760,9 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
         const markerPart = Number.isFinite(summaryTotal) && summaryTotal > 0
             ? `${summaryTotal} marqueur(s)`
             : null;
-
-        const sidecarSize = Number(sidecarMeta?.size ?? progressData?.sidecar_size ?? 0);
-        const sidecarUpdated = Number(sidecarMeta?.updated_at ?? progressData?.sidecar_updated_at ?? 0);
-
-        const sizeLabel = sidecarSize > 0 ? formatBytes(sidecarSize) : null;
-        const dateLabel = sidecarUpdated > 0 ? formatTimestamp(sidecarUpdated) : null;
-        const missedLabel = summaryMissed > 0 ? ` — ${summaryMissed} entrée(s) non trouvée(s)` : '';
-
-        let suffix = '';
-        if (sizeLabel && dateLabel) {
-            suffix = ` (${sizeLabel} · ${dateLabel})`;
-        } else if (sizeLabel) {
-            suffix = ` (${sizeLabel})`;
-        } else if (dateLabel) {
-            suffix = ` (${dateLabel})`;
-        }
-
-        message = `✅ Sidecar pagination prêt${markerPart ? ` — ${markerPart}` : ''}${missedLabel}${suffix}`;
+        message = markerPart
+            ? `✅ Données de pagination prêtes — ${markerPart}`
+            : '✅ Données de pagination prêtes';
         cssClass = `${baseClass} text-success`;
         hideSpinner();
     } else if (hasFile && !hasSidecar) {
@@ -656,13 +772,10 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
         hideSpinner();
     } else if (hasSidecar) {
         const markerCount = Number(paginationInfo?.details?.marker_count ?? 0);
-        const sizeLabel = paginationInfo?.size ? formatBytes(paginationInfo.size) : null;
-        const dateLabel = paginationInfo?.updated_at ? formatTimestamp(paginationInfo.updated_at) : null;
-        const origin = String(paginationInfo?.details?.origin || '').toLowerCase();
-        const originLabel = origin === 'pb' ? 'depuis <pb>' : '_lignes';
-        const markerLabel = markerCount > 0 ? `${markerCount} marqueur(s) (${originLabel})` : `Sidecar pagination (${originLabel})`;
-        const suffix = [sizeLabel, dateLabel].filter(Boolean).join(' · ');
-        message = `✅ ${markerLabel}${suffix ? ` — ${suffix}` : ''}`;
+        const markerPart = markerCount > 0 ? `${markerCount} marqueur(s)` : null;
+        message = markerPart
+            ? `✅ Données de pagination prêtes — ${markerPart}`
+            : '✅ Données de pagination prêtes';
         cssClass = `${baseClass} text-success`;
         hideSpinner();
     } else if (hasFile) {
@@ -736,14 +849,37 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
         state.lignesDownloadBtn.disabled = disableDownload;
     }
     if (state.lignesUploadBtn) {
-        state.lignesUploadBtn.disabled = !!(status && ['queued', 'running'].includes(status));
-        state.lignesUploadBtn.title = state.lignesUploadBtn.disabled
-            ? 'Traitement en cours — veuillez patienter'
-            : 'Importer un fichier _lignes';
+        if (isLegacy) {
+            state.lignesUploadBtn.disabled = true;
+        } else {
+            state.lignesUploadBtn.disabled = !!(status && ['queued', 'running'].includes(status));
+        }
+        if (!isLegacy) {
+            state.lignesUploadBtn.title = state.lignesUploadBtn.disabled
+                ? 'Traitement en cours — veuillez patienter'
+                : 'Importer un fichier _lignes';
+        }
+    }
+    if (state.lignesMergePbBtn) {
+        const pbAvailable = state.lignesMergePbBtn.dataset.pbAvailable === '1';
+        if (isLegacy) {
+            state.lignesMergePbBtn.disabled = true;
+        } else {
+            state.lignesMergePbBtn.disabled = !pbAvailable || !!(status && ['queued', 'running'].includes(status));
+        }
+        if (!isLegacy) {
+            if (!pbAvailable) {
+                state.lignesMergePbBtn.title = "Aucune balise <pb> détectée dans l'éditeur.";
+            } else if (state.lignesMergePbBtn.disabled) {
+                state.lignesMergePbBtn.title = 'Traitement en cours — veuillez patienter';
+            } else {
+                state.lignesMergePbBtn.title = "Ajouter les marqueurs de l'éditeur aux données de pagination";
+            }
+        }
     }
     if (state.lignesDeleteBtn) {
-        const disableDelete = !hasFile || (status && ['queued', 'running'].includes(status));
-        state.lignesDeleteBtn.hidden = !hasFile;
+        const disableDelete = !hasData || (status && ['queued', 'running'].includes(status));
+        state.lignesDeleteBtn.hidden = !hasData;
         state.lignesDeleteBtn.disabled = disableDelete;
     }
 
@@ -1220,7 +1356,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     document.addEventListener('versionsUpdated', e=>{
         if(e.detail.workId){
             selectedWorkId=e.detail.workId;
-            fetchVersions(selectedWorkId);
+            fetchVersions(selectedWorkId, true);
         }
     });
 
@@ -1256,7 +1392,7 @@ window.addEventListener('DOMContentLoaded',()=>{
             ev.target.reset();
             $fileInfo.textContent='';
             if (uploadModalInstance) { uploadModalInstance.hide(); }
-            fetchVersions(selectedWorkId);
+            fetchVersions(selectedWorkId, true);
             document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
         }catch(err){
             console.error(err);
@@ -1461,7 +1597,7 @@ async function purgeFacsimiles(versionId, { reason = 'clear' } = {}){
         stopFacsimilePolling(id);
         await requestFacsimileProgress(id);
         if (Number.isFinite(selectedWorkId)) {
-            fetchVersions(selectedWorkId);
+            fetchVersions(selectedWorkId, true);
         }
     } catch (err) {
         console.error(err);
@@ -1527,10 +1663,10 @@ async function uploadLignesFile(versionId, file){
         }
         if (state?.lignesDeleteBtn) {
             const cache = versionsCache.get(id);
-            const hasFile = !!(cache?.lignes);
+            const hasData = !!(cache?.lignes) || !!(cache?.pagination);
             const progressStatus = cache?.page_marker_progress?.status;
-            state.lignesDeleteBtn.hidden = !hasFile;
-            state.lignesDeleteBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+            state.lignesDeleteBtn.hidden = !hasData;
+            state.lignesDeleteBtn.disabled = !hasData || (progressStatus && ['queued','running'].includes(progressStatus));
         }
     }
 }
@@ -1562,10 +1698,59 @@ async function createPaginationFromPb(versionId){
     }
 }
 
+async function mergePaginationFromPb(versionId, pbCount = null){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+
+    const count = Number(pbCount);
+    const countLabel = Number.isFinite(count) && count > 0 ? count : null;
+    const confirmLabel = countLabel
+        ? `Ajouter ${countLabel} marqueur(s) depuis l’éditeur aux données de pagination ?`
+        : "Ajouter les marqueurs de l’éditeur aux données de pagination ?";
+    if (!confirm(confirmLabel)) return;
+
+    const state = facsimileRowState.get(id);
+    if (state?.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
+    if (state?.lignesMergePbBtn) state.lignesMergePbBtn.disabled = true;
+
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/pagination/merge-from-pb`), {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        const payload = await readJsonResponse(res);
+
+        const refreshed = await refreshPaginationInfo(id);
+        if (versionsCache.has(id)) {
+            const cached = versionsCache.get(id);
+            if (refreshed) {
+                cached.pagination = refreshed;
+            }
+            versionsCache.set(id, cached);
+        }
+
+        const cached = versionsCache.get(id) ?? {};
+        renderLignesStatus(id, cached.lignes ?? null, cached.page_marker_progress ?? null, cached.pagination ?? null);
+
+        if (payload?.message) {
+            alert(payload.message);
+        }
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Impossible de fusionner les marqueurs depuis l’éditeur.');
+    } finally {
+        if (state?.lignesSpinner) state.lignesSpinner.style.display = 'none';
+        renderLignesStatus(id, versionsCache.get(id)?.lignes ?? null, versionsCache.get(id)?.page_marker_progress ?? null, versionsCache.get(id)?.pagination ?? null);
+    }
+}
+
 async function deleteLignesFile(versionId){
     const id = Number(versionId);
     if (!Number.isFinite(id)) return;
-    if (!confirm('Supprimer définitivement le fichier _lignes pour cette version ?')) return;
+    if (!confirm('Supprimer les données de pagination pour cette version ?')) return;
 
     const state = facsimileRowState.get(id);
     if (state?.lignesDeleteBtn) state.lignesDeleteBtn.disabled = true;
@@ -1605,15 +1790,15 @@ async function deleteLignesFile(versionId){
         alert(err.message || 'Impossible de supprimer le fichier _lignes.');
     } finally {
         const cache = versionsCache.get(id);
-        const hasFile = !!(cache?.lignes);
+        const hasData = !!(cache?.lignes) || !!(cache?.pagination);
         const progressStatus = cache?.page_marker_progress?.status;
         if (state?.lignesSpinner) state.lignesSpinner.style.display = 'none';
         if (state?.lignesDeleteBtn) {
-            state.lignesDeleteBtn.hidden = !hasFile;
-            state.lignesDeleteBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+            state.lignesDeleteBtn.hidden = !hasData;
+            state.lignesDeleteBtn.disabled = !hasData || (progressStatus && ['queued','running'].includes(progressStatus));
         }
         if (state?.lignesDownloadBtn) {
-            state.lignesDownloadBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+            state.lignesDownloadBtn.disabled = !hasData || (progressStatus && ['queued','running'].includes(progressStatus));
         }
         if (state?.lignesUploadBtn) {
             state.lignesUploadBtn.disabled = !!(progressStatus && ['queued','running'].includes(progressStatus));
@@ -1664,7 +1849,7 @@ async function cancelLignesProcessing(versionId){
 
 let actionButtonsTooltips = [];
 
-async function fetchVersions(workId){
+async function fetchVersions(workId, force = false){
 
     actionButtonsTooltips.forEach(tt => tt.dispose());
     actionButtonsTooltips = [];
@@ -1677,13 +1862,13 @@ async function fetchVersions(workId){
         facsimileRowState.clear();
         facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
         lignesPollers.forEach((_, id) => stopLignesPolling(id));
+        setVersionsLoading(false);
         return;
     }
+    setVersionsLoading(true);
     list.innerHTML='<div class="text-muted p-2">Loading versions…</div>';
     try{
-        const res = await fetch(withBasePath(`/api/versions?work_id=${workId}`));
-        if(!res.ok) throw new Error(res.statusText);
-        const data = await res.json();
+        const data = await getVersionsForWork(workId, { force });
         list.innerHTML='';
         const versions = Array.isArray(data) ? data : [];
         versionsCache = new Map(versions.map(v => [Number(v.id), v]));
@@ -1735,9 +1920,14 @@ async function fetchVersions(workId){
 
             const tdChars = document.createElement('td');
             tdChars.className = 'text-muted';
+            tdChars.dataset.versionId = String(v.id);
             if (typeof v.text_length === 'number') {
                 tdChars.textContent = v.text_length.toLocaleString('fr-FR');
                 tdChars.title = 'Nombre de signes dans la version';
+            } else if (v.text_available) {
+                tdChars.textContent = '…';
+                tdChars.title = 'Chargement du nombre de signes';
+                requestTextLength(v.id, tdChars);
             } else {
                 tdChars.textContent = 'n/a';
                 tdChars.title = 'Fichier texte indisponible';
@@ -1750,10 +1940,11 @@ async function fetchVersions(workId){
 
             const tdFac = document.createElement('td');
             tdFac.className = 'align-middle';
-            const sourceCount = Number(v.facsimiles?.source_count ?? 0);
-            const publishedCount = Number(v.facsimiles?.published_count ?? 0);
-            const queueCount = Number(v.facsimiles?.queue_count ?? 0);
-            const totalExpected = Number(v.facsimiles?.total_expected ?? (sourceCount + queueCount));
+            const facsimileData = v.facsimiles && typeof v.facsimiles === 'object' ? v.facsimiles : null;
+            const sourceCount = Number(facsimileData?.source_count ?? 0);
+            const publishedCount = Number(facsimileData?.published_count ?? 0);
+            const queueCount = Number(facsimileData?.queue_count ?? 0);
+            const totalExpected = Number(facsimileData?.total_expected ?? (sourceCount + queueCount));
 
             const facButtons = document.createElement('div');
             facButtons.className = 'btn-group btn-group-sm';
@@ -1769,6 +1960,9 @@ async function fetchVersions(workId){
             btnFacView.disabled = sourceCount === 0;
             btnFacView.title = sourceCount === 0 ? 'Aucune image à afficher' : 'Afficher la galerie de fac-similés';
             btnFacView.addEventListener('click', () => {
+                if (btnFacView.dataset.facsimileLoading === '1') {
+                    requestFacsimileProgress(v.id);
+                }
                 document.dispatchEvent(new CustomEvent('facsimiles:select', {
                     detail: { versionId: v.id, versionName: v.name }
                 }));
@@ -1866,10 +2060,117 @@ async function fetchVersions(workId){
             const completionMeta = document.createElement('div');
             completionMeta.className = 'small text-muted';
             completionMeta.textContent = 'À cocher une fois la pagination validée.';
-            tdCompletion.appendChild(completionSwitch);
-            tdCompletion.appendChild(completionMeta);
+
+            const lignesWrap = document.createElement('div');
+            lignesWrap.className = 'mt-2 d-flex flex-column align-items-center gap-1';
+            const lignesTitle = document.createElement('div');
+            lignesTitle.className = 'small text-muted fw-semibold';
+            lignesTitle.textContent = 'Données de pagination';
+            lignesWrap.appendChild(lignesTitle);
+
+            const lignesActions = document.createElement('div');
+            lignesActions.className = 'd-flex align-items-center gap-1 mt-1 flex-wrap justify-content-center';
+            const lignesInput = document.createElement('input');
+            lignesInput.type = 'file';
+            lignesInput.accept = '.txt,text/plain';
+            lignesInput.style.display = 'none';
+            const lignesUploadBtn = document.createElement('button');
+            lignesUploadBtn.type = 'button';
+            lignesUploadBtn.className = 'btn btn-sm btn-outline-primary';
+            lignesUploadBtn.textContent = '_lignes';
+            lignesUploadBtn.title = 'Importer un fichier _lignes';
+            const lignesMergePbBtn = document.createElement('button');
+            lignesMergePbBtn.type = 'button';
+            lignesMergePbBtn.className = 'btn btn-sm btn-outline-secondary';
+            lignesMergePbBtn.textContent = 'Editeur';
+            lignesMergePbBtn.title = "Ajouter les marqueurs de l'éditeur aux données de pagination";
+            const lignesDeleteBtn = document.createElement('button');
+            lignesDeleteBtn.type = 'button';
+            lignesDeleteBtn.className = 'btn btn-sm btn-outline-danger';
+            lignesDeleteBtn.textContent = 'Supprimer';
+            lignesDeleteBtn.title = 'Supprimer les données de pagination';
+            const lignesCancelBtn = document.createElement('button');
+            lignesCancelBtn.type = 'button';
+            lignesCancelBtn.className = 'btn btn-sm btn-outline-warning';
+            lignesCancelBtn.textContent = 'Annuler';
+            lignesCancelBtn.hidden = true;
+            lignesCancelBtn.title = 'Annuler le traitement _lignes';
+            lignesActions.appendChild(lignesUploadBtn);
+            lignesActions.appendChild(lignesMergePbBtn);
+            lignesActions.appendChild(lignesDeleteBtn);
+            lignesActions.appendChild(lignesInput);
+            lignesWrap.appendChild(lignesActions);
+            tdCompletion.appendChild(lignesWrap);
+
+            const lignesStatus = document.createElement('div');
+            lignesStatus.className = 'small text-muted d-flex align-items-center gap-2 flex-wrap justify-content-center';
+            const lignesSpinner = document.createElement('span');
+            lignesSpinner.className = 'spinner-border spinner-border-sm text-primary';
+            lignesSpinner.setAttribute('role', 'status');
+            lignesSpinner.style.display = 'none';
+            const lignesStatusText = document.createElement('span');
+            lignesStatus.appendChild(lignesSpinner);
+            lignesStatus.appendChild(lignesStatusText);
+            lignesStatus.appendChild(lignesCancelBtn);
+            lignesWrap.appendChild(lignesStatus);
+
+            const lignesProgressWrap = document.createElement('div');
+            lignesProgressWrap.className = 'progress w-100';
+            lignesProgressWrap.style.height = '4px';
+            lignesProgressWrap.hidden = true;
+            const lignesProgressBar = document.createElement('div');
+            lignesProgressBar.className = 'progress-bar bg-info';
+            lignesProgressBar.style.width = '0%';
+            lignesProgressBar.setAttribute('role', 'progressbar');
+            lignesProgressWrap.appendChild(lignesProgressBar);
+            lignesWrap.appendChild(lignesProgressWrap);
+
+            const hasPbMarkers = pbCount > 0;
+            lignesMergePbBtn.dataset.pbAvailable = hasPbMarkers ? '1' : '0';
+            lignesMergePbBtn.disabled = !hasPbMarkers;
+            if (!hasPbMarkers) {
+                lignesMergePbBtn.title = "Aucune balise <pb> détectée dans l'éditeur.";
+            }
+
+            if (v.is_legacy) {
+                lignesUploadBtn.disabled = true;
+                lignesUploadBtn.classList.add('legacy-disabled');
+                lignesUploadBtn.title = 'Import _lignes désactivé pour les versions legacy.';
+                lignesMergePbBtn.disabled = true;
+                lignesMergePbBtn.classList.add('legacy-disabled');
+                lignesMergePbBtn.title = "Import depuis l'éditeur désactivé pour les versions legacy.";
+                lignesDeleteBtn.disabled = true;
+                lignesDeleteBtn.classList.add('legacy-disabled');
+                lignesDeleteBtn.title = 'Suppression désactivée pour les versions legacy.';
+                lignesCancelBtn.disabled = true;
+            }
+
+            lignesUploadBtn.addEventListener('click', () => {
+                if (v.is_legacy) return;
+                lignesInput.value = '';
+                lignesInput.click();
+            });
+            lignesMergePbBtn.addEventListener('click', () => {
+                if (v.is_legacy) return;
+                if (!hasPbMarkers) return;
+                mergePaginationFromPb(v.id, pbCount);
+            });
+            lignesDeleteBtn.addEventListener('click', () => {
+                if (v.is_legacy) return;
+                deleteLignesFile(v.id);
+            });
+            lignesInput.addEventListener('change', () => {
+                if (v.is_legacy) return;
+                if (!lignesInput.files || !lignesInput.files.length) return;
+                uploadLignesFile(v.id, lignesInput.files[0]);
+            });
+            lignesCancelBtn.addEventListener('click', () => {
+                if (v.is_legacy) return;
+                cancelLignesProcessing(v.id);
+            });
 
             const rowState = {
+                isLegacy: v.is_legacy,
                 viewBtn: btnFacView,
                 viewBadge,
                 uploadBtn: btnFacUpload,
@@ -1881,6 +2182,15 @@ async function fetchVersions(workId){
                 progressBar,
                 completionToggle,
                 completionMeta,
+                lignesStatus,
+                lignesStatusText,
+                lignesSpinner,
+                lignesProgressWrap,
+                lignesProgressBar,
+                lignesUploadBtn,
+                lignesMergePbBtn,
+                lignesDeleteBtn,
+                lignesCancelBtn,
             };
 
             facsimileRowState.set(Number(v.id), rowState);
@@ -1889,18 +2199,27 @@ async function fetchVersions(workId){
             tr.appendChild(tdCompletion);
 
             renderPaginationDoneState(v.id, v);
-            renderFacsimileStatus(v.id, v.facsimiles ?? {
-                source_count: sourceCount,
-                published_count: publishedCount,
-                queue_count: queueCount,
-                total_expected: totalExpected,
-                processing: queueCount > 0
-            });
+            if (facsimileData) {
+                renderFacsimileStatus(v.id, {
+                    source_count: sourceCount,
+                    published_count: publishedCount,
+                    queue_count: queueCount,
+                    total_expected: totalExpected,
+                    processing: queueCount > 0
+                });
+            } else {
+                renderFacsimileStatus(v.id, { loading: true });
+            }
 
-            if (queueCount > 0) {
+            if (facsimileData && queueCount > 0) {
                 ensureFacsimilePolling(v.id);
             } else {
                 stopFacsimilePolling(v.id);
+            }
+
+            renderLignesStatus(v.id, v.lignes ?? null, v.page_marker_progress ?? null, v.pagination ?? null);
+            if (v.page_marker_progress?.status && ['queued', 'running'].includes(v.page_marker_progress.status)) {
+                ensureLignesPolling(v.id, { immediate: true });
             }
 
             activeFacsimileIds.add(Number(v.id));
@@ -1994,10 +2313,18 @@ async function fetchVersions(workId){
             btnDel.innerHTML = '<i class="bi bi-trash3"></i>';
             btnDel.setAttribute('data-bs-toggle', 'tooltip');
             btnDel.addEventListener('click',()=>confirmDeleteVersion(v));
+            const deleteTitle = v.is_legacy
+                ? 'La suppression est désactivée pour les versions legacy.'
+                : 'Supprimer la version';
+            if (v.is_legacy) {
+                btnDel.disabled = true;
+                btnDel.classList.add('legacy-disabled');
+            }
+            btnDel.title = deleteTitle;
             const tooltipDel = new bootstrap.Tooltip(
                 btnDel,
                 {
-                    title: 'Supprimer la version',
+                    title: deleteTitle,
                     delay: { show: 500, hide: 0 },
                     trigger: 'hover'
                 }
@@ -2022,6 +2349,12 @@ async function fetchVersions(workId){
             btnGroup.appendChild(btnDel);
             tdActions.appendChild(btnGroup);
 
+            const completionWrap = document.createElement('div');
+            completionWrap.className = 'mt-2 d-flex flex-column align-items-center gap-1';
+            completionWrap.appendChild(completionSwitch);
+            completionWrap.appendChild(completionMeta);
+            tdActions.appendChild(completionWrap);
+
             tr.appendChild(tdActions);
             tbody.appendChild(tr);
         });
@@ -2037,6 +2370,8 @@ async function fetchVersions(workId){
         updateVersionsCount(null);
         list.innerHTML='<div class="text-danger p-2">Failed to load versions</div>';
         facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
+    } finally {
+        setVersionsLoading(false);
     }
 }
 function openEditModal(v){
@@ -2057,7 +2392,7 @@ async function updateVersionName(){
         if(!res.ok) throw new Error(res.statusText);
         await res.json();
         bootstrap.Modal.getInstance(document.getElementById('editVersionModal')).hide();
-        fetchVersions(selectedWorkId);
+        fetchVersions(selectedWorkId, true);
         document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
     }catch(err){
         console.error(err);
@@ -2086,7 +2421,7 @@ async function doDeleteVersion(){
             if (instance) instance.hide();
         }
         versionToDelete = null;
-        fetchVersions(selectedWorkId);
+        fetchVersions(selectedWorkId, true);
         document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
         if (payload?.message) {
             alert(payload.message);

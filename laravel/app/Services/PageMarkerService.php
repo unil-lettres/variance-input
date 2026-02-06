@@ -514,12 +514,19 @@ class PageMarkerService
             $html = $this->clearExistingMarkers($html);
         }
 
+        $availableImages = $this->collectImageNumbers($author->folder, $work->folder, $version->folder);
+        $availableImageCodes = [];
+        foreach ($availableImages as $number) {
+            $availableImageCodes[str_pad((string) $number, 3, '0', STR_PAD_LEFT)] = true;
+        }
+
         $result = $this->insertMarkersFromOffsets(
             $html,
             $markers,
             $role === 'source' ? 'right' : 'left',
             $clearExisting,
-            $replaceExisting
+            $replaceExisting,
+            $availableImageCodes
         );
 
         foreach ($existing as $path) {
@@ -883,6 +890,94 @@ class PageMarkerService
     }
 
     /**
+     * Merge <pb> markers from the TEI editor into an existing pagination sidecar.
+     *
+     * @return array{count:int,added:int,total:int,relative:string,created:bool}
+     */
+    public function mergeSidecarFromPb(Version $version): array
+    {
+        $existing = $this->loadPaginationSidecar($version->id);
+        if (!$existing) {
+            $result = $this->createSidecarFromPb($version);
+            $count = (int) ($result['count'] ?? 0);
+            return [
+                'count'    => $count,
+                'added'    => $count,
+                'total'    => $count,
+                'relative' => $result['relative'] ?? $this->paginationRelativePath($version->id),
+                'created'  => true,
+            ];
+        }
+
+        $contents = $this->readVersionXml($version);
+        if ($contents === null) {
+            return [
+                'count'    => 0,
+                'added'    => 0,
+                'total'    => count($existing['markers'] ?? []),
+                'relative' => $this->paginationRelativePath($version->id),
+                'created'  => false,
+            ];
+        }
+
+        $pbMarkers = $this->extractPbMarkers($contents);
+        if (empty($pbMarkers)) {
+            return [
+                'count'    => 0,
+                'added'    => 0,
+                'total'    => count($existing['markers'] ?? []),
+                'relative' => $this->paginationRelativePath($version->id),
+                'created'  => false,
+            ];
+        }
+
+        $mergedMarkers = is_array($existing['markers'] ?? null) ? array_values($existing['markers']) : [];
+        $index = [];
+        foreach ($mergedMarkers as $marker) {
+            $index[$this->markerKey($marker)] = true;
+        }
+
+        $added = 0;
+        foreach ($pbMarkers as $marker) {
+            $key = $this->markerKey($marker);
+            if ($key === '' || isset($index[$key])) {
+                continue;
+            }
+            $mergedMarkers[] = $marker;
+            $index[$key] = true;
+            $added++;
+        }
+
+        usort($mergedMarkers, static function ($a, $b) {
+            return (int) ($a['char_index'] ?? 0) <=> (int) ($b['char_index'] ?? 0);
+        });
+
+        $existing['markers'] = $mergedMarkers;
+        $existing['marker_count'] = count($mergedMarkers);
+        $existing['generated_at'] = time();
+        $existing['origin'] = $existing['origin'] ?? 'merged';
+        $existing['merged_from_pb'] = [
+            'added'      => $added,
+            'total_pb'   => count($pbMarkers),
+            'updated_at' => time(),
+        ];
+
+        $relative = $this->paginationRelativePath($version->id);
+        Storage::disk('local')->put(
+            $relative,
+            json_encode($existing, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+        );
+
+        return [
+            'count'    => count($pbMarkers),
+            'added'    => $added,
+            'total'    => count($mergedMarkers),
+            'relative' => $relative,
+            'created'  => false,
+        ];
+    }
+
+    /**
      * Read the TEI XML for a version.
      */
     private function readVersionXml(Version $version): ?string
@@ -950,6 +1045,27 @@ class PageMarkerService
         }
 
         return $markers;
+    }
+
+    private function markerKey(array $marker): string
+    {
+        $charIndex = isset($marker['char_index']) ? (string) (int) $marker['char_index'] : '';
+        $image = '';
+        if (isset($marker['image_code'])) {
+            $image = (string) $marker['image_code'];
+        } elseif (isset($marker['image'])) {
+            $image = (string) $marker['image'];
+        }
+        $page = '';
+        if (isset($marker['page'])) {
+            $page = (string) $marker['page'];
+        } elseif (isset($marker['pagination'])) {
+            $page = (string) $marker['pagination'];
+        }
+
+        $parts = [$charIndex, $image, $page];
+        $key = implode('|', $parts);
+        return $key === '||' ? '' : $key;
     }
 
     /**
@@ -1425,7 +1541,8 @@ class PageMarkerService
         array $markers,
         string $orientation,
         bool $clearExisting,
-        bool $replaceExisting
+        bool $replaceExisting,
+        ?array $availableImageCodes = null
     ): array {
         $normalized = array_values(array_filter($markers, static function ($marker) {
             return (isset($marker['char_index']) && is_numeric($marker['char_index'])) || !empty($marker['phrase']);
@@ -1462,6 +1579,10 @@ class PageMarkerService
             $imageCode = $this->normalizeImageCode($marker);
             if (!$imageCode) {
                 $misses[] = ['marker' => $marker, 'reason' => 'image_invalide'];
+                continue;
+            }
+            if ($availableImageCodes !== null && !array_key_exists($imageCode, $availableImageCodes)) {
+                $misses[] = ['marker' => $marker, 'reason' => 'image_introuvable'];
                 continue;
             }
 

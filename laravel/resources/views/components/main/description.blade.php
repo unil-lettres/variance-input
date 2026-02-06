@@ -70,6 +70,11 @@ let cancelBtn = null;
 let statusEl = null;
 let dirtyIndicatorVisible = false;
 let statusPill = null;
+const setDescriptionLoading = (state) => {
+    if (typeof window.setBladeLoading === 'function') {
+        window.setBladeLoading('descriptionCollapse', state);
+    }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
@@ -137,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleDirtyIndicator(false);
             updateStatusPill(false, true);
             setStatus('');
+            setDescriptionLoading(false);
             return;
         }
 
@@ -179,9 +185,20 @@ function saveDescription() {
         },
         body   : JSON.stringify({ desc: updatedDesc })
     })
-    .then(res => {
-        if (!res.ok) throw new Error('Failed to save description');
-        return res.json();
+    .then(async res => {
+        const contentType = res.headers.get('content-type') || '';
+        let payload = null;
+        if (contentType.includes('application/json')) {
+            payload = await res.json().catch(() => null);
+        } else {
+            const text = await res.text();
+            payload = text ? { message: text } : null;
+        }
+        if (!res.ok) {
+            const message = payload?.error || payload?.message || "Erreur lors de l'enregistrement";
+            throw new Error(message);
+        }
+        return payload;
     })
     .then(() => {
         lastSavedContent = updatedDesc;
@@ -192,7 +209,7 @@ function saveDescription() {
     })
     .catch(err => {
         console.error('Error saving description:', err);
-        setStatus("Erreur lors de l'enregistrement", 'error');
+        setStatus(err?.message || "Erreur lors de l'enregistrement", 'error');
     });
 }
 
@@ -208,6 +225,7 @@ function cancelEdit() {
 function fetchDescription(workId) {
     if (!ckeditorInstance || !workId) return;
     setStatus('Chargement…');
+    setDescriptionLoading(true);
 
     fetch(withBasePath(`/works/${workId}/description`))
         .then(res => res.json())
@@ -222,6 +240,9 @@ function fetchDescription(workId) {
         .catch(err => {
             console.error('Error fetching description:', err);
             setStatus('Erreur lors du chargement', 'error');
+        })
+        .finally(() => {
+            setDescriptionLoading(false);
         });
 }
 

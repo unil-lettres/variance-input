@@ -28,6 +28,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveWorkBtn     = document.getElementById("save-work-btn");
   const updateWorkBtn   = document.getElementById("update-work-btn");
   const editWorkShortTitleLabel = document.getElementById("edit-work-short-title-label");
+  const defaultTitles = {
+    editAuthor: editAuthorBtn?.title || '',
+    deleteAuthor: deleteAuthorBtn?.title || '',
+    editWork: editWorkBtn?.title || '',
+    deleteWork: deleteWorkBtn?.title || '',
+  };
 
   const mainContainer = document.getElementById("admin-main");
   const initialSelection = (() => {
@@ -474,6 +480,7 @@ document.addEventListener("DOMContentLoaded", () => {
           opt.value = author.id;
           opt.textContent = author.name;
           opt.dataset.folder = author.folder || '';
+          opt.dataset.isLegacy = author.is_legacy ? '1' : '0';
           authorSelector.appendChild(opt);
         });
 
@@ -537,6 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
             : work.title;
           opt.setAttribute('data-short-title', work.short_title || '');
           opt.dataset.folder = work.folder || '';
+          opt.dataset.isLegacy = work.is_legacy ? '1' : '0';
           workSelector.appendChild(opt);
         });
 
@@ -587,8 +595,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function toggleAuthorButtons() {
     const hasValue = !!authorSelector.value;
-    editAuthorBtn.disabled   = !hasValue;
-    deleteAuthorBtn.disabled = !hasValue;
+    const selected = hasValue ? authorSelector.options[authorSelector.selectedIndex] : null;
+    const isLegacy = selected?.dataset?.isLegacy === '1';
+    const legacyNote = 'Les auteurs legacy sont en lecture seule.';
+
+    editAuthorBtn.disabled = !hasValue || isLegacy;
+    deleteAuthorBtn.disabled = !hasValue || isLegacy;
+
+    editAuthorBtn.classList.toggle('legacy-disabled', !!isLegacy);
+    deleteAuthorBtn.classList.toggle('legacy-disabled', !!isLegacy);
+
+    if (isLegacy) {
+      editAuthorBtn.title = legacyNote;
+      deleteAuthorBtn.title = legacyNote;
+    } else {
+      editAuthorBtn.title = defaultTitles.editAuthor;
+      deleteAuthorBtn.title = defaultTitles.deleteAuthor;
+    }
   }
 
   function reflectSelectionInUrl() {
@@ -632,7 +655,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function toggleWorkButtons() {
     const hasValue = !!workSelector.value;
-    editWorkBtn.disabled   = !hasValue;
-    deleteWorkBtn.disabled = !hasValue;
+    const selected = hasValue ? workSelector.options[workSelector.selectedIndex] : null;
+    const isLegacy = selected?.dataset?.isLegacy === '1';
+    const legacyNote = 'Les oeuvres legacy sont en lecture seule.';
+
+    editWorkBtn.disabled   = !hasValue || isLegacy;
+    deleteWorkBtn.disabled = !hasValue || isLegacy;
+
+    editWorkBtn.classList.toggle('legacy-disabled', !!isLegacy);
+    deleteWorkBtn.classList.toggle('legacy-disabled', !!isLegacy);
+
+    if (isLegacy) {
+      editWorkBtn.title = legacyNote;
+      deleteWorkBtn.title = legacyNote;
+    } else {
+      editWorkBtn.title = defaultTitles.editWork;
+      deleteWorkBtn.title = defaultTitles.deleteWork;
+    }
   }
 });

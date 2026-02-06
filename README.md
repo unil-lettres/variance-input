@@ -25,6 +25,8 @@ The project is split into:
 > Detailed documentation: `descr/architecture.md`, `descr/workflow.md`,
 > `descr/facsimiles.md`, `descr/queues_jobs.md`, `descr/api_endpoints.md`,
 > `descr/deployment_notes.md`.
+>
+> Recent updates: `descr/updates_2026-02-04.md`.
 
 ---
 
@@ -44,11 +46,13 @@ The project is split into:
    - Supporting services (MariaDB, Redis, Nginx proxy, legacy PHP site)
 
 2. **Environment**
-   - `laravel/.env` is committed for development; tweak DB or queue
+   - Copy `laravel/example.env` to `laravel/.env` and tweak DB/queue
      settings if needed.
-   - The queue worker already runs
-     `php artisan queue:work --queue=facsimiles,page-markers`, so
-     pagination and facsimile jobs are processed automatically.
+   - If the admin is mounted under a sub-path (for example `/admin`), set
+     `ADMIN_BASE_PATH=admin` so generated URLs include the prefix.
+   - The `laravel-queue` service runs `laravel/scripts/run-queue-workers.sh`
+     and spawns multiple workers (`QUEUE_WORKERS`, default 5) for
+     `facsimiles` and `page-markers`.
 
 3. **Initial setup (first run)**
    ```bash
@@ -103,7 +107,7 @@ The project is split into:
 
 ```
 ├── docker-compose.yml
-├── descr/                    # Developer documentation (not committed)
+├── descr/                    # Developer documentation
 ├── laravel/                  # Admin application (PHP/Laravel)
 │   ├── app/
 │   ├── routes/
@@ -120,10 +124,14 @@ The project is split into:
 
 1. **Upload a version (`Versions` card)**
    - Accepts `.txt` files (≤ 8 MB, `text/plain`).
-   - `VersionController::store` normalises text (UTF‑8, whitespace collapse),
-     inserts `<lb/>`, wraps it in a TEI skeleton, and writes both the raw text
-     and TEI XML to `storage/app/public/uploads/versions/{base}.{txt,xml}` (with
-     public mirrors under `public/uploads/...`).  
+   - Optional hint: `original_encoding` (UTF‑8 / Windows‑1252 / ISO‑8859‑1).
+   - `VersionController::store` writes the raw TXT to
+     `storage/app/public/uploads/versions/{base}.txt`, normalises text (UTF‑8
+     LF, whitespace collapse), preserves inline `<pb>` tags, inserts `<lb/>`,
+     and saves TEI to `storage/app/public/uploads/versions/{base}.xml`.
+   - The app reads TEI from `storage/app/public/uploads/versions` and falls
+     back to `public/uploads/versions` or `variance/uploads/versions` if those
+     exist (legacy/imported data).
    - A `versions` row is created with the generated folder slug.
 
 2. **Upload `_lignes`**
@@ -134,6 +142,10 @@ The project is split into:
      `{ char_index, page, image_code, phrase, context }`.
    - Version-level progress is tracked in `storage/app/tmp/pager/{version_id}.json`
      so the UI shows when the sidecar is ready.
+   - `_lignes` uploads are limited to 4 MB.
+   - If the TEI already contains `<pb>` tags, use
+     `POST /api/versions/{version}/pagination/from-pb` to build the sidecar
+     directly.
 
 3. **Curate facsimiles & manifests**
    - Upload image batches via the facsimile carousel; jobs normalise the
@@ -162,6 +174,9 @@ The project is split into:
    - Comparison-scoped progress is written to
      `storage/app/tmp/pager/comparisons/{comparison_id}.json`; the UI polls this
      endpoint to show queued → running → done per role (source/target).
+   - Optional: `POST /api/comparisons/{comparison}/pagination/from-xhtml` can
+     rebuild the sidecar from `<pb>` tags already present in `source.xhtml` /
+     `target.xhtml`.
 
 6. **Export the legacy bundle**
    - “Exporter” generates a zip containing the published comparison directory
@@ -170,14 +185,16 @@ The project is split into:
 
 7. **Optional publication**
    - Use the “Publier” button to copy comparison artefacts into
-     `public/uploads/{author}/{work}/{comparison_folder}` for the legacy site.
+     `storage/app/public/uploads/{author}/{work}/{comparison_folder}` and
+     mirror them to `variance/uploads/{author}/{work}/{comparison_folder}` for
+     the legacy site.
 
 ### Background jobs
 
 - Pagination jobs (`ApplyLignesJob`, `InjectComparisonPaginationJob`) run on
   the `page-markers` queue; facsimile processing uses the `facsimiles` queue.
-- `laravel-queue` container runs  
-  `php artisan queue:work --queue=facsimiles,page-markers`.
+- `laravel-queue` container runs `laravel/scripts/run-queue-workers.sh` to
+  spawn multiple `queue:work` processes for `facsimiles,page-markers`.
 - Manual execution:  
   `docker compose exec laravel php artisan queue:work --queue=page-markers --stop-when-empty`.
 
@@ -193,9 +210,11 @@ The project is split into:
 | Version progress                | `storage/app/tmp/pager/{version_id}.json`                         |
 | Comparison progress             | `storage/app/tmp/pager/comparisons/{comparison_id}.json`          |
 | Medite outputs (XHTML/TEI)      | `storage/app/public/uploads/{author}/{work}/comparisons/{id}`     |
-| Published comparison (optional) | `public/uploads/{author}/{work}/{comparison_folder}`              |
+| Published comparison (optional) | `storage/app/public/uploads/{author}/{work}/{comparison_folder}` + mirror in `variance/uploads/...` |
 | Facsimile images (draft)        | `storage/app/public/uploads/{author}/{work}/{version}/`           |
 | Exported legacy zip             | Downloaded on demand via `/comparisons/{id}/export`                |
+| Work cover images               | `public/uploads_images/{hash}.{ext}` + mirror in `variance/uploads_images/` |
+| Work PDFs                       | `public/uploads/pdf/{work_id}.pdf` + mirror in `variance/uploads/pdf/` |
 
 ---
 

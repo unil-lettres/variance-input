@@ -83,10 +83,8 @@ class WorkController extends Controller
         //]);
 
         $work = Work::findOrFail($workId);
-        if ($work->is_legacy) {
-            return response()->json([
-                'error' => 'Les œuvres legacy sont en lecture seule.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
+            return $forbidden;
         }
         $work->desc = $request->desc;
         $work->save();
@@ -107,10 +105,8 @@ class WorkController extends Controller
     {
         $status = WorkStatus::where('work_id', $workId)->firstOrFail();
         $work = Work::findOrFail($workId);
-        if ($work->is_legacy) {
-            return response()->json([
-                'error' => 'Les œuvres legacy sont en lecture seule.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
+            return $forbidden;
         }
 
         $status->desc_status = $request->input('desc_status', $status->desc_status);
@@ -131,10 +127,8 @@ class WorkController extends Controller
     public function update(Request $request, $id)
     {
         $work = Work::findOrFail($id);
-        if ($work->is_legacy) {
-            return response()->json([
-                'error' => 'Les œuvres legacy sont en lecture seule.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
+            return $forbidden;
         }
 
         $validated = $request->validate([
@@ -164,10 +158,8 @@ class WorkController extends Controller
     public function destroy($id)
     {
         $work = Work::findOrFail($id);
-        if ($work->is_legacy) {
-            return response()->json([
-                'error' => 'Les œuvres legacy ne peuvent pas être supprimées.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
+            return $forbidden;
         }
     
         //  Prevent deletion if work has versions
@@ -181,6 +173,23 @@ class WorkController extends Controller
         $work->delete();
     
         return response()->json(['success' => true]);
+    }
+
+    private function forbidIfCannotEdit(Work $work)
+    {
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy sont en lecture seule.',
+            ], 403);
+        }
+
+        if (!auth()->check() || !auth()->user()->can('edit', $work)) {
+            return response()->json([
+                'error' => 'Vous n’avez pas la permission de modifier cette œuvre.',
+            ], 403);
+        }
+
+        return null;
     }
     
 

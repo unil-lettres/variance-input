@@ -22,6 +22,18 @@
     $warnText = 'text-warning fw-semibold';
     $badText = 'text-danger fw-semibold';
     $mutedText = 'text-muted';
+    $formatDate = function ($value) {
+        if (empty($value)) {
+            return 'n/a';
+        }
+        try {
+            return \Illuminate\Support\Carbon::parse($value)
+                ->setTimezone('Europe/Zurich')
+                ->format('d/m/Y H:i');
+        } catch (\Throwable $e) {
+            return $value;
+        }
+    };
     $statusTone = function (?string $status) use ($okText, $warnText, $badText, $mutedText) {
         return match($status) {
             'ok' => $okText,
@@ -40,7 +52,7 @@
                 <span>État du système</span>
                 <span class="badge {{ $statusClass }} text-uppercase health-status-badge">{{ $status ?? 'ok' }}</span>
             </h1>
-            <div class="text-muted small">Dernière mise à jour : {{ $timestamp_local ?? $timestamp ?? '' }}</div>
+            <div class="text-muted small">Dernière mise à jour : {{ $formatDate($timestamp ?? $timestamp_local ?? null) }}</div>
         </div>
         <div class="d-flex align-items-center gap-3"></div>
     </div>
@@ -205,7 +217,7 @@
                     <div class="{{ $recentClass }}">{{ $recentFailed ?? 'n/a' }}</div>
                     <div class="text-muted small">
                         Total: {{ data_get($checks, 'failed_jobs.total') ?? 'n/a' }}
-                        · Dernier: {{ data_get($checks, 'failed_jobs.latest_at') ?? 'n/a' }}
+                        · Dernier: {{ $formatDate(data_get($checks, 'failed_jobs.latest_at')) }}
                     </div>
                 </div>
             </div>
@@ -306,7 +318,7 @@
                 $mediteOk = (bool) data_get($checks, 'medite.ok');
                 $mediteStatusClass = $mediteOk ? $okText : $badText;
                 $mediteLatency = data_get($checks, 'medite.latency_ms');
-                $mediteLatencyClass = $mediteLatency !== null && $mediteLatency > 1000 ? $warnText : $mutedText;
+                $mediteLatencyClass = $mediteLatency !== null && $mediteLatency > 2000 ? $warnText : $mutedText;
             @endphp
             <div class="row g-3">
                 <div class="col-md-6">

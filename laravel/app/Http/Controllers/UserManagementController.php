@@ -42,7 +42,7 @@ class UserManagementController extends Controller
 
         return redirect()
             ->to(admin_path('users'))
-            ->with('status', 'Administrateur créé.');
+            ->with('status', 'Utilisateur créé.');
     }
 
     public function update(Request $request, User $user)

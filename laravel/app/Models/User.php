@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Comparison;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -70,6 +71,22 @@ class User extends Authenticatable
     public function permissions()
     {
         return $this->hasMany(Permission::class);
+    }
+
+    /**
+     * Relationship: Comparisons created by the user.
+     */
+    public function comparisons()
+    {
+        return $this->hasMany(Comparison::class, 'created_by');
+    }
+
+    /**
+     * Helper for non-admin users (researcher role).
+     */
+    public function isResearcher(): bool
+    {
+        return ! $this->is_admin;
     }
 
     /**

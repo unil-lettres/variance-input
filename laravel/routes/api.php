@@ -24,6 +24,7 @@ Route::post('/comparisons/{comparison}/page-markers/cancel', [ComparisonControll
 Route::post('/comparisons/{comparison}/page-markers/restore', [ComparisonController::class, 'restorePageMarkers']);
 
 Route::post('/versions/{version}/pagination/from-pb', [VersionController::class, 'createPaginationFromPb']);
+Route::post('/versions/{version}/pagination/merge-from-pb', [VersionController::class, 'mergePaginationFromPb']);
 Route::get('/comparisons/{comparison}/manifests/{role}', [ComparisonController::class, 'showManifest'])
     ->where('role', 'source|target')
     ->name('comparisons.manifest');

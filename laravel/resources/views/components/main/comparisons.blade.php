@@ -22,7 +22,7 @@
             Retrouvez ici toutes les comparaisons produites avec Medite pour l'œuvre sélectionnée. Vous pouvez suivre leur état, accéder aux résultats ou relancer la pagination si nécessaire.
         </p>
         <p class="text-muted small mb-3">
-            Pagination : deux workflows possibles. (1) Importer un fichier <code>_lignes</code> pour une version, puis « Injecter la pagination ». (2) Insérer des balises <code>&lt;pb&gt;</code> dans l’éditeur de version, lancer Medite, cliquer sur « Créer le sidecar (pb) » puis « Injecter la pagination ». Les boutons ci‑dessous centralisent toutes les opérations (génération, injection, restauration).
+            Pagination : préparez d’abord les données de pagination au niveau des versions, puis injectez‑les dans chaque comparaison. Deux options : (1) importer un fichier <code>_lignes</code> pour une version ; (2) ajouter des balises <code>&lt;pb&gt;</code> dans l’éditeur de version puis cliquer sur « Importer depuis l’éditeur » dans la section Versions. Si vous combinez <code>_lignes</code> + marqueurs manuels, importez d’abord <code>_lignes</code>, puis « Importer depuis l’éditeur ». Une fois les données prêtes, cliquez « Injecter la pagination » dans la comparaison concernée. Les données de pagination sont stockées par version et réutilisables, mais l’injection reste comparaison par comparaison. En cas de corrections, réimportez dans la version puis réinjectez la comparaison.
         </p>
         <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">
@@ -35,14 +35,11 @@
             <thead>
                 <tr>
                     <th>#</th>
+                    <th>Dossier</th>
                     <th>Source</th>
                     <th>Cible</th>
-                    <th>Dossier</th>
                     <th>Paramètres Medite</th>
-                    <th>Composants</th>
-                    <th>Publié</th>
                     <th>Publier</th>
-                    <th>Date</th>
                     <th>Résultats</th>
                 </tr>
             </thead>

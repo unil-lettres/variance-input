@@ -33,6 +33,7 @@ class PublishController extends Controller
         // 1. Récupération de la comparaison --------------------------------
         /** @var Comparison $comparison */
         $comparison = Comparison::findOrFail($request->input('comparison_id'));
+        $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
 
         // 2. Récupérer l’œuvre via la version source ------------------------
@@ -133,6 +134,7 @@ class PublishController extends Controller
                 'error' => 'Comparaison introuvable ou déjà supprimée.',
             ], 404);
         }
+        $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
 
         try {
@@ -637,6 +639,22 @@ class PublishController extends Controller
             || $sourceVersion?->work?->is_legacy
             || $targetVersion?->work?->is_legacy) {
             abort(403, 'Cette comparaison est en lecture seule.');
+        }
+    }
+
+    private function assertComparisonOwnership(Comparison $comparison): void
+    {
+        $user = auth()->user();
+        if (! $user || $user->is_admin) {
+            return;
+        }
+
+        if ($comparison->is_legacy && request()->isMethod('get')) {
+            return;
+        }
+
+        if ((int) $comparison->created_by !== (int) $user->id) {
+            abort(403, 'Accès limité aux comparaisons personnelles.');
         }
     }
 

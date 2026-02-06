@@ -28,13 +28,13 @@ class AuthorController extends Controller
 
     public function getWorksByAuthor($authorId)
     {
-        $works = Work::where('author_id', $authorId)->get(['id', 'title', 'short_title', 'folder']);
+        $works = Work::where('author_id', $authorId)->get(['id', 'title', 'short_title', 'folder', 'is_legacy']);
         return response()->json($works);
     }    
 
     public function index()
     {
-        $authors = Author::all(['id', 'name', 'folder']);
+        $authors = Author::all(['id', 'name', 'folder', 'is_legacy']);
         return response()->json($authors);
     }
 

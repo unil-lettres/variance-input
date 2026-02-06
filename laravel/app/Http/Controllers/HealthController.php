@@ -402,7 +402,7 @@ class HealthController extends Controller
         return [[
             'status' => $status,
             'timestamp' => $timestamp->toIso8601String(),
-            'timestamp_local' => $timestampLocal->format('m/d/Y H:i'),
+            'timestamp_local' => $timestampLocal->format('d/m/Y H:i'),
             'timezone' => $timezone,
             'checks' => $checks,
             'failed_window' => $failedWindowKey,

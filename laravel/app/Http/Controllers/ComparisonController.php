@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use ZipArchive;
 use App\Models\Comparison;
 use App\Models\Version;
+use App\Models\User;
 use App\Http\Controllers\PublishController;
 use App\Services\PageMarkerService;
 use App\Jobs\InjectComparisonPaginationJob;
@@ -30,6 +31,7 @@ class ComparisonController extends Controller
         $request->validate(['work_id' => 'required|exists:works,id']);
 
         $workId = (int) $request->input('work_id');
+        $light = $request->boolean('light', false);
 
         $versionIds = DB::table('versions')
             ->where('work_id', $workId)
@@ -50,107 +52,167 @@ class ComparisonController extends Controller
 
         $required = PublishController::COMPONENTS;
 
-        $comparisons = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author'])
-            ->whereIn('source_id', $versionIds)
-            ->orWhereIn('target_id', $versionIds)
+        $user = $request->user();
+
+        $comparisonsQuery = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author'])
+            ->where(function ($query) use ($versionIds) {
+                $query->whereIn('source_id', $versionIds)
+                    ->orWhereIn('target_id', $versionIds);
+            });
+
+        $this->scopeComparisonsToUser($comparisonsQuery, $user);
+
+        $comparisons = $comparisonsQuery
             ->orderByDesc('created_at')
             ->get()
-            ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder) {
-                // Do not inject default pagination markers anymore; rely on real facsimiles/_lignes only
-
-                $cmp->published = false;
-                $cmp->publish_missing = $required;
-                $cmp->publish_dest = null;
-                $publicationScope = $cmp->publication_scope ?? null;
-
-                if (!$destBase) {
+            ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder, $light) {
+                if ($light) {
+                    $publicationScope = $cmp->publication_scope ?? ($cmp->is_legacy ? 'prod' : null);
+                    $cmp->publication_scope = $publicationScope;
+                    $cmp->published = $publicationScope !== null;
+                    $cmp->publish_missing = null;
+                    $cmp->publish_dest = null;
+                    $cmp->publish_source = null;
+                    $cmp->components_ready = null;
+                    $cmp->xml_available = null;
+                    $cmp->medite_component_counts = null;
+                    $cmp->pagination = null;
+                    $cmp->manifests  = null;
+                    $cmp->comparison_progress = null;
+                    $cmp->details_loaded = false;
                     return $cmp;
                 }
 
-                $destDir   = "{$destBase}/{$cmp->folder}";
-                $fullDir   = storage_path("app/public/{$destDir}");
-                $publicDir = public_path($destDir);
-                $sourceDir = storage_path("app/public/{$destBase}/comparisons/{$cmp->id}");
-                if (!is_dir($sourceDir)) {
-                    $legacy = public_path("{$destBase}/comparisons/{$cmp->id}");
-                    if (is_dir($legacy)) {
-                        $sourceDir = $legacy;
-                    }
-                }
-
-                $legacyDir = null;
-                if ($authorFolder && $workFolder && $cmp->folder) {
-                    $candidate = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$cmp->folder}");
-                    if (is_dir($candidate)) {
-                        $legacyDir = $candidate;
-                    }
-                }
-
-                $publishedDir = is_dir($fullDir) ? $fullDir : (is_dir($publicDir) ? $publicDir : null);
-                if ($cmp->is_legacy && $legacyDir) {
-                    $publishedDir = $legacyDir;
-                }
-
-                $componentDir = is_dir($sourceDir) ? $sourceDir : $publishedDir;
-                if ($cmp->is_legacy && $legacyDir) {
-                    $componentDir = $legacyDir;
-                    $sourceDir = $legacyDir;
-                }
-
-                $missing = [];
-                if ($componentDir && is_dir($componentDir)) {
-                    foreach ($required as $file) {
-                        if (!is_file($componentDir . DIRECTORY_SEPARATOR . $file)) {
-                            $missing[] = $file;
-                        }
-                    }
-                } else {
-                    $missing = $required;
-                }
-
-                $alreadyPublished = 0;
-                if ($publishedDir) {
-                    foreach ($required as $file) {
-                        if (is_file($publishedDir . DIRECTORY_SEPARATOR . $file)) {
-                            $alreadyPublished++;
-                        }
-                    }
-                }
-
-                if (!$publicationScope && $cmp->is_legacy) {
-                    $publicationScope = 'prod';
-                }
-                if (!$publicationScope && $alreadyPublished === count($required)) {
-                    $publicationScope = 'prod';
-                }
-
-                $cmp->publication_scope = $publicationScope;
-                $cmp->published = $publicationScope !== null;
-                $cmp->publish_missing = $missing;
-                $cmp->publish_dest = $destDir;
-                $cmp->publish_source = is_dir($sourceDir) ? $sourceDir : null;
-                $cmp->components_ready = empty($missing);
-                if ($cmp->is_legacy) {
-                    $cmp->publish_source = null;
-                }
-                $cmp->xml_available = is_file(storage_path("app/public/uploads/comparisons/{$cmp->id}.xml"));
-
-                $cmp->medite_component_counts = $this->countMediteComponentEntries($componentDir);
-
-                Log::debug('Comparison components status', [
-                    'comparison_id' => $cmp->id,
-                    'source_dir'    => $sourceDir,
-                    'missing'       => $missing,
-                ]);
-
-                $cmp->pagination = $this->pageMarkerService->countMarkersForComparison($cmp);
-                $cmp->manifests  = $this->manifestStatusForComparison($cmp, $authorFolder, $workFolder);
-                $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id);
-
-                return $cmp;
+                return $this->enrichComparison($cmp, $destBase, $authorFolder, $workFolder, $required);
             });
 
         return response()->json($comparisons);
+    }
+
+    public function details(Comparison $comparison)
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $this->assertComparisonOwnership($comparison);
+
+        $work = $comparison->sourceVersion?->work ?? $comparison->targetVersion?->work;
+        $authorFolder = $work?->author?->folder;
+        $workFolder   = $work?->folder;
+        $destBase = ($authorFolder && $workFolder) ? "uploads/{$authorFolder}/{$workFolder}" : null;
+
+        $required = PublishController::COMPONENTS;
+
+        $comparison = $this->enrichComparison($comparison, $destBase, $authorFolder, $workFolder, $required);
+        $comparison->details_loaded = true;
+
+        return response()->json($comparison);
+    }
+
+    private function enrichComparison(
+        Comparison $cmp,
+        ?string $destBase,
+        ?string $authorFolder,
+        ?string $workFolder,
+        array $required
+    ): Comparison {
+        // Do not inject default pagination markers anymore; rely on real facsimiles/_lignes only
+
+        $cmp->published = false;
+        $cmp->publish_missing = $required;
+        $cmp->publish_dest = null;
+        $publicationScope = $cmp->publication_scope ?? null;
+
+        if (!$destBase) {
+            if (!$publicationScope && $cmp->is_legacy) {
+                $publicationScope = 'prod';
+            }
+            $cmp->publication_scope = $publicationScope;
+            $cmp->published = $publicationScope !== null;
+            $cmp->details_loaded = true;
+            return $cmp;
+        }
+
+        $destDir   = "{$destBase}/{$cmp->folder}";
+        $fullDir   = storage_path("app/public/{$destDir}");
+        $publicDir = public_path($destDir);
+        $sourceDir = storage_path("app/public/{$destBase}/comparisons/{$cmp->id}");
+        if (!is_dir($sourceDir)) {
+            $legacy = public_path("{$destBase}/comparisons/{$cmp->id}");
+            if (is_dir($legacy)) {
+                $sourceDir = $legacy;
+            }
+        }
+
+        $legacyDir = null;
+        if ($authorFolder && $workFolder && $cmp->folder) {
+            $candidate = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$cmp->folder}");
+            if (is_dir($candidate)) {
+                $legacyDir = $candidate;
+            }
+        }
+
+        $publishedDir = is_dir($fullDir) ? $fullDir : (is_dir($publicDir) ? $publicDir : null);
+        if ($cmp->is_legacy && $legacyDir) {
+            $publishedDir = $legacyDir;
+        }
+
+        $componentDir = is_dir($sourceDir) ? $sourceDir : $publishedDir;
+        if ($cmp->is_legacy && $legacyDir) {
+            $componentDir = $legacyDir;
+            $sourceDir = $legacyDir;
+        }
+
+        $missing = [];
+        if ($componentDir && is_dir($componentDir)) {
+            foreach ($required as $file) {
+                if (!is_file($componentDir . DIRECTORY_SEPARATOR . $file)) {
+                    $missing[] = $file;
+                }
+            }
+        } else {
+            $missing = $required;
+        }
+
+        $alreadyPublished = 0;
+        if ($publishedDir) {
+            foreach ($required as $file) {
+                if (is_file($publishedDir . DIRECTORY_SEPARATOR . $file)) {
+                    $alreadyPublished++;
+                }
+            }
+        }
+
+        if (!$publicationScope && $cmp->is_legacy) {
+            $publicationScope = 'prod';
+        }
+        if (!$publicationScope && $alreadyPublished === count($required)) {
+            $publicationScope = 'prod';
+        }
+
+        $cmp->publication_scope = $publicationScope;
+        $cmp->published = $publicationScope !== null;
+        $cmp->publish_missing = $missing;
+        $cmp->publish_dest = $destDir;
+        $cmp->publish_source = is_dir($sourceDir) ? $sourceDir : null;
+        $cmp->components_ready = empty($missing);
+        if ($cmp->is_legacy) {
+            $cmp->publish_source = null;
+        }
+        $cmp->xml_available = is_file(storage_path("app/public/uploads/comparisons/{$cmp->id}.xml"));
+
+        $cmp->medite_component_counts = $this->countMediteComponentEntries($componentDir);
+
+        Log::debug('Comparison components status', [
+            'comparison_id' => $cmp->id,
+            'source_dir'    => $sourceDir,
+            'missing'       => $missing,
+        ]);
+
+        $cmp->pagination = $this->pageMarkerService->countMarkersForComparison($cmp);
+        $cmp->manifests  = $this->manifestStatusForComparison($cmp, $authorFolder, $workFolder);
+        $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id);
+        $cmp->details_loaded = true;
+
+        return $cmp;
     }
 
     private function countMediteComponentEntries(?string $componentDir): array
@@ -234,6 +296,7 @@ class ComparisonController extends Controller
             'sourceVersion.work.author',
             'targetVersion.work.author',
         ])->findOrFail($id);
+        $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
 
         $destInfo = $this->resolvePublicationPaths($comparison);
@@ -293,6 +356,7 @@ class ComparisonController extends Controller
     public function exportPublishedLegacy(Comparison $comparison)
     {
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $this->assertComparisonOwnership($comparison);
 
         if (function_exists('set_time_limit')) {
             @set_time_limit(0);
@@ -352,6 +416,7 @@ class ComparisonController extends Controller
 
     public function applyPageMarkers(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
         $validated = $request->validate([
             'clear_existing'   => 'sometimes|boolean',
@@ -431,6 +496,7 @@ class ComparisonController extends Controller
      */
     public function buildPaginationFromXhtml(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
         $validated = $request->validate([
             'role' => 'nullable|in:source,target',
@@ -459,6 +525,7 @@ class ComparisonController extends Controller
 
     public function pageMarkersProgress(Comparison $comparison)
     {
+        $this->assertComparisonOwnership($comparison);
         $snapshot = $this->pageMarkerService->getComparisonProgressSnapshot($comparison->id);
         if (!$snapshot) {
             $snapshot = [
@@ -474,6 +541,7 @@ class ComparisonController extends Controller
 
     public function restorePageMarkers(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
@@ -510,6 +578,7 @@ class ComparisonController extends Controller
 
     public function cancelPageMarkers(Request $request, Comparison $comparison)
     {
+        $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
         $comparison->loadMissing('sourceVersion', 'targetVersion');
 
@@ -883,8 +952,35 @@ class ComparisonController extends Controller
         }
     }
 
+    private function scopeComparisonsToUser($query, ?User $user): void
+    {
+        if ($user && ! $user->is_admin) {
+            $query->where(function ($inner) use ($user) {
+                $inner->where('created_by', $user->id)
+                    ->orWhere('is_legacy', true);
+            });
+        }
+    }
+
+    private function assertComparisonOwnership(Comparison $comparison): void
+    {
+        $user = auth()->user();
+        if (! $user || $user->is_admin) {
+            return;
+        }
+
+        if ($comparison->is_legacy && request()->isMethod('get')) {
+            return;
+        }
+
+        if ((int) $comparison->created_by !== (int) $user->id) {
+            abort(403, 'Accès limité aux comparaisons personnelles.');
+        }
+    }
+
     public function showManifest(Comparison $comparison, string $role)
     {
+        $this->assertComparisonOwnership($comparison);
         $role = strtolower($role);
         if (!in_array($role, ['source', 'target'], true)) {
             abort(404);

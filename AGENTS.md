@@ -13,7 +13,7 @@ This file summarizes how the Variance stack is organized, where data lives, and 
 See `descr/architecture.md` for full topology.
 
 ## Primary entry points
-- Admin UI: `http://localhost:8080/admin`
+- Admin UI: `http://localhost:8080/admin` (default; configurable via `ADMIN_BASE_PATH`)
 - Legacy public: `http://localhost:8080/` (prod) and `/dev` (draft)
 - Medite debugging: `http://localhost:5000/`
 
@@ -28,6 +28,8 @@ See `descr/architecture.md` for full topology.
 - **Legacy mirror**: `variance/uploads/...` (public PHP reads here)
 - **Facsimiles**: `storage/app/public/uploads/{author}/{work}/{version}`
 - **Manifests**: `images_{role}_{author--work--comparison}.json` inside the facsimile folder
+- **Work cover images**: `public/uploads_images/{hash}.{ext}` (mirrors to `variance/uploads_images/`)
+- **Work PDFs**: `public/uploads/pdf/{work_id}.pdf` (mirrors to `variance/uploads/pdf/`)
 
 Reference: `descr/workflow.md`, `descr/facsimiles.md`.
 
@@ -35,19 +37,19 @@ Reference: `descr/workflow.md`, `descr/facsimiles.md`.
 - `page-markers`: `ApplyLignesJob`, `InjectComparisonPaginationJob`
 - `facsimiles`: `ProcessFacsimileImage`
 
-Worker container runs:
-```
-php artisan queue:work --queue=facsimiles,page-markers
-```
+Worker container runs `laravel/scripts/run-queue-workers.sh` which spawns
+multiple `queue:work` processes for `facsimiles,page-markers`. A heartbeat
+is written to `storage/app/private/queue_workers.json`.
 See `descr/queues_jobs.md`.
 
 ## Publication model (prod/dev)
 - Comparisons are **unpublished by default**.
 - Admin publishes with a scope (`prod` or `dev`).
 - Publishing:
-  - Copies comparison outputs to public path and mirrors to legacy tree.
+  - `prod`: copies comparison outputs to `storage/app/public/uploads/{author}/{work}/{comparison_folder}` and mirrors to legacy.
+  - `dev`: keeps outputs in `storage/app/public/uploads/{author}/{work}/comparisons/{id}` and mirrors to legacy.
   - Ensures facsimiles + manifests exist.
-  - Optional default marker insertion if no pagination markers.
+  - Optional default marker insertion when requested via publish API.
 
 ## Medite parameters (admin)
 - Input parameters: **Pivot**, **Ratio**, **Seuil**, **Sensibilité casse**, **Séparateurs**.
@@ -55,11 +57,24 @@ See `descr/queues_jobs.md`.
 
 ## Admin API (partial)
 See `descr/api_endpoints.md`. Notables:
-- `/comparisons/by-work?work_id={id}`
+- `/comparisons/by-work?work_id={id}&light=1`
+- `/comparisons/{id}/details`
 - `/api/comparisons/publication-counts`
 - `/api/run_medite`
 - `/api/comparisons/{id}/page-markers`
+- `/api/comparisons/{id}/pagination/from-xhtml`
+- `/api/versions/{id}/pagination/from-pb`
 - `/api/publish_xhtml`
+
+## Access control (current)
+- Users are `is_admin` or researcher (non-admin).
+- Non-admins only manage their own comparisons (`created_by`); legacy comparisons remain visible but read-only.
+- Work/media edits are blocked for legacy data and require Work policy permission.
+- Password changes are available at `/account/password`.
+
+## Editors
+- Version XML editor: `/version/{version}/editor` (includes facsimile ignore toggles).
+- Comparison XML editor: `/comparison/{comparison}/editor` (editable only when unpublished + manifest JSON exists).
 
 ## Deploy notes
 See `descr/deployment_notes.md` for TLS/proxy, volumes, legacy import, and VM recovery steps.

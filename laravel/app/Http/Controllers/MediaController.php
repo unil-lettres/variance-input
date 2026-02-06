@@ -32,10 +32,8 @@ class MediaController extends Controller
      */
     public function store(Request $request, Work $work)
     {
-        if ($work->is_legacy) {
-            return response()->json([
-                'error' => 'Les œuvres legacy sont en lecture seule.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
+            return $forbidden;
         }
 
         $shortTitle = $request->query('short_title', $work->short_title);
@@ -95,10 +93,8 @@ class MediaController extends Controller
      */
     public function destroy(Work $work, string $type)
     {
-        if ($work->is_legacy) {
-            return response()->json([
-                'error' => 'Les œuvres legacy sont en lecture seule.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
+            return $forbidden;
         }
 
         if ($type === 'vignette' && $work->image_url) {
@@ -116,6 +112,23 @@ class MediaController extends Controller
         $work->save();
         return response()->json(['success' => true]);
 }
+
+    private function forbidIfCannotEdit(Work $work)
+    {
+        if ($work->is_legacy) {
+            return response()->json([
+                'error' => 'Les œuvres legacy sont en lecture seule.',
+            ], 403);
+        }
+
+        if (!auth()->check() || !auth()->user()->can('edit', $work)) {
+            return response()->json([
+                'error' => 'Vous n’avez pas la permission de modifier cette œuvre.',
+            ], 403);
+        }
+
+        return null;
+    }
 
     private function mirrorToLegacy(string $fileName): void
     {

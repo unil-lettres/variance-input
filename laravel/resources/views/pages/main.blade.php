@@ -13,7 +13,9 @@
      data-initial-author-id="{{ $initialSelection['authorId'] ?? '' }}"
      data-initial-author-slug="{{ $initialSelection['authorSlug'] ?? '' }}"
      data-initial-work-id="{{ $initialSelection['workId'] ?? '' }}"
-     data-initial-work-slug="{{ $initialSelection['workSlug'] ?? '' }}">
+     data-initial-work-slug="{{ $initialSelection['workSlug'] ?? '' }}"
+     data-user-id="{{ Auth::id() ?? '' }}"
+     data-user-is-admin="{{ (Auth::check() && Auth::user()->is_admin) ? '1' : '0' }}">
 
     {{-- Sélecteur d’œuvre --}}
     <div id="zone-0">
@@ -57,18 +59,11 @@
 
 </div>
 
-<div class="admin-banner container py-2 text-center small text-white shadow-sm mt-4 admin-bottom-banner">
-    Variance-Input &copy; UNIL/SIER 2026 · Laravel {{ app()->version() }} · sier@unil.ch
-</div>
-
 @push('styles')
 <style>
     .admin-main-stack {
         display: grid;
         row-gap: 24px;
-    }
-    .admin-main-page .admin-bottom-banner {
-        margin-top: 1.5rem;
     }
     .admin-main-stack > [id^="zone-"] {
         margin: 0;
@@ -79,16 +74,84 @@
         height: 2rem;
         min-height: 2rem;
     }
+    #admin-main .card-header {
+        background: linear-gradient(180deg, #f1f0ec 0%, #e6e3de 100%);
+        color: #3f3c36;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+        letter-spacing: 0.02em;
+    }
+    #admin-main .card-header .collapse-chevron::before {
+        color: rgba(63, 60, 54, 0.75);
+    }
     .blade-disabled {
         opacity: 0.55;
         filter: grayscale(0.6);
         pointer-events: none;
+    }
+    .blade-loading {
+        position: relative;
+    }
+    .blade-loading .card-body {
+        opacity: 0.45;
+        filter: grayscale(0.4);
+    }
+    .blade-loading .blade-loading-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        pointer-events: none;
+        background: rgba(255, 255, 255, 0.35);
+        z-index: 2;
+    }
+    .blade-loading .blade-loading-overlay .spinner-border {
+        width: 1.1rem;
+        height: 1.1rem;
+        color: #6c757d;
+    }
+    .blade-loading .blade-loading-overlay .loading-label {
+        font-size: 0.85rem;
+        color: #6c757d;
     }
 </style>
 @endpush
 
 @push('scripts')
 <script>
+const BLADE_COLLAPSE_IDS = [
+    'descriptionCollapse',
+    'mediaCollapse',
+    'versionsCollapse',
+    'comparisonsCollapse',
+    'facsimilesCollapse',
+    'mediteCollapse',
+];
+
+window.setBladeLoading = (collapseId, isLoading) => {
+    const el = document.getElementById(collapseId);
+    const card = el ? el.closest('.card') : null;
+    if (!card) return;
+    card.classList.toggle('blade-loading', !!isLoading);
+    let overlay = card.querySelector('.blade-loading-overlay');
+    if (isLoading) {
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'blade-loading-overlay';
+            overlay.innerHTML = '<div class="spinner-border spinner-border-sm" role="status" aria-label="Chargement"></div><span class="loading-label">Chargement...</span>';
+            card.appendChild(overlay);
+        }
+    } else if (overlay) {
+        overlay.remove();
+    }
+};
+
+window.setAllBladesLoading = (isLoading) => {
+    BLADE_COLLAPSE_IDS.forEach((id) => window.setBladeLoading(id, isLoading));
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // Persist collapse state per work so deep links reopen cards as last seen
     const PERSISTED_COLLAPSES = [
@@ -104,6 +167,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const collapseInstances = new Map();
     const adminMain = document.getElementById('admin-main');
     let currentWorkId = (adminMain?.dataset?.initialWorkId || '').trim() || null;
+    if (currentWorkId) {
+        window.setAllBladesLoading(true);
+        window.setBladeLoading('facsimilesCollapse', false);
+    }
 
     const storageKey = (workId) => `${STORAGE_PREFIX}${workId ?? DEFAULT_WORK_KEY}`;
 
@@ -135,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return collapseInstances.get(id);
     };
+
 
     const applyStateForWork = (workId) => {
         const state = readState(workId);
@@ -181,6 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('workSelected', (event) => {
         currentWorkId = (event?.detail?.workId ?? '').toString().trim() || null;
         toggleBladesDisabled(!currentWorkId);
+        if (currentWorkId) {
+            window.setAllBladesLoading(true);
+            window.setBladeLoading('facsimilesCollapse', false);
+        } else {
+            window.setAllBladesLoading(false);
+        }
         applyStateForWork(currentWorkId);
     });
 
