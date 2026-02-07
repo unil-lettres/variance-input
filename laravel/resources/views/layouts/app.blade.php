@@ -153,11 +153,26 @@
         .admin-brand-text {
             font-family: var(--font-serif);
             font-size: 1.2rem;
-            font-weight: 500;
-            letter-spacing: 0.08em;
+            font-weight: 600;
+            letter-spacing: 0.02em;
             color: #ffffff;
             line-height: 1;
             display: inline-block;
+            white-space: nowrap;
+        }
+        .admin-brand-role {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 0.55rem;
+            padding: 0.18rem 0.55rem 0.2rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.14);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+            font-family: var(--font-sans);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
         .admin-user-toggle:focus {
             box-shadow: none;
@@ -293,7 +308,10 @@
             <div class="container admin-page-shell d-flex justify-content-between align-items-center">
                 <div class="admin-brand">
                     <a href="{{ admin_path() }}">
-                        <span class="admin-brand-text">variance/admin</span>
+                        <span class="admin-brand-text">
+                            <span class="admin-brand-name">Variance</span>
+                            <span class="admin-brand-role">Admin</span>
+                        </span>
                     </a>
                 </div>
 
