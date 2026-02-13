@@ -53,6 +53,9 @@ The project is split into:
      running commit SHA.
    - If the admin is mounted under a sub-path (for example `/admin`), set
      `ADMIN_BASE_PATH=admin` so generated URLs include the prefix.
+   - `MEDITE_STATUS_URL` controls the “Tâches Medite” menu link. Default:
+     `/medite/` (proxied through `variance-proxy`), so it works on both local
+     and staging hosts without hardcoded `localhost`.
    - The `laravel-queue` service runs `laravel/scripts/run-queue-workers.sh`
      and spawns multiple workers (`QUEUE_WORKERS`, default 5) for
      `facsimiles` and `page-markers`.

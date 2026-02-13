@@ -58,7 +58,7 @@
     @php
         $adminBannerColor = '#6f6d6a';
         $adminBannerStyle = 'background-color: ' . $adminBannerColor . ';';
-        $mediteStatusUrl = env('MEDITE_STATUS_URL', 'http://localhost:5000/');
+        $mediteStatusUrl = env('MEDITE_STATUS_URL', '/medite/');
     @endphp
     <style>
         :root {
@@ -459,7 +459,7 @@
     </main>
     <footer class="mt-4">
         <div class="admin-banner py-2 text-white shadow-sm" style="{{ $adminBannerStyle }}">
-            <div class="container admin-page-shell text-end small">
+            <div class="container admin-page-shell text-center small">
                 © 2026 Variance — Tous droits réservés
             </div>
         </div>
