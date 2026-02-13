@@ -9,11 +9,7 @@
             <span class="collapse-chevron" aria-hidden="true"></span>
             <span>Comparaisons</span>
         </div>
-        <div class="d-flex align-items-center gap-1">
-            <span id="comparisons-count-published" class="badge text-bg-success comparisons-count-pill">0</span>
-            <span id="comparisons-count-sep" class="text-muted">/</span>
-            <span id="comparisons-count-total" class="badge text-bg-secondary comparisons-count-pill">0</span>
-        </div>
+        <span id="comparisons-status-check" class="admin-card-check" aria-label="Statut comparaisons">&#10003;</span>
     </div>
 
     <div id="comparisonsCollapse" class="collapse show">
@@ -85,10 +81,6 @@
   }
   .comparisons-toggle[aria-expanded="false"] .collapse-chevron::before {
     transform: rotate(-90deg);
-  }
-  .comparisons-count-pill {
-    min-width: 32px;
-    text-align: center;
   }
   #comparisonsCollapse,
   #comparisonsCollapse *,

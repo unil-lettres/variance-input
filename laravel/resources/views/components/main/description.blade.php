@@ -13,7 +13,7 @@
             <span class="collapse-chevron" aria-hidden="true"></span>
             <span>Description</span>
         </div>
-        <span id="description-status-pill" class="badge text-bg-secondary media-status-pill"></span>
+        <span id="description-status-check" class="admin-card-check" aria-label="Statut description">&#10003;</span>
     </div>
     <div id="descriptionCollapse" class="collapse show">
     <div class="card-body">
@@ -69,7 +69,7 @@ let saveBtn = null;
 let cancelBtn = null;
 let statusEl = null;
 let dirtyIndicatorVisible = false;
-let statusPill = null;
+let statusCheck = null;
 const setDescriptionLoading = (state) => {
     if (typeof window.setBladeLoading === 'function') {
         window.setBladeLoading('descriptionCollapse', state);
@@ -82,8 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
     saveBtn   = document.getElementById('save-button');
     cancelBtn = document.getElementById('cancel-button');
     statusEl  = document.getElementById('desc-status');
-    statusPill = document.getElementById('description-status-pill');
-    updateStatusPill(false, true);
+    statusCheck = document.getElementById('description-status-check');
+    updateStatusCheck(false, true);
 
     ClassicEditor
         .create(document.querySelector('#desc-editor'), {
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ckeditorInstance.enableReadOnlyMode('initialLoad');
             exitEditMode();
             toggleDirtyIndicator(false);
-            updateStatusPill(false, true);
+            updateStatusCheck(false, true);
             setStatus('');
             setDescriptionLoading(false);
             return;
@@ -203,7 +203,7 @@ function saveDescription() {
     .then(() => {
         lastSavedContent = updatedDesc;
         toggleDirtyIndicator(false);
-        updateStatusPill(!!lastSavedContent);
+        updateStatusCheck(!!lastSavedContent);
         setStatus('Modifications enregistrées', 'success', true);
         exitEditMode();
     })
@@ -217,7 +217,7 @@ function cancelEdit() {
     if (!ckeditorInstance) return;
     ckeditorInstance.setData(lastSavedContent || '');
     toggleDirtyIndicator(false);
-    updateStatusPill(!!lastSavedContent);
+    updateStatusCheck(!!lastSavedContent);
     setStatus('Modifications annulées', 'muted', true);
     exitEditMode();
 }
@@ -234,7 +234,7 @@ function fetchDescription(workId) {
             ckeditorInstance.setData(lastSavedContent);
             exitEditMode();
             toggleDirtyIndicator(false);
-            updateStatusPill(!!lastSavedContent);
+            updateStatusCheck(!!lastSavedContent);
             setStatus('', 'muted');
         })
         .catch(err => {
@@ -295,30 +295,30 @@ function toggleDirtyIndicator(hasChanges) {
 }
 
 let tootltipTitle = "";
-new bootstrap.Tooltip(document.getElementById('description-status-pill'), {
-    title: () => tootltipTitle,
-    trigger: 'hover',
-    delay: { "show": 500, "hide": 0 }
-});
+if (document.getElementById('description-status-check')) {
+    new bootstrap.Tooltip(document.getElementById('description-status-check'), {
+        title: () => tootltipTitle,
+        trigger: 'hover',
+        delay: { "show": 500, "hide": 0 }
+    });
+}
 
-function updateStatusPill(hasContent, hide = false) {
-    if (!statusPill) return;
+function updateStatusCheck(hasContent, hide = false) {
+    if (!statusCheck) return;
 
-    statusPill.className = 'd-block text-uppercase badge media-status-pill';
+    statusCheck.className = 'admin-card-check';
+    statusCheck.innerHTML = '&#10003;';
 
     if (hide) {
-        statusPill.classList.add('d-none');
-        statusPill.textContent = '';
+        statusCheck.classList.add('d-none');
+        tootltipTitle = '';
         return;
     }
-    statusPill.classList.add('d-block');
+
     if (hasContent) {
-        statusPill.classList.add('text-bg-success');
-        statusPill.innerHTML = `<i class="bi bi-check-circle"></i> Description`;
+        statusCheck.classList.add('admin-card-check--done');
         tootltipTitle = 'La description est complétée';
     } else {
-        statusPill.classList.add('text-bg-secondary');
-        statusPill.innerHTML = `<i class="bi bi-x-circle"></i> Description`;
         tootltipTitle = 'La description est vide';
     }
 }

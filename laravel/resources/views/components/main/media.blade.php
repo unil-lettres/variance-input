@@ -12,9 +12,9 @@
       <span class="collapse-chevron" aria-hidden="true"></span>
       <span>Media</span>
     </div>
-    <div class="d-flex align-items-center gap-2" id="media-status-pills">
-      <span id="media-status-vignette" class="badge bg-danger-subtle text-danger media-status-pill"></span>
-      <span id="media-status-pdf" class="badge bg-danger-subtle text-danger media-status-pill"></span>
+    <div class="d-flex align-items-center gap-2 admin-card-checks" id="media-status-pills">
+      <span id="media-status-vignette" class="admin-card-check" aria-label="Statut vignette">&#10003;</span>
+      <span id="media-status-pdf" class="admin-card-check" aria-label="Statut notice">&#10003;</span>
     </div>
   </div>
   <div id="mediaCollapse" class="collapse show">
@@ -144,19 +144,19 @@
     }
   };
 
-  const statusLabels = { vignette: 'VIGNETTE', pdf: 'NOTICE' };
-  const statusPills = {
+  const statusLabels = { vignette: 'Vignette', pdf: 'Notice' };
+  const statusChecks = {
     vignette: document.getElementById('media-status-vignette'),
     pdf: document.getElementById('media-status-pdf')
   };
   const statusTooltip = { vignette: "", pdf: "" };
 
-  new bootstrap.Tooltip(statusPills.vignette, {
+  new bootstrap.Tooltip(statusChecks.vignette, {
     title: () => statusTooltip.vignette,
     trigger: 'hover',
     delay: { "show": 500, "hide": 0 }
   });
-  new bootstrap.Tooltip(statusPills.pdf, {
+  new bootstrap.Tooltip(statusChecks.pdf, {
     title: () => statusTooltip.pdf,
     trigger: 'hover',
     delay: { "show": 500, "hide": 0 }
@@ -166,27 +166,24 @@
   updateMediaStatus('pdf', false, true);
 
   function updateMediaStatus(type, hasFile, hide = false) {
-    const pill = statusPills[type];
-    if (!pill) return;
+    const check = statusChecks[type];
+    if (!check) return;
 
-    pill.className = 'd-block badge media-status-pill';
-    const label = statusLabels[type] || type.toUpperCase();
+    const label = statusLabels[type] || type;
+    check.className = 'admin-card-check';
+    check.innerHTML = '&#10003;';
 
     if (hide) {
-      pill.classList.add('d-none');
-      pill.textContent = '';
+      check.classList.add('d-none');
+      statusTooltip[type] = '';
       return;
     }
 
-    pill.classList.add('d-block');
     if (hasFile) {
-      pill.classList.add('text-bg-success');
-      pill.innerHTML = `<i class="bi bi-check-circle"></i> ${label}`;
-      statusTooltip[type] = 'Le média a été ajouté';
+      check.classList.add('admin-card-check--done');
+      statusTooltip[type] = `${label} : ajouté`;
     } else {
-      pill.classList.add('text-bg-secondary');
-      pill.innerHTML = `<i class="bi bi-x-circle"></i> ${label}`;
-      statusTooltip[type] = 'Le média n\'a pas été ajouté';
+      statusTooltip[type] = `${label} : manquant`;
     }
   }
 

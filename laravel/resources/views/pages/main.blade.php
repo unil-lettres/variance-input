@@ -1,12 +1,14 @@
 @extends('layouts.app')
 
 @section('title', 'Home')
-@section('body-class', 'admin-loading admin-main-page')
-
-@section('content')
 @php
     $initialSelection = $initialSelection ?? null;
+    $hasInitialWork = !empty($initialSelection['workId'] ?? null);
 @endphp
+@section('body-class', ($hasInitialWork ? 'admin-loading ' : '') . 'admin-main-page')
+
+@section('content')
+@php $initialSelection = $initialSelection ?? null; @endphp
 
 <div id="admin-main"
      class="container admin-main-stack"
@@ -83,6 +85,22 @@
     }
     #admin-main .card-header .collapse-chevron::before {
         color: rgba(63, 60, 54, 0.75);
+    }
+    #admin-main .admin-card-checks {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    #admin-main .admin-card-check {
+        min-width: 1.1rem;
+        text-align: center;
+        font-size: 1.05rem;
+        line-height: 1;
+        font-weight: 700;
+        color: #1b1b1b;
+    }
+    #admin-main .admin-card-check--done {
+        color: #198754;
     }
     .blade-disabled {
         opacity: 0.55;

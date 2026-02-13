@@ -10,7 +10,7 @@
             <span class="collapse-chevron" aria-hidden="true"></span>
             <span>Versions</span>
         </div>
-        <span id="versions-count-pill" class="badge text-bg-danger media-status-pill">0</span>
+        <span id="versions-status-check" class="admin-card-check" aria-label="Statut versions">&#10003;</span>
     </div>
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
@@ -800,6 +800,20 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
         state.lignesStatus.className = cssClass;
     }
 
+    if (state.lignesCountsWrap && state.lignesCountPill && state.editorCountPill) {
+        const counts = paginationInfo?.details?.counts ?? null;
+        const lignesCount = Number(counts?.lignes ?? NaN);
+        const editorCount = Number(counts?.editor ?? NaN);
+        const canShowCounts = !(status && ['queued', 'running', 'failed', 'cancelled'].includes(String(status)));
+        if (canShowCounts && Number.isFinite(lignesCount) && Number.isFinite(editorCount)) {
+            state.lignesCountsWrap.hidden = false;
+            state.lignesCountPill.textContent = `_lignes: ${lignesCount.toLocaleString('fr-FR')}`;
+            state.editorCountPill.textContent = `éditeur: ${editorCount.toLocaleString('fr-FR')}`;
+        } else {
+            state.lignesCountsWrap.hidden = true;
+        }
+    }
+
     if (state.lignesCancelBtn) {
         if (status && ['queued', 'running'].includes(status)) {
             state.lignesCancelBtn.hidden = false;
@@ -1406,21 +1420,23 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 /*********************  API HELPERS  *********************/
 function updateVersionsCount(count) {
-    const pill = document.getElementById('versions-count-pill');
-    if (!pill) return;
+    const check = document.getElementById('versions-status-check');
+    if (!check) return;
 
-    pill.className = 'badge text-uppercase media-status-pill d-block align-items-center';
     if (count === null || count === undefined) {
-        pill.classList.add('d-none');
+        check.className = 'admin-card-check d-none';
+        check.title = '';
         return;
     }
 
-    pill.classList.add(count > 0 ? 'text-bg-success' : 'text-bg-danger');
-    pill.classList.add('d-block');
-
     const numericCount = Number(count);
     const label = Number.isFinite(numericCount) ? numericCount : 0;
-    pill.textContent = label;
+    check.className = 'admin-card-check';
+    check.innerHTML = '&#10003;';
+    if (label > 0) {
+        check.classList.add('admin-card-check--done');
+    }
+    check.title = `Versions : ${label}`;
 }
 
 function openFacsimileUploadModal(version) {
@@ -1891,6 +1907,8 @@ async function fetchVersions(workId, force = false){
         versions.forEach(v=>{
             const tr = document.createElement('tr');
             const shortFolder = (v.folder || '').split('/').pop();
+            // Used for pagination actions (merge from <pb> markers), but we no longer display the pb badge in the name column.
+            const pbCount = Number(v.pb_markers ?? 0);
 
             const tdId = document.createElement('td');
             tdId.textContent = v.id;
@@ -1908,13 +1926,6 @@ async function fetchVersions(workId, force = false){
             editTrigger.title = 'Modifier la désignation';
             editTrigger.addEventListener('click', () => openEditModal(v));
             tdName.appendChild(editTrigger);
-
-            const pbCount = Number(v.pb_markers ?? 0);
-            const pbBadge = document.createElement('span');
-            pbBadge.className = 'badge rounded-pill bg-light text-muted border ms-2 align-middle';
-            pbBadge.textContent = `pb: ${pbCount}`;
-            pbBadge.title = 'Balises <pb> présentes dans la version';
-            tdName.appendChild(pbBadge);
 
             tr.appendChild(tdName);
 
@@ -2102,6 +2113,17 @@ async function fetchVersions(workId, force = false){
             lignesWrap.appendChild(lignesActions);
             tdCompletion.appendChild(lignesWrap);
 
+            const lignesCountsWrap = document.createElement('div');
+            lignesCountsWrap.className = 'd-flex align-items-center gap-2 flex-wrap justify-content-center mt-1';
+            lignesCountsWrap.hidden = true;
+            const lignesCountPill = document.createElement('span');
+            lignesCountPill.className = 'badge rounded-pill bg-light text-muted border';
+            const editorCountPill = document.createElement('span');
+            editorCountPill.className = 'badge rounded-pill bg-light text-muted border';
+            lignesCountsWrap.appendChild(lignesCountPill);
+            lignesCountsWrap.appendChild(editorCountPill);
+            lignesWrap.appendChild(lignesCountsWrap);
+
             const lignesStatus = document.createElement('div');
             lignesStatus.className = 'small text-muted d-flex align-items-center gap-2 flex-wrap justify-content-center';
             const lignesSpinner = document.createElement('span');
@@ -2185,6 +2207,9 @@ async function fetchVersions(workId, force = false){
                 lignesStatus,
                 lignesStatusText,
                 lignesSpinner,
+                lignesCountsWrap,
+                lignesCountPill,
+                editorCountPill,
                 lignesProgressWrap,
                 lignesProgressBar,
                 lignesUploadBtn,

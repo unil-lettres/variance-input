@@ -2,9 +2,7 @@ function initComparisonsTable() {
   const tbody          = document.querySelector('#comparisons-table tbody');
   const loading        = document.getElementById('comparisons-loading');
   const noComparisons  = document.getElementById('no-comparisons');
-  const countPublished = document.getElementById('comparisons-count-published');
-  const countTotal     = document.getElementById('comparisons-count-total');
-  const countSeparator = document.getElementById('comparisons-count-sep');
+  const statusCheck    = document.getElementById('comparisons-status-check');
   const setComparisonsLoading = (state) => {
     if (typeof window.setBladeLoading === 'function') {
       window.setBladeLoading('comparisonsCollapse', state);
@@ -110,6 +108,16 @@ function initComparisonsTable() {
 
   let paginationWarningModal = null;
   let paginationWarningResolve = null;
+  let comparisonsStatusTooltip = '';
+
+  if (statusCheck && window.bootstrap && bootstrap.Tooltip) {
+    new bootstrap.Tooltip(statusCheck, {
+      title: () => comparisonsStatusTooltip,
+      trigger: 'hover',
+      delay: { show: 500, hide: 0 },
+      placement: 'left',
+    });
+  }
 
   const getPaginationWarningChoice = () => {
     const modalEl = document.getElementById('pagination-warning-modal');
@@ -145,23 +153,26 @@ function initComparisonsTable() {
   };
 
   function updateComparisonCounts(published, total) {
-    if (!countPublished || !countTotal) return;
     const pub = normalizeCount(published);
     const tot = normalizeCount(total);
     const hide = tot === 0 && pub === 0 && (!isValidWorkId(currentWorkId) || !isValidId(currentAuthorId));
     if (hide) {
-      countPublished.classList.add('d-none');
-      countTotal.classList.add('d-none');
-      if (countSeparator) countSeparator.classList.add('d-none');
+      if (statusCheck) {
+        statusCheck.className = 'admin-card-check d-none';
+        statusCheck.title = '';
+      }
+      comparisonsStatusTooltip = '';
       return;
     }
-    countPublished.textContent = pub;
-    countTotal.textContent = tot;
-    if (countSeparator) {
-      countSeparator.classList.remove('d-none');
+    if (!statusCheck) return;
+
+    statusCheck.className = 'admin-card-check';
+    statusCheck.innerHTML = '&#10003;';
+    if (tot > 0) {
+      statusCheck.classList.add('admin-card-check--done');
     }
-    countPublished.classList.remove('d-none');
-    countTotal.classList.remove('d-none');
+    comparisonsStatusTooltip = `Comparaisons : ${tot}`;
+    statusCheck.title = comparisonsStatusTooltip;
   }
 
   function refreshComparisonCounts() {
