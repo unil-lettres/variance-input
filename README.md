@@ -48,6 +48,9 @@ The project is split into:
 2. **Environment**
    - Copy `laravel/example.env` to `laravel/.env` and tweak DB/queue
      settings if needed.
+   - Set `APP_GIT_SHA=$(git rev-parse HEAD)` before (re)creating `laravel`
+     and `laravel-queue` containers if you want `/admin/health` to expose the
+     running commit SHA.
    - If the admin is mounted under a sub-path (for example `/admin`), set
      `ADMIN_BASE_PATH=admin` so generated URLs include the prefix.
    - The `laravel-queue` service runs `laravel/scripts/run-queue-workers.sh`
@@ -197,6 +200,22 @@ The project is split into:
   spawn multiple `queue:work` processes for `facsimiles,page-markers`.
 - Manual execution:  
   `docker compose exec laravel php artisan queue:work --queue=page-markers --stop-when-empty`.
+
+### Health severity (top banner dot)
+
+- `ok` (green): system healthy.
+- `degraded` (orange): warning-level issues; application remains usable.
+  Examples: disk below warning threshold but above critical floor, queue backlog
+  without hard failure, stale scheduler heartbeat.
+- `fail` (red): critical issues that materially compromise functionality.
+  Examples: database unavailable, Medite health check down, critical disk level reached.
+
+Configurable health thresholds:
+- `HEALTHCHECK_DISK_WARN_GB` (default `10`)
+- `HEALTHCHECK_DISK_CRIT_GB` (default `5`)
+- `HEALTHCHECK_MEDITE_WARN_MS` (default `2500`)
+- `HEALTHCHECK_FAILED_JOBS_WARN` (default `1`)
+- `HEALTHCHECK_FAILED_JOBS_CRIT` (default `10`)
 
 ### Artefact cheat sheet
 

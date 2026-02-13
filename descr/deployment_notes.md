@@ -12,12 +12,20 @@ Guidance for running the Variance stack outside the default development setup.
 
 ## Environment
 
-- Copy `laravel/.env.example` to `laravel/.env` and set:
+- Copy `laravel/example.env` to `laravel/.env` and set:
   * `APP_ENV=production`
   * `APP_URL` to your external URL.
+  * `APP_GIT_SHA` to the deployed commit SHA so `/admin/health` can report the running revision.
+  * `ADMIN_BASE_PATH=admin` if the app is mounted under `/admin`.
   * Database credentials matching your MariaDB deployment.
   * `QUEUE_CONNECTION=redis` (default) and ensure Redis is reachable.
   * Update mail settings if emailing is required.
+  * Optional health thresholds:
+    - `HEALTHCHECK_DISK_WARN_GB` (warning floor, default `10`)
+    - `HEALTHCHECK_DISK_CRIT_GB` (critical floor, default `5`)
+    - `HEALTHCHECK_MEDITE_WARN_MS` (Medite latency warning, default `2500`)
+    - `HEALTHCHECK_FAILED_JOBS_WARN` (recent failed jobs warning, default `1`)
+    - `HEALTHCHECK_FAILED_JOBS_CRIT` (recent failed jobs critical, default `10`)
 - For Medite, adjust `.env` or environment variables as needed (e.g. concurrency, Celery broker/backends).
 
 ## Networking / Proxy
@@ -27,6 +35,8 @@ Guidance for running the Variance stack outside the default development setup.
 - Optionally expose Medite on a separate hostname or keep it internal-only.
 - If TLS is terminated upstream (e.g. Apache), forward `X-Forwarded-Proto` so Laravel
   generates HTTPS URLs correctly (or you will see http:// redirects from `/admin`).
+- When using a sub-path proxy (e.g. `/admin`), also forward `X-Forwarded-Prefix`
+  so URLs and assets resolve correctly.
 
 ## Scaling
 
@@ -39,6 +49,10 @@ Guidance for running the Variance stack outside the default development setup.
 - Track queue length (Laravel Horizon or custom metrics) and Celery task times.
 - Monitor disk usage for upload directories.
 - Keep an eye on Laravel logs (`docker compose logs -f laravel`) and queue logs.
+- Health severity model:
+  - `ok` => green
+  - `degraded` => orange warning (service still usable)
+  - `fail` => red critical (major functionality compromised)
 
 ## Backups
 

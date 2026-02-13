@@ -116,6 +116,13 @@
                     <div>{{ data_get($checks, 'app.url') }}</div>
                 </div>
                 <div class="col-md-4">
+                    <div class="text-muted small">Git SHA</div>
+                    <div>
+                        {{ data_get($checks, 'app.git_sha_short') ?? 'n/a' }}
+                        <span class="text-muted small">({{ data_get($checks, 'app.git_source') ?? 'unknown' }})</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
                     <div class="text-muted small">Cache</div>
                     <div class="{{ $cacheClass }}">{{ data_get($checks, 'cache.driver') }}</div>
                 </div>

@@ -36,6 +36,7 @@ class HealthController extends Controller
         $status = 'ok';
         $httpStatus = 200;
         $failedWindowSeconds = $this->failedWindowSeconds($failedWindowKey);
+        $git = $this->resolveGitMetadata();
 
         $checks['app'] = [
             'ok' => true,
@@ -44,6 +45,9 @@ class HealthController extends Controller
             'url' => config('app.url'),
             'php' => PHP_VERSION,
             'laravel' => app()->version(),
+            'git_sha' => $git['sha'],
+            'git_sha_short' => $git['short_sha'],
+            'git_source' => $git['source'],
         ];
         $checks['config'] = [
             'queue_connection' => config('queue.default'),
@@ -68,8 +72,7 @@ class HealthController extends Controller
                 'ok' => false,
                 'error' => $e->getMessage(),
             ];
-            $status = 'fail';
-            $httpStatus = 503;
+            $this->markCritical($status, $httpStatus);
         }
 
         $storagePath = storage_path();
@@ -81,9 +84,9 @@ class HealthController extends Controller
         $critBytes = $critGb > 0 ? $critGb * 1024 * 1024 * 1024 : null;
         $diskStatus = 'ok';
         if ($storageFree !== null) {
-            if ($critBytes !== null && $storageFree < $critBytes) {
+            if ($critBytes !== null && $storageFree <= $critBytes) {
                 $diskStatus = 'critical';
-            } elseif ($warnBytes !== null && $storageFree < $warnBytes) {
+            } elseif ($warnBytes !== null && $storageFree <= $warnBytes) {
                 $diskStatus = 'warning';
             }
         }
@@ -97,15 +100,15 @@ class HealthController extends Controller
             'crit_gb' => $critGb,
         ];
         if (! $storageOk || $diskStatus === 'critical') {
-            $this->markDegraded($status, $httpStatus);
+            $this->markCritical($status, $httpStatus);
         }
         if ($diskStatus === 'warning') {
-            $this->markDegraded($status, $httpStatus);
+            $this->markWarning($status, $httpStatus);
         }
 
         $checks['paths'] = $this->checkPaths();
         if (! $checks['paths']['ok']) {
-            $this->markDegraded($status, $httpStatus);
+            $this->markCritical($status, $httpStatus);
         }
 
         $publicPath = public_path();
@@ -115,7 +118,7 @@ class HealthController extends Controller
             'path' => $publicPath,
         ];
         if (! $publicOk) {
-            $this->markDegraded($status, $httpStatus);
+            $this->markCritical($status, $httpStatus);
         }
 
         $cacheDriver = config('cache.default');
@@ -129,7 +132,7 @@ class HealthController extends Controller
                 'driver' => $cacheDriver,
             ];
             if (! $cacheOk) {
-                $this->markDegraded($status, $httpStatus);
+                $this->markWarning($status, $httpStatus);
             }
         } catch (\Throwable $e) {
             $checks['cache'] = [
@@ -137,7 +140,7 @@ class HealthController extends Controller
                 'driver' => $cacheDriver,
                 'error' => $e->getMessage(),
             ];
-            $this->markDegraded($status, $httpStatus);
+            $this->markWarning($status, $httpStatus);
         }
 
         $queueDriver = config('queue.default');
@@ -179,7 +182,7 @@ class HealthController extends Controller
                         'driver' => $queueDriver,
                         'error' => $e->getMessage(),
                     ];
-                    $this->markDegraded($status, $httpStatus);
+                    $this->markWarning($status, $httpStatus);
                 }
             } else {
                 $checks['queue'] = [
@@ -187,7 +190,7 @@ class HealthController extends Controller
                     'driver' => $queueDriver,
                     'error' => 'Redis extension/client not available',
                 ];
-                $this->markDegraded($status, $httpStatus);
+                $this->markWarning($status, $httpStatus);
             }
         } elseif ($dbOk) {
             $now = now()->timestamp;
@@ -249,18 +252,21 @@ class HealthController extends Controller
                 'driver' => $queueDriver,
                 'error' => 'Database unavailable for queue stats',
             ];
-            $this->markDegraded($status, $httpStatus);
+            $this->markWarning($status, $httpStatus);
         }
 
         $checks['workers'] = $this->deriveWorkerStatus($checks['queue'] ?? null);
         $checks['workers'] = $this->mergeWorkerHeartbeat($checks['workers']);
+        if (in_array(($checks['workers']['status'] ?? null), ['backlog', 'stalled'], true)) {
+            $this->markWarning($status, $httpStatus);
+        }
         $checks['worker_probe'] = $this->runWorkerProbe($queueDriver);
         if (($checks['worker_probe']['status'] ?? null) === 'stale') {
-            $this->markDegraded($status, $httpStatus);
+            $this->markWarning($status, $httpStatus);
         }
         $checks['scheduler'] = $this->readSchedulerHeartbeat();
         if (! ($checks['scheduler']['ok'] ?? false)) {
-            $this->markDegraded($status, $httpStatus);
+            $this->markWarning($status, $httpStatus);
         }
 
         if ($dbOk) {
@@ -328,29 +334,41 @@ class HealthController extends Controller
                     'ok' => false,
                     'error' => $e->getMessage(),
                 ];
-                $this->markDegraded($status, $httpStatus);
+                $this->markWarning($status, $httpStatus);
             }
         } else {
             $checks['failed_jobs'] = [
                 'ok' => false,
                 'error' => 'Database unavailable',
             ];
-            $this->markDegraded($status, $httpStatus);
+            $this->markWarning($status, $httpStatus);
+        }
+        $recentFailed = (int) data_get($checks, 'failed_jobs.recent', 0);
+        $failedWarnThreshold = (int) env('HEALTHCHECK_FAILED_JOBS_WARN', 1);
+        $failedCritThreshold = (int) env('HEALTHCHECK_FAILED_JOBS_CRIT', 10);
+        if ($recentFailed >= max($failedCritThreshold, 1)) {
+            $this->markCritical($status, $httpStatus);
+        } elseif ($recentFailed >= max($failedWarnThreshold, 1)) {
+            $this->markWarning($status, $httpStatus);
         }
 
         $mediteUrl = config('services.medite.health_url') ?? env('MEDITE_HEALTH_URL', 'http://medite:5000/health');
+        $mediteWarnMs = (int) env('HEALTHCHECK_MEDITE_WARN_MS', 2500);
         try {
             $mediteStart = microtime(true);
             $response = Http::timeout(2)->get($mediteUrl);
+            $mediteLatencyMs = (int) round((microtime(true) - $mediteStart) * 1000);
             $checks['medite'] = [
                 'ok' => $response->ok(),
                 'status' => $response->status(),
-                'latency_ms' => (int) round((microtime(true) - $mediteStart) * 1000),
+                'latency_ms' => $mediteLatencyMs,
                 'url' => $mediteUrl,
                 'body' => $response->ok() ? $response->json() : null,
             ];
             if (! $response->ok()) {
-                $this->markDegraded($status, $httpStatus);
+                $this->markCritical($status, $httpStatus);
+            } elseif ($mediteWarnMs > 0 && $mediteLatencyMs > $mediteWarnMs) {
+                $this->markWarning($status, $httpStatus);
             }
         } catch (\Throwable $e) {
             $checks['medite'] = [
@@ -359,12 +377,12 @@ class HealthController extends Controller
                 'url' => $mediteUrl,
                 'error' => $e->getMessage(),
             ];
-            $this->markDegraded($status, $httpStatus);
+            $this->markCritical($status, $httpStatus);
         }
 
         $checks['medite_probe'] = $this->runMediteProbe($mediteUrl);
         if (($checks['medite_probe']['status'] ?? null) === 'stale') {
-            $this->markDegraded($status, $httpStatus);
+            $this->markWarning($status, $httpStatus);
         }
 
         $httpChecks = [];
@@ -379,7 +397,11 @@ class HealthController extends Controller
                     'url' => $url,
                 ];
                 if (! $ok) {
-                    $this->markDegraded($status, $httpStatus);
+                    if ($this->isCriticalHttpTarget((string) $label)) {
+                        $this->markCritical($status, $httpStatus);
+                    } else {
+                        $this->markWarning($status, $httpStatus);
+                    }
                 }
             } catch (\Throwable $e) {
                 $httpChecks[$label] = [
@@ -387,7 +409,11 @@ class HealthController extends Controller
                     'url' => $url,
                     'error' => $e->getMessage(),
                 ];
-                $this->markDegraded($status, $httpStatus);
+                if ($this->isCriticalHttpTarget((string) $label)) {
+                    $this->markCritical($status, $httpStatus);
+                } else {
+                    $this->markWarning($status, $httpStatus);
+                }
             }
         }
 
@@ -436,12 +462,29 @@ class HealthController extends Controller
         return sprintf('%.1f %s', $value, end($units));
     }
 
-    private function markDegraded(string &$status, int &$httpStatus): void
+    private function markWarning(string &$status, int &$httpStatus): void
     {
         if ($status === 'ok') {
             $status = 'degraded';
-            $httpStatus = 503;
         }
+        $httpStatus = $this->statusToHttpCode($status);
+    }
+
+    private function markCritical(string &$status, int &$httpStatus): void
+    {
+        $status = 'fail';
+        $httpStatus = $this->statusToHttpCode($status);
+    }
+
+    private function statusToHttpCode(string $status): int
+    {
+        return $status === 'fail' ? 503 : 200;
+    }
+
+    private function isCriticalHttpTarget(string $label): bool
+    {
+        $normalized = strtolower(trim($label));
+        return in_array($normalized, ['public', 'admin', 'health', 'main'], true);
     }
 
     private function resolveFailedWindowKey(Request $request): string
@@ -822,5 +865,184 @@ class HealthController extends Controller
         }
 
         return $worker;
+    }
+
+    private function resolveGitMetadata(): array
+    {
+        $raw = $this->resolveEnvValue(['APP_GIT_SHA', 'GIT_SHA']);
+
+        $sha = $this->normalizeGitSha($raw);
+        if ($sha !== null) {
+            return [
+                'sha' => $sha,
+                'short_sha' => substr($sha, 0, 8),
+                'source' => 'env',
+            ];
+        }
+
+        $sha = $this->resolveGitShaFromWorkTree(base_path());
+        if ($sha !== null) {
+            return [
+                'sha' => $sha,
+                'short_sha' => substr($sha, 0, 8),
+                'source' => 'git',
+            ];
+        }
+
+        return [
+            'sha' => null,
+            'short_sha' => null,
+            'source' => 'unknown',
+        ];
+    }
+
+    private function resolveGitShaFromWorkTree(string $workTree): ?string
+    {
+        $gitEntry = rtrim($workTree, '/') . '/.git';
+        if (is_dir($gitEntry)) {
+            return $this->resolveGitShaFromGitDir($gitEntry);
+        }
+
+        if (! is_file($gitEntry)) {
+            return null;
+        }
+
+        $content = @file_get_contents($gitEntry);
+        if ($content === false) {
+            return null;
+        }
+
+        if (! preg_match('/^gitdir:\s*(.+)\s*$/mi', $content, $matches)) {
+            return null;
+        }
+
+        $gitDir = trim($matches[1]);
+        if ($gitDir === '') {
+            return null;
+        }
+
+        if (! str_starts_with($gitDir, '/')) {
+            $gitDir = rtrim($workTree, '/') . '/' . $gitDir;
+        }
+
+        return $this->resolveGitShaFromGitDir($gitDir);
+    }
+
+    private function resolveGitShaFromGitDir(string $gitDir): ?string
+    {
+        $headPath = rtrim($gitDir, '/') . '/HEAD';
+        if (! is_file($headPath)) {
+            return null;
+        }
+
+        $head = trim((string) @file_get_contents($headPath));
+        if ($head === '') {
+            return null;
+        }
+
+        if (str_starts_with($head, 'ref:')) {
+            $ref = trim(substr($head, 4));
+            if ($ref === '') {
+                return null;
+            }
+
+            $refPath = rtrim($gitDir, '/') . '/' . $ref;
+            if (is_file($refPath)) {
+                return $this->normalizeGitSha((string) @file_get_contents($refPath));
+            }
+
+            $packed = $this->lookupPackedRef($gitDir, $ref);
+            if ($packed !== null) {
+                return $packed;
+            }
+
+            return null;
+        }
+
+        return $this->normalizeGitSha($head);
+    }
+
+    private function lookupPackedRef(string $gitDir, string $ref): ?string
+    {
+        $packedRefsPath = rtrim($gitDir, '/') . '/packed-refs';
+        if (! is_file($packedRefsPath)) {
+            return null;
+        }
+
+        $lines = @file($packedRefsPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (! is_array($lines)) {
+            return null;
+        }
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, '^')) {
+                continue;
+            }
+
+            [$sha, $name] = array_pad(preg_split('/\s+/', $line, 2), 2, null);
+            if ($name === $ref) {
+                return $this->normalizeGitSha($sha);
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeGitSha(?string $raw): ?string
+    {
+        if ($raw === null) {
+            return null;
+        }
+
+        $sha = strtolower(trim($raw));
+        return preg_match('/^[0-9a-f]{7,40}$/', $sha) === 1 ? $sha : null;
+    }
+
+    private function resolveEnvValue(array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            $value = $_SERVER[$key] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        foreach ($keys as $key) {
+            $value = $_ENV[$key] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        foreach ($keys as $key) {
+            $value = getenv($key);
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        foreach ($keys as $key) {
+            $value = trim((string) env($key, ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $procEnv = @file_get_contents('/proc/1/environ');
+        if (is_string($procEnv) && $procEnv !== '') {
+            $entries = explode("\0", $procEnv);
+            foreach ($entries as $entry) {
+                if (! str_contains($entry, '=')) {
+                    continue;
+                }
+                [$name, $value] = explode('=', $entry, 2);
+                if (in_array($name, $keys, true) && trim($value) !== '') {
+                    return trim($value);
+                }
+            }
+        }
+
+        return null;
     }
 }

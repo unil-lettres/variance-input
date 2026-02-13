@@ -126,10 +126,22 @@
         }
         .admin-user-toggle {
             border: 0;
-            background: transparent;
             color: #fff;
-            padding: 0 0.25rem;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.35rem 0.65rem;
             font-size: 0.875rem;
+            line-height: 1.1;
+            text-decoration: none;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.3);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+            transition: background-color 120ms ease, box-shadow 120ms ease;
+        }
+        .admin-user-toggle:hover {
+            background: rgba(0, 0, 0, 0.42);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+            color: #fff;
         }
         .admin-brand {
             display: flex;
@@ -154,6 +166,7 @@
             font-family: var(--font-serif);
             font-size: 1.2rem;
             font-weight: 600;
+            font-variant-caps: normal;
             letter-spacing: 0.02em;
             color: #ffffff;
             line-height: 1;
@@ -177,8 +190,30 @@
         .admin-user-toggle:focus {
             box-shadow: none;
         }
+        .admin-user-toggle:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.75);
+            outline-offset: 2px;
+        }
+        .admin-user-toggle.dropdown-toggle::after {
+            margin-left: 0.55rem;
+            border-top: 0.42em solid;
+            border-right: 0.34em solid transparent;
+            border-left: 0.34em solid transparent;
+            vertical-align: 0.12em;
+            opacity: 0.9;
+        }
         .admin-user-menu {
             font-size: 0.85rem;
+            border-radius: 14px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+        .admin-user-menu .dropdown-item {
+            padding: 0.45rem 0.95rem;
+        }
+        .admin-user-menu .dropdown-divider {
+            margin: 0.35rem 0;
         }
         .admin-user-menu .dropdown-item:hover,
         .admin-user-menu .dropdown-item:focus {
@@ -300,14 +335,14 @@
         body.legacy-skin .admin-banner-shell {
             border-bottom: none;
         }
-    </style>
+                </style>
 </head>
 <body class="d-flex flex-column min-vh-100 @yield('body-class') {{ $legacySkin ? 'legacy-skin' : '' }}">
     <header class="mb-4 admin-banner-shell">
         <div class="admin-banner py-4 text-white shadow-sm" style="{{ $adminBannerStyle }}">
             <div class="container admin-page-shell d-flex justify-content-between align-items-center">
                 <div class="admin-brand">
-                    <a href="{{ admin_path() }}">
+                    <a href="{{ rtrim(admin_path(), '/') . '/' }}">
                         <span class="admin-brand-text">
                             <span class="admin-brand-name">Variance</span>
                             <span class="admin-brand-role">Admin</span>
@@ -315,7 +350,7 @@
                     </a>
                 </div>
 
-                <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
                     @auth
                         @if(Auth::user()->is_admin)
                             <div class="dropdown">
@@ -339,24 +374,39 @@
                                 </ul>
                             </div>
                         @endif
-                    @endauth
-                    <div class="dropdown">
-                        <button class="admin-user-toggle dropdown-toggle"
-                                type="button"
-                                id="admin-sites-menu"
+	                    @endauth
+	                    <div class="dropdown">
+	                        <button class="admin-user-toggle dropdown-toggle"
+	                                type="button"
+	                                id="admin-sites-menu"
                                 data-bs-toggle="dropdown"
                                 aria-expanded="false">
-                            Sites
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
-                            <li>
-                                <a class="dropdown-item" href="{{ legacy_url() }}" data-site-scope="prod" data-site-label="Site public">Site public</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{{ legacy_url('dev') }}" data-site-scope="dev" data-site-label="Site dev">Site dev</a>
-                            </li>
-                        </ul>
-                    </div>
+                            Aller a
+		                        </button>
+		                        <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
+                                    <li>
+                                        <span class="dropdown-item-text text-muted small">Variance legacy</span>
+                                    </li>
+		                            <li>
+		                                <a class="dropdown-item" href="{{ legacy_url() }}" data-site-scope="prod" data-site-label="Site public">Site public</a>
+		                            </li>
+		                            <li>
+		                                <a class="dropdown-item" href="{{ legacy_url('dev') }}" data-site-scope="dev" data-site-label="Site dev">Site dev</a>
+		                            </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <span class="dropdown-item-text text-muted small">Historique</span>
+                                </li>
+                                <li class="px-2 pb-1" id="admin-history-container">
+                                    <ul class="list-unstyled mb-1" id="admin-history-list">
+                                        <li>
+                                            <span class="dropdown-item-text text-muted small">Aucun historique</span>
+                                        </li>
+                                    </ul>
+                                    <button type="button" class="dropdown-item text-danger" id="admin-history-clear">Effacer l'historique</button>
+                                </li>
+	                        </ul>
+	                    </div>
 
                     @auth
                         <div class="dropdown">
@@ -365,13 +415,20 @@
                                     id="admin-user-menu"
                                     data-bs-toggle="dropdown"
                                     aria-expanded="false">
-                                {{ Auth::user()->display_name }}
+                                Réglages
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-user-menu">
+                                @php
+                                    $roleLabel = Auth::user()->is_admin ? 'Admin' : 'Utilisateur';
+                                @endphp
+                                <li>
+                                    <span class="dropdown-item-text">
+                                        <span class="fw-semibold">{{ Auth::user()->display_name }}</span>
+                                        <span class="text-muted">· {{ $roleLabel }}</span>
+                                    </span>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
                                 @if(Auth::user()->is_admin)
-                                    <li>
-                                        <span class="dropdown-item-text text-muted fst-italic">Admin</span>
-                                    </li>
                                     <li>
                                         <a class="dropdown-item" href="{{ admin_path('users') }}">Gérer les utilisateurs</a>
                                     </li>
@@ -421,17 +478,110 @@
     @stack('scripts')
 
     <script>
-        (function () {
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.forEach((tooltipTriggerEl) => {
-                new bootstrap.Tooltip(tooltipTriggerEl);
-            });
-        })();
+	        (function () {
+	            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+	            tooltipTriggerList.forEach((tooltipTriggerEl) => {
+	                new bootstrap.Tooltip(tooltipTriggerEl);
+	            });
+	        })();
 
-        (function () {
-            const buildLabel = (base, count) => {
-                const total = Number(count) || 0;
-                const suffix = total === 1 ? ' comparaison' : ' comparaisons';
+            (function () {
+                const HISTORY_KEY = 'variance:history:v1';
+                const listEl = document.getElementById('admin-history-list');
+
+                const escapeHtml = (value) => String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+
+                const readHistory = () => {
+                    try {
+                        const raw = localStorage.getItem(HISTORY_KEY);
+                        if (!raw) return [];
+                        const parsed = JSON.parse(raw);
+                        return Array.isArray(parsed) ? parsed : [];
+                    } catch (err) {
+                        return [];
+                    }
+                };
+
+                const buildSelectUrl = (entry) => {
+                    const authorSlug = String(entry?.authorSlug ?? '').trim();
+                    const workSlug = String(entry?.workSlug ?? '').trim();
+                    if (!authorSlug || !workSlug) return null;
+                    const path = `/select/${encodeURIComponent(authorSlug)}/${encodeURIComponent(workSlug)}`;
+                    return typeof window.withBasePath === 'function' ? window.withBasePath(path) : path;
+                };
+
+                const render = () => {
+                    if (!listEl) return;
+                    const items = readHistory().filter(Boolean);
+                    if (items.length === 0) {
+                        listEl.innerHTML = '<li><span class="dropdown-item-text text-muted small">Aucun historique</span></li>';
+                        return;
+                    }
+
+                    const rows = items.slice(0, 12).map((entry) => {
+                        const authorId = String(entry?.authorId ?? '').trim();
+                        const workId = String(entry?.workId ?? '').trim();
+                        const authorLabel = entry?.authorLabel || 'Auteur';
+                        const workLabel = entry?.workLabel || 'Oeuvre';
+                        const href = buildSelectUrl(entry) || (typeof window.withBasePath === 'function' ? window.withBasePath('/') : '/');
+
+                        return `
+                            <li>
+                                <a class="dropdown-item"
+                                   href="${escapeHtml(href)}"
+                                   data-history-author-id="${escapeHtml(authorId)}"
+                                   data-history-work-id="${escapeHtml(workId)}">
+                                    <div class="fw-semibold">${escapeHtml(workLabel)}</div>
+                                    <div class="small text-muted">${escapeHtml(authorLabel)}</div>
+                                </a>
+                            </li>
+                        `;
+                    }).join('');
+                    listEl.innerHTML = rows;
+                };
+
+                document.addEventListener('DOMContentLoaded', render);
+                document.addEventListener('workSelected', render);
+
+                document.addEventListener('click', (event) => {
+                    const clearBtn = event.target?.closest?.('#admin-history-clear');
+                    if (clearBtn) {
+                        event.preventDefault();
+                        try { localStorage.removeItem(HISTORY_KEY); } catch (err) {}
+                        render();
+                        return;
+                    }
+
+                    const link = event.target?.closest?.('a[data-history-author-id][data-history-work-id]');
+                    if (!link) return;
+                    if (!document.getElementById('admin-main')) return; // only soft-select on main page
+                    if (typeof window.varianceSelectWork !== 'function') return;
+
+                    const authorId = link.getAttribute('data-history-author-id');
+                    const workId = link.getAttribute('data-history-work-id');
+                    if (!authorId || !workId) return;
+
+                    event.preventDefault();
+                    window.varianceSelectWork(authorId, workId);
+
+                    // Close dropdown after selection
+                    const dropdown = link.closest('.dropdown');
+                    const toggle = dropdown?.querySelector?.('[data-bs-toggle="dropdown"]');
+                    if (toggle && window.bootstrap && bootstrap.Dropdown) {
+                        bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+                    }
+                });
+            })();
+	
+	        (function () {
+	            const buildLabel = (base, count) => {
+	                const total = Number(count) || 0;
+	                const suffix = total === 1 ? ' comparaison' : ' comparaisons';
                 return `${base} (${total}${suffix})`;
             };
 
@@ -486,15 +636,16 @@
             const refreshStatus = async () => {
                 try {
                     const res = await fetch(withBasePath('/health'), { headers: { 'Accept': 'application/json' } });
-                    if (!res.ok) {
-                        setStatus('fail', 'État du système indisponible');
-                        return;
+                    let data = null;
+                    try {
+                        data = await res.json();
+                    } catch (_) {
+                        data = null;
                     }
-                    const data = await res.json();
-                    const status = data?.status || 'unknown';
+                    const status = data?.status || (res.ok ? 'degraded' : 'fail');
                     const label = status === 'ok'
                         ? 'État du système : OK'
-                        : (status === 'degraded' ? 'État du système : Dégradé' : 'État du système : Problème');
+                        : (status === 'degraded' ? 'État du système : Avertissement' : 'État du système : Critique');
                     setStatus(status, label);
                 } catch (err) {
                     setStatus('fail', 'État du système indisponible');
