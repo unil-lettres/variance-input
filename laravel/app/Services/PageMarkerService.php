@@ -182,6 +182,7 @@ class PageMarkerService
             'version_folder' => $version->folder,
             'work_id'        => $version->work_id,
             'generated_at'   => time(),
+            'origin'         => 'lignes',
             'text_length'    => mb_strlen($shadowText, 'UTF-8'),
             'marker_count'   => $markerCount,
             'missed_count'   => $missCount,
@@ -1039,6 +1040,17 @@ class PageMarkerService
             } elseif (!empty($attrs['n'])) {
                 $entry['page'] = $attrs['n'];
             }
+            // If the editor (or upstream TEI) provides <pb n="..."/> without facs,
+            // we still want injection to work. Default image to the numeric page
+            // if possible; otherwise use the marker order (1..N).
+            if (empty($entry['image'] ?? null)) {
+                $candidate = (string) ($entry['page'] ?? '');
+                if (preg_match('/^\d{1,4}$/', $candidate)) {
+                    $entry['image'] = $candidate;
+                } else {
+                    $entry['image'] = (string) (count($markers) + 1);
+                }
+            }
 
             $markers[] = $entry;
             $offset = $pos + strlen($tag);
@@ -1202,6 +1214,16 @@ class PageMarkerService
                 $entry['page'] = $attrs['pagination'];
             } elseif (!empty($attrs['n'])) {
                 $entry['page'] = $attrs['n'];
+            }
+            // Same fallback as extractPbMarkers(): allow pb-only pagination to map
+            // to sequential facsimile codes during injection.
+            if (empty($entry['image'] ?? null)) {
+                $candidate = (string) ($entry['page'] ?? '');
+                if (preg_match('/^\d{1,4}$/', $candidate)) {
+                    $entry['image'] = $candidate;
+                } else {
+                    $entry['image'] = (string) (count($markers) + 1);
+                }
             }
 
             $markers[] = $entry;
@@ -1619,6 +1641,12 @@ class PageMarkerService
             $raw = (string) $marker['image_code'];
         } elseif (isset($marker['image'])) {
             $raw = (string) $marker['image'];
+        } elseif (isset($marker['page']) && preg_match('/^\d{1,4}$/', (string) $marker['page'])) {
+            // Backward-compatible fallback: older pb-derived sidecars may not
+            // include "image". If page is numeric, treat it as image index.
+            $raw = (string) $marker['page'];
+        } elseif (isset($marker['pagination']) && preg_match('/^\d{1,4}$/', (string) $marker['pagination'])) {
+            $raw = (string) $marker['pagination'];
         }
         if ($raw === null || $raw === '') {
             return null;
@@ -2607,11 +2635,30 @@ class PageMarkerService
         try {
             $contents = Storage::disk('local')->get($relative);
             $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+            $markers = is_array($decoded['markers'] ?? null) ? $decoded['markers'] : [];
+            $markerCount = (int) ($decoded['marker_count'] ?? count($markers));
+            $fromLignes = 0;
+            foreach ($markers as $marker) {
+                if (!is_array($marker)) {
+                    continue;
+                }
+                // Markers created from `_lignes` always include these keys (possibly with null values).
+                if (array_key_exists('phrase', $marker) || array_key_exists('line', $marker)) {
+                    $fromLignes++;
+                }
+            }
+            $fromEditor = max(0, $markerCount - $fromLignes);
             $details = [
-                'marker_count' => (int) ($decoded['marker_count'] ?? 0),
+                'marker_count' => $markerCount,
                 'missed_count' => (int) ($decoded['missed_count'] ?? 0),
                 'generated_at' => (int) ($decoded['generated_at'] ?? 0),
                 'origin'       => $decoded['origin'] ?? null,
+                'merged_from_pb' => $decoded['merged_from_pb'] ?? null,
+                'counts' => [
+                    'lignes' => $fromLignes,
+                    'editor' => $fromEditor,
+                    'total'  => $markerCount,
+                ],
             ];
         } catch (\Throwable $e) {
             $details = null;

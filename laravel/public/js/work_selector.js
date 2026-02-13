@@ -1,5 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
   const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  const LAST_SELECTION_KEY = 'variance:last-selection:v1';
+  const HISTORY_KEY = 'variance:history:v1';
+  const HISTORY_LIMIT = 12;
   const buildUrl = (path) => {
     if (typeof path !== 'string') return path;
     if (typeof window.withBasePath === 'function') {
@@ -69,6 +72,87 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let readyForDispatch = false;
 
+  function readHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function writeHistory(items) {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+    } catch (err) {
+      // Ignore storage failures (private mode, quotas…)
+    }
+  }
+
+  function pushHistory(entry) {
+    if (!entry || typeof entry !== 'object') return;
+    const authorId = String(entry.authorId ?? '').trim();
+    const workId = String(entry.workId ?? '').trim();
+    const authorSlug = String(entry.authorSlug ?? '').trim();
+    const workSlug = String(entry.workSlug ?? '').trim();
+    if (!authorId || !workId) return;
+
+    const items = readHistory().filter(Boolean);
+    const key = `${authorId}:${workId}`;
+    const cleaned = items.filter(it => `${String(it?.authorId ?? '').trim()}:${String(it?.workId ?? '').trim()}` !== key);
+    cleaned.unshift({
+      authorId,
+      workId,
+      authorSlug,
+      workSlug,
+      authorLabel: String(entry.authorLabel ?? '').trim(),
+      workLabel: String(entry.workLabel ?? '').trim(),
+      updatedAt: Date.now(),
+    });
+    writeHistory(cleaned.slice(0, HISTORY_LIMIT));
+  }
+
+  function readLastSelection() {
+    try {
+      const raw = localStorage.getItem(LAST_SELECTION_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      const authorId = parsed.authorId ?? null;
+      const workId = parsed.workId ?? null;
+      const authorSlug = parsed.authorSlug ?? null;
+      const workSlug = parsed.workSlug ?? null;
+      return {
+        authorId: authorId ? String(authorId).trim() : null,
+        workId: workId ? String(workId).trim() : null,
+        authorSlug: authorSlug ? String(authorSlug).trim() : null,
+        workSlug: workSlug ? String(workSlug).trim() : null,
+      };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function writeLastSelection(selection) {
+    try {
+      if (!selection || typeof selection !== 'object') return;
+      const authorId = selection.authorId ? String(selection.authorId).trim() : '';
+      const workId = selection.workId ? String(selection.workId).trim() : '';
+      if (!authorId || !workId) return;
+      localStorage.setItem(LAST_SELECTION_KEY, JSON.stringify({
+        authorId,
+        workId,
+        authorSlug: selection.authorSlug ? String(selection.authorSlug).trim() : '',
+        workSlug: selection.workSlug ? String(selection.workSlug).trim() : '',
+        updatedAt: Date.now(),
+      }));
+    } catch (err) {
+      // Ignore storage failures (private mode, quotas…)
+    }
+  }
+
   function dispatchWorkSelected(workId, authorId, shortTitle = null) {
     const authorOption = authorId
       ? authorSelector.querySelector(`option[value="${authorId}"]`)
@@ -81,6 +165,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const workFolder   = workOption?.dataset.folder || null;
     const authorLabel  = authorOption?.textContent?.trim() || null;
     const workLabel    = workOption?.textContent?.trim() || null;
+
+    if (workId && authorId) {
+      writeLastSelection({
+        authorId,
+        workId,
+        authorSlug: authorFolder,
+        workSlug: workFolder,
+      });
+      pushHistory({
+        authorId,
+        workId,
+        authorSlug: authorFolder,
+        workSlug: workFolder,
+        authorLabel,
+        workLabel,
+      });
+    }
 
     document.dispatchEvent(new CustomEvent('workSelected', {
       detail: {
@@ -102,22 +203,45 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleWorkButtons();
   }
 
-  function initialReset() {
-    // No author/work yet: disable things and tell blades to clear themselves
+  function initialReset({ dispatch = true } = {}) {
+    // No author/work yet: disable things and optionally tell blades to clear themselves
     authorSelector.value = '';
     resetWorksUI(null, null);
     toggleAuthorButtons();
-    dispatchWorkSelected(null, null);
+    if (dispatch) {
+      dispatchWorkSelected(null, null);
+    }
   }
 
   // ============
   // LOAD + TOGGLE
   // ============
-  initialReset();   // <— important: notify blades at startup
-
-  if (initialSelection.authorId && initialSelection.workId) {
-    readyForDispatch = true;
+  // If the URL does not provide an initial selection (e.g. user clicked "Aller a -> Admin"),
+  // restore the latest author/work from localStorage.
+  const storedSelection = readLastSelection();
+  if (!initialSelection.authorId && !initialSelection.workId && storedSelection?.authorId && storedSelection?.workId) {
+    initialSelection.authorId = storedSelection.authorId;
+    initialSelection.workId = storedSelection.workId;
   }
+
+  readyForDispatch = !!(initialSelection.authorId && initialSelection.workId);
+  initialReset({ dispatch: !readyForDispatch });   // notify blades only if we don't have a selection to restore
+
+  // Expose a helper for UI components (e.g. header history menu).
+  window.varianceSelectWork = (authorId, workId) => {
+    const a = String(authorId ?? '').trim();
+    const w = String(workId ?? '').trim();
+    if (!/^\d+$/.test(a) || !/^\d+$/.test(w)) return false;
+    if (!authorSelector || !workSelector) return false;
+
+    authorSelector.value = a;
+    toggleAuthorButtons();
+    resetWorksUI(a);
+    dispatchWorkSelected(null, a);
+    reflectSelectionInUrl();
+    loadWorks(a, w);
+    return true;
+  };
 
   loadAuthors(initialSelection.authorId, initialSelection.workId);    // then load data
 
