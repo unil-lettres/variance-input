@@ -823,7 +823,8 @@ class VersionController extends Controller
             throw new \RuntimeException("Impossible de lire le fichier source : {$absPath}");
         }
 
-        $enc = $this->normalizeSourceEncodingHint($hint);
+        $hintEncoding = $this->normalizeSourceEncodingHint($hint);
+        $enc = $hintEncoding;
         if ($enc === null) {
             $enc = mb_detect_encoding(
                 $bytes,
@@ -834,6 +835,11 @@ class VersionController extends Controller
         $enc ??= 'Windows-1252';
 
         $utf8 = $this->convertToUtf8($bytes, $enc);
+
+        // For unknown/no-BOM legacy files, prefer Mac Roman when decoded text quality is better.
+        if ($hintEncoding === null) {
+            $utf8 = $this->preferMacRomanIfCleaner($bytes, $enc, $utf8);
+        }
 
         // Last-chance fallback for files reported as unknown/no BOM:
         // many old Mac exports are Mac Roman.
@@ -889,6 +895,39 @@ class VersionController extends Controller
         }
 
         return mb_convert_encoding($bytes, 'UTF-8', $source);
+    }
+
+    private function preferMacRomanIfCleaner(string $bytes, string $detectedEncoding, string $decoded): string
+    {
+        $normalized = strtoupper(trim($detectedEncoding));
+        if (!in_array($normalized, ['WINDOWS-1252', 'ISO-8859-1', 'ASCII'], true)) {
+            return $decoded;
+        }
+
+        $macDecoded = $this->convertToUtf8($bytes, 'Macintosh');
+        if ($macDecoded === '' || !mb_check_encoding($macDecoded, 'UTF-8')) {
+            return $decoded;
+        }
+
+        $decodedScore = $this->decodedTextNoiseScore($decoded);
+        $macScore = $this->decodedTextNoiseScore($macDecoded);
+
+        // Pick Mac Roman when it clearly removes control/mojibake noise.
+        return ($macScore + 3) < $decodedScore ? $macDecoded : $decoded;
+    }
+
+    private function decodedTextNoiseScore(string $content): int
+    {
+        if ($content === '') {
+            return 0;
+        }
+
+        $score = 0;
+        $score += preg_match_all('/[\x{0080}-\x{009F}]/u', $content) * 10; // C1 controls
+        $score += preg_match_all('/[\x{FFFD}]/u', $content) * 6; // replacement chars
+        $score += preg_match_all('/[\x{00D5}\x{0152}\x{0153}\x{02C6}\x{0160}\x{2039}\x{203A}\x{0178}\x{017E}\x{2122}]/u', $content) * 2;
+
+        return $score;
     }
 
     /**
