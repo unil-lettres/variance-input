@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 use App\Services\PageMarkerService;
 
 class VersionController extends Controller
@@ -121,7 +122,7 @@ class VersionController extends Controller
         $validated = $request->validate([
             'work_id'     => 'required|exists:works,id',
             'name'        => 'required|string|max:100',
-            'versionFile' => 'required|file|mimetypes:text/plain|max:8192',
+            'versionFile' => 'required|file|max:8192',
         ]);
 
         /* 2. Context */
@@ -140,6 +141,11 @@ class VersionController extends Controller
         /* 4. Read & normalise → UTF‑8 LF */
         $fullTxt = storage_path("app/public/{$txtStoragePath}");
         $utf8    = $this->readFileAsUtf8($fullTxt, $request->input('original_encoding'));
+        if (!$this->isLikelyTextContent($utf8)) {
+            throw ValidationException::withMessages([
+                'versionFile' => 'Le fichier importé ne semble pas être un texte lisible.',
+            ]);
+        }
         $utf8    = $this->normalizeCharacters($utf8);
         $utf8    = $this->collapseSpacesAndTabs($utf8);
 
@@ -883,6 +889,42 @@ class VersionController extends Controller
         }
 
         return mb_convert_encoding($bytes, 'UTF-8', $source);
+    }
+
+    /**
+     * Heuristic guard to reject obvious binary uploads while accepting legacy encodings.
+     */
+    private function isLikelyTextContent(string $content): bool
+    {
+        if ($content === '') {
+            return false;
+        }
+
+        if (strpos($content, "\0") !== false) {
+            return false;
+        }
+
+        $sample = mb_substr($content, 0, 12000, 'UTF-8');
+        $len = mb_strlen($sample, 'UTF-8');
+        if ($len === 0) {
+            return false;
+        }
+
+        $controls = 0;
+        $chars = preg_split('//u', $sample, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($chars as $ch) {
+            $ord = mb_ord($ch, 'UTF-8');
+            if ($ord === false) {
+                continue;
+            }
+            // Allow tab/newline/carriage return; count other C0 controls.
+            if ($ord < 32 && !in_array($ord, [9, 10, 13], true)) {
+                $controls++;
+            }
+        }
+
+        // If >2% control chars, likely binary.
+        return ($controls / max(1, $len)) < 0.02;
     }
 
     /** Unicode tidy-up (subset of original txt2tei.py) */

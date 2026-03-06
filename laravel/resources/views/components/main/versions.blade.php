@@ -1428,7 +1428,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         const file        = $fileInput.files[0];
         const editionName = document.getElementById('editionName').value.trim();
         if(!file || !editionName) return alert('Merci de remplir tous les champs.');
-        if(!file.name.toLowerCase().endsWith('.txt')) return alert('Seuls les fichiers .txt sont autorisés.');
         const txt = await file.text();
         if(txt.length>MAX_TXT_CHARACTERS) return alert(`Le fichier dépasse ${formatNumber(MAX_TXT_CHARACTERS)} caractères.`);
 
@@ -1446,8 +1445,15 @@ window.addEventListener('DOMContentLoaded',()=>{
                 body:fd
             });
             if(!res.ok){
-                console.error(await res.text());
-                return alert('Erreur de téléversement.');
+                const raw = await res.text();
+                let payload = null;
+                try { payload = JSON.parse(raw); } catch (_) {}
+                const msg = payload?.message
+                    || payload?.error
+                    || (payload?.errors ? Object.values(payload.errors).flat().join(' ') : null)
+                    || 'Erreur de téléversement.';
+                console.error(raw);
+                return alert(msg);
             }
             await res.json();
             ev.target.reset();
