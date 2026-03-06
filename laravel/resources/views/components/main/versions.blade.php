@@ -1091,11 +1091,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         $fileInfo.innerHTML='';
         detectedEncoding='Unknown';
         if(!file) return;
-        if(!file.name.toLowerCase().endsWith('.txt')){
-            $fileInfo.textContent='❌ Extension invalide (uniquement .txt)';
-            $fileInput.value='';
-            return;
-        }
         detectedEncoding = await detectEncodingBOM(file);
         try{
             const txt = await file.text();
