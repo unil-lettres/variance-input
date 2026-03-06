@@ -1013,7 +1013,7 @@ class PageMarkerService
         $contents = $this->stripTeiHeader($contents);
 
         // Build the plaintext shadow + offset map to compute char_index the same way insertion does.
-        [, $map] = $this->buildIndexedPlaintext($contents);
+        [$shadow, $map] = $this->buildIndexedPlaintext($contents);
 
         $markers = [];
         $mapIndex = 0;
@@ -1032,6 +1032,10 @@ class PageMarkerService
 
             $attrs = $this->parsePbAttributes($tag);
             $entry = ['char_index' => $mapIndex];
+            $anchorPhrase = $this->buildMarkerAnchorPhrase($shadow, $mapIndex);
+            if ($anchorPhrase !== null) {
+                $entry['phrase'] = $anchorPhrase;
+            }
             if (!empty($attrs['facs'])) {
                 $entry['image'] = $attrs['facs'];
             }
@@ -1207,6 +1211,10 @@ class PageMarkerService
 
             $attrs = $this->parsePbAttributes($tag);
             $entry = ['char_index' => $mapIndex];
+            $anchorPhrase = $this->buildMarkerAnchorPhrase($shadow, $mapIndex);
+            if ($anchorPhrase !== null) {
+                $entry['phrase'] = $anchorPhrase;
+            }
             if (!empty($attrs['facs'])) {
                 $entry['image'] = $attrs['facs'];
             }
@@ -1250,6 +1258,31 @@ class PageMarkerService
         }
 
         return $attrs;
+    }
+
+    /**
+     * Create a short forward-looking anchor snippet from marker position.
+     * This helps re-anchor pb-derived sidecars when TEI and comparison XHTML
+     * differ slightly in whitespace or normalization.
+     */
+    private function buildMarkerAnchorPhrase(string $shadow, int $charIndex, int $maxChars = 90): ?string
+    {
+        $start = max(0, $charIndex);
+        $slice = mb_substr($shadow, $start, $maxChars, 'UTF-8');
+        if ($slice === '') {
+            return null;
+        }
+
+        $phrase = preg_replace('/\s+/u', ' ', $slice);
+        if (!is_string($phrase)) {
+            return null;
+        }
+        $phrase = trim($phrase);
+        if ($phrase === '') {
+            return null;
+        }
+
+        return $phrase;
     }
 
     private function candidatePaths(string $authorFolder, string $workFolder, Comparison $comparison, string $fileName, bool $preferPublished = false): array
@@ -1700,6 +1733,11 @@ class PageMarkerService
             $match = $this->findMatchWindow($pattern, $fold, $start, $window);
             if ($match) {
                 [, $offset] = $match;
+                return $offset;
+            }
+            $globalMatch = $this->findMatch($pattern, $fold, 0);
+            if ($globalMatch) {
+                [, $offset] = $globalMatch;
                 return $offset;
             }
         }
@@ -2314,7 +2352,7 @@ class PageMarkerService
         $this->writeComparisonProgress($comparisonId, $payload);
     }
 
-    public function getComparisonProgressSnapshot(int $comparisonId): ?array
+    public function getComparisonProgressSnapshot(int $comparisonId, ?int $minUpdatedAt = null): ?array
     {
         $path = $this->comparisonProgressFilePath($comparisonId);
         if (!is_file($path)) {
@@ -2325,7 +2363,18 @@ class PageMarkerService
             return null;
         }
         $decoded = json_decode($json, true);
-        return is_array($decoded) ? $decoded : null;
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        if ($minUpdatedAt !== null) {
+            $updatedAt = (int) ($decoded['updated_at'] ?? 0);
+            if ($updatedAt > 0 && $updatedAt < $minUpdatedAt) {
+                return null;
+            }
+        }
+
+        return $decoded;
     }
 
     public function markComparisonFailed(int $comparisonId, string $message): void
@@ -2343,6 +2392,14 @@ class PageMarkerService
         $dir = storage_path('app/tmp/pager/comparisons');
         File::ensureDirectoryExists($dir);
         return $dir . '/' . $comparisonId . '.json';
+    }
+
+    public function clearComparisonProgress(int $comparisonId): void
+    {
+        $path = $this->comparisonProgressFilePath($comparisonId);
+        if (is_file($path)) {
+            @unlink($path);
+        }
     }
 
     private function writeComparisonProgress(int $comparisonId, array $payload): void

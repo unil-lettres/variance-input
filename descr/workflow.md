@@ -68,6 +68,9 @@ markers into comparison outputs.
 4. **Events**  
    Successive uploads/fire-and-save actions emit `facsimilesUploaded` and `comparisonManifestUpdated` browser events so the gallery and comparisons table stay in sync without a reload.
 
+5. **Cancel upload / rollback**  
+   During long facsimile folder uploads, the modal exposes an explicit cancel action. Cancelling aborts the current HTTP batch, removes partial files and queued items, and restores the previous facsimile series when a backup exists (`DELETE /api/versions/{version}/facsimiles/cancel-upload?restore_previous=1`).
+
 ## 4. Running Medite
 
 1. **User action**  

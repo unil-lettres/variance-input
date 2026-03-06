@@ -16,6 +16,7 @@ Route::get('/versions/{version}/pagination-info', [VersionController::class, 'pa
 Route::delete('/versions/{version}/lignes', [VersionController::class, 'cancelLignes']);
 Route::delete('/versions/{version}/lignes/file', [VersionController::class, 'deleteLignesFile']);
 Route::delete('/versions/{version}/facsimiles', [VersionController::class, 'cancelFacsimiles']);
+Route::delete('/versions/{version}/facsimiles/cancel-upload', [FacsimileController::class, 'cancelUpload']);
 Route::get('/versions/{version}/facsimiles/progress', [VersionController::class, 'facsimilesProgress']);
 Route::get('/versions/{version}/comparisons', [VersionController::class, 'manifestComparisons']);
 Route::put('/versions/{version}/manifests/{comparison}', [VersionController::class, 'updateManifestImages']);

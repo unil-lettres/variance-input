@@ -150,6 +150,7 @@
                 <div id="facsimile-upload-summary" class="small text-muted" style="white-space: pre-line;"></div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger d-none" id="facsimile-upload-cancel-btn">Annuler l'import</button>
                 <button type="button" class="btn btn-primary" id="facsimile-upload-btn-modal" disabled>Importer</button>
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
             </div>
@@ -228,6 +229,7 @@ let facModalTitle    = null;
 let facModalInfo     = null;
 let facFileInput     = null;
 let facUploadBtn     = null;
+let facCancelBtn     = null;
 let facSpinner       = null;
 let facLog           = null;
 let facSummary       = null;
@@ -238,6 +240,10 @@ let facVersionId     = null;
 let facVersionName   = '';
 let facSpaceOk       = true;
 let facSpaceCheckToken = 0;
+let facUploadInProgress = false;
+let facUploadAbortController = null;
+let facUploadCancelRequested = false;
+let facCurrentUploadVersionId = null;
 let selectedAuthorLabel = '';
 let selectedWorkLabel   = '';
 const UPLOAD_MODAL_BASE_TITLE = 'Ajouter une version';
@@ -1009,6 +1015,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     facModalInfo   = document.getElementById('facsimile-upload-info');
     facFileInput   = document.getElementById('facsimile-img-input');
     facUploadBtn   = document.getElementById('facsimile-upload-btn-modal');
+    facCancelBtn   = document.getElementById('facsimile-upload-cancel-btn');
     facSpinner     = document.getElementById('facsimile-upload-spinner');
     facLog         = document.getElementById('facsimile-upload-log');
     facSummary     = document.getElementById('facsimile-upload-summary');
@@ -1038,9 +1045,21 @@ window.addEventListener('DOMContentLoaded',()=>{
         });
     }
     if (facModalEl) {
+        facModalEl.addEventListener('hide.bs.modal', (event) => {
+            if (!facUploadInProgress) return;
+            event.preventDefault();
+            if (facSummary) {
+                facSummary.className = 'small text-warning';
+                facSummary.textContent = 'Import en cours: fermeture désactivée pour éviter une série incomplète.';
+            }
+        });
         facModalEl.addEventListener('hidden.bs.modal', () => {
+            setFacsimileUploadBusy(false);
             facVersionId = null;
             facVersionName = '';
+            facUploadCancelRequested = false;
+            facCurrentUploadVersionId = null;
+            facUploadAbortController = null;
             facSpaceOk = true;
             facSpaceCheckToken += 1;
             if (facFileInput) facFileInput.value = '';
@@ -1094,6 +1113,8 @@ window.addEventListener('DOMContentLoaded',()=>{
         facFileInput.addEventListener('change', () => {
             const allFiles = facFileInput.files ? facFileInput.files.length : 0;
             const images = collectSelectedImages();
+            const filesArray = facFileInput.files ? Array.from(facFileInput.files) : [];
+            const dsStoreCount = filesArray.filter(isDsStoreFile).length;
             if (facSummary) {
                 facSummary.className = 'small text-muted';
                 facSummary.textContent = '';
@@ -1118,7 +1139,7 @@ window.addEventListener('DOMContentLoaded',()=>{
                 } else if (!images.length) {
                     facLog.textContent = 'Aucun fichier image reconnu dans ce dossier.';
                 } else {
-                    const ignored = allFiles - images.length;
+                    const ignored = Math.max(0, allFiles - images.length - dsStoreCount);
                     facLog.textContent = `${images.length} image(s) détectée(s)` + (ignored > 0 ? ` — ${ignored} ignorée(s)` : '');
                 }
             }
@@ -1148,6 +1169,14 @@ window.addEventListener('DOMContentLoaded',()=>{
                 return keyA.localeCompare(keyB, undefined, { numeric: true, sensitivity: 'base' });
             });
 
+            const uploadVersionId = Number(facVersionId);
+            if (!Number.isFinite(uploadVersionId) || uploadVersionId <= 0) {
+                alert('Version cible invalide. Réouvrez la fenêtre d\'import.');
+                return;
+            }
+            facUploadCancelRequested = false;
+            facCurrentUploadVersionId = uploadVersionId;
+            setFacsimileUploadBusy(true);
             facUploadBtn.disabled = true;
             if (facSpinner) facSpinner.style.display = 'inline-block';
             if (facLog) facLog.textContent = '';
@@ -1168,6 +1197,7 @@ window.addEventListener('DOMContentLoaded',()=>{
             let cursor = 0;
             let batchIndex = 0;
             while (cursor < totalFiles) {
+                if (facUploadCancelRequested) break;
                 let batchSize = 0;
                 let byteTotal = 0;
                 const chunk = [];
@@ -1197,11 +1227,12 @@ window.addEventListener('DOMContentLoaded',()=>{
                 if (facLog) facLog.textContent = `Envoi des images ${start} à ${end} sur ${totalFiles}…`;
 
                 const form = new FormData();
-                form.append('version_id', facVersionId);
+                form.append('version_id', String(uploadVersionId));
                 form.append('reset', batchIndex === 0 ? '1' : '0');
                 chunk.forEach(file => form.append('images[]', file));
 
                 try {
+                    facUploadAbortController = new AbortController();
                     const res = await fetch(withBasePath('/api/upload_facsimiles'), {
                         method : 'POST',
                         headers: {
@@ -1209,8 +1240,10 @@ window.addEventListener('DOMContentLoaded',()=>{
                             'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').content
                         },
-                        body   : form
+                        body   : form,
+                        signal : facUploadAbortController.signal
                     });
+                    facUploadAbortController = null;
 
                     const payload = await readJsonResponse(res);
 
@@ -1231,6 +1264,10 @@ window.addEventListener('DOMContentLoaded',()=>{
                         processingQueued = true;
                     }
                 } catch (err) {
+                    facUploadAbortController = null;
+                    if (facUploadCancelRequested && (err?.name === 'AbortError' || /aborted/i.test(String(err?.message || '')))) {
+                        break;
+                    }
                     console.error(err);
                     batchErrors.push({
                         range: `${start}-${end}`,
@@ -1241,8 +1278,13 @@ window.addEventListener('DOMContentLoaded',()=>{
                 batchIndex += 1;
             }
 
+        if (facUploadCancelRequested) {
+            return;
+        }
         if (facSpinner) facSpinner.style.display = 'none';
-        facUploadBtn.disabled = false;
+        setFacsimileUploadBusy(false);
+        updateFacUploadButtonState(collectSelectedImages().length);
+        facCurrentUploadVersionId = null;
 
         const success = uploadedCount && !processingIssues.length && !batchErrors.length;
 
@@ -1259,7 +1301,7 @@ window.addEventListener('DOMContentLoaded',()=>{
                 }
             }
             document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
-                detail: { versionId: facVersionId }
+                detail: { versionId: uploadVersionId }
             }));
             if (facModalInstance) facModalInstance.hide();
             return;
@@ -1313,6 +1355,11 @@ window.addEventListener('DOMContentLoaded',()=>{
             facSummary.textContent = messages.join('\n');
         }
         if (facLog) facLog.textContent = '';
+        });
+    }
+    if (facCancelBtn) {
+        facCancelBtn.addEventListener('click', () => {
+            cancelCurrentFacsimileUpload();
         });
     }
 
@@ -1450,6 +1497,10 @@ function openFacsimileUploadModal(version) {
     }
     facVersionId   = Number(version.id);
     facVersionName = version.name || '';
+    setFacsimileUploadBusy(false);
+    facUploadCancelRequested = false;
+    facCurrentUploadVersionId = null;
+    facUploadAbortController = null;
 
     if (facModalTitle) facModalTitle.textContent = `Téléverser des fac-similés — ${facVersionName}`;
     const versionShort = version.folder || '';
@@ -1465,7 +1516,7 @@ function openFacsimileUploadModal(version) {
 
     document.dispatchEvent(new CustomEvent('facsimiles:select', { detail: { versionId: facVersionId, versionName: facVersionName } }));
 
-    facModalInstance = facModalInstance || new bootstrap.Modal(facModalEl);
+    facModalInstance = facModalInstance || new bootstrap.Modal(facModalEl, { backdrop: 'static', keyboard: false });
     facModalInstance.show();
 }
 
@@ -1477,9 +1528,97 @@ function collectSelectedImages() {
     });
 }
 
+function isDsStoreFile(file) {
+    const rawName = file?.name || '';
+    const rawPath = file?.webkitRelativePath || '';
+    const path = String(rawPath || rawName);
+    const parts = path.split('/');
+    const base = parts.length ? parts[parts.length - 1] : path;
+    return base === '.DS_Store';
+}
+
 function updateFacUploadButtonState(imageCount) {
     if (!facUploadBtn) return;
-    facUploadBtn.disabled = imageCount === 0 || !facSpaceOk;
+    facUploadBtn.disabled = facUploadInProgress || imageCount === 0 || !facSpaceOk;
+}
+
+function setFacsimileUploadBusy(isBusy) {
+    facUploadInProgress = !!isBusy;
+    if (facFileInput) {
+        facFileInput.disabled = facUploadInProgress;
+    }
+    if (facCancelBtn) {
+        facCancelBtn.classList.toggle('d-none', !facUploadInProgress);
+        facCancelBtn.disabled = !facUploadInProgress;
+    }
+    if (facModalEl) {
+        facModalEl.querySelectorAll('[data-bs-dismiss="modal"]').forEach((btn) => {
+            btn.disabled = facUploadInProgress;
+            btn.classList.toggle('disabled', facUploadInProgress);
+        });
+    }
+}
+
+async function cancelCurrentFacsimileUpload() {
+    if (!facUploadInProgress) return;
+    const versionId = Number(facCurrentUploadVersionId || facVersionId);
+    if (!Number.isFinite(versionId) || versionId <= 0) return;
+
+    facUploadCancelRequested = true;
+    if (facCancelBtn) {
+        facCancelBtn.disabled = true;
+    }
+    if (facLog) {
+        facLog.textContent = 'Annulation en cours... restauration de la série précédente si disponible.';
+    }
+    if (facSummary) {
+        facSummary.className = 'small text-warning';
+        facSummary.textContent = 'Annulation de l’import en cours...';
+    }
+
+    if (facUploadAbortController) {
+        facUploadAbortController.abort();
+    }
+
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${versionId}/facsimiles/cancel-upload?restore_previous=1`), {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            }
+        });
+        const payload = await readJsonResponse(res);
+        const restored = !!payload?.restored_previous;
+        const msg = payload?.message || (restored
+            ? 'Import annulé et série précédente restaurée.'
+            : 'Import annulé. Les fichiers partiels ont été supprimés.');
+
+        setFacsimileUploadBusy(false);
+        updateFacUploadButtonState(collectSelectedImages().length);
+        facCurrentUploadVersionId = null;
+
+        if (facSpinner) facSpinner.style.display = 'none';
+        if (facSummary) {
+            facSummary.className = restored ? 'small text-success' : 'small text-warning';
+            facSummary.textContent = msg;
+        }
+        if (facLog) facLog.textContent = '';
+        document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
+            detail: { versionId }
+        }));
+    } catch (err) {
+        setFacsimileUploadBusy(false);
+        updateFacUploadButtonState(collectSelectedImages().length);
+        facCurrentUploadVersionId = null;
+        if (facSummary) {
+            facSummary.className = 'small text-danger';
+            facSummary.textContent = `⚠️ Échec de l'annulation: ${err.message || 'erreur inconnue'}`;
+        }
+    } finally {
+        facUploadAbortController = null;
+    }
 }
 
 async function checkFacsimileSpace(totalBytes, imageCount) {

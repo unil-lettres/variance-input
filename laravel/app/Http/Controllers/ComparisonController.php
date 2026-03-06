@@ -209,7 +209,8 @@ class ComparisonController extends Controller
 
         $cmp->pagination = $this->pageMarkerService->countMarkersForComparison($cmp);
         $cmp->manifests  = $this->manifestStatusForComparison($cmp, $authorFolder, $workFolder);
-        $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id);
+        $minUpdatedAt = $cmp->created_at ? $cmp->created_at->getTimestamp() : null;
+        $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id, $minUpdatedAt);
         $cmp->details_loaded = true;
 
         return $cmp;
@@ -347,7 +348,8 @@ class ComparisonController extends Controller
             }
         }
 
-        // Remove DB record
+        // Remove stale comparison progress snapshot and DB record
+        $this->pageMarkerService->clearComparisonProgress($comparison->id);
         $comparison->delete();
 
         return response()->json(['message' => 'Comparison deleted']);
@@ -418,6 +420,7 @@ class ComparisonController extends Controller
     {
         $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
+        $this->assertComparisonUnpublished($comparison);
         $validated = $request->validate([
             'clear_existing'   => 'sometimes|boolean',
             'replace_existing' => 'sometimes|boolean',
@@ -498,6 +501,7 @@ class ComparisonController extends Controller
     {
         $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
+        $this->assertComparisonUnpublished($comparison);
         $validated = $request->validate([
             'role' => 'nullable|in:source,target',
         ]);
@@ -526,7 +530,8 @@ class ComparisonController extends Controller
     public function pageMarkersProgress(Comparison $comparison)
     {
         $this->assertComparisonOwnership($comparison);
-        $snapshot = $this->pageMarkerService->getComparisonProgressSnapshot($comparison->id);
+        $minUpdatedAt = $comparison->created_at ? $comparison->created_at->getTimestamp() : null;
+        $snapshot = $this->pageMarkerService->getComparisonProgressSnapshot($comparison->id, $minUpdatedAt);
         if (!$snapshot) {
             $snapshot = [
                 'status'        => 'idle',
@@ -543,6 +548,7 @@ class ComparisonController extends Controller
     {
         $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
+        $this->assertComparisonUnpublished($comparison);
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
         try {
@@ -949,6 +955,15 @@ class ComparisonController extends Controller
             || $sourceVersion?->work?->is_legacy
             || $targetVersion?->work?->is_legacy) {
             abort(403, 'Cette comparaison est en lecture seule.');
+        }
+    }
+
+    private function assertComparisonUnpublished(Comparison $comparison): void
+    {
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $destInfo = $this->resolvePublicationPaths($comparison);
+        if (!empty($destInfo['published'])) {
+            abort(409, 'Cette comparaison est publiée. Dépubliez-la avant toute modification.');
         }
     }
 

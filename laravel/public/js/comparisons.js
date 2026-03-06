@@ -33,6 +33,11 @@ function initComparisonsTable() {
   })();
   const currentUserIsAdmin = adminMain?.dataset?.userIsAdmin === '1';
   const ownershipNote = 'Action réservée au propriétaire de la comparaison.';
+  const publishedNote = 'Dépubliez cette comparaison avant de modifier ses composants.';
+  const isComparisonPublished = (comp) => {
+    const scope = comp?.publication_scope || ((comp?.is_legacy) ? 'prod' : null);
+    return !!(scope || comp?.published === true);
+  };
 
   const TERMINAL_STATUSES = new Set(['done', 'ok', 'failed', 'restored', 'idle', 'skipped', 'cancelled', 'missing']);
   const STATUS_LABELS = {
@@ -178,7 +183,7 @@ function initComparisonsTable() {
   function refreshComparisonCounts() {
     const rows = Array.from(comparisonData.values());
     const total = rows.length;
-    const published = rows.filter(comp => !!comp.publication_scope || !!comp?.is_legacy).length;
+    const published = rows.filter(comp => isComparisonPublished(comp)).length;
     updateComparisonCounts(published, total);
   }
 
@@ -504,6 +509,7 @@ function initComparisonsTable() {
     }
     const isLegacy = !!comp.is_legacy;
     const ownershipBlocked = !!comp._ownershipBlocked;
+    const publishedLocked = isComparisonPublished(comp);
     const legacyNote = 'La pagination des comparaisons legacy est en lecture seule.';
     const data = (comp.pagination && comp.pagination[role]) || {};
     const container = document.createElement('div');
@@ -535,6 +541,20 @@ function initComparisonsTable() {
       ctrl.disabled = true;
       ctrl.setAttribute('aria-disabled', 'true');
       ctrl.title = ownershipNote;
+    };
+    const applyPublishedButtonState = (btn) => {
+      if (!btn) return;
+      btn.classList.add('legacy-disabled');
+      btn.setAttribute('aria-disabled', 'true');
+      btn.setAttribute('data-published-disabled', '1');
+      btn.title = publishedNote;
+      registerTooltip(btn);
+    };
+    const applyPublishedDisabledState = (ctrl) => {
+      if (!ctrl) return;
+      ctrl.disabled = true;
+      ctrl.setAttribute('aria-disabled', 'true');
+      ctrl.title = publishedNote;
     };
 
     const badges = document.createElement('div');
@@ -777,8 +797,8 @@ function initComparisonsTable() {
     const statusRef = { role, statusEl, label: versionName, cancelBtn };
     registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
 
-    const hasSidecar = data.lignes_available ?? false;
-    if (!hasSidecar && !isLegacy) {
+    const hasPaginationData = !!sidecarAvailable || !!(data.lignes_available ?? false);
+    if (!hasPaginationData && !isLegacy) {
       runBtn.disabled = true;
       feedback.textContent = 'Associez un fichier _lignes ou générez le sidecar depuis les balises <pb>.';
     }
@@ -791,7 +811,7 @@ function initComparisonsTable() {
     }
 
     runBtn.addEventListener('click', () => {
-      if (isLegacy || ownershipBlocked) return;
+      if (isLegacy || ownershipBlocked || publishedLocked) return;
       const clearExisting = clearToggle ? clearToggle.checked : true;
       const replaceExisting = replaceToggle ? replaceToggle.checked : true;
       cancelBtn.disabled = false;
@@ -806,13 +826,13 @@ function initComparisonsTable() {
     });
 
     uploadLignesBtn.addEventListener('click', () => {
-      if (isLegacy || ownershipBlocked) return;
+      if (isLegacy || ownershipBlocked || publishedLocked) return;
       lignesInput.value = '';
       lignesInput.click();
     });
 
     lignesInput.addEventListener('change', async () => {
-      if (isLegacy || ownershipBlocked) return;
+      if (isLegacy || ownershipBlocked || publishedLocked) return;
       if (!lignesInput.files || !lignesInput.files.length) return;
       const file = lignesInput.files[0];
       const versionId = role === 'source' ? comp.source_id : comp.target_id;
@@ -865,7 +885,7 @@ function initComparisonsTable() {
     });
 
     buildSidecarBtn.addEventListener('click', () => {
-      if (isLegacy || ownershipBlocked) return;
+      if (isLegacy || ownershipBlocked || publishedLocked) return;
       buildSidecarFromXhtml(comp, {
         role,
         button: buildSidecarBtn,
@@ -878,7 +898,7 @@ function initComparisonsTable() {
     });
 
     restoreBtn.addEventListener('click', () => {
-      if (isLegacy || ownershipBlocked) return;
+      if (isLegacy || ownershipBlocked || publishedLocked) return;
       if (!confirm('Les fichiers originaux de sortie Medite vont être restaurés; tous les marqueurs de pagination seront supprimés.')) {
         return;
       }
@@ -908,6 +928,14 @@ function initComparisonsTable() {
       applyLegacyDisabledState(replaceToggle);
       applyLegacyDisabledState(lignesInput);
       [uploadLignesBtn, buildSidecarBtn, runBtn, restoreBtn, cancelBtn].forEach(applyLegacyButtonState);
+    } else if (publishedLocked) {
+      applyPublishedDisabledState(clearToggle);
+      applyPublishedDisabledState(replaceToggle);
+      applyPublishedDisabledState(lignesInput);
+      [uploadLignesBtn, buildSidecarBtn, runBtn, restoreBtn].forEach(applyPublishedButtonState);
+      if (feedback) {
+        feedback.textContent = publishedNote;
+      }
     } else if (ownershipBlocked) {
       applyOwnershipDisabledState(clearToggle);
       applyOwnershipDisabledState(replaceToggle);
@@ -1364,9 +1392,10 @@ function initComparisonsTable() {
       ? 'Comparaison legacy en lecture seule.'
       : ownershipNote;
     const scope = comp.publication_scope || (isLegacy ? 'prod' : null);
-    const isPublished = !!scope;
-    const isPublishedProd = scope === 'prod';
-    const isPublishedDev = scope === 'dev';
+    const inferredScope = scope || ((comp?.published === true) ? 'prod' : null);
+    const isPublished = !!inferredScope;
+    const isPublishedProd = inferredScope === 'prod';
+    const isPublishedDev = inferredScope === 'dev';
     tr.dataset.published = isPublished ? '1' : '0';
     tr.dataset.publishDest = comp.publish_dest || '';
     const isRunning = runningComparisons.has(Number(comp.id));
@@ -1574,6 +1603,7 @@ function initComparisonsTable() {
     comparisonData.clear();
     comparisonRows.clear();
     comparisonDetailsRequests.clear();
+    pendingRoleStatuses.clear();
     noComparisons.style.display = 'none';
 
     initComparisonsTable.initializedTooltips?.forEach(tooltip => tooltip.dispose());
@@ -1590,7 +1620,7 @@ function initComparisonsTable() {
 
       const totalCount = Array.isArray(comparisons) ? comparisons.length : 0;
       const publishedCount = Array.isArray(comparisons)
-        ? comparisons.filter(comp => !!comp.publication_scope || !!comp?.is_legacy).length
+        ? comparisons.filter(comp => isComparisonPublished(comp)).length
         : 0;
 
       if (!Array.isArray(comparisons) || comparisons.length === 0) {

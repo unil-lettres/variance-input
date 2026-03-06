@@ -156,6 +156,8 @@ Route::get('/version/{version}/editor', [EditorController::class, 'versionEditor
 Route::put('/version/{version}/editor', [EditorController::class, 'versionUpdate'])->middleware('auth')->name('version.editor.update');
 Route::get('/comparison/{comparison}/editor', [EditorController::class, 'comparisonEditor'])->middleware('auth')->name('comparison.editor');
 Route::put('/comparison/{comparison}/editor', [EditorController::class, 'comparisonUpdate'])->middleware('auth')->name('comparison.editor.update');
+Route::post('/comparison/{comparison}/editor/transformation/remove', [EditorController::class, 'removeTransformation'])->middleware('auth')->name('comparison.editor.remove-transformation');
+Route::get('/comparison/{comparison}/editor/consistency', [EditorController::class, 'comparisonConsistency'])->middleware('auth')->name('comparison.editor.consistency');
 
 // TEI to XHTML conversion
 // Route::post('/api/run_xhtml', [XhtmlController::class, 'run']);

@@ -11,9 +11,13 @@ use Illuminate\Support\Str;
 use App\Models\Comparison;
 use App\Models\Version;
 use App\Models\Work;
+use App\Services\PageMarkerService;
 
 class MediteController extends Controller
 {
+    public function __construct(private PageMarkerService $pageMarkerService)
+    {
+    }
 
     /**
      * POST /api/comparisons
@@ -76,6 +80,7 @@ class MediteController extends Controller
         }
 
         $cmp = Comparison::create($payload);
+        $this->pageMarkerService->clearComparisonProgress($cmp->id);
 
         return response()->json($cmp, 201);                // Created
     }
@@ -185,6 +190,7 @@ class MediteController extends Controller
 
             $cmp = Comparison::create($createPayload);
         }
+        $this->pageMarkerService->clearComparisonProgress($cmp->id);
 
         /* ───── Paths for Flask outputs ───── */
         $workRow = DB::table('works')

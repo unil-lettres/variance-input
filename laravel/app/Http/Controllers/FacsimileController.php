@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 use App\Jobs\ProcessFacsimileImage;
 use App\Models\Version;
 use App\Services\PageMarkerService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -44,7 +45,17 @@ class FacsimileController extends Controller
         $dirRel  = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
         $disk    = Storage::disk('public');           // = storage/app/public
 
+        if (! $request->boolean('reset') && $this->hasCancelMarker($version->id)) {
+            return response()->json([
+                'status' => 'cancelled',
+                'message' => 'Import annulé: lot ignoré.',
+                'files_added' => 0,
+            ], 409);
+        }
+
         if ($request->boolean('reset')) {
+            $this->backupPreviousSeries($version, $dirRel);
+            $this->clearCancelMarker($version->id);
             $disk->deleteDirectory($dirRel);
             $legacyDir = base_path('../variance/' . $dirRel);
             if (is_dir($legacyDir)) {
@@ -159,6 +170,59 @@ class FacsimileController extends Controller
                 'main_quality'  => $mainQuality,
                 'thumb_width'   => $thumbWidth,
             ],
+        ]);
+    }
+
+    /**
+     * DELETE /api/versions/{version}/facsimiles/cancel-upload
+     */
+    public function cancelUpload(Request $request, Version $version): JsonResponse
+    {
+        $version->loadMissing('work.author');
+        $work = $version->work;
+        if ($version->is_legacy || ($work && $work->is_legacy)) {
+            return response()->json([
+                'status' => 'forbidden',
+                'message' => 'Les versions legacy sont en lecture seule.',
+            ], 403);
+        }
+
+        $restorePrevious = $request->boolean('restore_previous', true);
+        $author = $work->author;
+        $dirRel = "uploads/{$author->folder}/{$work->folder}/{$version->folder}";
+        $queueDir = "facsimile_queue/{$author->folder}/{$work->folder}/{$version->folder}";
+
+        $removed = false;
+        $publicDisk = Storage::disk('public');
+        if ($publicDisk->deleteDirectory($dirRel)) {
+            $removed = true;
+        }
+
+        $legacyDir = base_path('../variance/' . $dirRel);
+        if (is_dir($legacyDir)) {
+            File::deleteDirectory($legacyDir);
+            $removed = true;
+        }
+
+        $queueDisk = Storage::disk('local');
+        if ($queueDisk->deleteDirectory($queueDir)) {
+            $removed = true;
+        }
+
+        $this->setCancelMarker($version->id);
+        $restored = false;
+        if ($restorePrevious) {
+            $restored = $this->restorePreviousSeries($version, $dirRel);
+        }
+        $this->clearBackupSeries($version->id);
+
+        return response()->json([
+            'status' => 'cancelled',
+            'message' => $restored
+                ? 'Import annulé et série précédente restaurée.'
+                : ($removed ? 'Import annulé et fichiers partiels supprimés.' : 'Aucun import en cours détecté.'),
+            'restored_previous' => $restored,
+            'removed_partial' => $removed,
         ]);
     }
 
@@ -302,5 +366,101 @@ class FacsimileController extends Controller
 
         $precision = $idx === 0 ? 0 : 1;
         return number_format($value, $precision, ',', ' ') . ' ' . $units[$idx];
+    }
+
+    private function backupRootPath(int $versionId): string
+    {
+        return storage_path('app/private/facsimile_backups/' . $versionId);
+    }
+
+    private function backupPreviousSeries(Version $version, string $dirRel): void
+    {
+        $backupRoot = $this->backupRootPath((int) $version->id);
+        if (is_dir($backupRoot)) {
+            File::deleteDirectory($backupRoot);
+        }
+        File::ensureDirectoryExists($backupRoot);
+
+        $hadPrevious = false;
+        $publicSource = Storage::disk('public')->path($dirRel);
+        $backupPublic = $backupRoot . '/source';
+        if (is_dir($publicSource)) {
+            File::copyDirectory($publicSource, $backupPublic);
+            $hadPrevious = true;
+        }
+
+        $legacySource = base_path('../variance/' . $dirRel);
+        $backupLegacy = $backupRoot . '/legacy';
+        if (is_dir($legacySource)) {
+            File::copyDirectory($legacySource, $backupLegacy);
+            $hadPrevious = true;
+        }
+
+        File::put($backupRoot . '/meta.json', json_encode([
+            'version_id' => (int) $version->id,
+            'dir_rel' => $dirRel,
+            'had_previous' => $hadPrevious,
+            'created_at' => now()->toIso8601String(),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function restorePreviousSeries(Version $version, string $dirRel): bool
+    {
+        $backupRoot = $this->backupRootPath((int) $version->id);
+        if (!is_dir($backupRoot)) {
+            return false;
+        }
+
+        $restored = false;
+        $backupPublic = $backupRoot . '/source';
+        if (is_dir($backupPublic)) {
+            $publicTarget = Storage::disk('public')->path($dirRel);
+            File::ensureDirectoryExists(dirname($publicTarget));
+            File::copyDirectory($backupPublic, $publicTarget);
+            $restored = true;
+        }
+
+        $backupLegacy = $backupRoot . '/legacy';
+        if (is_dir($backupLegacy)) {
+            $legacyTarget = base_path('../variance/' . $dirRel);
+            File::ensureDirectoryExists(dirname($legacyTarget));
+            File::copyDirectory($backupLegacy, $legacyTarget);
+            $restored = true;
+        }
+
+        return $restored;
+    }
+
+    private function clearBackupSeries(int $versionId): void
+    {
+        $backupRoot = $this->backupRootPath($versionId);
+        if (is_dir($backupRoot)) {
+            File::deleteDirectory($backupRoot);
+        }
+    }
+
+    private function cancelMarkerPath(int $versionId): string
+    {
+        return storage_path('app/private/facsimile_cancel/' . $versionId . '.flag');
+    }
+
+    private function setCancelMarker(int $versionId): void
+    {
+        $path = $this->cancelMarkerPath($versionId);
+        File::ensureDirectoryExists(dirname($path));
+        File::put($path, (string) now()->timestamp);
+    }
+
+    private function clearCancelMarker(int $versionId): void
+    {
+        $path = $this->cancelMarkerPath($versionId);
+        if (is_file($path)) {
+            @unlink($path);
+        }
+    }
+
+    private function hasCancelMarker(int $versionId): bool
+    {
+        return is_file($this->cancelMarkerPath($versionId));
     }
 }

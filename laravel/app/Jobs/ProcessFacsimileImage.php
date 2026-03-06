@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\Encoders\JpegEncoder;
@@ -50,6 +51,11 @@ class ProcessFacsimileImage implements ShouldQueue
     {
         @ini_set('memory_limit', config('variance.facsimile_memory_limit', '512M'));
 
+        if ($this->isCancelled()) {
+            Storage::disk($this->queuedDisk)->delete($this->queuedPath);
+            return;
+        }
+
         $queuedDisk = Storage::disk($this->queuedDisk);
         if (! $queuedDisk->exists($this->queuedPath)) {
             Log::warning('Facsimile queued file missing', [
@@ -85,6 +91,10 @@ class ProcessFacsimileImage implements ShouldQueue
             }
 
             $mainEncoded = $display->encode(new JpegEncoder(quality: $this->mainQuality));
+            if ($this->isCancelled()) {
+                $queuedDisk->delete($this->queuedPath);
+                return;
+            }
             $publicDisk->put($mainPath, (string) $mainEncoded);
 
             $thumbImage = clone $original;
@@ -106,5 +116,10 @@ class ProcessFacsimileImage implements ShouldQueue
             throw $e;
         }
     }
-}
 
+    private function isCancelled(): bool
+    {
+        $flag = storage_path('app/private/facsimile_cancel/' . $this->versionId . '.flag');
+        return File::exists($flag);
+    }
+}

@@ -64,6 +64,7 @@ Key endpoints exposed by the Laravel admin app. Routes are defined in `laravel/r
 | GET | `/api/versions/{version}/comparisons` | List comparisons involving the version (used for manifest selection). |
 | PUT | `/api/versions/{version}/manifests/{comparison}` | Save manifest images for the given comparison/role. |
 | POST | `/api/facsimiles/publish` | Publish facsimiles for a version (legacy mirror). |
+| DELETE | `/api/versions/{version}/facsimiles/cancel-upload?restore_previous=1` | Cancel the current facsimile folder upload, purge partial files, and restore the previous series when a backup exists. |
 | POST | `/versions/{version}/facsimiles/toggle-ignored` | Toggle ignored facsimile page for a version. |
 | DELETE | `/api/versions/{version}` | Remove a version if not used in comparisons. |
 
