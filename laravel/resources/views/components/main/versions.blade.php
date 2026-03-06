@@ -83,12 +83,12 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="uploadVersionModalLabel">Ajouter une version</h5>
+                <h5 class="modal-title" id="uploadVersionModalLabel">Téléverser une version textuelle</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <p class="text-muted small">
-                    Choisissez un fichier <code>.txt</code> à téléverser et indiquez la désignation éditoriale telle qu’elle apparaîtra dans la partie publique.
+                    Choisissez un fichier au format texte à téléverser (formats autorisés: <code>.txt</code>, <code>.text</code>, texte brut sans extension; encodages <code>UTF-8</code>, <code>Windows-1252</code>, <code>ISO-8859-1</code>, <code>Mac Roman</code>), et indiquez la désignation éditoriale telle qu’elle apparaîtra dans la partie publique.
                 </p>
                 <form id="upload-version-form" enctype="multipart/form-data">
                     @csrf
@@ -99,7 +99,7 @@
                                    name="versionFile"
                                    id="versionFile"
                                    class="form-control"
-                                   accept=".txt"
+                                   accept=".txt,.text,text/plain"
                                    required>
                             <div id="file-info" class="form-text text-muted"></div>
                         </div>
@@ -246,7 +246,7 @@ let facUploadCancelRequested = false;
 let facCurrentUploadVersionId = null;
 let selectedAuthorLabel = '';
 let selectedWorkLabel   = '';
-const UPLOAD_MODAL_BASE_TITLE = 'Ajouter une version';
+const UPLOAD_MODAL_BASE_TITLE = 'Téléverser une version textuelle';
 /*********************  GLOBAL STATE  *********************/
 /*********************  UTIL HELPERS  *********************/
 const formatNumber = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');

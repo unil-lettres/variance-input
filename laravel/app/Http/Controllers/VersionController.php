@@ -827,7 +827,7 @@ class VersionController extends Controller
         if ($enc === null) {
             $enc = mb_detect_encoding(
                 $bytes,
-                ['UTF-8', 'Macintosh', 'Windows-1252', 'ISO-8859-1', 'ASCII'],
+                ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'],
                 true
             ) ?: null;
         }
