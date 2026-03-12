@@ -19,6 +19,24 @@ use App\Services\PageMarkerService;
 class VersionController extends Controller
 {
     private const INLINE_TAG_WHITELIST = ['pb'];
+    private const USER_IMPORT_OPTION_KEYS = [
+        'strip_indentation',
+        'collapse_double_spaces',
+        'trim_line_ends',
+        'trim_file_edges',
+        'preserve_nbsp',
+        'legacy_typography',
+    ];
+    private const DEFAULT_IMPORT_OPTIONS = [
+        'strip_indentation'      => true,
+        'collapse_double_spaces' => false,
+        'trim_line_ends'         => true,
+        'trim_file_edges'        => true,
+        'strip_invisible_chars'  => true,
+        'normalize_line_endings' => true,
+        'preserve_nbsp'          => false,
+        'legacy_typography'      => false,
+    ];
 
     public function __construct(private PageMarkerService $pageMarkerService)
     {
@@ -123,6 +141,12 @@ class VersionController extends Controller
             'work_id'     => 'required|exists:works,id',
             'name'        => 'required|string|max:100',
             'versionFile' => 'required|file|max:8192',
+            'strip_indentation'      => 'nullable|boolean',
+            'collapse_double_spaces' => 'nullable|boolean',
+            'trim_line_ends'         => 'nullable|boolean',
+            'trim_file_edges'        => 'nullable|boolean',
+            'preserve_nbsp'          => 'nullable|boolean',
+            'legacy_typography'      => 'nullable|boolean',
         ]);
 
         /* 2. Context */
@@ -139,18 +163,40 @@ class VersionController extends Controller
         $request->file('versionFile')->storeAs($folderPath, $txtFilename, 'public');
 
         /* 4. Read & normalise → UTF‑8 LF */
+        $options = $this->resolveImportOptions($request);
         $fullTxt = storage_path("app/public/{$txtStoragePath}");
-        $utf8    = $this->readFileAsUtf8($fullTxt, $request->input('original_encoding'));
+        $utf8    = $this->readFileAsUtf8(
+            $fullTxt,
+            $request->input('original_encoding'),
+            $options['normalize_line_endings']
+        );
         if (!$this->isLikelyTextContent($utf8)) {
             throw ValidationException::withMessages([
                 'versionFile' => 'Le fichier importé ne semble pas être un texte lisible.',
             ]);
         }
-        $utf8    = $this->normalizeCharacters($utf8);
-        $utf8    = $this->collapseSpacesAndTabs($utf8);
+        if ($options['strip_invisible_chars']) {
+            $utf8 = $this->stripInvisibleCharacters($utf8, $options['preserve_nbsp']);
+        }
+        if ($options['legacy_typography']) {
+            $utf8 = $this->applyLegacyTypographicNormalisation($utf8);
+        }
+        $utf8 = $this->removeTabs($utf8);
+        if ($options['strip_indentation']) {
+            $utf8 = $this->stripLeadingIndentation($utf8);
+        }
+        if ($options['trim_line_ends']) {
+            $utf8 = $this->trimLineEndSpaces($utf8);
+        }
+        if ($options['collapse_double_spaces']) {
+            $utf8 = $this->collapseDoubleSpaces($utf8);
+        }
+        if ($options['trim_file_edges']) {
+            $utf8 = $this->trimFileEdges($utf8);
+        }
 
         /* 5. Insert line‑break tags */
-        $lines        = explode("\n", $utf8);
+        $lines        = preg_split('/\r\n|\r|\n/', $utf8) ?: [''];
         $escapedLines = array_map(fn($l) => htmlspecialchars($l, ENT_XML1 | ENT_COMPAT, 'UTF-8'), $lines);
         $bodyWithLb   = implode("\n          <lb/>\n", $escapedLines);
         $bodyWithLb   = $this->restoreInlineTags($bodyWithLb, self::INLINE_TAG_WHITELIST);
@@ -295,6 +341,7 @@ class VersionController extends Controller
     {
         $this->assertVersionEditable($version);
         $version->loadMissing('work.author');
+        $this->setFacsimileCancelMarker($version->id);
         $removed    = $this->purgeFacsimileStorage($version, includePublished: true);
         $facsimiles = $this->facsimileStatus($version);
 
@@ -816,7 +863,7 @@ class VersionController extends Controller
     /* ──────────────────────────── HELPERS ──────────────────────────── */
 
     /** Detect + convert arbitrary bytes to UTF‑8 LF */
-    private function readFileAsUtf8(string $absPath, ?string $hint = null): string
+    private function readFileAsUtf8(string $absPath, ?string $hint = null, bool $normalizeLineEndings = true): string
     {
         $bytes = file_get_contents($absPath);
         if ($bytes === false) {
@@ -847,7 +894,9 @@ class VersionController extends Controller
             $utf8 = $this->convertToUtf8($bytes, 'Macintosh');
         }
 
-        return str_replace(["\r\n", "\r"], "\n", $utf8);
+        return $normalizeLineEndings
+            ? str_replace(["\r\n", "\r"], "\n", $utf8)
+            : $utf8;
     }
 
     private function normalizeSourceEncodingHint(?string $hint): ?string
@@ -966,25 +1015,111 @@ class VersionController extends Controller
         return ($controls / max(1, $len)) < 0.02;
     }
 
-    /** Unicode tidy-up (subset of original txt2tei.py) */
-    private function normalizeCharacters(string $txt): string
+    private function resolveImportOptions(Request $request): array
     {
-        return str_replace([
-            "\u{2013}", "\u{2212}", "\u{2010}", "\u{2011}", "\u{00AD}", "\u{2026}",
-            "\u{201C}", "\u{201D}", "\u{201E}", "\u{201F}", "\u{2018}", "\u{2019}", "\u{02BC}", "\u{00B4}", "\u{02C8}",
-            "\u{00A0}", "\u{2002}", "\u{2003}", "\u{2009}", "\u{202F}", "\u{200B}", "\u{FEFF}"
-        ], [
-            "\u{2014}", '-', '-', '-', '', '...',
-            '"', '"', '"', '"', "'", "'", "'", "'", "'",
-            ' ', ' ', ' ', ' ', ' ', '', ''
-        ], $txt);
+        $resolved = self::DEFAULT_IMPORT_OPTIONS;
+
+        foreach (self::USER_IMPORT_OPTION_KEYS as $key) {
+            if ($request->has($key)) {
+                $resolved[$key] = $request->boolean($key);
+            }
+        }
+
+        return $resolved;
     }
 
-    /** Collapse runs of spaces/tabs but leave newlines */
-    private function collapseSpacesAndTabs(string $txt): string
+    /** Remove invisible/spacing control characters while preserving text flow. */
+    private function stripInvisibleCharacters(string $txt, bool $preserveNbsp = false): string
     {
-        $txt = str_replace("\t", ' ', $txt);
-        return preg_replace('/ {2,}/', ' ', $txt);
+        $search = [
+            "\u{2002}", "\u{2003}", "\u{2009}",
+            "\u{200B}", "\u{FEFF}",
+        ];
+        $replace = [
+            ' ', ' ', ' ',
+            '', '',
+        ];
+
+        if (!$preserveNbsp) {
+            array_unshift($search, "\u{00A0}", "\u{202F}");
+            array_unshift($replace, ' ', ' ');
+        }
+
+        return str_replace($search, $replace, $txt);
+    }
+
+    /**
+     * Optional typographic normalisation aligned with protocol rules 1–5:
+     * 1) remove spaces before ; : ! ?
+     * 2) normalize suspension points to ellipsis character
+     * 3) normalize apostrophes to typographic apostrophe
+     * 4) normalize only unambiguous dash variants to en dash
+     * 5) normalize guillemets spacing and common quote variants (best effort)
+     */
+    private function applyLegacyTypographicNormalisation(string $txt): string
+    {
+        // 3) Apostrophes
+        $txt = str_replace(
+            ["\u{2018}", "\u{2019}", "\u{02BC}", "\u{02B9}", "\u{00B4}", "\u{02C8}", "'"],
+            "\u{2019}",
+            $txt
+        );
+
+        // 2) Points de suspension: every run of 3 dots becomes one ellipsis char.
+        $txt = preg_replace('/\.{3}/u', "\u{2026}", $txt) ?? $txt;
+
+        // 1) No space before ; : ! ?
+        $txt = preg_replace('/[ \t\x{00A0}\x{202F}]+([;:!?])/u', '$1', $txt) ?? $txt;
+
+        // 4) Conservative dash normalization:
+        // convert only unambiguous long/minus variants to en dash.
+        // Keep hyphen-like codepoints untouched to avoid corrupting compounds/cesurae.
+        $txt = str_replace(
+            ["\u{2014}", "\u{2212}"],
+            "\u{2013}",
+            $txt
+        );
+
+        // 5) Guillemets and spacing around them.
+        $txt = str_replace(["\u{2039}", "\u{203A}"], ["\u{00AB}", "\u{00BB}"], $txt);
+        $txt = preg_replace('/«\s+/u', '«', $txt) ?? $txt;
+        $txt = preg_replace('/\s+»/u', '»', $txt) ?? $txt;
+
+        // Best effort: map paired curly quotes to guillemets.
+        $txt = preg_replace('/“([^”\r\n]+)”/u', '«$1»', $txt) ?? $txt;
+        $txt = preg_replace('/„([^”\r\n]+)”/u', '«$1»', $txt) ?? $txt;
+
+        return $txt;
+    }
+
+    /** Remove tabs globally (editorial policy). */
+    private function removeTabs(string $txt): string
+    {
+        return str_replace("\t", '', $txt);
+    }
+
+    /** Remove tabs/spaces at line starts (paragraph indentation). */
+    private function stripLeadingIndentation(string $txt): string
+    {
+        return preg_replace('/^[ \t]+/m', '', $txt) ?? $txt;
+    }
+
+    /** Remove spaces/tabs before line breaks. */
+    private function trimLineEndSpaces(string $txt): string
+    {
+        return preg_replace('/[ \t]+$/m', '', $txt) ?? $txt;
+    }
+
+    /** Optional compression of inter-word space runs. */
+    private function collapseDoubleSpaces(string $txt): string
+    {
+        return preg_replace('/ {2,}/', ' ', $txt) ?? $txt;
+    }
+
+    /** Remove leading/trailing spaces and blank lines at file edges. */
+    private function trimFileEdges(string $txt): string
+    {
+        return trim($txt);
     }
 
     private function facsimileStatus(Version $version): array
@@ -1012,7 +1147,7 @@ class VersionController extends Controller
         $queuePrefix = $this->queuePrefix($version);
         $queuedCount = $queueDisk->exists($queuePrefix)
             ? collect($queueDisk->files($queuePrefix))
-                ->filter(fn ($path) => preg_match('/\.(jpe?g|png)$/i', basename($path)))
+                ->filter(fn ($path) => preg_match('/\.(jpe?g|png|tiff?)$/i', basename($path)))
                 ->count()
             : 0;
 
@@ -1118,6 +1253,18 @@ class VersionController extends Controller
         }
 
         return $removed;
+    }
+
+    private function facsimileCancelMarkerPath(int $versionId): string
+    {
+        return storage_path('app/private/facsimile_cancel/' . $versionId . '.flag');
+    }
+
+    private function setFacsimileCancelMarker(int $versionId): void
+    {
+        $path = $this->facsimileCancelMarkerPath($versionId);
+        File::ensureDirectoryExists(dirname($path));
+        File::put($path, (string) now()->timestamp);
     }
 
     private function queuePrefix(Version $version): string

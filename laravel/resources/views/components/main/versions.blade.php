@@ -87,7 +87,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small">
+                <p class="text-muted small mb-3">
                     Choisissez un fichier au format texte à téléverser (formats autorisés: <code>.txt</code>, <code>.text</code>, texte brut sans extension; encodages <code>UTF-8</code>, <code>Windows-1252</code>, <code>ISO-8859-1</code>, <code>Mac Roman</code>), et indiquez la désignation éditoriale telle qu’elle apparaîtra dans la partie publique.
                 </p>
                 <form id="upload-version-form" enctype="multipart/form-data">
@@ -113,6 +113,65 @@
                                    class="form-control"
                                    placeholder="Éditeur (année)"
                                    required>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-sm-3 col-form-label">Normalisations :</label>
+                        <div class="col-sm-9">
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="strip_indentation" name="strip_indentation" checked>
+                                <label class="form-check-label" for="strip_indentation">
+                                    Éliminer les alinéas
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Supprime les tabulations et les espaces en début de ligne.">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="collapse_double_spaces" name="collapse_double_spaces">
+                                <label class="form-check-label" for="collapse_double_spaces">
+                                    Éliminer les doubles espaces
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Remplace toute suite de 2 espaces ou plus entre mots par un seul espace.">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="trim_line_ends" name="trim_line_ends" checked>
+                                <label class="form-check-label" for="trim_line_ends">
+                                    Éliminer les espaces en fin de ligne
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Supprime les espaces juste avant chaque retour de ligne.">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="trim_file_edges" name="trim_file_edges" checked>
+                                <label class="form-check-label" for="trim_file_edges">
+                                    Éliminer les blancs en début/fin de fichier
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Supprime espaces, tabulations et lignes vides au tout début et à la toute fin du fichier.">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="preserve_nbsp" name="preserve_nbsp">
+                                <label class="form-check-label" for="preserve_nbsp">
+                                    Conserver les espaces insécables
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Conserve les espaces insécables (NBSP, NNBSP). Si décoché, ils sont convertis en espaces normaux.">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="legacy_typography" name="legacy_typography">
+                                <label class="form-check-label" for="legacy_typography">
+                                    Appliquer les normalisations typographiques
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Applique une normalisation prudente: espaces avant ;:!? supprimés, ... -> …, apostrophes uniformisées, guillemets harmonisés, et conversion limitée des tirets (—, − -> –). Les traits d’union et les coupures de fin de ligne ne sont pas modifiés automatiquement.">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -1024,6 +1083,18 @@ window.addEventListener('DOMContentLoaded',()=>{
 
     const $fileInput = document.getElementById('versionFile');
     const $fileInfo  = document.getElementById('file-info');
+    const uploadNormalizationTooltips = [];
+
+    const initUploadNormalizationTooltips = () => {
+        uploadNormalizationTooltips.forEach(t => t.dispose());
+        uploadNormalizationTooltips.length = 0;
+
+        document.querySelectorAll('[data-upload-normalization-tooltip]').forEach((el) => {
+            const instance = new bootstrap.Tooltip(el);
+            uploadNormalizationTooltips.push(instance);
+        });
+    };
+    initUploadNormalizationTooltips();
 
     updateVersionsCount(null);
 
@@ -1105,11 +1176,12 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
 
     if (facFileInput) {
-        facFileInput.addEventListener('change', () => {
+        facFileInput.addEventListener('change', async () => {
             const allFiles = facFileInput.files ? facFileInput.files.length : 0;
             const images = collectSelectedImages();
             const filesArray = facFileInput.files ? Array.from(facFileInput.files) : [];
             const dsStoreCount = filesArray.filter(isDsStoreFile).length;
+            const estimatedPages = await estimateFacsimilePages(images);
             if (facSummary) {
                 facSummary.className = 'small text-muted';
                 facSummary.textContent = '';
@@ -1135,7 +1207,9 @@ window.addEventListener('DOMContentLoaded',()=>{
                     facLog.textContent = 'Aucun fichier image reconnu dans ce dossier.';
                 } else {
                     const ignored = Math.max(0, allFiles - images.length - dsStoreCount);
-                    facLog.textContent = `${images.length} image(s) détectée(s)` + (ignored > 0 ? ` — ${ignored} ignorée(s)` : '');
+                    const sourceLabel = `${images.length} fichier(s) source détecté(s)`;
+                    const pageLabel = estimatedPages > 0 ? ` — ${estimatedPages} page(s) estimée(s)` : '';
+                    facLog.textContent = sourceLabel + pageLabel + (ignored > 0 ? ` — ${ignored} ignorée(s)` : '');
                 }
             }
         });
@@ -1283,23 +1357,35 @@ window.addEventListener('DOMContentLoaded',()=>{
 
         const success = uploadedCount && !processingIssues.length && !batchErrors.length;
 
-        if (success) {
+            if (success) {
             if (facFileInput) facFileInput.value = '';
             if (facUploadBtn) facUploadBtn.disabled = true;
             if (facLog) facLog.textContent = '';
             if (facTotalSizeEl) facTotalSizeEl.textContent = '';
-            if (facSummary) {
-                facSummary.className = 'small text-success';
-                facSummary.textContent = `✅ ${uploadedCount} fichier(s) importé(s)` + (lastStoredDir ? ` dans ${lastStoredDir}` : '');
-                if (processingQueued) {
-                    facSummary.textContent += '\n🕓 Les redimensionnements et miniatures se poursuivent en arrière-plan.';
+                if (facSummary) {
+                    facSummary.className = 'small text-success';
+                    facSummary.textContent = `✅ ${uploadedCount} fac-similé(s) importé(s)` + (lastStoredDir ? ` dans ${lastStoredDir}` : '');
+                    if (processingQueued) {
+                        facSummary.textContent += '\n🕓 Les redimensionnements et miniatures se poursuivent en arrière-plan.';
+                    }
                 }
-            }
-            document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
-                detail: { versionId: uploadVersionId }
-            }));
-            if (facModalInstance) facModalInstance.hide();
-            return;
+                await requestFacsimileProgress(uploadVersionId);
+                if (Number.isFinite(selectedWorkId)) {
+                    await fetchVersions(selectedWorkId, true);
+                }
+                [1200, 3500, 7000].forEach((delayMs) => {
+                    setTimeout(async () => {
+                        await requestFacsimileProgress(uploadVersionId);
+                        if (Number.isFinite(selectedWorkId)) {
+                            await fetchVersions(selectedWorkId, true);
+                        }
+                    }, delayMs);
+                });
+                document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
+                    detail: { versionId: uploadVersionId }
+                }));
+                if (facModalInstance) facModalInstance.hide();
+                return;
         }
 
         const messages = [];
@@ -1432,6 +1518,17 @@ window.addEventListener('DOMContentLoaded',()=>{
         fd.append('name',editionName);
         fd.append('original_encoding',detectedEncoding);
         if(shortTitle) fd.append('short_title',shortTitle);
+        [
+            'strip_indentation',
+            'collapse_double_spaces',
+            'trim_line_ends',
+            'trim_file_edges',
+            'preserve_nbsp',
+            'legacy_typography',
+        ].forEach((key) => {
+            const input = document.getElementById(key);
+            fd.append(key, input && input.checked ? '1' : '0');
+        });
 
         try{
             const res = await fetch(withBasePath('/api/versions'),{
@@ -1525,8 +1622,62 @@ function collectSelectedImages() {
     if (!facFileInput || !facFileInput.files) return [];
     return Array.from(facFileInput.files).filter(file => {
         if (file.type && file.type.startsWith('image/')) return true;
-        return /\.(jpe?g|png)$/i.test(file.name || '');
+        return /\.(jpe?g|png|tiff?)$/i.test(file.name || '');
     });
+}
+
+async function estimateFacsimilePages(files) {
+    if (!Array.isArray(files) || !files.length) return 0;
+    const counts = await Promise.all(files.map(async (file) => {
+        if (isTiffFile(file)) {
+            const pages = await estimateTiffPages(file);
+            return pages > 0 ? pages : 1;
+        }
+        return 1;
+    }));
+    return counts.reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0);
+}
+
+function isTiffFile(file) {
+    const name = String(file?.name || '').toLowerCase();
+    const type = String(file?.type || '').toLowerCase();
+    return name.endsWith('.tif') || name.endsWith('.tiff') || type === 'image/tiff' || type === 'image/tif';
+}
+
+async function estimateTiffPages(file) {
+    try {
+        const buffer = await file.arrayBuffer();
+        const view = new DataView(buffer);
+        if (view.byteLength < 8) return 0;
+
+        const bom = String.fromCharCode(view.getUint8(0), view.getUint8(1));
+        const littleEndian = bom === 'II';
+        const bigEndian = bom === 'MM';
+        if (!littleEndian && !bigEndian) return 0;
+        const le = littleEndian;
+
+        const magic = view.getUint16(2, le);
+        if (magic !== 42) return 0; // classic TIFF
+
+        let ifdOffset = view.getUint32(4, le);
+        let pages = 0;
+        const seen = new Set();
+
+        while (ifdOffset > 0 && ifdOffset + 6 <= view.byteLength) {
+            if (seen.has(ifdOffset)) break;
+            seen.add(ifdOffset);
+            pages += 1;
+
+            const entryCount = view.getUint16(ifdOffset, le);
+            const nextPtrOffset = ifdOffset + 2 + (entryCount * 12);
+            if (nextPtrOffset + 4 > view.byteLength) break;
+            ifdOffset = view.getUint32(nextPtrOffset, le);
+        }
+
+        return pages;
+    } catch (_) {
+        return 0;
+    }
 }
 
 function isDsStoreFile(file) {
