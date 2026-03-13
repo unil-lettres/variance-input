@@ -43,6 +43,7 @@ class ProcessFacsimileImage implements ShouldQueue
         public int $mainQuality,
         public int $thumbWidth,
         public int $thumbQuality,
+        public ?int $sourcePage = null,
     ) {
         $this->onQueue('facsimiles');
     }
@@ -76,7 +77,7 @@ class ProcessFacsimileImage implements ShouldQueue
         $thumbPath = "{$this->outputDir}/{$this->basename}_thumb.jpg";
 
         try {
-            $original = $manager->read($sourcePath);
+            $original = $this->readSourceImage($manager, $sourcePath);
 
             $origWidth  = $original->width();
             $origHeight = $original->height();
@@ -121,5 +122,32 @@ class ProcessFacsimileImage implements ShouldQueue
     {
         $flag = storage_path('app/private/facsimile_cancel/' . $this->versionId . '.flag');
         return File::exists($flag);
+    }
+
+    private function readSourceImage(ImageManager $manager, string $sourcePath)
+    {
+        if ($this->sourcePage === null) {
+            return $manager->read($sourcePath);
+        }
+
+        if (!class_exists(\Imagick::class)) {
+            throw new \RuntimeException('Le support TIFF multipage nécessite l’extension Imagick.');
+        }
+
+        $imagick = new \Imagick();
+        try {
+            $imagick->readImage($sourcePath . '[' . $this->sourcePage . ']');
+            $imagick->setImageFormat('jpeg');
+            $blob = $imagick->getImageBlob();
+        } finally {
+            $imagick->clear();
+            $imagick->destroy();
+        }
+
+        if (!is_string($blob) || $blob === '') {
+            throw new \RuntimeException('Impossible de lire la page TIFF demandée.');
+        }
+
+        return $manager->read($blob);
     }
 }

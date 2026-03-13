@@ -7,12 +7,15 @@ FROM php:8.2-fpm
 RUN apt-get update && apt-get install -y \
       git unzip curl mariadb-client \
       libzip-dev libjpeg-dev libpng-dev libfreetype6-dev \
+      libmagickwand-dev imagemagick \
   # Node 18.x
   && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
   && apt-get install -y nodejs \
   # PHP GD + Zip + MySQL drivers
   && docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install gd zip pdo pdo_mysql
+  && docker-php-ext-install gd zip pdo pdo_mysql \
+  && pecl install imagick \
+  && docker-php-ext-enable imagick
 
 # 2) Composer (copied from official image)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

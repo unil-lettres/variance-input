@@ -8,6 +8,7 @@ use App\Models\Version;
 use App\Services\PageMarkerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -27,7 +28,8 @@ class FacsimileController extends Controller
         @set_time_limit(300);
         $validated = $request->validate([
             'version_id' => 'required|exists:versions,id',
-            'images.*'   => 'required|image|max:12000',           // 12 Mo
+            'images'     => 'required|array|min:1',
+            'images.*'   => 'required|file|mimes:jpg,jpeg,png,tif,tiff|max:12000', // 12 Mo
         ]);
 
         // -----------------------------------------------------------------
@@ -122,40 +124,61 @@ class FacsimileController extends Controller
         $thumbQuality = max(10, min(100, (int) config('variance.facsimile_thumb_quality', 80)));
 
         foreach ($images as $file) {
-            $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
-            $basename = "img_{$version->folder}_{$index}";
-            $ext      = strtolower($file->getClientOriginalExtension() ?: $file->guessClientExtension() ?: 'upload');
-            $ext      = preg_replace('/[^a-z0-9]/', '', $ext) ?: 'upload';
-
-            $queuedFilename = "{$basename}.{$ext}";
-            $queuedPath     = trim($queueDir . '/' . $queuedFilename, '/');
+            $ext = strtolower($file->getClientOriginalExtension() ?: $file->guessClientExtension() ?: 'upload');
+            $ext = preg_replace('/[^a-z0-9]/', '', $ext) ?: 'upload';
+            $isTiff = in_array($ext, ['tif', 'tiff'], true);
 
             try {
-                $queueDisk->delete($queuedPath);
-                $queueDisk->putFileAs($queueDir, $file, $queuedFilename);
-
-                ProcessFacsimileImage::dispatch(
-                    versionId: $version->id,
-                    basename: $basename,
-                    queuedDisk: $queueDiskName,
-                    queuedPath: $queuedPath,
-                    outputDir: $dirRel,
-                    maxLongEdge: $maxLongEdge,
-                    mainQuality: $mainQuality,
-                    thumbWidth: $thumbWidth,
-                    thumbQuality: $thumbQuality,
-                );
-
-                $queued++;
+                $pageCount = $this->detectSourcePageCount($file, $isTiff);
+                $bytes = file_get_contents($file->getRealPath());
+                if ($bytes === false) {
+                    throw new \RuntimeException('Impossible de lire le fichier source temporaire.');
+                }
             } catch (\Throwable $e) {
-                Log::warning('Facsimile enqueue failed', [
+                Log::warning('Facsimile source analysis failed', [
                     'file' => $file->getClientOriginalName(),
                     'err'  => $e->getMessage(),
                 ]);
-                $errors[] = "{$basename}.jpg";
-                $queueDisk->delete($queuedPath);
+                $errors[] = $file->getClientOriginalName();
+                continue;
             }
-            $i++;
+
+            for ($page = 0; $page < $pageCount; $page++) {
+                $index    = str_pad($i, 3, '0', STR_PAD_LEFT);
+                $basename = "img_{$version->folder}_{$index}";
+                $queuedFilename = "{$basename}.{$ext}";
+                $queuedPath     = trim($queueDir . '/' . $queuedFilename, '/');
+
+                try {
+                    $queueDisk->delete($queuedPath);
+                    $queueDisk->put($queuedPath, $bytes);
+
+                    ProcessFacsimileImage::dispatch(
+                        versionId: $version->id,
+                        basename: $basename,
+                        queuedDisk: $queueDiskName,
+                        queuedPath: $queuedPath,
+                        outputDir: $dirRel,
+                        maxLongEdge: $maxLongEdge,
+                        mainQuality: $mainQuality,
+                        thumbWidth: $thumbWidth,
+                        thumbQuality: $thumbQuality,
+                        sourcePage: $isTiff ? $page : null,
+                    );
+
+                    $queued++;
+                } catch (\Throwable $e) {
+                    Log::warning('Facsimile enqueue failed', [
+                        'file' => $file->getClientOriginalName(),
+                        'page' => $page,
+                        'err'  => $e->getMessage(),
+                    ]);
+                    $errors[] = "{$basename}.jpg";
+                    $queueDisk->delete($queuedPath);
+                }
+
+                $i++;
+            }
         }
 
         return response()->json([
@@ -462,5 +485,32 @@ class FacsimileController extends Controller
     private function hasCancelMarker(int $versionId): bool
     {
         return is_file($this->cancelMarkerPath($versionId));
+    }
+
+    private function detectSourcePageCount(UploadedFile $file, bool $isTiff): int
+    {
+        if (!$isTiff) {
+            return 1;
+        }
+
+        if (!class_exists(\Imagick::class)) {
+            throw new \RuntimeException('Le support TIFF multipage nécessite l’extension Imagick.');
+        }
+
+        $path = $file->getRealPath();
+        if (!$path || !is_file($path)) {
+            throw new \RuntimeException('Fichier TIFF temporaire introuvable.');
+        }
+
+        $imagick = new \Imagick();
+        try {
+            $imagick->pingImage($path);
+            $count = (int) $imagick->getNumberImages();
+        } finally {
+            $imagick->clear();
+            $imagick->destroy();
+        }
+
+        return max(1, $count);
     }
 }
