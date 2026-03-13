@@ -6,7 +6,7 @@
         <span>Retour à l’accueil</span>
     </a>
 
-    <h1 class="border-bottom pb-2">Version <b>{{ $version->name }}</b> | Oeuvre <b>{{ $version->work->title }}</b> | Auteur <b>{{ $version->work->author->name }}</b></h1>
+    <h1 class="border-bottom pb-2">Version <b>{{ $version->name }}</b> | Œuvre <b>{{ $version->work->title }}</b> | Auteur <b>{{ $version->work->author->name }}</b></h1>
 
     <div class="border border-top-0 p-3 row m-0 overflow-auto editor" style="height: calc(100vh - 200px);">
         <div class="col-md-6 col-12 order-last order-md-first h-100 d-flex flex-column">

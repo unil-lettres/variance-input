@@ -25,6 +25,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const addWorkBtn      = document.getElementById("add-work-btn");
   const editWorkBtn     = document.getElementById("edit-work-btn");
   const deleteWorkBtn   = document.getElementById("delete-work-btn");
+  const selectorContextTitle = document.getElementById("work-selector-context-title");
+  const selectorContextText = document.getElementById("work-selector-context-text");
+  const workSelectorPanel = document.getElementById("work-selector-panel");
 
   const saveAuthorBtn   = document.getElementById("save-author-btn");
   const updateAuthorBtn = document.getElementById("update-author-btn");
@@ -196,11 +199,49 @@ document.addEventListener("DOMContentLoaded", () => {
     }));
   }
 
+  function updateSelectionContext() {
+    const authorOption = authorSelector.value
+      ? authorSelector.options[authorSelector.selectedIndex]
+      : null;
+    const workOption = workSelector.value
+      ? workSelector.options[workSelector.selectedIndex]
+      : null;
+    const authorLabel = authorOption?.textContent?.trim() || '';
+    const workLabel = workOption?.textContent?.trim() || '';
+    const isLegacyWork = workOption?.dataset?.isLegacy === '1';
+
+    if (workSelectorPanel) {
+      workSelectorPanel.classList.toggle('is-inactive', !authorOption);
+    }
+    if (!selectorContextTitle || !selectorContextText) return;
+    selectorContextText.classList.toggle('is-warning', !!isLegacyWork && !!workLabel);
+
+    if (!authorLabel) {
+      selectorContextTitle.textContent = 'Aucune œuvre sélectionnée';
+      selectorContextText.textContent = 'Sélectionnez d’abord un auteur, puis une œuvre pour charger l’atelier éditorial correspondant.';
+      selectorContextText.classList.remove('is-warning');
+      return;
+    }
+
+    if (!workLabel) {
+      selectorContextTitle.textContent = authorLabel;
+      selectorContextText.textContent = 'Choisissez maintenant une œuvre pour ouvrir le contexte éditorial associé.';
+      selectorContextText.classList.remove('is-warning');
+      return;
+    }
+
+    selectorContextTitle.textContent = `${authorLabel} · ${workLabel}`;
+    selectorContextText.textContent = isLegacyWork
+      ? 'Cette œuvre fait partie de la collection Variance originelle, son contenu est en lecture seule.'
+      : '';
+  }
+
   function resetWorksUI(authorId = null) {
-    workSelector.innerHTML = '<option value="" disabled selected>Sélectionner une oeuvre</option>';
+    workSelector.innerHTML = '<option value="" disabled selected>Sélectionner une œuvre</option>';
     workSelector.value     = '';
     workSelector.disabled  = !authorId;
     toggleWorkButtons();
+    updateSelectionContext();
   }
 
   function initialReset({ dispatch = true } = {}) {
@@ -208,6 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
     authorSelector.value = '';
     resetWorksUI(null, null);
     toggleAuthorButtons();
+    updateSelectionContext();
     if (dispatch) {
       dispatchWorkSelected(null, null);
     }
@@ -248,6 +290,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ——— AUTHOR CHANGE ———
   authorSelector.addEventListener("change", () => {
     toggleAuthorButtons();
+    updateSelectionContext();
 
     const authorId = authorSelector.value || null;
 
@@ -269,6 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ——— WORK CHANGE ———
   workSelector.addEventListener("change", () => {
     toggleWorkButtons();
+    updateSelectionContext();
 
     const workId   = workSelector.value || null;
     const authorId = authorSelector.value || null;
@@ -415,7 +459,7 @@ document.addEventListener("DOMContentLoaded", () => {
     })
     .catch(error => {
       console.error(error);
-      alert("Impossible de supprimer cet auteur. Vérifiez qu'il n'a pas encore d'oeuvres associées.");
+      alert("Impossible de supprimer cet auteur. Vérifiez qu'il n'a pas encore d'œuvres associées.");
     });
   });
 
@@ -618,6 +662,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         toggleAuthorButtons();
+        updateSelectionContext();
 
         if (targetAuthorId) {
           // 🔔 clear dependent blades only when we're not restoring an initial selection
@@ -712,6 +757,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // keep edit / delete buttons in sync
         toggleWorkButtons();
+        updateSelectionContext();
         reflectSelectionInUrl();
       })
       .catch(console.error);
@@ -721,7 +767,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasValue = !!authorSelector.value;
     const selected = hasValue ? authorSelector.options[authorSelector.selectedIndex] : null;
     const isLegacy = selected?.dataset?.isLegacy === '1';
-    const legacyNote = 'Les auteurs legacy sont en lecture seule.';
+    const legacyNote = 'Le nom de l’auteur importé du site public est en lecture seule.';
 
     editAuthorBtn.disabled = !hasValue || isLegacy;
     deleteAuthorBtn.disabled = !hasValue || isLegacy;
@@ -736,6 +782,7 @@ document.addEventListener("DOMContentLoaded", () => {
       editAuthorBtn.title = defaultTitles.editAuthor;
       deleteAuthorBtn.title = defaultTitles.deleteAuthor;
     }
+    updateSelectionContext();
   }
 
   function reflectSelectionInUrl() {
@@ -781,7 +828,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasValue = !!workSelector.value;
     const selected = hasValue ? workSelector.options[workSelector.selectedIndex] : null;
     const isLegacy = selected?.dataset?.isLegacy === '1';
-    const legacyNote = 'Les oeuvres legacy sont en lecture seule.';
+    const legacyNote = 'Les œuvres importées du site public sont en lecture seule.';
 
     editWorkBtn.disabled   = !hasValue || isLegacy;
     deleteWorkBtn.disabled = !hasValue || isLegacy;
@@ -796,5 +843,6 @@ document.addEventListener("DOMContentLoaded", () => {
       editWorkBtn.title = defaultTitles.editWork;
       deleteWorkBtn.title = defaultTitles.deleteWork;
     }
+    updateSelectionContext();
   }
 });

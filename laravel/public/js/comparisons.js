@@ -2,7 +2,12 @@ function initComparisonsTable() {
   const tbody          = document.querySelector('#comparisons-table tbody');
   const loading        = document.getElementById('comparisons-loading');
   const noComparisons  = document.getElementById('no-comparisons');
-  const statusCheck    = document.getElementById('comparisons-status-check');
+  const comparisonsTitleCount = document.getElementById('comparisons-title-count');
+  const comparisonsSummaryTitle = document.getElementById('comparisons-summary-title');
+  const comparisonsSummarySubtitle = document.getElementById('comparisons-summary-subtitle');
+  const comparisonsSummaryTotal = document.getElementById('comparisons-summary-total');
+  const comparisonsSummaryPublished = document.getElementById('comparisons-summary-published');
+  const comparisonsSummaryDraft = document.getElementById('comparisons-summary-draft');
   const setComparisonsLoading = (state) => {
     if (typeof window.setBladeLoading === 'function') {
       window.setBladeLoading('comparisonsCollapse', state);
@@ -102,6 +107,25 @@ function initComparisonsTable() {
     const mins = minutes % 60;
     return `${hours}h ${mins}m`;
   };
+  const formatElapsedSince = value => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const elapsedMs = Date.now() - date.getTime();
+    if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return null;
+    const totalSeconds = Math.floor(elapsedMs / 1000);
+    if (totalSeconds < 60) {
+      return `${totalSeconds}s`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes < 60) {
+      return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins.toString().padStart(2, '0')}m`;
+  };
   const normalizeCount = value => {
     const num = Number(value);
     return Number.isFinite(num) && num >= 0 ? num : 0;
@@ -113,17 +137,6 @@ function initComparisonsTable() {
 
   let paginationWarningModal = null;
   let paginationWarningResolve = null;
-  let comparisonsStatusTooltip = '';
-
-  if (statusCheck && window.bootstrap && bootstrap.Tooltip) {
-    new bootstrap.Tooltip(statusCheck, {
-      title: () => comparisonsStatusTooltip,
-      trigger: 'hover',
-      delay: { show: 500, hide: 0 },
-      placement: 'left',
-    });
-  }
-
   const getPaginationWarningChoice = () => {
     const modalEl = document.getElementById('pagination-warning-modal');
     if (!modalEl || !window.bootstrap || !bootstrap.Modal) {
@@ -160,24 +173,52 @@ function initComparisonsTable() {
   function updateComparisonCounts(published, total) {
     const pub = normalizeCount(published);
     const tot = normalizeCount(total);
-    const hide = tot === 0 && pub === 0 && (!isValidWorkId(currentWorkId) || !isValidId(currentAuthorId));
-    if (hide) {
-      if (statusCheck) {
-        statusCheck.className = 'admin-card-check d-none';
-        statusCheck.title = '';
-      }
-      comparisonsStatusTooltip = '';
+    if (!comparisonsTitleCount) return;
+    const count = (tot === 0 && pub === 0 && (!isValidWorkId(currentWorkId) || !isValidId(currentAuthorId))) ? 0 : tot;
+    comparisonsTitleCount.textContent = `(${count})`;
+    const draft = Math.max(0, count - pub);
+    const totalLabel = `${count} comparaison${count === 1 ? '' : 's'}`;
+    const publishedLabel = `${pub} publiée${pub === 1 ? '' : 's'}`;
+    const draftLabel = `${draft} éditoriale${draft === 1 ? '' : 's'}`;
+    if (comparisonsSummaryTotal) comparisonsSummaryTotal.textContent = totalLabel;
+    if (comparisonsSummaryPublished) comparisonsSummaryPublished.textContent = publishedLabel;
+    if (comparisonsSummaryDraft) comparisonsSummaryDraft.textContent = draftLabel;
+  }
+
+  function updateComparisonSummaryState(state, counts = {}) {
+    const total = normalizeCount(counts.total);
+    const published = normalizeCount(counts.published);
+    const draft = Math.max(0, total - published);
+    if (comparisonsSummaryTotal) {
+      comparisonsSummaryTotal.textContent = `${total} comparaison${total === 1 ? '' : 's'}`;
+    }
+    if (comparisonsSummaryPublished) {
+      comparisonsSummaryPublished.textContent = `${published} publiée${published === 1 ? '' : 's'}`;
+    }
+    if (comparisonsSummaryDraft) {
+      comparisonsSummaryDraft.textContent = `${draft} éditoriale${draft === 1 ? '' : 's'}`;
+    }
+    if (!comparisonsSummaryTitle || !comparisonsSummarySubtitle) return;
+
+    if (state === 'idle') {
+      comparisonsSummaryTitle.textContent = 'Section en attente de sélection';
+      comparisonsSummarySubtitle.textContent = 'Sélectionnez une œuvre pour afficher les comparaisons textuelles disponibles.';
       return;
     }
-    if (!statusCheck) return;
-
-    statusCheck.className = 'admin-card-check';
-    statusCheck.innerHTML = '&#10003;';
-    if (tot > 0) {
-      statusCheck.classList.add('admin-card-check--done');
+    if (state === 'loading') {
+      comparisonsSummaryTitle.textContent = 'Chargement des comparaisons textuelles';
+      comparisonsSummarySubtitle.textContent = 'Les résultats éditoriaux de l’œuvre sélectionnée sont en cours de récupération.';
+      return;
     }
-    comparisonsStatusTooltip = `Comparaisons : ${tot}`;
-    statusCheck.title = comparisonsStatusTooltip;
+    if (state === 'empty') {
+      comparisonsSummaryTitle.textContent = 'Aucune comparaison textuelle disponible';
+      comparisonsSummarySubtitle.textContent = 'Lancez un alignement dans la section Alignement Medite pour produire un premier résultat.';
+      return;
+    }
+    comparisonsSummaryTitle.textContent = 'Comparaisons disponibles pour l’œuvre sélectionnée';
+    comparisonsSummarySubtitle.textContent = published > 0
+      ? 'Chaque comparaison peut être consultée, complétée puis publiée individuellement.'
+      : 'Les comparaisons listées ci-dessous sont encore au stade éditorial tant qu’elles ne sont pas publiées.';
   }
 
   function refreshComparisonCounts() {
@@ -951,16 +992,19 @@ function initComparisonsTable() {
     };
   }
 
-  function renderMediteParams(comp) {
+  function renderMediteParams(comp, { isRunning = false } = {}) {
     if (comp?.is_legacy) {
       return '<span class="text-muted">n/a</span>';
     }
     const chips = [];
 
     const pushChip = (html, variant) => {
-      const variantClass = variant === 'output'
-        ? 'comparison-param-chip--output'
-        : 'comparison-param-chip--input';
+      let variantClass = 'comparison-param-chip--input';
+      if (variant === 'output') {
+        variantClass = 'comparison-param-chip--output';
+      } else if (variant === 'running') {
+        variantClass = 'comparison-param-chip--running';
+      }
       chips.push(`<span class="comparison-param-chip ${variantClass}">${html}</span>`);
     };
 
@@ -1021,6 +1065,13 @@ function initComparisonsTable() {
     addNumeric('Seuil', comp.seuil);
     addBoolean('Sensibilité casse', comp.case_sensitive);
     addSeparators(comp.sep);
+    if (isRunning) {
+      pushChip('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Exécution</strong> en cours', 'running');
+      const elapsed = formatElapsedSince(comp.created_at);
+      if (elapsed) {
+        pushChip(`<strong>Temps écoulé</strong> ${elapsed}`, 'running');
+      }
+    }
     addDuration('Durée', comp.medite_runtime_ms);
     addMemory('Pic mémoire', comp.medite_peak_rss_kb);
     const counts = comp.medite_component_counts || comp.component_counts || {};
@@ -1353,6 +1404,7 @@ function initComparisonsTable() {
 
   // Initial reset for counts with no selection
   updateComparisonCounts(0, 0);
+  updateComparisonSummaryState('idle', { total: 0, published: 0 });
 
   function resetUI() {
     loading.style.display = 'none';
@@ -1363,6 +1415,7 @@ function initComparisonsTable() {
     comparisonRows.clear();
     comparisonDetailsRequests.clear();
     updateComparisonCounts(0, 0);
+    updateComparisonSummaryState('idle', { total: 0, published: 0 });
     setComparisonsLoading(false);
   }
 
@@ -1438,7 +1491,7 @@ function initComparisonsTable() {
       : (createdAt ? `(${createdAt})` : '');
 
     comparisonData.set(comp.id, comp);
-    const mediteParamsHtml = renderMediteParams(comp);
+    const mediteParamsHtml = renderMediteParams(comp, { isRunning });
     const scopeName = `publish-scope-${comp.id}`;
     const defaultScope = scope || (isLegacy ? 'prod' : 'dev');
     const publishDisabled = !detailsLoaded || !comp.publish_source || isLegacy || ownershipBlocked;
@@ -1597,6 +1650,7 @@ function initComparisonsTable() {
     activeComparisonsRequest = requestToken;
 
     setComparisonsLoading(true);
+    updateComparisonSummaryState('loading', { total: 0, published: 0 });
     loading.style.display = 'block';
     tbody.innerHTML = '';
     comparisonRoleComponents.clear();
@@ -1625,11 +1679,13 @@ function initComparisonsTable() {
 
       if (!Array.isArray(comparisons) || comparisons.length === 0) {
         updateComparisonCounts(publishedCount, totalCount);
+        updateComparisonSummaryState('empty', { total: totalCount, published: publishedCount });
         noComparisons.style.display = 'block';
         return;
       }
 
       updateComparisonCounts(publishedCount, totalCount);
+      updateComparisonSummaryState('ready', { total: totalCount, published: publishedCount });
 
       comparisons.forEach(comp => {
         const row = buildComparisonRow(comp);
@@ -1643,6 +1699,7 @@ function initComparisonsTable() {
       console.error('Erreur lors du chargement des comparaisons:', err);
       // Leave UI cleared; don't try to render an error page as JSON
       updateComparisonCounts(0, 0);
+      updateComparisonSummaryState('empty', { total: 0, published: 0 });
       noComparisons.style.display = 'block';
     } finally {
       if (requestToken === activeComparisonsRequest) {
@@ -1650,6 +1707,18 @@ function initComparisonsTable() {
       }
       setComparisonsLoading(false);
     }
+  }
+
+  function refreshRunningComparisonIndicators() {
+    comparisonData.forEach((comp, comparisonId) => {
+      const numericId = Number(comparisonId);
+      if (!runningComparisons.has(numericId)) return;
+      const row = comparisonRows.get(numericId);
+      if (!row) return;
+      const paramsCell = row.children[4];
+      if (!paramsCell) return;
+      paramsCell.innerHTML = renderMediteParams(comp, { isRunning: true });
+    });
   }
 
   // React to global events, but let loadComparisons() guard invalid IDs
@@ -1672,6 +1741,13 @@ function initComparisonsTable() {
     loadComparisons(e.detail?.workId);
   });
 
+  document.addEventListener('comparisonCompleted', e => {
+    if (e.detail?.comparisonId) {
+      runningComparisons.delete(Number(e.detail.comparisonId));
+    }
+    loadComparisons(e.detail?.workId);
+  });
+
   document.addEventListener('comparisonFailed', e => {
     if (e.detail?.comparisonId) {
       runningComparisons.delete(Number(e.detail.comparisonId));
@@ -1679,7 +1755,19 @@ function initComparisonsTable() {
     loadComparisons(e.detail?.workId);
   });
 
+  document.addEventListener('comparisonDeleted', e => {
+    if (e.detail?.comparisonId) {
+      runningComparisons.delete(Number(e.detail.comparisonId));
+    }
+    loadComparisons(e.detail?.workId);
+  });
+
   document.addEventListener('versionsUpdated',   e => loadComparisons(e.detail?.workId));
+  document.addEventListener('refreshComparisons', () => loadComparisons(currentWorkId));
+  window.setInterval(() => {
+    if (runningComparisons.size === 0) return;
+    refreshRunningComparisonIndicators();
+  }, 1000);
 
   document.addEventListener('comparisonManifestUpdated', e => {
     const detail = e.detail || {};
@@ -1981,6 +2069,7 @@ function initComparisonsTable() {
       const rows = Array.from(tbody.querySelectorAll('tr'));
       const publishedLeft = rows.filter(row => row.dataset.published === '1').length;
       updateComparisonCounts(publishedLeft, rows.length);
+      updateComparisonSummaryState(rows.length ? 'ready' : 'empty', { total: rows.length, published: publishedLeft });
       if (!rows.length) noComparisons.style.display = 'block';
 
     } catch (err) {

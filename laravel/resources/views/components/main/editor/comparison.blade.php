@@ -7,7 +7,7 @@
             <span>Retour à l’accueil</span>
         </a>
 
-        <h1>Oeuvre <b>{{ $work->title }}</b> | Auteur <b>{{ $work->author->name }}</b> | Comparaison <b>#{{ $comparison->id }}</b></h1>
+        <h1>Œuvre <b>{{ $work->title }}</b> | Auteur <b>{{ $work->author->name }}</b> | Comparaison <b>#{{ $comparison->id }}</b></h1>
 
         <div class="d-flex flex-wrap align-items-center gap-2 mt-3 mb-2">
             <span class="badge text-bg-secondary">Composants: {{ count($components) }}</span>

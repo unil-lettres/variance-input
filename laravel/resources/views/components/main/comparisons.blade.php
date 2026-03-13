@@ -5,21 +5,36 @@
          data-bs-target="#comparisonsCollapse"
          aria-expanded="true"
          aria-controls="comparisonsCollapse">
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-start gap-2 admin-card-heading">
             <span class="collapse-chevron" aria-hidden="true"></span>
-            <span>Comparaisons</span>
+            <span class="admin-card-heading-text">
+                <span class="admin-card-title">Comparaisons textuelles <span id="comparisons-title-count">(0)</span></span>
+                <span class="admin-card-subtitle">Résultats produits à partir des versions</span>
+            </span>
         </div>
-        <span id="comparisons-status-check" class="admin-card-check" aria-label="Statut comparaisons">&#10003;</span>
     </div>
 
     <div id="comparisonsCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-2">
-            Retrouvez ici toutes les comparaisons produites avec Medite pour l'œuvre sélectionnée. Vous pouvez suivre leur état, accéder aux résultats ou relancer la pagination si nécessaire.
+            Retrouvez ici les comparaisons textuelles produites pour l’œuvre sélectionnée.
         </p>
         <p class="text-muted small mb-3">
-            Pagination : préparez d’abord les données de pagination au niveau des versions, puis injectez‑les dans chaque comparaison. Deux options : (1) importer un fichier <code>_lignes</code> pour une version ; (2) ajouter des balises <code>&lt;pb&gt;</code> dans l’éditeur de version puis cliquer sur « Importer depuis l’éditeur » dans la section Versions. Si vous combinez <code>_lignes</code> + marqueurs manuels, importez d’abord <code>_lignes</code>, puis « Importer depuis l’éditeur ». Une fois les données prêtes, cliquez « Injecter la pagination » dans la comparaison concernée. Les données de pagination sont stockées par version et réutilisables, mais l’injection reste comparaison par comparaison. En cas de corrections, réimportez dans la version puis réinjectez la comparaison.
+            En pratique : suivez l’état des traitements, ouvrez les résultats, puis injectez la pagination après préparation des données dans la section Versions textuelles.
         </p>
+
+        <div class="comparisons-summary-band">
+            <div class="comparisons-summary-text">
+                <div class="comparisons-summary-title" id="comparisons-summary-title">Section en attente de sélection</div>
+                <div class="comparisons-summary-subtitle" id="comparisons-summary-subtitle">Sélectionnez une œuvre pour afficher les comparaisons textuelles disponibles.</div>
+            </div>
+            <div class="comparisons-summary-metrics">
+                <span class="comparisons-summary-pill" id="comparisons-summary-total">0 comparaison</span>
+                <span class="comparisons-summary-pill" id="comparisons-summary-published">0 publiée</span>
+                <span class="comparisons-summary-pill" id="comparisons-summary-draft">0 éditoriale</span>
+            </div>
+        </div>
+
         <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">
             <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -88,6 +103,52 @@
   #comparisonsCollapse.show * {
     visibility: visible !important;
   }
+  .comparisons-summary-band {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem 1rem;
+    margin-bottom: 1rem;
+    padding: 0.95rem 1.05rem;
+    border: 1px solid #ddd6ca;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #fbfaf7 0%, #f3efe8 100%);
+  }
+  .comparisons-summary-text {
+    min-width: 0;
+    flex: 1 1 20rem;
+  }
+  .comparisons-summary-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #463f38;
+  }
+  .comparisons-summary-subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #655d53;
+  }
+  .comparisons-summary-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+  .comparisons-summary-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.25rem 0.7rem;
+    border: 1px solid #d8d0c4;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #5d5449;
+    white-space: nowrap;
+  }
   .comparisons-table th {
     font-weight: 600;
     font-size: 0.85rem;
@@ -125,8 +186,30 @@
     background: #e7f4ea;
     color: #1f4d2f;
   }
+  .comparison-param-chip--running {
+    background: #fff4db;
+    color: #7a5512;
+    border: 1px solid #f0d49a;
+  }
   .comparison-param-chip strong {
     color: #1d2340;
+  }
+  .comparison-param-chip--running strong {
+    color: #6a470e;
+  }
+  .comparison-running-spinner {
+    display: inline-block;
+    width: 0.82rem;
+    height: 0.82rem;
+    margin-right: 0.35rem;
+    border: 0.12rem solid rgba(122, 85, 18, 0.25);
+    border-top-color: #c58a1f;
+    border-radius: 999px;
+    vertical-align: -0.12rem;
+    animation: comparison-running-spin 0.85s linear infinite;
+  }
+  @keyframes comparison-running-spin {
+    to { transform: rotate(360deg); }
   }
   .manifest-json-pill {
     cursor: pointer;

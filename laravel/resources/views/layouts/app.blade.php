@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Variance')</title>
+    <title>@yield('title', 'Variance — Atelier éditorial')</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -158,9 +158,16 @@
         }
         .admin-brand img {
             display: block;
-            height: 22px;
+            height: 26px;
             width: auto;
             filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+        }
+        .admin-brand-logo {
+            display: block;
+            height: 30px;
+            width: auto;
+            max-width: min(17rem, 42vw);
+            filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28));
         }
         .admin-brand-text {
             font-family: var(--font-serif);
@@ -240,6 +247,71 @@
         }
         .admin-main-page footer {
             display: block;
+        }
+        .admin-main-page header {
+            margin-bottom: 1rem !important;
+        }
+        .admin-main-page .admin-banner-shell {
+            border-bottom: none;
+        }
+        .admin-main-page .admin-banner {
+            --banner-ink: rgba(0, 0, 0, 0.22);
+            --banner-wash: rgba(255, 255, 255, 0.1);
+            background-image:
+                radial-gradient(150px 110px at 10% 65%, var(--banner-ink), rgba(0, 0, 0, 0) 60%),
+                radial-gradient(220px 170px at 24% 28%, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 70%),
+                linear-gradient(180deg, var(--banner-wash), rgba(0, 0, 0, 0.08)),
+                repeating-linear-gradient(
+                    45deg,
+                    rgba(255, 255, 255, 0.025) 0 2px,
+                    rgba(0, 0, 0, 0.02) 2px 4px
+                );
+            box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+        }
+        .admin-main-page header .admin-banner {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+        }
+        .admin-main-page .admin-brand a {
+            background: rgba(0, 0, 0, 0.24);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+        .admin-main-page .admin-brand-text {
+            font-size: 1.08rem;
+        }
+        .admin-main-page .admin-brand-logo {
+            height: 28px;
+            max-width: min(15rem, 38vw);
+        }
+        .admin-main-page .admin-brand-role {
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+            font-size: 0.72rem;
+        }
+        .admin-main-page .admin-user-toggle {
+            background: rgba(0, 0, 0, 0.2);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        }
+        .admin-main-page .admin-user-toggle:hover {
+            background: rgba(0, 0, 0, 0.3);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+        }
+        .admin-main-page main {
+            padding-top: 0.15rem;
+        }
+        .admin-main-page footer {
+            margin-top: 1.25rem !important;
+        }
+        .admin-main-page footer .admin-banner {
+            background-image: none;
+            background-color: rgba(111, 109, 106, 0.14) !important;
+            color: #6a6157 !important;
+            box-shadow: none;
+            border-top: 1px solid rgba(117, 107, 94, 0.12);
+        }
+        .admin-main-page footer .admin-page-shell {
+            font-size: 0.78rem;
+            letter-spacing: 0.03em;
         }
         .admin-loading-overlay {
             position: fixed;
@@ -343,10 +415,7 @@
             <div class="container admin-page-shell d-flex justify-content-between align-items-center">
                 <div class="admin-brand">
                     <a href="{{ rtrim(admin_path(), '/') . '/' }}">
-                        <span class="admin-brand-text">
-                            <span class="admin-brand-name">Variance</span>
-                            <span class="admin-brand-role">Admin</span>
-                        </span>
+                        <img class="admin-brand-logo" src="{{ legacy_url('img/full_logo_white.svg') }}" alt="Variance">
                     </a>
                 </div>
 
@@ -363,10 +432,10 @@
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-tasks-menu">
                                     <li>
-                                        <a class="dropdown-item" href="{{ $mediteStatusUrl }}" target="_blank" rel="noopener">Tâches Medite</a>
+                                        <a class="dropdown-item" href="{{ $mediteStatusUrl }}" target="_blank" rel="noopener">Traitements Medite</a>
                                     </li>
                                     <li>
-                                        <a class="dropdown-item" href="{{ admin_path('tasks') }}">Tâches Laravel</a>
+                                        <a class="dropdown-item" href="{{ admin_path('tasks') }}">File Laravel</a>
                                     </li>
                                     <li>
                                         <a class="dropdown-item" href="{{ admin_path('health/report') }}">État système</a>
@@ -381,17 +450,17 @@
 	                                id="admin-sites-menu"
                                 data-bs-toggle="dropdown"
                                 aria-expanded="false">
-                            Aller a
+                            Aller à
 		                        </button>
 		                        <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
                                     <li>
-                                        <span class="dropdown-item-text text-muted small">Variance legacy</span>
+                                        <span class="dropdown-item-text text-muted small">Site public</span>
                                     </li>
 		                            <li>
 		                                <a class="dropdown-item" href="{{ legacy_url() }}" data-site-scope="prod" data-site-label="Site public">Site public</a>
 		                            </li>
 		                            <li>
-		                                <a class="dropdown-item" href="{{ legacy_url('dev') }}" data-site-scope="dev" data-site-label="Site dev">Site dev</a>
+		                                <a class="dropdown-item" href="{{ legacy_url('dev') }}" data-site-scope="dev" data-site-label="Site de travail">Site de travail</a>
 		                            </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
@@ -460,7 +529,7 @@
     <footer class="mt-4">
         <div class="admin-banner py-2 text-white shadow-sm" style="{{ $adminBannerStyle }}">
             <div class="container admin-page-shell text-center small">
-                © 2026 Variance — Tous droits réservés
+                Variance — Atelier éditorial
             </div>
         </div>
     </footer>
@@ -527,7 +596,7 @@
                         const authorId = String(entry?.authorId ?? '').trim();
                         const workId = String(entry?.workId ?? '').trim();
                         const authorLabel = entry?.authorLabel || 'Auteur';
-                        const workLabel = entry?.workLabel || 'Oeuvre';
+                        const workLabel = entry?.workLabel || 'Œuvre';
                         const href = buildSelectUrl(entry) || (typeof window.withBasePath === 'function' ? window.withBasePath('/') : '/');
 
                         return `
@@ -592,7 +661,7 @@
                     return;
                 }
                 const prodLabel = prodLink.dataset.siteLabel || 'Site public';
-                const devLabel = devLink.dataset.siteLabel || 'Site dev';
+                const devLabel = devLink.dataset.siteLabel || 'Site de travail';
 
                 try {
                     const res = await fetch(withBasePath('/api/comparisons/publication-counts'), {

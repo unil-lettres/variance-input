@@ -6,34 +6,111 @@
          data-bs-target="#versionsCollapse"
          aria-expanded="true"
          aria-controls="versionsCollapse">
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-start gap-2 admin-card-heading">
             <span class="collapse-chevron" aria-hidden="true"></span>
-            <span>Versions</span>
+            <span class="admin-card-heading-text">
+                <span class="admin-card-title">Versions textuelles <span id="versions-title-count">(0)</span></span>
+                <span class="admin-card-subtitle">Témoins textuels utilisés pour l’alignement</span>
+            </span>
         </div>
-        <span id="versions-status-check" class="admin-card-check" aria-label="Statut versions">&#10003;</span>
     </div>
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
-        <p class="fst-italic text-muted small mb-3">
-            Les versions textuelles alimentent Medite. La pagination se prépare au niveau des versions, puis s’injecte dans chaque comparaison. Ajoutez vos balises <code>&lt;pb&gt;</code> dans l’éditeur (icône crayon), puis cliquez sur «&nbsp;Importer depuis l’éditeur&nbsp;» pour alimenter les données de pagination de la version. Si vous disposez d’un fichier <code>_lignes</code>, importez‑le ici ; si vous combinez <code>_lignes</code> et marqueurs manuels, importez d’abord <code>_lignes</code>, puis «&nbsp;Importer depuis l’éditeur&nbsp;». Une fois les données prêtes, allez dans Comparaisons pour injecter la pagination. Pour les fac‑similés, le bouton «&nbsp;Téléverser&nbsp;» importe l’ensemble des images; l’onglet Fac‑similés permet ensuite de choisir, par comparaison, le sous‑ensemble publié (manifeste JSON). Les fac‑similés sont publiés automatiquement lors de la publication d’une comparaison.
-        </p>
+        <div class="versions-toolbar mb-4">
+            <div class="versions-toolbar-primary">
+                <div class="versions-toolbar-label">Actions éditoriales</div>
+                <button type="button"
+                        class="btn btn-primary"
+                        id="open-upload-version-modal"
+                        disabled
+                        aria-label="Téléverser une version">
+                    Téléverser une version
+                </button>
+            </div>
+            <div class="versions-toolbar-guides">
+                <div class="versions-guide-card">
+                    <div class="versions-guide-title">Pagination</div>
+                    <div class="versions-guide-text">
+                        Préparez les données dans chaque ligne de version, par fichier <code>_lignes</code> ou depuis l’éditeur.
+                    </div>
+                </div>
+                <div class="versions-guide-card">
+                    <div class="versions-guide-title">Fac-similés</div>
+                    <div class="versions-guide-text">
+                        Téléversez et consultez les images depuis la colonne dédiée, puis retrouvez-les dans la section Fac-similés.
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- ────────────── Versions list  ────────────── -->
-        <ul id="versions-list" class="list-group">
+        <ul id="versions-list" class="list-group versions-list-shell">
             <li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>
         </ul>
-        <div class="d-flex justify-content-start p-3">
-            <button type="button"
-                    class="btn btn-outline-primary"
-                    id="open-upload-version-modal"
-                    disabled
-                    aria-label="Téléverser une version">
-                Téléverser une version
-            </button>
-        </div>
     </div>
     </div>
 </div>
+
+@push('styles')
+<style>
+    .versions-toolbar {
+        display: grid;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+        padding: 1rem 1.1rem;
+        border: 1px solid #ddd6ca;
+        border-radius: 0.95rem;
+        background: linear-gradient(180deg, #fbfaf7 0%, #f2efe8 100%);
+    }
+    .versions-toolbar-primary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+    .versions-toolbar-label {
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #7a7165;
+    }
+    .versions-toolbar-guides {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+    .versions-guide-card {
+        padding: 0.85rem 0.95rem;
+        border: 1px solid #e1dbd0;
+        border-radius: 0.8rem;
+        background: rgba(255, 255, 255, 0.72);
+    }
+    .versions-guide-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #5f584f;
+        margin-bottom: 0.3rem;
+    }
+    .versions-guide-text {
+        font-size: 0.88rem;
+        line-height: 1.45;
+        color: #5c554b;
+    }
+    .versions-list-shell {
+        border-radius: 0.85rem;
+        overflow: hidden;
+    }
+    @media (max-width: 767.98px) {
+        .versions-toolbar-guides {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+@endpush
 
 <!-- ────────────── Edit modal  ────────────── -->
 <div class="modal fade" id="editVersionModal" tabindex="-1" aria-labelledby="editVersionModalLabel" aria-hidden="true">
@@ -51,8 +128,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="update-version-btn">Update</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" id="update-version-btn">Mettre à jour</button>
             </div>
         </div>
     </div>
@@ -118,6 +195,9 @@
                     <div class="row mb-2">
                         <label class="col-sm-3 col-form-label">Normalisations :</label>
                         <div class="col-sm-9">
+                            <div class="form-text text-muted mb-3">
+                                Par défaut, l'import convertit les retours de ligne au format standard, supprime les caractères invisibles, remplace les espaces insécables (<code>NBSP</code>, <code>NNBSP</code>) par des espaces normaux, enlève les tabulations, les alinéas, les doubles espaces, les espaces en fin de ligne, les blancs en début/fin de fichier, et applique les normalisations typographiques.
+                            </div>
                             <div class="form-check mb-1">
                                 <input class="form-check-input" type="checkbox" id="strip_indentation" name="strip_indentation" checked>
                                 <label class="form-check-label" for="strip_indentation">
@@ -128,7 +208,7 @@
                                 </button>
                             </div>
                             <div class="form-check mb-1">
-                                <input class="form-check-input" type="checkbox" id="collapse_double_spaces" name="collapse_double_spaces">
+                                <input class="form-check-input" type="checkbox" id="collapse_double_spaces" name="collapse_double_spaces" checked>
                                 <label class="form-check-label" for="collapse_double_spaces">
                                     Éliminer les doubles espaces
                                 </label>
@@ -154,17 +234,8 @@
                                     <i class="bi bi-info-circle"></i>
                                 </button>
                             </div>
-                            <div class="form-check mb-1">
-                                <input class="form-check-input" type="checkbox" id="preserve_nbsp" name="preserve_nbsp">
-                                <label class="form-check-label" for="preserve_nbsp">
-                                    Conserver les espaces insécables
-                                </label>
-                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Conserve les espaces insécables (NBSP, NNBSP). Si décoché, ils sont convertis en espaces normaux.">
-                                    <i class="bi bi-info-circle"></i>
-                                </button>
-                            </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="legacy_typography" name="legacy_typography">
+                                <input class="form-check-input" type="checkbox" id="legacy_typography" name="legacy_typography" checked>
                                 <label class="form-check-label" for="legacy_typography">
                                     Appliquer les normalisations typographiques
                                 </label>
@@ -192,21 +263,28 @@
                 <h5 class="modal-title" id="facsimileUploadModalLabel">Téléverser des fac-similés</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <p class="text-muted small" id="facsimile-upload-info">Sélectionnez un dossier contenant les images à importer.</p>
-                <div class="mb-3">
+            <div class="modal-body py-4">
+                <div class="rounded border bg-light-subtle px-3 py-3 mb-4">
+                    <p class="text-muted small mb-0 lh-base" id="facsimile-upload-info">
+                    Sélectionnez un dossier source contenant soit une suite d'images (JPG, PNG), soit un ou plusieurs fichiers TIFF multipages.
+                    Chaque image devient un fac-similé ; pour un TIFF multipage, chaque page est importée comme un fac-similé distinct.
+                    </p>
+                </div>
+                <div class="mb-4">
                     <div class="input-group">
-                        <label class="btn btn-outline-secondary mb-0" for="facsimile-img-input">Sélectionner le dossier d'images</label>
+                        <label class="btn btn-outline-secondary mb-0" for="facsimile-img-input">Sélectionner le dossier source</label>
                         <input type="file" id="facsimile-img-input" class="d-none" webkitdirectory directory multiple accept="image/*">
                         <span class="form-control" id="facsimile-folder-label" readonly>Aucun dossier</span>
                     </div>
                 </div>
-                <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="d-flex align-items-center gap-2 mb-3">
                     <div id="facsimile-upload-spinner" class="spinner-border spinner-border-sm text-primary" role="status" style="display:none;"></div>
                 </div>
-                <div id="facsimile-upload-log" class="small text-muted mb-2" style="white-space: pre-line;"></div>
-                <div id="facsimile-upload-total" class="small text-muted mb-2"></div>
-                <div id="facsimile-upload-summary" class="small text-muted" style="white-space: pre-line;"></div>
+                <div class="vstack gap-2">
+                    <div id="facsimile-upload-log" class="small text-muted lh-base" style="white-space: pre-line;"></div>
+                    <div id="facsimile-upload-total" class="small text-muted lh-base"></div>
+                    <div id="facsimile-upload-summary" class="small text-muted lh-base" style="white-space: pre-line;"></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-danger d-none" id="facsimile-upload-cancel-btn">Annuler l'import</button>
@@ -996,7 +1074,7 @@ function renderPaginationDoneState(versionId, data = null){
                 parts.push(doneByName);
             }
             const suffix = parts.length ? ` — ${parts.join(' · ')}` : '';
-            state.completionMeta.textContent = `Terminé${suffix}`;
+            state.completionMeta.textContent = `Validée${suffix}`;
             state.completionMeta.className = 'small text-success';
         } else {
             state.completionMeta.textContent = 'À cocher une fois la pagination validée.';
@@ -1523,7 +1601,6 @@ window.addEventListener('DOMContentLoaded',()=>{
             'collapse_double_spaces',
             'trim_line_ends',
             'trim_file_edges',
-            'preserve_nbsp',
             'legacy_typography',
         ].forEach((key) => {
             const input = document.getElementById(key);
@@ -1565,23 +1642,17 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 /*********************  API HELPERS  *********************/
 function updateVersionsCount(count) {
-    const check = document.getElementById('versions-status-check');
-    if (!check) return;
+    const countLabel = document.getElementById('versions-title-count');
+    if (!countLabel) return;
 
     if (count === null || count === undefined) {
-        check.className = 'admin-card-check d-none';
-        check.title = '';
+        countLabel.textContent = '(0)';
         return;
     }
 
     const numericCount = Number(count);
     const label = Number.isFinite(numericCount) ? numericCount : 0;
-    check.className = 'admin-card-check';
-    check.innerHTML = '&#10003;';
-    if (label > 0) {
-        check.classList.add('admin-card-check--done');
-    }
-    check.title = `Versions : ${label}`;
+    countLabel.textContent = `(${label})`;
 }
 
 function openFacsimileUploadModal(version) {
@@ -1603,7 +1674,7 @@ function openFacsimileUploadModal(version) {
     if (facModalTitle) facModalTitle.textContent = `Téléverser des fac-similés — ${facVersionName}`;
     const versionShort = version.folder || '';
     const infoLabel = versionShort ? `${facVersionName} [${versionShort}]` : facVersionName;
-    if (facModalInfo) facModalInfo.innerHTML = `Les fichiers seront importés dans l'ordre alphabétique-numérique de leur nom d'origine.<br><strong>Version cible :</strong> ${infoLabel}`;
+    if (facModalInfo) facModalInfo.innerHTML = `Importez un dossier source contenant des images JPG/PNG ou des fichiers TIFF multipages.<br>Les fichiers seront traités dans l'ordre alphabétique-numérique de leur nom d'origine et, pour chaque TIFF multipage, les pages seront importées dans leur ordre interne.<br><strong>Version cible :</strong> ${infoLabel}`;
     facSpaceOk = true;
     facSpaceCheckToken += 1;
     if (facFileInput) facFileInput.value = '';
@@ -2182,7 +2253,7 @@ async function fetchVersions(workId, force = false){
         facsimileRowState.clear();
         if(versions.length===0) {
             updateVersionsCount(0);
-            list.innerHTML='<div class="text-muted p-2">Aucune version textuelle disponible pour cette oeuvre - cliquez "Téléverser une version" ci-dessous pour en ajouter une.</div>';
+            list.innerHTML='<div class="text-muted p-2">Aucune version textuelle n’est encore associée à cette œuvre. Cliquez sur « Téléverser une version » pour en ajouter une.</div>';
             facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
             lignesPollers.forEach((_, id) => stopLignesPolling(id));
             return;
@@ -2265,6 +2336,9 @@ async function fetchVersions(workId, force = false){
                 if (btnFacView.dataset.facsimileLoading === '1') {
                     requestFacsimileProgress(v.id);
                 }
+                if (typeof window.openEditorialStep === 'function') {
+                    window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
+                }
                 document.dispatchEvent(new CustomEvent('facsimiles:select', {
                     detail: { versionId: v.id, versionName: v.name }
                 }));
@@ -2272,12 +2346,6 @@ async function fetchVersions(workId, force = false){
                 if (collapseEl && !collapseEl.classList.contains('show')) {
                     const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
                     collapse.show();
-                }
-                const facsimilesCard = document.getElementById('facsimiles-card');
-                if (facsimilesCard) {
-                    setTimeout(() => {
-                        facsimilesCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 50);
                 }
             });
             facButtons.appendChild(btnFacView);
@@ -2350,13 +2418,13 @@ async function fetchVersions(workId, force = false){
             completionToggle.className = 'form-check-input';
             completionToggle.id = `version-${v.id}-pagination-done`;
             completionToggle.checked = !!v.pagination_done;
-            completionToggle.title = 'Cochez lorsque la pagination est terminée pour cette version';
-            completionToggle.setAttribute('aria-label', 'Marquer la pagination terminée');
+            completionToggle.title = 'Cochez lorsque la pagination est validée pour cette version';
+            completionToggle.setAttribute('aria-label', 'Marquer la pagination validée');
             completionToggle.addEventListener('change', () => togglePaginationDone(v.id, completionToggle.checked));
             const completionLabel = document.createElement('label');
             completionLabel.className = 'form-check-label small text-muted';
             completionLabel.setAttribute('for', completionToggle.id);
-            completionLabel.textContent = 'Terminé';
+            completionLabel.textContent = 'Validée';
             completionSwitch.appendChild(completionToggle);
             completionSwitch.appendChild(completionLabel);
             const completionMeta = document.createElement('div');
@@ -2402,7 +2470,6 @@ async function fetchVersions(workId, force = false){
             lignesActions.appendChild(lignesDeleteBtn);
             lignesActions.appendChild(lignesInput);
             lignesWrap.appendChild(lignesActions);
-            tdCompletion.appendChild(lignesWrap);
 
             const lignesCountsWrap = document.createElement('div');
             lignesCountsWrap.className = 'd-flex align-items-center gap-2 flex-wrap justify-content-center mt-1';
@@ -2437,6 +2504,7 @@ async function fetchVersions(workId, force = false){
             lignesProgressBar.setAttribute('role', 'progressbar');
             lignesProgressWrap.appendChild(lignesProgressBar);
             lignesWrap.appendChild(lignesProgressWrap);
+            tdCompletion.appendChild(lignesWrap);
 
             const hasPbMarkers = pbCount > 0;
             lignesMergePbBtn.dataset.pbAvailable = hasPbMarkers ? '1' : '0';

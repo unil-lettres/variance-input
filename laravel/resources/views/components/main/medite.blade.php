@@ -1,104 +1,209 @@
 @php /** components/main/medite.blade.php **/ @endphp
-<div class="card">
-    <div class="card-header fw-semibold d-flex justify-content-between align-items-center medite-toggle"
-         role="button"
-         data-bs-toggle="collapse"
-         data-bs-target="#mediteCollapse"
-        aria-expanded="true"
-        aria-controls="mediteCollapse">
-        <div class="d-flex align-items-center gap-2">
-            <span class="collapse-chevron" aria-hidden="true"></span>
-            <span>Medite</span>
+<div class="card medite-launch-card" id="medite-launch-card">
+    <div class="card-header fw-semibold d-flex align-items-start gap-2">
+        <span class="admin-card-heading-text">
+            <span class="admin-card-title">Alignement Medite</span>
+            <span class="admin-card-subtitle">Lancer une nouvelle comparaison entre deux versions</span>
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="medite-launch-shell">
+            <div class="medite-launch-copy">
+                <div class="medite-launch-kicker">Action</div>
+                <h3 class="medite-launch-title">Ouvrir le module d’alignement</h3>
+                <p class="medite-launch-text">
+                    Lancez Medite dans une fenêtre dédiée, puis retrouvez la comparaison produite dans la section
+                    Comparaisons textuelles.
+                </p>
+            </div>
+            <button type="button" class="btn btn-primary" id="open-medite-modal-btn" data-bs-toggle="modal" data-bs-target="#mediteModal">
+                Lancer un alignement
+            </button>
         </div>
     </div>
-    <div id="mediteCollapse" class="collapse show">
-    <div class="card-body">
-        <p class="fst-italic text-muted small mb-3">
-            Choisissez deux versions et, si besoin, paramétrez Medite pour lancer un alignement. Une fois le traitement terminé, la comparaison apparaît dans la liste&nbsp;; elle peut ensuite être publiée en dev ou prod en utilisant les boutons de publication de la liste des comparaisons.
-        </p>
-        <form id="medite-form">
-            @csrf
-            <!-- Hidden context -->
-            <input type="hidden" id="work_id"          name="work_id">
-            <input type="hidden" id="author_id"        name="author_id">
-            <input type="hidden" id="author_name"      name="author_name">
-            <input type="hidden" id="work_name"        name="work_name">
-            <input type="hidden" id="comparison_id"    name="comparison_id">
-            <input type="hidden" id="src_short"        name="src_short">
-            <input type="hidden" id="tgt_short"        name="tgt_short">
-            <input type="hidden" id="output_xml"       name="output_xml">
-            <input type="hidden" id="xhtml_output_dir" name="xhtml_output_dir">
+</div>
 
-            <!-- User‑visible fields -->
-            <div class="mb-3">
-                <label for="source_version" class="form-label">Version source</label>
-                <select id="source_version" name="source_version" class="form-control" required aria-describedby="sourceHelp"></select>
-                <div id="sourceHelp" class="form-text">Choisissez la version qui servira de texte de référence.</div>
-            </div>
-            <div class="mb-3">
-                <label for="target_version" class="form-label">Version cible</label>
-                <select id="target_version" name="target_version" class="form-control" required aria-describedby="targetHelp"></select>
-                <div id="targetHelp" class="form-text">Sélectionnez la version à comparer avec la source.</div>
-            </div>
-            <div class="mb-3">
-                <label for="lg_pivot" class="form-label">Longueur de pivot</label>
-                <input type="number" id="lg_pivot" name="lg_pivot" class="form-control" value="7" required aria-describedby="pivotHelp">
-                <div id="pivotHelp" class="form-text">Plus la valeur est grande, plus Medite exige de caractères consécutifs identiques pour aligner deux passages. Réduisez-la pour détecter des micro-variantes, augmentez-la pour ne garder que des correspondances substantielles.</div>
-            </div>
-            <div class="mb-3">
-                <label for="ratio" class="form-label">Ratio</label>
-                <input type="number" id="ratio" name="ratio" class="form-control" value="15" required aria-describedby="ratioHelp">
-                <div id="ratioHelp" class="form-text">Pourcentage du texte concerné par un déplacement avant qu’il ne soit signalé. Une valeur élevée élimine les déplacements mineurs ; une valeur plus faible permet de voir des mouvements de texte plus localisés.</div>
-            </div>
-            <div class="mb-3">
-                <label for="sep" class="form-label">Séparateurs</label>
-                <input type="text" id="sep" name="sep" class="form-control" value=",.;?!" aria-describedby="sepHelp" data-default-example=",.;?!" placeholder="Laisser vide pour utiliser les valeurs par défaut">
-                <div id="sepHelp" class="form-text">
-                    Liste personnalisée des caractères séparateurs. Laissez le champ vide (ou cochez l’option ci-dessous) pour que Medite applique ses valeurs par défaut : espace, !, retour chariot (\r), saut de ligne (\n), deux-points (:), tabulation (\t), point-virgule (;), trait d’union (-), point d’interrogation (?), guillemet double (&quot;), apostrophe droite ('), accent grave (`), apostrophe typographique (’), parenthèses ouvrantes et fermantes.
+<div class="modal fade" id="mediteModal" tabindex="-1" aria-labelledby="mediteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content medite-modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title h5 mb-1" id="mediteModalLabel">Alignement Medite</h2>
+                    <p class="text-muted small mb-0">Choisissez deux versions textuelles et lancez l’alignement dans cette fenêtre.</p>
                 </div>
-                <div class="form-check mt-2">
-                    <input class="form-check-input" type="checkbox" id="use_default_sep" checked>
-                    <label class="form-check-label" for="use_default_sep">Utiliser la liste de séparateurs par défaut de Medite</label>
-                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
             </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="case_sensitive" name="case_sensitive" checked>
-                <label class="form-check-label" for="case_sensitive">Sensibilité à la casse</label>
-            </div>
-            <button type="submit" class="btn btn-primary mt-3">Lancer Medite</button>
-        </form>
+            <div class="modal-body">
+                <form id="medite-form">
+                    @csrf
+                    <input type="hidden" id="work_id" name="work_id">
+                    <input type="hidden" id="author_id" name="author_id">
+                    <input type="hidden" id="author_name" name="author_name">
+                    <input type="hidden" id="work_name" name="work_name">
+                    <input type="hidden" id="comparison_id" name="comparison_id">
+                    <input type="hidden" id="src_short" name="src_short">
+                    <input type="hidden" id="tgt_short" name="tgt_short">
+                    <input type="hidden" id="output_xml" name="output_xml">
+                    <input type="hidden" id="xhtml_output_dir" name="xhtml_output_dir">
 
-        <!-- Progress / Results unchanged -->
-        <div id="progress-indicator" class="mt-4" style="display:none;"></div>
-        <div id="results" class="mt-4" style="display:none;"></div>
-    </div>
+                    <div class="medite-panel-grid">
+                        <section class="medite-panel">
+                            <div class="medite-panel-kicker">Étape 1</div>
+                            <h3 class="medite-panel-title">Versions choisies</h3>
+                            <p class="medite-panel-text">Définissez le texte de référence et le texte à comparer.</p>
+                            <div class="mb-3">
+                                <label for="source_version" class="form-label">Version source</label>
+                                <select id="source_version" name="source_version" class="form-control" required aria-describedby="sourceHelp"></select>
+                                <div id="sourceHelp" class="form-text">Choisissez la version qui servira de texte de référence.</div>
+                            </div>
+                            <div class="mb-0">
+                                <label for="target_version" class="form-label">Version cible</label>
+                                <select id="target_version" name="target_version" class="form-control" required aria-describedby="targetHelp"></select>
+                                <div id="targetHelp" class="form-text">Sélectionnez la version à comparer avec la source.</div>
+                            </div>
+                        </section>
+
+                        <section class="medite-panel medite-panel--settings">
+                            <div class="medite-panel-kicker">Étape 2</div>
+                            <h3 class="medite-panel-title">Paramètres d’alignement</h3>
+                            <p class="medite-panel-text">Affinez l’analyse si nécessaire. Les valeurs proposées conviennent à l’usage courant.</p>
+                            <div class="mb-3">
+                                <label for="lg_pivot" class="form-label">Longueur de pivot</label>
+                                <input type="number" id="lg_pivot" name="lg_pivot" class="form-control" value="7" required aria-describedby="pivotHelp">
+                                <div id="pivotHelp" class="form-text">Plus la valeur est grande, plus Medite exige de caractères consécutifs identiques pour aligner deux passages. Réduisez-la pour détecter des micro-variantes, augmentez-la pour ne garder que des correspondances substantielles.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="ratio" class="form-label">Ratio</label>
+                                <input type="number" id="ratio" name="ratio" class="form-control" value="15" required aria-describedby="ratioHelp">
+                                <div id="ratioHelp" class="form-text">Pourcentage du texte concerné par un déplacement avant qu’il ne soit signalé. Une valeur élevée élimine les déplacements mineurs ; une valeur plus faible permet de voir des mouvements de texte plus localisés.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="sep" class="form-label">Séparateurs</label>
+                                <input type="text" id="sep" name="sep" class="form-control" value=",.;?!" aria-describedby="sepHelp" data-default-example=",.;?!" placeholder="Laisser vide pour utiliser les valeurs par défaut">
+                                <div id="sepHelp" class="form-text">
+                                    Liste personnalisée des caractères séparateurs. Laissez le champ vide (ou cochez l’option ci-dessous) pour que Medite applique ses valeurs par défaut : espace, !, retour chariot (\r), saut de ligne (\n), deux-points (:), tabulation (\t), point-virgule (;), trait d’union (-), point d’interrogation (?), guillemet double (&quot;), apostrophe droite ('), accent grave (`), apostrophe typographique (’), parenthèses ouvrantes et fermantes.
+                                </div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="use_default_sep" checked>
+                                    <label class="form-check-label" for="use_default_sep">Utiliser la liste de séparateurs par défaut de Medite</label>
+                                </div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="case_sensitive" name="case_sensitive" checked>
+                                <label class="form-check-label" for="case_sensitive">Sensibilité à la casse</label>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="medite-launch-bar">
+                        <div class="medite-launch-text">Étape 3 : lancer l’alignement puis consulter le résultat dans Comparaisons textuelles.</div>
+                        <button type="submit" class="btn btn-primary">Lancer Medite</button>
+                    </div>
+                </form>
+
+                <div id="progress-indicator" class="mt-4" style="display:none;"></div>
+                <div id="results" class="mt-4" style="display:none;"></div>
+            </div>
+        </div>
     </div>
 </div>
 
 @push('styles')
 <style>
-  .medite-toggle .collapse-chevron::before {
-    content: "\25BC";
-    display: inline-block;
-    transition: transform .2s ease;
+  .medite-launch-shell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.05rem;
+    border: 1px solid #ddd6ca;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #fbfaf7 0%, #f4f1eb 100%);
   }
-  .medite-toggle[aria-expanded="false"] .collapse-chevron::before {
-    transform: rotate(-90deg);
+  .medite-launch-copy {
+    min-width: 0;
+    flex: 1 1 22rem;
   }
-  #mediteCollapse,
-  #mediteCollapse *,
-  #mediteCollapse.show,
-  #mediteCollapse.show * {
-    visibility: visible !important;
+  .medite-launch-kicker {
+    margin-bottom: 0.3rem;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7a7165;
+  }
+  .medite-launch-title {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #433d36;
+  }
+  .medite-launch-text {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #62594f;
+  }
+  .medite-modal-content {
+    border-radius: 1rem;
+  }
+  .medite-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  .medite-panel {
+    padding: 1rem 1.1rem;
+    border: 1px solid #ddd6ca;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #fbfaf7 0%, #f4f1eb 100%);
+  }
+  .medite-panel--settings {
+    background: linear-gradient(180deg, #f8f6f1 0%, #efebe4 100%);
+  }
+  .medite-panel-kicker {
+    margin-bottom: 0.35rem;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7a7165;
+  }
+  .medite-panel-title {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #433d36;
+  }
+  .medite-panel-text {
+    margin-bottom: 0.9rem;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #62594f;
+  }
+  .medite-modal-content .medite-launch-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding: 0.95rem 1.05rem;
+    border: 1px solid #e0d9ce;
+    border-radius: 0.9rem;
+    background: rgba(246, 243, 237, 0.9);
+  }
+  @media (max-width: 991.98px) {
+    .medite-panel-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 @endpush
 
 @push('scripts')
 <script>
-/*------------------------------------------------------------*
- | Shared helpers                                              |
- *------------------------------------------------------------*/
 const $srcSel  = document.getElementById('source_version');
 const $tgtSel  = document.getElementById('target_version');
 const $form    = document.getElementById('medite-form');
@@ -107,12 +212,25 @@ const $progress= document.getElementById('progress-indicator');
 const $results = document.getElementById('results');
 const $sepInput = document.getElementById('sep');
 const $useDefaultSep = document.getElementById('use_default_sep');
+const $mediteModalEl = document.getElementById('mediteModal');
+const $mediteLaunchCard = document.getElementById('medite-launch-card');
 const CSRF     = document.querySelector('meta[name="csrf-token"]').content;
 const DEFAULT_SEP_VALUE = ($sepInput && $sepInput.dataset.defaultExample) ? $sepInput.dataset.defaultExample : ',.;?!';
 let cachedCustomSep = $sepInput ? $sepInput.value : DEFAULT_SEP_VALUE;
 const setMediteLoading = (state) => {
-  if (typeof window.setBladeLoading === 'function') {
-    window.setBladeLoading('mediteCollapse', state);
+  if ($mediteLaunchCard) {
+    $mediteLaunchCard.classList.toggle('blade-loading', !!state);
+    let overlay = $mediteLaunchCard.querySelector('.blade-loading-overlay');
+    if (state) {
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'blade-loading-overlay';
+        overlay.innerHTML = '<div class="spinner-border spinner-border-sm" role="status" aria-label="Chargement"></div><span class="loading-label">Chargement...</span>';
+        $mediteLaunchCard.appendChild(overlay);
+      }
+    } else if (overlay) {
+      overlay.remove();
+    }
   }
 };
 
@@ -160,9 +278,6 @@ function updateSubmitState() {
   $submitBtn.disabled = !canRun;
 }
 
-/*------------------------------------------------------------*
- | 1) Populate dropdowns when a work is selected               |
- *------------------------------------------------------------*/
 async function refreshVersions(workId, { force = false } = {}){
     if (!workId) {
         $srcSel.innerHTML = '<option value="">Choisir la version source</option>';
@@ -216,7 +331,7 @@ async function refreshVersions(workId, { force = false } = {}){
     available.forEach(v=>{
         const opt1 = new Option(v.name, v.id);
         const opt2 = new Option(v.name, v.id);
-        opt1.dataset.short = v.folder;   // e.g. "1pda"
+        opt1.dataset.short = v.folder;
         opt2.dataset.short = v.folder;
         $srcSel.add(opt1); $tgtSel.add(opt2);
     });
@@ -224,7 +339,6 @@ async function refreshVersions(workId, { force = false } = {}){
     setMediteLoading(false);
 }
 
-/* workSelected comes from outer UI */
 document.addEventListener('workSelected', e=>{
     const {workId, authorId, author_folder, work_folder} = e.detail;
     fillHidden('work_id', workId);
@@ -245,13 +359,23 @@ if ($tgtSel) {
   $tgtSel.addEventListener('change', updateSubmitState);
 }
 
-/*------------------------------------------------------------*
- | 2) On submit → add silent params then POST to backend       |
- *------------------------------------------------------------*/
+if ($mediteModalEl) {
+  $mediteModalEl.addEventListener('shown.bs.modal', () => {
+    if ($progress) {
+      $progress.style.display = 'none';
+      $progress.innerHTML = '';
+    }
+    if ($results) {
+      $results.style.display = 'none';
+      $results.innerHTML = '';
+    }
+    $srcSel?.focus();
+  });
+}
+
 $form.addEventListener('submit', async ev => {
     ev.preventDefault();
 
-    /* basic selection guard */
     if (!$srcSel.value || !$tgtSel.value) {
         alert('Veuillez sélectionner une version source et une version cible.');
         return;
@@ -261,54 +385,41 @@ $form.addEventListener('submit', async ev => {
         $sepInput.value = '';
     }
 
-    /* short names come from <option data-short="1pda"> */
     const srcShort = $srcSel.selectedOptions[0].dataset.short;
     const tgtShort = $tgtSel.selectedOptions[0].dataset.short;
     fillHidden('src_short', srcShort);
     fillHidden('tgt_short', tgtShort);
 
-    /*──────────────────── 1) Reserve a comparison row ────────────────────*/
     const cmpResp = await fetch(withBasePath('/api/comparisons'), {
         method : 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept'      : 'application/json',   // ensures JSON error on 4xx/5xx
+            'Accept'      : 'application/json',
             'X-CSRF-TOKEN': CSRF
         },
         body: JSON.stringify({
-            /* IDs */
             source_id:        $srcSel.value,
             target_id:        $tgtSel.value,
-
-            /* Unique folder short-name */
             folder:           `${srcShort}-${tgtShort}`,
-
-            /* Medite parameters you may want to persist */
             lg_pivot:         +document.getElementById('lg_pivot').value,
             ratio:            +document.getElementById('ratio').value,
             sep:              document.getElementById('sep').value,
-
-            /* Flags as simple booleans (true / false) */
             case_sensitive:   document.getElementById('case_sensitive').checked,
             diacri_sensitive: true
         })
-
     });
 
     if (!cmpResp.ok) {
-        /* show Laravel’s JSON message or fallback to raw text */
         const err = await cmpResp.clone().json().catch(() => cmpResp.text());
         console.error('Create-comparison error', cmpResp.status, err);
         alert(`Create comparison failed (${cmpResp.status}). Check console.`);
         return;
     }
 
-    const cmpData = await cmpResp.json();        // { id, folder, … }
+    const cmpData = await cmpResp.json();
     fillHidden('comparison_id', cmpData.id);
-
     notifyComparison('comparisonCreated', cmpData.id);
 
-    /*──────────────────── 2) Build output paths for Flask ───────────────*/
     const authorSlug = document.getElementById('author_name').value || 'author';
     const workSlug   = document.getElementById('work_name').value   || 'work';
     const cmpFolder  = `/app/uploads/${authorSlug}/${workSlug}/comparisons/${cmpData.id}`;
@@ -316,18 +427,13 @@ $form.addEventListener('submit', async ev => {
     fillHidden('output_xml',        `${cmpFolder}/${srcShort}-${tgtShort}.xml`);
     fillHidden('xhtml_output_dir',  cmpFolder);
 
-    /*──────────────────── 3) Launch Medite via Laravel proxy ────────────*/
     $progress.style.display = 'block';
     $progress.innerHTML = `
         <p>Processing…
            <span class="spinner-border spinner-border-sm" role="status"></span>
         </p>`;
 
-    const fd  = new FormData($form);   // includes all visible + hidden fields
-
-    console.log('Medite FormData 🚀', Object.fromEntries(fd));
-
-
+    const fd  = new FormData($form);
 
     const run = await fetch(withBasePath('/api/run_medite'), {
         method : 'POST',
@@ -341,23 +447,22 @@ $form.addEventListener('submit', async ev => {
     if (!run.ok) {
         const err = await run.clone().json().catch(() => run.text());
         console.error('run_medite error', run.status, err);
-        $progress.innerHTML =
-            '<div class="alert alert-danger">Launch failed</div>';
+        $progress.innerHTML = '<div class="alert alert-danger">Launch failed</div>';
         return;
     }
 
     const { task_id } = await run.json();
-    pollTask(task_id, cmpData.id);     // keep existing polling logic
+    const modalInstance = window.bootstrap?.Modal.getInstance($mediteModalEl);
+    if (modalInstance) {
+        modalInstance.hide();
+    }
+    pollTask(task_id, cmpData.id);
 });
 
-
-/*------------------------------------------------------------*
- | 3) Poll task status                                         |
- *------------------------------------------------------------*/
 function pollTask(taskId, cmpId){
     let retries = 0;
     const intervalMs = 2000;
-    const max = Math.ceil((45 * 60 * 1000) / intervalMs); // allow 45 minutes of polling
+    const max = Math.ceil((45 * 60 * 1000) / intervalMs);
 
     const timer = setInterval(async () => {
         if (++retries > max) {
@@ -368,18 +473,16 @@ function pollTask(taskId, cmpId){
 
         const r = await fetch(withBasePath(`/api/task_status/${taskId}`));
         const d = await r.json();
-        if (d.status === 'pending') return;   // still running
+        if (d.status === 'pending') return;
 
         clearInterval(timer);
 
-        /* ── handle completed / failed ─────────────────────────────── */
         if (d.status === 'completed') {
             const result = d.result || {};
             const outArr = result.output || [];
             const publicUrls = result.public_urls || {};
             const meta = result.meta || {};
 
-            // find the XML and HTML paths regardless of order
             const xmlPath  = outArr.find(p => p.endsWith('.xml'));
             const htmlPath = outArr.find(p => p.endsWith('.html'));
 
@@ -411,21 +514,11 @@ function pollTask(taskId, cmpId){
                 alert.appendChild(heading);
 
                 const extra = [];
-                if (result?.status && result.status !== 'success') {
-                    extra.push(`Status: ${result.status}`);
-                }
-                if (result?.error) {
-                    extra.push(result.error.trim());
-                }
-                if (result?.stdout) {
-                    extra.push(result.stdout.trim());
-                }
-                if (result?.stderr) {
-                    extra.push(result.stderr.trim());
-                }
-                if (result?.traceback) {
-                    extra.push(result.traceback.trim());
-                }
+                if (result?.status && result.status !== 'success') extra.push(`Status: ${result.status}`);
+                if (result?.error) extra.push(result.error.trim());
+                if (result?.stdout) extra.push(result.stdout.trim());
+                if (result?.stderr) extra.push(result.stderr.trim());
+                if (result?.traceback) extra.push(result.traceback.trim());
 
                 if (!extra.length) {
                     const fallback = document.createElement('p');
@@ -437,99 +530,42 @@ function pollTask(taskId, cmpId){
                         const hasBreaks = /\n/.test(text);
                         const block = document.createElement(hasBreaks ? 'pre' : 'p');
                         block.textContent = text;
-                        if (hasBreaks) {
-                            block.classList.add('mb-0');
-                        }
+                        if (hasBreaks) block.classList.add('mb-0');
                         alert.appendChild(block);
                     });
                 }
 
-                $progress.appendChild(alert);
-                notifyComparison('comparisonFailed', cmpId);
+                $results.style.display = 'block';
+                $results.innerHTML = '';
+                $results.appendChild(alert);
+                notifyComparison('comparisonDeleted', cmpId);
                 return;
             }
 
-            // show success message
-            const successMsg = meta.html_fallback === false
-                ? 'Medite run completed successfully. You can open the consolidated results from the comparisons table.'
-                : 'Medite run completed successfully. Component XHTML outputs were generated; open them from the comparisons table.';
+            $progress.innerHTML = '<div class="alert alert-success mb-0">Alignement terminé.</div>';
+            $results.style.display = 'block';
+            $results.innerHTML = `
+                <div class="alert alert-light border mb-0">
+                    <p class="mb-2"><strong>Comparaison produite.</strong></p>
+                    <ul class="mb-2">
+                        <li><a href="${withBasePath(xmlUrl)}" target="_blank" rel="noopener">XML de comparaison</a></li>
+                        ${htmlUrl ? `<li><a href="${withBasePath(htmlUrl)}" target="_blank" rel="noopener">Aperçu HTML</a></li>` : ''}
+                    </ul>
+                    ${meta.runtime_ms ? `<p class="small text-muted mb-1">Durée : ${meta.runtime_ms} ms</p>` : ''}
+                    ${meta.peak_rss_kb ? `<p class="small text-muted mb-0">Pic mémoire : ${meta.peak_rss_kb} KB</p>` : ''}
+                </div>`;
 
-            $progress.innerHTML = '';
-            const success = document.createElement('div');
-            success.className = 'alert alert-success';
-            success.textContent = successMsg;
-            $progress.appendChild(success);
-            $progress.style.display = 'block';
-
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'btn btn-link btn-sm p-0 mt-2';
-            closeBtn.type = 'button';
-            closeBtn.textContent = 'Fermer ce message';
-            closeBtn.addEventListener('click', () => {
-                $progress.innerHTML = '';
-                $progress.style.display = 'none';
-            });
-            $progress.appendChild(closeBtn);
-
-            $results.style.display = 'none';
-
-            if (Array.isArray(meta.xhtml_components) && meta.xhtml_components.length) {
-                const list = document.createElement('ul');
-                list.className = 'mt-3 mb-0 small';
-                const counts = meta.component_counts || {};
-                const labels = {
-                    'd.xhtml': { title: 'd.xhtml', desc: 'déplacements', one: 'déplacement', many: 'déplacements' },
-                    'i.xhtml': { title: 'i.xhtml', desc: 'insertions', one: 'insertion', many: 'insertions' },
-                    'r.xhtml': { title: 'r.xhtml', desc: 'remplacements', one: 'remplacement', many: 'remplacements' },
-                    's.xhtml': { title: 's.xhtml', desc: 'suppressions', one: 'suppression', many: 'suppressions' },
-                    'source.xhtml': { title: 'source.xhtml', desc: 'texte source aligné' },
-                    'target.xhtml': { title: 'target.xhtml', desc: 'texte cible aligné' },
-                };
-
-                meta.xhtml_components.forEach(name => {
-                    const key = name.toLowerCase();
-                    const info = labels[key] || { title: name };
-                    const li = document.createElement('li');
-                    const count = counts[name] ?? counts[key] ?? null;
-
-                    if (typeof count === 'number') {
-                        const unit = info;
-                        const noun = count === 1 ? (unit.one || 'entrée') : (unit.many || 'entrées');
-                        li.innerHTML = `<strong>${info.title}</strong> — ${count} ${noun}`;
-                    } else if (info.desc) {
-                        li.innerHTML = `<strong>${info.title}</strong> — ${info.desc}`;
-                    } else {
-                        li.textContent = info.title;
-                    }
-
-                    list.appendChild(li);
-                });
-
-                const hint = document.createElement('div');
-                hint.className = 'alert alert-info mt-3';
-                hint.innerHTML = '<strong>Composants générés :</strong>';
-                hint.appendChild(list);
-                $progress.appendChild(hint);
-            }
-
-            notifyComparison('comparisonReady', cmpId);
-
-        } else {   // failed → roll back comparison
-            await fetch(withBasePath(`/comparisons/${cmpId}`), {
-                method:'DELETE',
-                headers:{'X-CSRF-TOKEN': CSRF}
-            });
-
-            const msg = d.error || 'Task failed';
-            $progress.textContent = '';
-            const alert = document.createElement('div');
-            alert.className = 'alert alert-danger';
-            alert.textContent = msg;
-            $progress.appendChild(alert);
-            notifyComparison('comparisonFailed', cmpId);
+            notifyComparison('comparisonCompleted', cmpId);
+            document.dispatchEvent(new CustomEvent('refreshComparisons'));
+            return;
         }
+
+        const failureText = d.error || d.traceback || 'Medite a échoué.';
+        $progress.innerHTML = '<div class="alert alert-danger mb-0">Échec du traitement.</div>';
+        $results.style.display = 'block';
+        $results.innerHTML = `<div class="alert alert-danger mb-0"><pre class="mb-0">${failureText}</pre></div>`;
+        notifyComparison('comparisonDeleted', cmpId);
     }, intervalMs);
 }
-
 </script>
 @endpush

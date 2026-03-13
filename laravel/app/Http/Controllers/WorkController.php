@@ -48,11 +48,6 @@ class WorkController extends Controller
         ]);
 
         $author = \App\Models\Author::findOrFail($validated['author_id']);
-        if ($author->is_legacy) {
-            return response()->json([
-                'error' => 'Les auteurs legacy sont en lecture seule.',
-            ], 403);
-        }
     
         $work = Work::create($validated);
     

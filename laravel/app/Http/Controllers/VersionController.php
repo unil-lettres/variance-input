@@ -74,6 +74,9 @@ class VersionController extends Controller
                     $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
                 }
                 $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
+                $pageMarkerProgress = $version->is_legacy
+                    ? null
+                    : $this->pageMarkerService->getProgressSnapshot($version->id);
                 $textLength = null; // lazy-loaded via /api/versions/{id}/text-length
                 $facsimileCacheKey = "versions:facsimiles:{$version->id}";
                 $facsimileCacheTtl = now()->addSeconds(20);
@@ -98,7 +101,7 @@ class VersionController extends Controller
                     'text_length' => $textLength,
                     'facsimiles' => $facsimiles,
                     'page_markers' => $this->pageMarkerService->countMarkers($version),
-                    'page_marker_progress' => $this->pageMarkerService->getProgressSnapshot($version->id),
+                    'page_marker_progress' => $pageMarkerProgress,
                     'lignes' => $lignesInfo,
                     'pagination' => $paginationInfo,
                 ];

@@ -6,46 +6,58 @@
          data-bs-target="#facsimilesCollapse"
         aria-expanded="true"
         aria-controls="facsimilesCollapse">
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-start gap-2 admin-card-heading">
             <span class="collapse-chevron" aria-hidden="true"></span>
-            <span>Fac-similés</span>
+            <span class="admin-card-heading-text">
+                <span class="admin-card-title">Fac-similés</span>
+                <span class="admin-card-subtitle">Images associées aux versions et aux comparaisons</span>
+            </span>
         </div>
     </div>
     <div id="facsimilesCollapse" class="collapse show">
     <div class="card-body">
         <p class="fst-italic text-muted small mb-3">
-            Choisissez une version pour parcourir son dossier d’images. Utilisez ensuite la « gestion du manifeste »
-            pour sélectionner les fac-similés à exposer dans les comparaisons Medite (JSON) et sur le site public.
+            Consultez ici les fac-similés associés à chaque version textuelle et préparez, si besoin, leur publication par manifeste.
         </p>
 
-        <div id="facsimile-status" class="text-muted small mb-3">
-            Sélectionnez une version pour afficher les fac-similés.
-        </div>
-
-        <div id="manifest-manager" class="manifest-manager border rounded px-3 py-3 mb-3 d-none">
-            <div class="d-flex flex-column flex-xl-row align-items-xl-center gap-2 gap-xl-3">
-                <div class="manifest-instructions">
-                    <div class="fw-semibold text-uppercase small text-muted">Gestion du manifeste JSON</div>
-                    <div class="text-muted small">Sélectionnez une comparaison pour choisir les images publiées.</div>
-                </div>
-                <div class="flex-grow-1">
-                    <label for="manifest-comparison" class="form-label small mb-1">Comparaison</label>
-                    <select id="manifest-comparison" class="form-select form-select-sm" disabled>
-                        <option value="">Associer une comparaison…</option>
-                    </select>
-                </div>
-                <div class="d-flex flex-nowrap gap-2">
-                    <button type="button" class="btn btn-sm btn-primary" id="manifest-save" disabled>Enregistrer</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="manifest-cancel" disabled>Annuler</button>
-                </div>
+        <div id="facsimiles-empty-state" class="facsimiles-empty-state">
+            <div class="facsimiles-empty-title">Aucune série de fac-similés sélectionnée</div>
+            <div class="facsimiles-empty-text">
+                Choisissez une version textuelle dans la section «&nbsp;Versions textuelles&nbsp;» pour afficher les fac-similés associés.
             </div>
-            <div id="manifest-list" class="manifest-list d-flex flex-wrap gap-2 mt-3"></div>
-            <div id="manifest-summary" class="small text-muted mt-2"></div>
+            <div class="facsimiles-empty-hint">
+                Les images importées et les manifestes de publication apparaîtront ici.
+            </div>
         </div>
 
-        <div id="gallery" class="d-flex flex-wrap gap-2"></div>
-        <div id="gallery-meta" class="mt-2 text-center text-muted small"></div>
-        <div id="gallery-pagination" class="mt-1 d-flex flex-wrap justify-content-center gap-1"></div>
+        <div id="facsimiles-workspace" class="d-none">
+            <div id="facsimile-status" class="text-muted small mb-3"></div>
+
+            <div id="manifest-manager" class="manifest-manager border rounded px-3 py-3 mb-3 d-none">
+                <div class="d-flex flex-column flex-xl-row align-items-xl-center gap-2 gap-xl-3">
+                    <div class="manifest-instructions">
+                        <div class="fw-semibold text-uppercase small text-muted">Gestion du manifeste JSON</div>
+                        <div class="text-muted small">Sélectionnez une comparaison pour choisir les images publiées.</div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <label for="manifest-comparison" class="form-label small mb-1">Comparaison</label>
+                        <select id="manifest-comparison" class="form-select form-select-sm" disabled>
+                            <option value="">Associer une comparaison…</option>
+                        </select>
+                    </div>
+                    <div class="d-flex flex-nowrap gap-2">
+                        <button type="button" class="btn btn-sm btn-primary" id="manifest-save" disabled>Enregistrer</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="manifest-cancel" disabled>Annuler</button>
+                    </div>
+                </div>
+                <div id="manifest-list" class="manifest-list d-flex flex-wrap gap-2 mt-3"></div>
+                <div id="manifest-summary" class="small text-muted mt-2"></div>
+            </div>
+
+            <div id="gallery" class="d-flex flex-wrap gap-2"></div>
+            <div id="gallery-meta" class="mt-2 text-center text-muted small"></div>
+            <div id="gallery-pagination" class="mt-1 d-flex flex-wrap justify-content-center gap-1"></div>
+        </div>
     </div>
     </div>
 </div>
@@ -69,6 +81,34 @@
     #manifest-manager {
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
+    }
+    .facsimiles-empty-state {
+        display: grid;
+        place-items: center;
+        gap: 0.7rem;
+        padding: 1.75rem 1.5rem;
+        border: 1px dashed #d4cec3;
+        border-radius: 0.9rem;
+        background: linear-gradient(180deg, #faf8f4 0%, #f3f0ea 100%);
+        text-align: center;
+    }
+    .facsimiles-empty-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #4b453d;
+        letter-spacing: 0.01em;
+    }
+    .facsimiles-empty-text,
+    .facsimiles-empty-hint {
+        max-width: 44rem;
+        font-size: 0.88rem;
+        line-height: 1.5;
+    }
+    .facsimiles-empty-text {
+        color: #61594f;
+    }
+    .facsimiles-empty-hint {
+        color: #7a7165;
     }
     #manifest-manager select {
         min-width: 260px;
@@ -114,6 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const galleryMeta   = document.getElementById('gallery-meta');
     const galleryPager  = document.getElementById('gallery-pagination');
     const statusEl      = document.getElementById('facsimile-status');
+    const emptyStateEl  = document.getElementById('facsimiles-empty-state');
+    const workspaceEl   = document.getElementById('facsimiles-workspace');
     const manifestManager   = document.getElementById('manifest-manager');
     const manifestSelect    = document.getElementById('manifest-comparison');
     const manifestSaveBtn   = document.getElementById('manifest-save');
@@ -167,12 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let manifestRequestToken = 0;
 
     function openFacsimilesPanel() {
+        if (typeof window.openEditorialStep === 'function') {
+            window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
+        }
         if (facsimilesCollapse && window.bootstrap?.Collapse) {
             const collapse = bootstrap.Collapse.getOrCreateInstance(facsimilesCollapse, { toggle: false });
             collapse.show();
-        }
-        if (facsimilesCard) {
-            facsimilesCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
     let pendingManifestFocus = null;
@@ -207,10 +249,19 @@ document.addEventListener('DOMContentLoaded', () => {
         statusEl.textContent = message;
     }
 
-    function resetGallery(message = 'Sélectionnez une version pour afficher les fac-similés.') {
+    function setWorkspaceState(hasSelection) {
+        if (emptyStateEl) {
+            emptyStateEl.classList.toggle('d-none', !!hasSelection);
+        }
+        if (workspaceEl) {
+            workspaceEl.classList.toggle('d-none', !hasSelection);
+        }
+    }
+
+    function resetGallery(message = '') {
         galleryFiles = [];
         galleryPage  = 1;
-        gallery.innerHTML = `<div class="text-muted">${message}</div>`;
+        gallery.innerHTML = message ? `<div class="text-muted">${message}</div>` : '';
         galleryPager.innerHTML = '';
         galleryMeta.textContent = '';
     }
@@ -396,7 +447,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateManifestSummary(option);
             if (manifestManager) {
                 manifestManager.classList.remove('d-none');
-                manifestManager.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (typeof window.openEditorialStep === 'function') {
+                    window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
+                }
             }
             pendingManifestFocus = null;
             return true;
@@ -732,13 +785,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadGallery(versionId, versionName = '') {
         if (!versionId) {
+            setWorkspaceState(false);
             resetGallery();
             setFacsimilesLoading(false);
             return;
         }
 
+        setWorkspaceState(true);
         setStatus(`Chargement des fac-similés pour ${versionName || 'cette version'}…`);
-        resetGallery('<div class="text-muted">Chargement…</div>');
+        resetGallery('Chargement…');
         bumpFacsimilesLoading(1);
 
         try {
@@ -770,7 +825,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentVersionId  = null;
         currentVersionName= '';
         resetManifestControls({ hideManager: true });
-        setStatus('Sélectionnez une version pour afficher les fac-similés.');
+        setWorkspaceState(false);
+        setStatus('');
         resetGallery();
         setFacsimilesLoading(false);
     });
@@ -781,7 +837,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentVersionName = versionName || '';
         resetManifestControls();
         if (!currentVersionId) {
-            setStatus('Sélectionnez une version pour afficher les fac-similés.');
+            setWorkspaceState(false);
+            setStatus('');
             resetGallery();
             return;
         }

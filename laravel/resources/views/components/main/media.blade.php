@@ -8,56 +8,54 @@
       aria-expanded="true"
       aria-controls="mediaCollapse"
   >
-    <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-start gap-2 admin-card-heading">
       <span class="collapse-chevron" aria-hidden="true"></span>
-      <span>Media</span>
+      <span class="admin-card-heading-text">
+        <span class="admin-card-title">Vignette et notice</span>
+        <span class="admin-card-subtitle">Documents visibles depuis le site public</span>
+      </span>
     </div>
     <div class="d-flex align-items-center gap-2 admin-card-checks" id="media-status-pills">
-      <span id="media-status-vignette" class="admin-card-check" aria-label="Statut vignette">&#10003;</span>
-      <span id="media-status-pdf" class="admin-card-check" aria-label="Statut notice">&#10003;</span>
+      <span id="media-status-vignette" class="admin-card-check media-status-pill d-none" aria-label="Statut description"></span>
+      <span id="media-status-pdf" class="admin-card-check media-status-pill d-none" aria-label="Statut notice"></span>
     </div>
   </div>
-  <div id="mediaCollapse" class="collapse show">
+    <div id="mediaCollapse" class="collapse show">
     <div class="card-body">
     <p class="fst-italic text-muted small mb-3">
-      Téléversez ici la vignette (visible dans la fiche d'oeuvre du catalogue public) et la notice d'oeuvre (téléchargeable depuis la fiche).
+      Téléversez ici la vignette (visible dans la fiche publique de l’œuvre) et la notice d’œuvre (téléchargeable depuis cette fiche).
     </p>
-    <!-- ROW 1 : Dropzones -->
-    <div class="row g-4 mb-3">
-      <div class="col-md-6">
-        <label class="form-label">Vignette (format jpg/png/webp, max. 2&nbsp;Mo)</label>
+
+    <div class="media-doc-grid">
+      <section class="media-doc-card">
+        <div class="media-doc-header">
+          <div class="media-doc-kicker">Document</div>
+          <h3 class="media-doc-title">Vignette</h3>
+          <p class="media-doc-text">Image affichée dans la fiche publique de l’œuvre.</p>
+        </div>
+        <label class="form-label media-doc-label">Format jpg/png/webp, max. 2&nbsp;Mo</label>
         <div id="vignette-dropzone" class="dropzone rounded-3 border border-2 text-center disabled" role="button" aria-label="Charger une vignette">
           <p class="mb-0">Glissez une image ici ou cliquez pour sélectionner un fichier</p>
           <input type="file" id="vignette-input" accept="image/*" class="d-none" />
         </div>
-      </div>
-      <div class="col-md-6">
-        <label class="form-label">Notice d'oeuvre (format PDF, max. 10&nbsp;Mo)</label>
+        <div id="vignette-preview" class="preview-box"></div>
+        <div id="vignette-btn"></div>
+      </section>
+
+      <section class="media-doc-card">
+        <div class="media-doc-header">
+          <div class="media-doc-kicker">Document</div>
+          <h3 class="media-doc-title">Notice d’œuvre</h3>
+          <p class="media-doc-text">PDF téléchargeable depuis la fiche publique.</p>
+        </div>
+        <label class="form-label media-doc-label">Format PDF, max. 10&nbsp;Mo</label>
         <div id="pdf-dropzone" class="dropzone rounded-3 border border-2 text-center disabled" role="button" aria-label="Charger un PDF">
           <p class="mb-0">Glissez un PDF ici ou cliquez pour sélectionner un fichier</p>
           <input type="file" id="pdf-input" accept="application/pdf" class="d-none" />
         </div>
-      </div>
-    </div>
-
-    <!-- ROW 2 : Previews -->
-    <div class="row g-4 mb-2">
-      <div class="col-md-6">
-        <div id="vignette-preview" class="preview-box"></div>
-      </div>
-      <div class="col-md-6">
         <div id="pdf-preview" class="preview-box pdf"></div>
-      </div>
-    </div>
-
-    <!-- ROW 3 : Filenames + Delete buttons -->
-    <div class="row g-4">
-      <div class="col-md-6 text-center">
-        <div id="vignette-btn"></div>
-      </div>
-      <div class="col-md-6 text-center">
         <div id="pdf-btn"></div>
-      </div>
+      </section>
     </div>
   </div>
 </div>
@@ -71,15 +69,66 @@
     --media-preview-max-height: 220px;
     --media-preview-max-height-pdf: 250px;
   }
+  .media-doc-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  .media-doc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem 1.05rem;
+    border: 1px solid #ddd6ca;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #fbfaf7 0%, #f3efe8 100%);
+  }
+  .media-doc-header {
+    display: grid;
+    gap: 0.2rem;
+  }
+  .media-doc-kicker {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7a7165;
+  }
+  .media-doc-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #463f38;
+  }
+  .media-doc-text {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #655d53;
+  }
+  .media-doc-label {
+    margin-bottom: 0;
+    font-size: 0.79rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #60584e;
+  }
   .dropzone {
     min-height: var(--media-dropzone-height);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background .2s;
+    padding: 0.85rem;
+    background: rgba(255, 255, 255, 0.75);
+    transition: background .2s, border-color .2s, box-shadow .2s;
   }
-  .dropzone.hover { background: #f8f9fa; }
+  .dropzone.hover {
+    background: #f8f9fa;
+    border-color: rgba(13, 110, 253, 0.35) !important;
+    box-shadow: 0 0 0 0.18rem rgba(13, 110, 253, 0.08);
+  }
   .dropzone.disabled { cursor: not-allowed; opacity:.5; }
   .preview-box {
     width: min(100%, var(--media-preview-max-width));
@@ -92,6 +141,11 @@
     background: #fff;
     padding: .75rem;
     margin: 0 auto;
+  }
+  #vignette-btn,
+  #pdf-btn {
+    text-align: center;
+    min-height: 2rem;
   }
   .preview-box img,
   .preview-box canvas,
@@ -128,6 +182,11 @@
   #mediaCollapse.show * {
     visibility: visible !important;
   }
+  @media (max-width: 767.98px) {
+    .media-doc-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 @endpush
 
@@ -145,6 +204,10 @@
   };
 
   const statusLabels = { vignette: 'Vignette', pdf: 'Notice' };
+  const statusMissingLabels = {
+    vignette: 'Vignette manquante',
+    pdf: 'Notice manquante'
+  };
   const statusChecks = {
     vignette: document.getElementById('media-status-vignette'),
     pdf: document.getElementById('media-status-pdf')
@@ -170,8 +233,8 @@
     if (!check) return;
 
     const label = statusLabels[type] || type;
-    check.className = 'admin-card-check';
-    check.innerHTML = '&#10003;';
+    check.className = 'admin-card-check media-status-pill';
+    check.textContent = '';
 
     if (hide) {
       check.classList.add('d-none');
@@ -180,9 +243,11 @@
     }
 
     if (hasFile) {
-      check.classList.add('admin-card-check--done');
       statusTooltip[type] = `${label} : ajouté`;
+      check.classList.add('d-none');
     } else {
+      check.classList.add('admin-card-check--missing');
+      check.textContent = statusMissingLabels[type] || `${label} manquante`;
       statusTooltip[type] = `${label} : manquant`;
     }
   }
