@@ -979,6 +979,179 @@ class PageMarkerService
     }
 
     /**
+     * Replace the pagination sidecar markers with the exact <pb> set currently
+     * present in the TEI. This keeps editor deletions in sync with the sidecar.
+     *
+     * @return array{count:int,total:int,removed:int,relative:string,created:bool}
+     */
+    public function syncSidecarWithPb(Version $version): array
+    {
+        $existing = $this->loadPaginationSidecar($version->id);
+        if (!$existing) {
+            $result = $this->createSidecarFromPb($version);
+            $count = (int) ($result['count'] ?? 0);
+            return [
+                'count'    => $count,
+                'total'    => $count,
+                'removed'  => 0,
+                'relative' => $result['relative'] ?? $this->paginationRelativePath($version->id),
+                'created'  => true,
+            ];
+        }
+
+        $contents = $this->readVersionXml($version);
+        if ($contents === null) {
+            return [
+                'count'    => 0,
+                'total'    => count($existing['markers'] ?? []),
+                'removed'  => 0,
+                'relative' => $this->paginationRelativePath($version->id),
+                'created'  => false,
+            ];
+        }
+
+        $pbMarkers = $this->extractPbMarkers($contents);
+        $previousTotal = count($existing['markers'] ?? []);
+
+        $existing['markers'] = $pbMarkers;
+        $existing['marker_count'] = count($pbMarkers);
+        $existing['generated_at'] = time();
+        $existing['origin'] = 'pb-tei';
+        $existing['synced_from_pb'] = [
+            'updated_at' => time(),
+            'previous_total' => $previousTotal,
+            'current_total' => count($pbMarkers),
+        ];
+
+        $relative = $this->paginationRelativePath($version->id);
+        Storage::disk('local')->put(
+            $relative,
+            json_encode($existing, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+        );
+
+        return [
+            'count'    => count($pbMarkers),
+            'total'    => count($pbMarkers),
+            'removed'  => max(0, $previousTotal - count($pbMarkers)),
+            'relative' => $relative,
+            'created'  => false,
+        ];
+    }
+
+    /**
+     * Materialize sidecar markers as inline <pb/> nodes for the version editor,
+     * while keeping any <pb/> tags already present in the TEI.
+     *
+     * @return array{xml:string|null,injected:int,total_sidecar:int,existing_pb:int}
+     */
+    public function buildVersionEditorXml(Version $version): array
+    {
+        $contents = $this->readVersionXml($version);
+        if ($contents === null) {
+            return [
+                'xml'          => null,
+                'injected'     => 0,
+                'total_sidecar'=> 0,
+                'existing_pb'  => 0,
+            ];
+        }
+
+        $existingPb = $this->extractPbMarkers($contents);
+        $existingCodes = [];
+        foreach ($existingPb as $marker) {
+            $code = $this->normalizeImageCode($marker);
+            if ($code) {
+                $existingCodes[$code] = true;
+            }
+        }
+
+        $sidecar = $this->loadPaginationSidecar($version->id);
+        $markers = is_array($sidecar['markers'] ?? null) ? array_values($sidecar['markers']) : [];
+        if (empty($markers)) {
+            return [
+                'xml'          => $contents,
+                'injected'     => 0,
+                'total_sidecar'=> 0,
+                'existing_pb'  => count($existingPb),
+            ];
+        }
+
+        $imageMap = $this->versionEditorImageMap($version);
+        $missing = [];
+
+        foreach ($markers as $marker) {
+            $code = $this->normalizeImageCode($marker);
+            if (!$code || isset($existingCodes[$code])) {
+                continue;
+            }
+
+            $missing[] = [
+                'char_index' => (int) ($marker['char_index'] ?? 0),
+                'phrase'     => $marker['phrase'] ?? null,
+                'image_code' => $code,
+                'facs'       => $imageMap[$code] ?? (($marker['image'] ?? null) ? (string) $marker['image'] : $code),
+                'page'       => (string) ($marker['page'] ?? $code),
+            ];
+        }
+
+        if (empty($missing)) {
+            return [
+                'xml'          => $contents,
+                'injected'     => 0,
+                'total_sidecar'=> count($markers),
+                'existing_pb'  => count($existingPb),
+            ];
+        }
+
+        $result = $this->insertPbTagsFromOffsets($contents, $missing);
+
+        return [
+            'xml'          => $result['xml'],
+            'injected'     => $result['inserted'],
+            'total_sidecar'=> count($markers),
+            'existing_pb'  => count($existingPb),
+        ];
+    }
+
+    /**
+     * Persist the canonical version TEI with sidecar-derived <pb/> tags
+     * materialized on disk and mirrored to public/legacy locations.
+     *
+     * @return array{written:bool,injected:int,total_sidecar:int,existing_pb:int}
+     */
+    public function materializeCanonicalVersionXml(Version $version): array
+    {
+        $payload = $this->buildVersionEditorXml($version);
+        $xml = $payload['xml'] ?? null;
+        if (!is_string($xml) || $xml === '') {
+            return [
+                'written'      => false,
+                'injected'     => 0,
+                'total_sidecar'=> 0,
+                'existing_pb'  => 0,
+            ];
+        }
+
+        $paths = [
+            storage_path("app/public/uploads/versions/{$version->folder}.xml"),
+            public_path("uploads/versions/{$version->folder}.xml"),
+            base_path("../variance/uploads/versions/{$version->folder}.xml"),
+        ];
+
+        foreach ($paths as $path) {
+            File::ensureDirectoryExists(dirname($path));
+            File::put($path, $xml);
+        }
+
+        return [
+            'written'      => true,
+            'injected'     => (int) ($payload['injected'] ?? 0),
+            'total_sidecar'=> (int) ($payload['total_sidecar'] ?? 0),
+            'existing_pb'  => (int) ($payload['existing_pb'] ?? 0),
+        ];
+    }
+
+    /**
      * Read the TEI XML for a version.
      */
     private function readVersionXml(Version $version): ?string
@@ -999,6 +1172,26 @@ class PageMarkerService
         }
 
         return null;
+    }
+
+    /** @return array<string,string> image_code => facsimile filename */
+    private function versionEditorImageMap(Version $version): array
+    {
+        $version->loadMissing('work.author');
+        $map = [];
+
+        foreach ($version->collectManifestEntries() as $entry) {
+            $file = basename((string) ($entry['big'] ?? ''));
+            if ($file === '') {
+                continue;
+            }
+            $code = $this->normalizeImageCode(['image' => $file]);
+            if ($code) {
+                $map[$code] = $file;
+            }
+        }
+
+        return $map;
     }
 
     /**
@@ -1662,6 +1855,70 @@ class PageMarkerService
 
         return [
             'html'     => $html,
+            'inserted' => $inserted,
+            'misses'   => $misses,
+        ];
+    }
+
+    /**
+     * Insert inline <pb/> tags inside a TEI/XML document using sidecar offsets.
+     *
+     * @param  array<int,array{char_index:int,phrase?:string|null,image_code?:string,facs?:string,page?:string}>  $markers
+     * @return array{xml:string,inserted:int,misses:array<int,array<string,mixed>>}
+     */
+    private function insertPbTagsFromOffsets(string $xml, array $markers): array
+    {
+        $normalized = array_values(array_filter($markers, static function ($marker) {
+            return (isset($marker['char_index']) && is_numeric($marker['char_index'])) || !empty($marker['phrase']);
+        }));
+
+        usort($normalized, static function ($a, $b) {
+            return (int)($a['char_index'] ?? 0) <=> (int)($b['char_index'] ?? 0);
+        });
+
+        [$shadow, $map, $fold] = $this->buildIndexedPlaintext($xml);
+        $inserted = 0;
+        $misses = [];
+        $offsetShift = 0;
+
+        foreach ($normalized as $marker) {
+            $charIndex = (int) ($marker['char_index'] ?? -1);
+            $resolvedIndex = $this->resolveMarkerIndex($marker, $shadow, $fold, $map, $charIndex);
+            if ($resolvedIndex === null || !array_key_exists($resolvedIndex, $map)) {
+                $misses[] = ['marker' => $marker, 'reason' => 'index_introuvable'];
+                continue;
+            }
+
+            $facs = trim((string) ($marker['facs'] ?? ''));
+            if ($facs === '') {
+                $imageCode = $this->normalizeImageCode($marker);
+                $facs = $imageCode ?: '';
+            }
+            if ($facs === '') {
+                $misses[] = ['marker' => $marker, 'reason' => 'image_invalide'];
+                continue;
+            }
+
+            $page = trim((string) ($marker['page'] ?? ''));
+            if ($page === '') {
+                $page = trim((string) ($marker['image_code'] ?? $this->normalizeImageCode($marker) ?? ''));
+            }
+
+            $pbTag = sprintf(
+                '<pb facs="%s" pagination="%s"/>',
+                htmlspecialchars($facs, ENT_QUOTES | ENT_XML1, 'UTF-8'),
+                htmlspecialchars($page, ENT_QUOTES | ENT_XML1, 'UTF-8')
+            );
+
+            $xmlOffset = $map[$resolvedIndex] + $offsetShift;
+            $insertAt = $this->moveBeforeOpeningChain($xml, $xmlOffset);
+            $xml = substr($xml, 0, $insertAt) . $pbTag . substr($xml, $insertAt);
+            $offsetShift += strlen($pbTag);
+            $inserted++;
+        }
+
+        return [
+            'xml'      => $xml,
             'inserted' => $inserted,
             'misses'   => $misses,
         ];
@@ -2774,7 +3031,7 @@ class PageMarkerService
 
     public function lignesRelativePath(int $versionId): string
     {
-        return "private/lignes/{$versionId}.txt";
+        return "lignes/{$versionId}.txt";
     }
 
     private function countFileLines(string $relative): int
@@ -2812,7 +3069,7 @@ class PageMarkerService
 
     public function paginationRelativePath(int $versionId): string
     {
-        return "private/pagination/{$versionId}.json";
+        return "pagination/{$versionId}.json";
     }
 
     public function countMarkersForComparison(Comparison $comparison): array

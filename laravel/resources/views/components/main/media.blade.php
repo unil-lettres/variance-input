@@ -1,29 +1,21 @@
 <!-- resources/views/components/main/media.blade.php -->
 <div class="card" id="media-panel">
   <div
-      class="media-toggle card-header fw-semibold d-flex justify-content-between align-items-center" 
-      role="button"
-      data-bs-toggle="collapse"
-      data-bs-target="#mediaCollapse"
-      aria-expanded="true"
-      aria-controls="mediaCollapse"
+      class="card-header fw-semibold d-flex justify-content-between align-items-center"
   >
     <div class="d-flex align-items-start gap-2 admin-card-heading">
-      <span class="collapse-chevron" aria-hidden="true"></span>
       <span class="admin-card-heading-text">
-        <span class="admin-card-title">Vignette et notice</span>
-        <span class="admin-card-subtitle">Documents visibles depuis le site public</span>
+        <span class="admin-card-title">2.2 · Vignette et notice</span>
       </span>
     </div>
     <div class="d-flex align-items-center gap-2 admin-card-checks" id="media-status-pills">
       <span id="media-status-vignette" class="admin-card-check media-status-pill d-none" aria-label="Statut description"></span>
       <span id="media-status-pdf" class="admin-card-check media-status-pill d-none" aria-label="Statut notice"></span>
     </div>
-  </div>
-    <div id="mediaCollapse" class="collapse show">
+    </div>
     <div class="card-body">
     <p class="fst-italic text-muted small mb-3">
-      Téléversez ici la vignette (visible dans la fiche publique de l’œuvre) et la notice d’œuvre (téléchargeable depuis cette fiche).
+      Téléversez ici la vignette et la notice d’œuvre.
     </p>
 
     <div class="media-doc-grid">
@@ -58,7 +50,6 @@
       </section>
     </div>
   </div>
-</div>
 </div>
 
 @push('styles')

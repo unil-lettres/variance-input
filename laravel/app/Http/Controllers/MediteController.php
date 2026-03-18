@@ -115,13 +115,15 @@ class MediteController extends Controller
         }
         $separators = $rawSep;
 
+        $sourceVersion = Version::with('work.author')->findOrFail((int) $validated['source_version']);
+        $targetVersion = Version::with('work.author')->findOrFail((int) $validated['target_version']);
+
+        $this->pageMarkerService->materializeCanonicalVersionXml($sourceVersion);
+        $this->pageMarkerService->materializeCanonicalVersionXml($targetVersion);
+
         /* ───── Short names for versions ───── */
-        $sourceShort = DB::table('versions')
-                        ->where('id', $validated['source_version'])
-                        ->value('folder');
-        $targetShort = DB::table('versions')
-                        ->where('id', $validated['target_version'])
-                        ->value('folder');
+        $sourceShort = $sourceVersion->folder;
+        $targetShort = $targetVersion->folder;
         $comparisonShort = "$sourceShort-$targetShort";
 
         /* ───── Create or update comparison ───── */

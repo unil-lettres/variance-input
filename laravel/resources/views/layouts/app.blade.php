@@ -56,7 +56,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
     @php
-        $adminBannerColor = '#6f6d6a';
+        $adminBannerColor = 'rgba(111, 109, 106, 0.14)';
         $adminBannerStyle = 'background-color: ' . $adminBannerColor . ';';
         $mediteStatusUrl = env('MEDITE_STATUS_URL', '/medite/');
     @endphp
@@ -98,6 +98,13 @@
         .admin-banner-shell {
             border-bottom: 1px solid rgba(210, 165, 74, 0.65);
         }
+        header .admin-banner {
+            background-image: none;
+            background-color: rgba(111, 109, 106, 0.14) !important;
+            color: #6a6157 !important;
+            box-shadow: none;
+            border-bottom: 1px solid rgba(117, 107, 94, 0.12);
+        }
         .login-bg {
             background-color: #f4f1ed;
             background-image:
@@ -126,7 +133,7 @@
         }
         .admin-user-toggle {
             border: 0;
-            color: #fff;
+            color: #5f564d;
             display: inline-flex;
             align-items: center;
             padding: 0.35rem 0.65rem;
@@ -134,14 +141,38 @@
             line-height: 1.1;
             text-decoration: none;
             border-radius: 999px;
-            background: rgba(0, 0, 0, 0.3);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+            background: rgba(117, 107, 94, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
             transition: background-color 120ms ease, box-shadow 120ms ease;
         }
         .admin-user-toggle:hover {
-            background: rgba(0, 0, 0, 0.42);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-            color: #fff;
+            background: rgba(117, 107, 94, 0.14);
+            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.2);
+            color: #4f473f;
+        }
+        .admin-chrome {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.9rem;
+            width: 100%;
+        }
+        .admin-chrome--embedded {
+            justify-content: space-between;
+        }
+        .admin-embedded-title {
+            flex: 0 0 auto;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.38em;
+            text-transform: uppercase;
+            color: #6b6258;
+            white-space: nowrap;
+        }
+        .admin-chrome-actions {
+            margin-left: auto;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
         .admin-brand {
             display: flex;
@@ -153,8 +184,9 @@
             align-items: center;
             padding: 0.3rem 0.6rem;
             border-radius: 999px;
-            background: rgba(0, 0, 0, 0.42);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+            background: rgba(117, 107, 94, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
+            text-decoration: none;
         }
         .admin-brand img {
             display: block;
@@ -168,6 +200,50 @@
             width: auto;
             max-width: min(17rem, 42vw);
             filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28));
+        }
+        .admin-wordmark {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            margin: 0;
+            padding-right: 0.08em;
+            font-family: "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            font-size: clamp(1.7rem, 2.2vw, 2.4rem);
+            font-weight: 600;
+            font-style: italic;
+            letter-spacing: 0.08em;
+            line-height: 0.9;
+            color: #6a6157;
+            text-shadow:
+                0 0 1px rgba(255, 255, 255, 0.42),
+                0 0 10px rgba(255, 255, 255, 0.1),
+                0 0 20px rgba(177, 168, 151, 0.16);
+        }
+        .admin-wordmark__ghost,
+        .admin-wordmark__core {
+            display: block;
+        }
+        .admin-wordmark__ghost {
+            position: absolute;
+            inset: 0;
+            color: rgba(182, 171, 150, 0.28);
+            filter: blur(2px);
+            transform: translate(0.06em, 0.03em) scaleX(1.02);
+            pointer-events: none;
+        }
+        .admin-wordmark__core {
+            position: relative;
+        }
+        .admin-wordmark__core::after {
+            content: "";
+            position: absolute;
+            left: 0.16em;
+            right: 0.04em;
+            bottom: 0.11em;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(160, 149, 128, 0.7), rgba(210, 202, 188, 0.28), rgba(255, 255, 255, 0));
+            filter: blur(0.5px);
+            opacity: 0.95;
         }
         .admin-brand-text {
             font-family: var(--font-serif);
@@ -198,7 +274,7 @@
             box-shadow: none;
         }
         .admin-user-toggle:focus-visible {
-            outline: 2px solid rgba(255, 255, 255, 0.75);
+            outline: 2px solid rgba(117, 107, 94, 0.5);
             outline-offset: 2px;
         }
         .admin-user-toggle.dropdown-toggle::after {
@@ -225,6 +301,139 @@
         .admin-user-menu .dropdown-item:hover,
         .admin-user-menu .dropdown-item:focus {
             background-color: rgba(0, 0, 0, 0.08);
+        }
+        .admin-public-menu {
+            width: max-content;
+            min-width: 30rem;
+            max-width: none;
+            max-height: none;
+            overflow: visible;
+        }
+        .admin-public-menu-section {
+            padding: 0.15rem 0;
+        }
+        .admin-public-menu-heading {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.35rem 0.95rem 0.3rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .admin-public-menu-heading-link {
+            padding: 0;
+            text-decoration: none;
+            color: inherit;
+        }
+        .admin-public-menu-heading-link:hover,
+        .admin-public-menu-heading-link:focus {
+            background-color: rgba(0, 0, 0, 0.04);
+        }
+        .admin-public-menu-heading-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.05rem;
+            height: 1.05rem;
+            margin-right: 0.45rem;
+            flex: 0 0 auto;
+        }
+        .admin-public-menu-heading-icon svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .admin-public-pair {
+            position: relative;
+        }
+        .admin-public-pair-toggle {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            text-align: left;
+            padding: 0.45rem 0.95rem;
+            font-size: 0.9rem;
+            color: #3f3c36;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+        .admin-public-pair-toggle:hover,
+        .admin-public-pair-toggle:focus {
+            background-color: rgba(0, 0, 0, 0.06);
+        }
+        .admin-public-pair-toggle[aria-expanded="true"] {
+            font-weight: 700;
+        }
+        .admin-public-pair-toggle::after {
+            content: "›";
+            font-size: 1rem;
+            line-height: 1;
+            opacity: 0.65;
+        }
+        .admin-public-comparisons {
+            position: absolute;
+            top: -0.35rem;
+            left: calc(100% - 0.35rem);
+            width: max-content;
+            min-width: 28rem;
+            max-width: none;
+            max-height: none;
+            overflow: visible;
+            padding: 0.35rem 0;
+            background: #fff;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 14px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1085;
+        }
+        .admin-public-comparisons[hidden] {
+            display: none !important;
+        }
+        .admin-public-comparison-link {
+            display: block;
+            padding: 0.45rem 0.95rem;
+            font-size: 0.84rem;
+            color: #5b554c;
+            text-decoration: none;
+            white-space: normal;
+        }
+        .admin-public-comparison-link:hover,
+        .admin-public-comparison-link:focus {
+            background-color: rgba(0, 0, 0, 0.05);
+            color: #2f2b26;
+        }
+        .admin-public-empty {
+            padding: 0.35rem 0.95rem;
+            font-size: 0.84rem;
+            color: #7a7165;
+        }
+        .admin-public-comparisons-heading {
+            padding: 0.15rem 0.95rem 0.35rem;
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #8b8173;
+        }
+        @media (max-width: 991.98px) {
+            .admin-public-menu {
+                width: min(92vw, 30rem);
+                min-width: 0;
+                max-width: 92vw;
+            }
+            .admin-public-comparisons {
+                position: static;
+                left: auto;
+                top: auto;
+                width: auto;
+                min-width: 0;
+                max-width: none;
+                max-height: none;
+                margin: 0 0.6rem 0.45rem;
+                border-radius: 12px;
+            }
         }
         .system-status-dot {
             width: 8px;
@@ -255,26 +464,16 @@
             border-bottom: none;
         }
         .admin-main-page .admin-banner {
-            --banner-ink: rgba(0, 0, 0, 0.22);
-            --banner-wash: rgba(255, 255, 255, 0.1);
-            background-image:
-                radial-gradient(150px 110px at 10% 65%, var(--banner-ink), rgba(0, 0, 0, 0) 60%),
-                radial-gradient(220px 170px at 24% 28%, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 70%),
-                linear-gradient(180deg, var(--banner-wash), rgba(0, 0, 0, 0.08)),
-                repeating-linear-gradient(
-                    45deg,
-                    rgba(255, 255, 255, 0.025) 0 2px,
-                    rgba(0, 0, 0, 0.02) 2px 4px
-                );
-            box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+            background-image: none;
+            box-shadow: none;
         }
         .admin-main-page header .admin-banner {
             padding-top: 1rem !important;
             padding-bottom: 1rem !important;
         }
         .admin-main-page .admin-brand a {
-            background: rgba(0, 0, 0, 0.24);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+            background: rgba(117, 107, 94, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
         }
         .admin-main-page .admin-brand-text {
             font-size: 1.08rem;
@@ -283,18 +482,21 @@
             height: 28px;
             max-width: min(15rem, 38vw);
         }
+        .admin-main-page .admin-wordmark {
+            font-size: clamp(1.45rem, 1.9vw, 2rem);
+        }
         .admin-main-page .admin-brand-role {
             background: rgba(255, 255, 255, 0.1);
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
             font-size: 0.72rem;
         }
         .admin-main-page .admin-user-toggle {
-            background: rgba(0, 0, 0, 0.2);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+            background: rgba(117, 107, 94, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
         }
         .admin-main-page .admin-user-toggle:hover {
-            background: rgba(0, 0, 0, 0.3);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+            background: rgba(117, 107, 94, 0.14);
+            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.2);
         }
         .admin-main-page main {
             padding-top: 0.15rem;
@@ -407,119 +609,47 @@
         body.legacy-skin .admin-banner-shell {
             border-bottom: none;
         }
+        @media (max-width: 767.98px) {
+            .admin-brand a {
+                padding: 0.22rem 0.5rem;
+            }
+            .admin-wordmark {
+                font-size: clamp(1.3rem, 6.8vw, 1.7rem);
+                letter-spacing: 0.05em;
+            }
+            .admin-embedded-title {
+                font-size: 0.88rem;
+                letter-spacing: 0.24em;
+            }
+        }
+        @media (max-width: 991.98px) {
+            .admin-chrome {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .admin-chrome-actions {
+                justify-content: flex-start;
+                margin-left: 0;
+            }
+        }
                 </style>
 </head>
+@php
+    $bodyClassValue = trim($__env->yieldContent('body-class'));
+    $isAdminMainPage = str_contains($bodyClassValue, 'admin-main-page');
+    $isLoginPage = str_contains($bodyClassValue, 'login-page');
+    $useEmbeddedChrome = $isLoginPage || request()->routeIs('version.editor') || request()->routeIs('comparison.editor');
+@endphp
 <body class="d-flex flex-column min-vh-100 @yield('body-class') {{ $legacySkin ? 'legacy-skin' : '' }}">
-    <header class="mb-4 admin-banner-shell">
-        <div class="admin-banner py-4 text-white shadow-sm" style="{{ $adminBannerStyle }}">
-            <div class="container admin-page-shell d-flex justify-content-between align-items-center">
-                <div class="admin-brand">
-                    <a href="{{ rtrim(admin_path(), '/') . '/' }}">
-                        <img class="admin-brand-logo" src="{{ legacy_url('img/full_logo_white.svg') }}" alt="Variance">
-                    </a>
-                </div>
-
-                <div class="d-flex align-items-center gap-2">
-                    @auth
-                        @if(Auth::user()->is_admin)
-                            <div class="dropdown">
-                                <button class="admin-user-toggle dropdown-toggle"
-                                        type="button"
-                                        id="admin-tasks-menu"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false">
-                                    Système <span id="system-status-dot" class="system-status-dot" aria-hidden="true"></span>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-tasks-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="{{ $mediteStatusUrl }}" target="_blank" rel="noopener">Traitements Medite</a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="{{ admin_path('tasks') }}">File Laravel</a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="{{ admin_path('health/report') }}">État système</a>
-                                    </li>
-                                </ul>
-                            </div>
-                        @endif
-	                    @endauth
-	                    <div class="dropdown">
-	                        <button class="admin-user-toggle dropdown-toggle"
-	                                type="button"
-	                                id="admin-sites-menu"
-                                data-bs-toggle="dropdown"
-                                aria-expanded="false">
-                            Aller à
-		                        </button>
-		                        <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-sites-menu">
-                                    <li>
-                                        <span class="dropdown-item-text text-muted small">Site public</span>
-                                    </li>
-		                            <li>
-		                                <a class="dropdown-item" href="{{ legacy_url() }}" data-site-scope="prod" data-site-label="Site public">Site public</a>
-		                            </li>
-		                            <li>
-		                                <a class="dropdown-item" href="{{ legacy_url('dev') }}" data-site-scope="dev" data-site-label="Site de travail">Site de travail</a>
-		                            </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <span class="dropdown-item-text text-muted small">Historique</span>
-                                </li>
-                                <li class="px-2 pb-1" id="admin-history-container">
-                                    <ul class="list-unstyled mb-1" id="admin-history-list">
-                                        <li>
-                                            <span class="dropdown-item-text text-muted small">Aucun historique</span>
-                                        </li>
-                                    </ul>
-                                    <button type="button" class="dropdown-item text-danger" id="admin-history-clear">Effacer l'historique</button>
-                                </li>
-	                        </ul>
-	                    </div>
-
-                    @auth
-                        <div class="dropdown">
-                            <button class="admin-user-toggle dropdown-toggle"
-                                    type="button"
-                                    id="admin-user-menu"
-                                    data-bs-toggle="dropdown"
-                                    aria-expanded="false">
-                                Réglages
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end py-1 admin-user-menu" aria-labelledby="admin-user-menu">
-                                @php
-                                    $roleLabel = Auth::user()->is_admin ? 'Admin' : 'Utilisateur';
-                                @endphp
-                                <li>
-                                    <span class="dropdown-item-text">
-                                        <span class="fw-semibold">{{ Auth::user()->display_name }}</span>
-                                        <span class="text-muted">· {{ $roleLabel }}</span>
-                                    </span>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                @if(Auth::user()->is_admin)
-                                    <li>
-                                        <a class="dropdown-item" href="{{ admin_path('users') }}">Gérer les utilisateurs</a>
-                                    </li>
-                                    <li><hr class="dropdown-divider"></li>
-                                @endif
-                                <li>
-                                    <a class="dropdown-item" href="{{ admin_path('account/password') }}">Changer mon mot de passe</a>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <form action="{{ admin_path('logout') }}" method="POST">
-                                        @csrf
-                                        <button type="submit" class="dropdown-item">Se déconnecter</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </div>
-                    @endauth
+    @unless($isAdminMainPage)
+        <header class="mb-4 admin-banner-shell">
+            <div class="admin-banner py-4 text-white shadow-sm" style="{{ $adminBannerStyle }}">
+                <div class="container admin-page-shell">
+                    @include('components.admin.chrome_controls', ['embedded' => $useEmbeddedChrome])
                 </div>
             </div>
-        </div>
-    </header>
+        </header>
+    @endunless
 
     <main class="flex-grow-1 d-flex flex-column @yield('main-class')">
         <div class="container-fluid admin-page-shell">
@@ -603,6 +733,8 @@
                             <li>
                                 <a class="dropdown-item"
                                    href="${escapeHtml(href)}"
+                                   target="_blank"
+                                   rel="noopener"
                                    data-history-author-id="${escapeHtml(authorId)}"
                                    data-history-work-id="${escapeHtml(workId)}">
                                     <div class="fw-semibold">${escapeHtml(workLabel)}</div>
@@ -624,25 +756,6 @@
                         try { localStorage.removeItem(HISTORY_KEY); } catch (err) {}
                         render();
                         return;
-                    }
-
-                    const link = event.target?.closest?.('a[data-history-author-id][data-history-work-id]');
-                    if (!link) return;
-                    if (!document.getElementById('admin-main')) return; // only soft-select on main page
-                    if (typeof window.varianceSelectWork !== 'function') return;
-
-                    const authorId = link.getAttribute('data-history-author-id');
-                    const workId = link.getAttribute('data-history-work-id');
-                    if (!authorId || !workId) return;
-
-                    event.preventDefault();
-                    window.varianceSelectWork(authorId, workId);
-
-                    // Close dropdown after selection
-                    const dropdown = link.closest('.dropdown');
-                    const toggle = dropdown?.querySelector?.('[data-bs-toggle="dropdown"]');
-                    if (toggle && window.bootstrap && bootstrap.Dropdown) {
-                        bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
                     }
                 });
             })();
@@ -680,6 +793,137 @@
 
             document.addEventListener('DOMContentLoaded', updateCounts);
             document.addEventListener('publicationCountsChanged', updateCounts);
+        })();
+
+        (function () {
+            const menu = document.querySelector('.admin-public-menu');
+            if (!menu) return;
+
+            const scopeContainers = {
+                prod: menu.querySelector('[data-public-scope="prod"]'),
+                dev: menu.querySelector('[data-public-scope="dev"]'),
+            };
+
+            const escapeHtml = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+
+            const closeSubmenus = (scope) => {
+                const root = scope ? scopeContainers[scope] : menu;
+                if (!root) return;
+                root.querySelectorAll('[data-public-pair-toggle]').forEach((toggle) => {
+                    toggle.setAttribute('aria-expanded', 'false');
+                });
+                root.querySelectorAll('.admin-public-comparisons').forEach((panel) => {
+                    panel.hidden = true;
+                });
+            };
+
+            const renderScope = (scope, items) => {
+                const container = scopeContainers[scope];
+                if (!container) return;
+                if (!Array.isArray(items) || items.length === 0) {
+                    container.innerHTML = '<div class="admin-public-empty">Aucune comparaison publiée.</div>';
+                    return;
+                }
+
+                container.innerHTML = items.map((item) => {
+                    const comparisons = Array.isArray(item.comparisons) ? item.comparisons : [];
+                    const comparisonsMarkup = comparisons.length
+                        ? comparisons.map((comparison) =>
+                            `<a class="admin-public-comparison-link" href="${escapeHtml(comparison.url)}" target="_blank" rel="noopener">${escapeHtml(comparison.label)}</a>`
+                        ).join('')
+                        : '<div class="admin-public-empty">Aucune comparaison publiée.</div>';
+
+                    return `
+                        <div class="admin-public-pair">
+                            <button type="button"
+                                    class="admin-public-pair-toggle"
+                                    data-public-pair-toggle
+                                    aria-expanded="false">
+                                ${escapeHtml(item.pair_label)}
+                            </button>
+                            <div class="admin-public-comparisons" hidden>
+                                <div class="admin-public-comparisons-heading">${escapeHtml(item.pair_label)}</div>
+                                ${comparisonsMarkup}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            const loadMenu = async () => {
+                try {
+                    const res = await fetch(withBasePath('/api/comparisons/public-menu'), {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    renderScope('prod', data?.prod || []);
+                    renderScope('dev', data?.dev || []);
+                } catch (err) {
+                    Object.values(scopeContainers).forEach((container) => {
+                        if (container) {
+                            container.innerHTML = '<div class="admin-public-empty">Menu indisponible.</div>';
+                        }
+                    });
+                }
+            };
+
+            menu.addEventListener('click', (event) => {
+                const toggle = event.target.closest('[data-public-pair-toggle]');
+                if (toggle) {
+                    event.preventDefault();
+                    const content = toggle.nextElementSibling;
+                    const expanded = toggle.getAttribute('aria-expanded') === 'true';
+                    closeSubmenus();
+                    if (!expanded) {
+                        toggle.setAttribute('aria-expanded', 'true');
+                        if (content) {
+                            content.hidden = false;
+                        }
+                    }
+                    return;
+                }
+
+                if (!event.target.closest('.admin-public-comparisons')) {
+                    closeSubmenus();
+                }
+            });
+
+            menu.addEventListener('mouseover', (event) => {
+                const toggle = event.target.closest('[data-public-pair-toggle]');
+                if (!toggle) return;
+                const content = toggle.nextElementSibling;
+                if (!content) return;
+                closeSubmenus();
+                toggle.setAttribute('aria-expanded', 'true');
+                content.hidden = false;
+            });
+
+            menu.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    closeSubmenus();
+                }
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!menu.contains(event.target)) {
+                    closeSubmenus();
+                }
+            });
+
+            document.getElementById('admin-public-sites-menu')?.addEventListener('hidden.bs.dropdown', () => {
+                closeSubmenus();
+            });
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', loadMenu);
+            } else {
+                loadMenu();
+            }
         })();
 
         (function () {

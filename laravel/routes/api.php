@@ -30,3 +30,4 @@ Route::get('/comparisons/{comparison}/manifests/{role}', [ComparisonController::
     ->where('role', 'source|target')
     ->name('comparisons.manifest');
 Route::get('/comparisons/publication-counts', [ComparisonController::class, 'publicationCounts']);
+Route::get('/comparisons/public-menu', [ComparisonController::class, 'publicMenu']);

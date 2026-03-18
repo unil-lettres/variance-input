@@ -1944,6 +1944,7 @@ function initComparisonsTable() {
         }
         updateComparisonRow(comparisonId, {
           publication_scope: scope,
+          published: true,
           publish_missing: Array.isArray(data.missing_files) ? data.missing_files : (comparisonData.get(Number(comparisonId))?.publish_missing ?? []),
           components_ready: Array.isArray(data.missing_files) ? data.missing_files.length === 0 : (comparisonData.get(Number(comparisonId))?.components_ready ?? null),
         });
@@ -1963,6 +1964,8 @@ function initComparisonsTable() {
         }
         updateComparisonRow(comparisonId, {
           publication_scope: null,
+          published: false,
+          publish_dest: null,
         });
       }
 
@@ -2022,6 +2025,7 @@ function initComparisonsTable() {
 
       updateComparisonRow(comparisonId, {
         publication_scope: nextScope,
+        published: true,
         publish_missing: Array.isArray(data.missing_files) ? data.missing_files : (comparisonData.get(Number(comparisonId))?.publish_missing ?? []),
         components_ready: Array.isArray(data.missing_files) ? data.missing_files.length === 0 : (comparisonData.get(Number(comparisonId))?.components_ready ?? null),
       });

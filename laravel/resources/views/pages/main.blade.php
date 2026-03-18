@@ -19,53 +19,26 @@
      data-user-id="{{ Auth::id() ?? '' }}"
      data-user-is-admin="{{ (Auth::check() && Auth::user()->is_admin) ? '1' : '0' }}">
 
-    <section class="editorial-journey" id="editorial-journey" aria-labelledby="editorial-journey-title">
-        <div class="editorial-journey-nav">
-            <div class="work-selector-intro editorial-work-context">
-                <div class="work-selector-context-title" id="work-selector-context-title">Aucune œuvre sélectionnée</div>
-                <div class="work-selector-context-text" id="work-selector-context-text">Sélectionnez d’abord un auteur, puis une œuvre pour charger l’atelier éditorial correspondant.</div>
-            </div>
-            <div class="editorial-journey-controls" role="tablist" aria-label="Étapes de l’atelier">
-                <button type="button" class="editorial-step-chip is-active" id="editorial-step-chip-0" data-editorial-step-target="0" role="tab" aria-selected="true" aria-controls="editorial-step-0">
-                    <span class="editorial-step-chip-number">1</span>
-                    <span class="editorial-step-chip-copy">
-                        <span class="editorial-step-chip-label">Choisir l’œuvre</span>
-                        <span class="editorial-step-chip-detail">Auteur et contexte</span>
-                    </span>
-                </button>
-                <button type="button" class="editorial-step-chip" id="editorial-step-chip-1" data-editorial-step-target="1" role="tab" aria-selected="false" aria-controls="editorial-step-1">
-                    <span class="editorial-step-chip-number">2</span>
-                    <span class="editorial-step-chip-copy">
-                        <span class="editorial-step-chip-label">Décrire l’œuvre</span>
-                        <span class="editorial-step-chip-detail">Présentation et notice</span>
-                    </span>
-                </button>
-                <button type="button" class="editorial-step-chip" id="editorial-step-chip-2" data-editorial-step-target="2" role="tab" aria-selected="false" aria-controls="editorial-step-2">
-                    <span class="editorial-step-chip-number">3</span>
-                    <span class="editorial-step-chip-copy">
-                        <span class="editorial-step-chip-label">Préparer les témoins</span>
-                        <span class="editorial-step-chip-detail">Versions et fac-similés</span>
-                    </span>
-                </button>
-                <button type="button" class="editorial-step-chip" id="editorial-step-chip-3" data-editorial-step-target="3" role="tab" aria-selected="false" aria-controls="editorial-step-3">
-                    <span class="editorial-step-chip-number">4</span>
-                    <span class="editorial-step-chip-copy">
-                        <span class="editorial-step-chip-label">Comparer et publier</span>
-                        <span class="editorial-step-chip-detail">Alignement et résultats</span>
-                    </span>
-                </button>
-            </div>
-        </div>
+    <div class="admin-main-work-selector">
+        @include('components.main.work_selector')
+    </div>
 
+    <section class="editorial-journey" id="editorial-journey" aria-labelledby="editorial-journey-title">
         <div class="editorial-carousel">
             <div class="editorial-carousel-viewport" id="editorial-carousel-viewport">
                 <div class="editorial-carousel-track" id="editorial-carousel-track">
                     <section class="editorial-step-panel is-active" id="editorial-step-0" data-editorial-step="0" role="tabpanel" aria-labelledby="editorial-step-chip-0">
                         <div class="editorial-step-content">
-                            <div id="zone-0">
-                                @include('components.main.work_selector')
+                            <div class="editorial-welcome">
+                                <span>Bienvenue dans l'interface de publication Variance.</span>
+                                <span>Sélectionnez une oeuvre pour démarrer le processus éditorial.</span>
                             </div>
-
+                            <div class="editorial-history" aria-labelledby="editorial-history-title">
+                                <div class="editorial-history-title" id="editorial-history-title">Oeuvres récemment ouvertes en édition</div>
+                                <ul class="editorial-history-list" id="editorial-history-list">
+                                    <li class="editorial-history-empty">Aucun historique</li>
+                                </ul>
+                            </div>
                             <div id="zone-1" style="display:none;">
                                 @include('components.main.status')
                             </div>
@@ -129,114 +102,15 @@
         display: grid;
         row-gap: 24px;
     }
+    .admin-main-work-selector {
+        margin-top: 0;
+    }
     .admin-main-stack > [id^="zone-"] {
         margin: 0;
     }
     .editorial-journey {
         display: grid;
-        gap: 1.1rem;
-    }
-    .editorial-journey-nav {
-        display: grid;
-        gap: 0.85rem;
-        padding: 1rem 1.15rem;
-        border: 1px solid rgba(117, 107, 94, 0.18);
-        border-radius: 1.1rem;
-        background: linear-gradient(180deg, #fcfbf8 0%, #f2eee7 100%);
-        box-shadow: 0 10px 24px rgba(76, 63, 46, 0.06);
-    }
-    .editorial-work-context {
-        margin: 0;
-        justify-self: center;
-        width: min(100%, 44rem);
-        padding: 0.65rem 0.9rem;
-        border: 1px solid #ddd6ca;
-        border-radius: 0.85rem;
-        background: linear-gradient(180deg, #fcfbf8 0%, #f5f1ea 100%);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-        text-align: center;
-    }
-    .editorial-work-context .work-selector-context-title {
-        font-size: 1rem;
-        font-weight: 700;
-        line-height: 1.3;
-        color: #463f38;
-    }
-    .editorial-work-context .work-selector-context-text {
-        margin-top: 0.08rem;
-        font-size: 0.8rem;
-        line-height: 1.35;
-        color: #655d53;
-    }
-    .editorial-work-context .work-selector-context-text.is-warning {
-        color: #9a4d45;
-        font-weight: 600;
-    }
-    .editorial-journey-controls {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.8rem;
-    }
-    .editorial-step-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.7rem;
-        width: 100%;
-        padding: 0.8rem 0.95rem;
-        border: 1px solid rgba(117, 107, 94, 0.18);
-        border-radius: 1rem;
-        background: rgba(255, 255, 255, 0.78);
-        color: #5f564b;
-        text-align: left;
-        transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease, background 0.28s ease;
-    }
-    .editorial-step-chip:hover {
-        border-color: rgba(104, 92, 78, 0.32);
-        box-shadow: 0 8px 18px rgba(94, 78, 56, 0.08);
-        transform: translateY(-1px);
-    }
-    .editorial-step-chip.is-active {
-        border-color: rgba(91, 116, 173, 0.26);
-        background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
-        box-shadow: 0 10px 20px rgba(69, 101, 163, 0.12);
-    }
-    .editorial-step-chip-number {
-        flex: 0 0 auto;
-        display: grid;
-        place-items: center;
-        width: 2rem;
-        height: 2rem;
-        border-radius: 999px;
-        border: 1px solid rgba(117, 107, 94, 0.18);
-        background: linear-gradient(180deg, #f5f2ec 0%, #ebe6dd 100%);
-        font-size: 0.9rem;
-        font-weight: 700;
-        color: #5f564b;
-    }
-    .editorial-step-chip.is-active .editorial-step-chip-number {
-        border-color: rgba(91, 116, 173, 0.22);
-        background: linear-gradient(180deg, #f8fbff 0%, #e6eefb 100%);
-        color: #38548f;
-    }
-    .editorial-step-chip-label {
-        min-width: 0;
-        font-size: 0.92rem;
-        font-weight: 700;
-        line-height: 1.25;
-    }
-    .editorial-step-chip-copy {
-        display: grid;
-        gap: 0.1rem;
-        min-width: 0;
-    }
-    .editorial-step-chip-detail {
-        font-size: 0.75rem;
-        line-height: 1.25;
-        color: #7a7165;
-        white-space: nowrap;
-    }
-    .editorial-step-chip.is-active .editorial-step-chip-detail {
-        color: #586f9d;
+        gap: 0.9rem;
     }
     .editorial-carousel {
         display: grid;
@@ -268,6 +142,110 @@
     .editorial-step-content {
         display: grid;
         gap: 24px;
+    }
+    .editorial-welcome {
+        padding: 0.35rem 0.2rem 0.1rem;
+        font-size: 1.18rem;
+        font-style: italic;
+        line-height: 1.6;
+        color: #5d554b;
+        text-align: center;
+    }
+    .editorial-welcome span {
+        display: block;
+    }
+    .editorial-history {
+        width: min(60%, 44rem);
+        margin: 0 auto;
+        padding: 0 0.2rem;
+    }
+    .editorial-history-title {
+        margin-bottom: 0.55rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #7a7165;
+        text-align: center;
+    }
+    .editorial-history-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0.55rem;
+    }
+    .editorial-history-list a {
+        display: block;
+        padding: 0.7rem 0.85rem;
+        padding-right: 2.6rem;
+        border: 1px solid rgba(117, 107, 94, 0.14);
+        border-radius: 0.95rem;
+        background: rgba(255, 255, 255, 0.72);
+        text-decoration: none;
+        box-shadow: 0 6px 14px rgba(94, 78, 56, 0.05);
+    }
+    .editorial-history-list a:hover {
+        border-color: rgba(104, 92, 78, 0.28);
+        box-shadow: 0 10px 20px rgba(94, 78, 56, 0.08);
+    }
+    .editorial-history-item {
+        position: relative;
+    }
+    .editorial-history-work {
+        display: block;
+        font-weight: 700;
+        color: #4d463d;
+        line-height: 1.35;
+    }
+    .editorial-history-author {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.08rem;
+        font-size: 0.84rem;
+        color: #7a7165;
+        line-height: 1.35;
+    }
+    .editorial-history-opened-at {
+        display: inline-block;
+        margin-top: 0;
+        font-size: 0.76rem;
+        color: #978d80;
+        line-height: 1.3;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .editorial-history-remove {
+        position: absolute;
+        top: 0.7rem;
+        right: 0.75rem;
+        width: 1.5rem;
+        height: 1.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: #9b9184;
+        font-size: 1rem;
+        line-height: 1;
+        cursor: pointer;
+        transition: background-color 120ms ease, color 120ms ease;
+    }
+    .editorial-history-remove:hover,
+    .editorial-history-remove:focus-visible {
+        background: rgba(117, 107, 94, 0.1);
+        color: #6a6157;
+        outline: none;
+    }
+    .editorial-history-empty {
+        padding: 0.1rem 0;
+        font-size: 0.95rem;
+        color: #7a7165;
+        font-style: italic;
     }
     .editorial-carousel-actions {
         display: flex;
@@ -412,13 +390,10 @@
         color: #6c757d;
     }
     @media (max-width: 991.98px) {
-        .editorial-journey-controls {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
     }
     @media (max-width: 767.98px) {
-        .editorial-journey-controls {
-            grid-template-columns: 1fr;
+        .editorial-history {
+            width: 100%;
         }
         .editorial-carousel-actions {
             flex-direction: column-reverse;
@@ -461,6 +436,116 @@ window.setAllBladesLoading = (isLoading) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    const HISTORY_KEY = 'variance:history:v1';
+    const historyList = document.getElementById('editorial-history-list');
+
+    const readHistory = () => {
+        try {
+            const raw = localStorage.getItem(HISTORY_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (err) {
+            return [];
+        }
+    };
+
+    const writeHistory = (items) => {
+        try {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+        } catch (err) {
+            // Ignore storage failures.
+        }
+    };
+
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const buildSelectUrl = (entry) => {
+        const authorSlug = String(entry?.authorSlug ?? '').trim();
+        const workSlug = String(entry?.workSlug ?? '').trim();
+        if (!authorSlug || !workSlug) return null;
+        const path = `/select/${encodeURIComponent(authorSlug)}/${encodeURIComponent(workSlug)}`;
+        return typeof window.withBasePath === 'function' ? window.withBasePath(path) : path;
+    };
+
+    const formatOpenedAt = (value) => {
+        const timestamp = Number(value);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+        try {
+            return new Intl.DateTimeFormat('fr-CH', {
+                dateStyle: 'short',
+                timeStyle: 'short',
+            }).format(new Date(timestamp));
+        } catch (err) {
+            return '';
+        }
+    };
+
+    const renderEditorialHistory = () => {
+        if (!historyList) return;
+        const items = readHistory().filter(Boolean);
+        if (items.length === 0) {
+            historyList.innerHTML = '<li class="editorial-history-empty">Aucun historique</li>';
+            return;
+        }
+
+        historyList.innerHTML = items.slice(0, 5).map((entry) => {
+            const href = buildSelectUrl(entry) || (typeof window.withBasePath === 'function' ? window.withBasePath('/') : '/');
+            const workLabel = entry?.workLabel || 'Œuvre';
+            const authorLabel = entry?.authorLabel || 'Auteur';
+            const openedAt = formatOpenedAt(entry?.updatedAt);
+            const authorId = String(entry?.authorId ?? '').trim();
+            const workId = String(entry?.workId ?? '').trim();
+            return `
+                <li class="editorial-history-item">
+                    <a href="${escapeHtml(href)}"
+                       data-history-author-id="${escapeHtml(authorId)}"
+                       data-history-work-id="${escapeHtml(workId)}">
+                        <span class="editorial-history-work">${escapeHtml(workLabel)}</span>
+                        <span class="editorial-history-author">
+                            <span>${escapeHtml(authorLabel)}</span>
+                            ${openedAt ? `<span class="editorial-history-opened-at">${escapeHtml(openedAt)}</span>` : ''}
+                        </span>
+                    </a>
+                    <button type="button"
+                            class="editorial-history-remove"
+                            data-history-remove
+                            data-history-author-id="${escapeHtml(authorId)}"
+                            data-history-work-id="${escapeHtml(workId)}"
+                            aria-label="Retirer cette entrée de la liste"
+                            title="Retirer cette entrée de la liste">
+                        ×
+                    </button>
+                </li>
+            `;
+        }).join('');
+    };
+
+    renderEditorialHistory();
+
+    historyList?.addEventListener('click', (event) => {
+        const removeButton = event.target.closest('[data-history-remove]');
+        if (!removeButton) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const authorId = String(removeButton.getAttribute('data-history-author-id') ?? '').trim();
+        const workId = String(removeButton.getAttribute('data-history-work-id') ?? '').trim();
+        if (!authorId || !workId) return;
+
+        const key = `${authorId}:${workId}`;
+        const nextItems = readHistory().filter((entry) => {
+            const entryKey = `${String(entry?.authorId ?? '').trim()}:${String(entry?.workId ?? '').trim()}`;
+            return entryKey !== key;
+        });
+        writeHistory(nextItems);
+        renderEditorialHistory();
+    });
+
     document.querySelectorAll('#admin-main .modal').forEach((modalEl) => {
         if (modalEl.parentElement !== document.body) {
             document.body.appendChild(modalEl);
@@ -652,10 +737,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentWorkId) {
             window.setAllBladesLoading(true);
             window.setBladeLoading('facsimilesCollapse', false);
+            if (currentStep === 0) {
+                openEditorialStep(1, { focusPanel: false });
+            }
         } else {
             window.setAllBladesLoading(false);
         }
         applyStateForWork(currentWorkId);
+        renderEditorialHistory();
         updateViewportHeight();
     });
 

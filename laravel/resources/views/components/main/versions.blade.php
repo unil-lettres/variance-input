@@ -31,7 +31,7 @@
                 <div class="versions-guide-card">
                     <div class="versions-guide-title">Pagination</div>
                     <div class="versions-guide-text">
-                        Préparez les données dans chaque ligne de version, par fichier <code>_lignes</code> ou depuis l’éditeur.
+                        Préparez les données de pagination pour chaque version, en téléversant un fichier <code>_lignes</code> ou depuis l’éditeur.
                     </div>
                 </div>
                 <div class="versions-guide-card">
@@ -2347,6 +2347,10 @@ async function fetchVersions(workId, force = false){
                     const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
                     collapse.show();
                 }
+                window.setTimeout(() => {
+                    const facCard = document.getElementById('facsimiles-card');
+                    facCard?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+                }, 180);
             });
             facButtons.appendChild(btnFacView);
 
@@ -2807,9 +2811,6 @@ async function doDeleteVersion(){
         versionToDelete = null;
         fetchVersions(selectedWorkId, true);
         document.dispatchEvent(new CustomEvent('versionsUpdated',{detail:{workId:selectedWorkId}}));
-        if (payload?.message) {
-            alert(payload.message);
-        }
     }catch(err){
         console.error(err);
         alert(err.message || 'Impossible de supprimer la version.');

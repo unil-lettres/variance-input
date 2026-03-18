@@ -8,9 +8,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use App\Models\Comparison;
 use App\Models\Version;
+use App\Services\PageMarkerService;
 
 class PublishController extends Controller
 {
+    public function __construct(private PageMarkerService $pageMarkerService)
+    {
+    }
+
     public const COMPONENTS = [
         'd.xhtml',
         'i.xhtml',
@@ -35,6 +40,14 @@ class PublishController extends Controller
         $comparison = Comparison::findOrFail($request->input('comparison_id'));
         $this->assertComparisonOwnership($comparison);
         $this->assertComparisonEditable($comparison);
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        if ($comparison->sourceVersion instanceof Version) {
+            $this->pageMarkerService->materializeCanonicalVersionXml($comparison->sourceVersion);
+        }
+        if ($comparison->targetVersion instanceof Version) {
+            $this->pageMarkerService->materializeCanonicalVersionXml($comparison->targetVersion);
+        }
 
         // 2. Récupérer l’œuvre via la version source ------------------------
         try {

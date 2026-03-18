@@ -130,6 +130,9 @@
                         </div>
                     @endforeach
                 </div>
+                <div id="facsimiles-empty-state" class="small text-muted px-2 py-3 text-center" style="display: none;">
+                    Aucun fac-similé importé pour cette version.
+                </div>
             </div>
             <nav aria-label="Page navigation">
                 <ul id="pagination" class="pagination pagination-sm mb-0 flex-wrap justify-content-center"></ul>

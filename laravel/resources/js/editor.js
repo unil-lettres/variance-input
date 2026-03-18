@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editorContainer: document.getElementById('editor-container'),
         imageName: document.getElementById('image-name'),
         pagination: document.getElementById('pagination'),
+        facsimilesEmptyState: document.getElementById('facsimiles-empty-state'),
         generatePageNumbersModal: document.getElementById('generatePageNumbersModal'),
         italicErrorsModal: document.getElementById('italicErrorsModal'),
         italicErrorsList: document.getElementById('italic-errors-list'),
@@ -160,6 +161,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initPagination = () => {
         const allButtons = document.querySelectorAll('.button-item');
+        const hasFacsimiles = allButtons.length > 0;
+
+        if (elements.facsimilesEmptyState) {
+            elements.facsimilesEmptyState.style.display = hasFacsimiles ? 'none' : 'block';
+        }
+        if (elements.generatePageNumbersBtn) {
+            elements.generatePageNumbersBtn.disabled = !hasFacsimiles;
+            elements.generatePageNumbersBtn.setAttribute(
+                'title',
+                hasFacsimiles
+                    ? 'Générer les numéros de page'
+                    : 'Aucun fac-similé importé pour cette version'
+            );
+        }
+
+        if (!hasFacsimiles) {
+            if (elements.pagination?.parentElement) {
+                elements.pagination.parentElement.style.display = 'none';
+            }
+            return;
+        }
+
         const totalPages = Math.ceil(allButtons.length / itemsPerPage);
 
         allButtons.forEach((item, index) => {

@@ -287,6 +287,100 @@ class ComparisonController extends Controller
         ]);
     }
 
+    public function publicMenu()
+    {
+        $rows = DB::table('comparisons as c')
+            ->leftJoin('versions as vs', 'vs.id', '=', 'c.source_id')
+            ->leftJoin('versions as vt', 'vt.id', '=', 'c.target_id')
+            ->join('works as w', function ($join) {
+                $join->on('w.id', '=', 'vs.work_id')
+                    ->orOn('w.id', '=', 'vt.work_id');
+            })
+            ->join('authors as a', 'a.id', '=', 'w.author_id')
+            ->where(function ($query) {
+                $query->whereIn('c.publication_scope', ['prod', 'dev'])
+                    ->orWhere(function ($legacy) {
+                        $legacy->whereNull('c.publication_scope')
+                            ->where('c.is_legacy', true);
+                    });
+            })
+            ->orderByRaw('LOWER(SUBSTRING_INDEX(TRIM(a.name), \' \', -1)) asc')
+            ->orderByRaw('LOWER(a.name) asc')
+            ->orderByRaw("
+                LOWER(
+                    TRIM(
+                        REGEXP_REPLACE(
+                            TRIM(w.title),
+                            '^(d''|de l''|de la |des |du |de |aux |au |l''|le |la |les |un |une )',
+                            ''
+                        )
+                    )
+                ) asc
+            ")
+            ->orderByRaw('LOWER(w.title) asc')
+            ->orderByRaw('LOWER(COALESCE(vs.name, \'\')) asc')
+            ->orderByRaw('LOWER(COALESCE(vt.name, \'\')) asc')
+            ->get([
+                'c.id',
+                'c.folder as comparison_folder',
+                'c.publication_scope',
+                'c.is_legacy',
+                'a.name as author_name',
+                'a.folder as author_folder',
+                'w.title as work_title',
+                'w.folder as work_folder',
+                'vs.name as source_version_name',
+                'vt.name as target_version_name',
+            ]);
+
+        $tree = [
+            'prod' => [],
+            'dev' => [],
+        ];
+
+        foreach ($rows as $row) {
+            $scope = $row->publication_scope ?: ($row->is_legacy ? 'prod' : null);
+            if (!in_array($scope, ['prod', 'dev'], true)) {
+                continue;
+            }
+
+            $pairKey = $row->author_folder . '/' . $row->work_folder;
+
+            if (!isset($tree[$scope][$pairKey])) {
+                $tree[$scope][$pairKey] = [
+                    'key' => $pairKey,
+                    'author_label' => $row->author_name,
+                    'work_label' => $row->work_title,
+                    'pair_label' => $row->author_name . ' - ' . $row->work_title,
+                    'comparisons' => [],
+                ];
+            }
+
+            $sourceVersionName = trim((string) ($row->source_version_name ?? ''));
+            $targetVersionName = trim((string) ($row->target_version_name ?? ''));
+            $comparisonLabel = collect([$sourceVersionName, $targetVersionName])
+                ->filter()
+                ->join(' - ');
+            if ($comparisonLabel === '') {
+                $comparisonLabel = $row->comparison_folder ?: ('#' . $row->id);
+            }
+            $comparisonPath = $scope === 'prod'
+                ? "{$row->author_folder}/{$row->work_folder}/comparaison/{$row->comparison_folder}"
+                : "dev/{$row->author_folder}/{$row->work_folder}/comparaison/{$row->id}";
+
+            $tree[$scope][$pairKey]['comparisons'][] = [
+                'id' => (int) $row->id,
+                'label' => $comparisonLabel,
+                'url' => legacy_url($comparisonPath),
+            ];
+        }
+
+        return response()->json([
+            'prod' => array_values($tree['prod']),
+            'dev' => array_values($tree['dev']),
+        ]);
+    }
+
     /**
      * Delete comparison DB row **and** its generated HTML / XML files.
      * Files are stored in `uploads/comparisons/{comparison_id}.xml|html`.

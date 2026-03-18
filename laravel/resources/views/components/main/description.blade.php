@@ -2,32 +2,19 @@
 
 <div class="card">
     <div
-        class="card-header d-flex justify-content-between align-items-center fw-semibold description-toggle"
-        role="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#descriptionCollapse"
-        aria-expanded="true"
-        aria-controls="descriptionCollapse"
+        class="card-header d-flex justify-content-between align-items-center fw-semibold"
     >
         <div class="d-flex align-items-start gap-2 admin-card-heading">
-            <span class="collapse-chevron" aria-hidden="true"></span>
             <span class="admin-card-heading-text">
-                <span class="admin-card-title">Présentation de l’œuvre</span>
-                <span class="admin-card-subtitle">Texte affiché dans la fiche publique</span>
+                <span class="admin-card-title">2.1 · Texte de présentation de l’œuvre</span>
             </span>
         </div>
         <span id="description-status-check" class="admin-card-check media-status-pill d-none" aria-label="Statut présentation"></span>
     </div>
-    <div id="descriptionCollapse" class="collapse show">
     <div class="card-body">
-        <p class="fst-italic text-muted small mb-3">
-            Saisissez ici la présentation de l’œuvre telle qu’elle apparaîtra dans la fiche publique.
-        </p>
         <div class="description-editor-shell" id="description-editor-shell">
             <div class="description-state-bar">
                 <div class="description-state-copy">
-                    <div class="description-state-kicker">État éditorial</div>
-                    <div class="description-state-title" id="description-state-title">Aucune présentation enregistrée</div>
                     <div class="description-state-subtitle" id="description-state-subtitle">Commencez la rédaction pour préparer la fiche publique de l’œuvre.</div>
                 </div>
                 <div id="desc-status" class="description-state-feedback" style="display:none;"></div>
@@ -46,30 +33,13 @@
             </div>
         </div>
     </div>
-    </div>
 </div>
 
 @push('styles')
 <style>
-  .description-toggle .collapse-chevron::before {
-    content: "\25BC";
-    display: inline-block;
-    transition: transform .2s ease;
-  }
-  .description-toggle[aria-expanded="false"] .collapse-chevron::before {
-    transform: rotate(-90deg);
-  }
-  #descriptionCollapse,
-  #descriptionCollapse *,
-  #descriptionCollapse.show,
-  #descriptionCollapse.show * {
-    visibility: visible !important;
-  }
   .description-editor-shell {
-    border: 1px solid #ddd6ca;
-    border-radius: 0.95rem;
-    background: linear-gradient(180deg, #fbfaf7 0%, #f3efe8 100%);
-    overflow: hidden;
+    display: grid;
+    gap: 0.9rem;
   }
   .description-state-bar {
     display: flex;
@@ -77,30 +47,16 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem 1rem;
-    padding: 0.95rem 1.05rem;
+    padding: 0 0 0.85rem;
     border-bottom: 1px solid #e0d9ce;
-    background: rgba(255, 255, 255, 0.58);
   }
   .description-state-copy {
     min-width: 0;
     flex: 1 1 22rem;
   }
-  .description-state-kicker {
-    font-size: 0.74rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #7a7165;
-  }
-  .description-state-title {
-    margin-top: 0.18rem;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #463f38;
-  }
   .description-state-subtitle {
-    margin-top: 0.2rem;
     font-size: 0.88rem;
+    font-style: italic;
     line-height: 1.45;
     color: #655d53;
   }
@@ -109,13 +65,13 @@
     padding: 0.28rem 0.75rem;
     border-radius: 999px;
     border: 1px solid #ddd6ca;
-    background: rgba(255, 255, 255, 0.82);
+    background: #fff;
     font-size: 0.8rem;
     font-weight: 600;
     white-space: nowrap;
   }
   .description-editor-frame {
-    padding: 1rem 1.05rem 0;
+    padding: 0;
   }
   .description-action-bar {
     display: flex;
@@ -123,7 +79,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem 1rem;
-    padding: 0.95rem 1.05rem 1rem;
+    padding: 0;
   }
   .description-action-copy {
     font-size: 0.84rem;
@@ -134,7 +90,7 @@
     color: #3f3a34;
   }
   #description-editor-shell.has-dirty-state .description-state-bar {
-    background: rgba(255, 248, 244, 0.9);
+    border-bottom-color: #d9b4aa;
   }
   @media (max-width: 767.98px) {
     .description-state-feedback {
@@ -161,7 +117,6 @@ let cancelBtn = null;
 let statusEl = null;
 let dirtyIndicatorVisible = false;
 let statusCheck = null;
-let stateTitleEl = null;
 let stateSubtitleEl = null;
 let editorShellEl = null;
 const setDescriptionLoading = (state) => {
@@ -177,7 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelBtn = document.getElementById('cancel-button');
     statusEl  = document.getElementById('desc-status');
     statusCheck = document.getElementById('description-status-check');
-    stateTitleEl = document.getElementById('description-state-title');
     stateSubtitleEl = document.getElementById('description-state-subtitle');
     editorShellEl = document.getElementById('description-editor-shell');
     updateStatusCheck(false, true);
@@ -411,34 +365,28 @@ function updateEditorStateSummary(state) {
     if (editorShellEl) {
         editorShellEl.classList.toggle('is-editing', state === 'editing' || state === 'editing-empty' || state === 'dirty');
     }
-    if (!stateTitleEl || !stateSubtitleEl) return;
+    if (!stateSubtitleEl) return;
 
     if (state === 'saved') {
-        stateTitleEl.textContent = 'Présentation prête pour la fiche publique';
         stateSubtitleEl.textContent = 'Le texte enregistré sera affiché dans la fiche publique de l’œuvre.';
         return;
     }
     if (state === 'editing') {
-        stateTitleEl.textContent = 'Rédaction en cours';
         stateSubtitleEl.textContent = 'Vous modifiez une présentation déjà enregistrée.';
         return;
     }
     if (state === 'editing-empty') {
-        stateTitleEl.textContent = 'Rédaction en cours';
         stateSubtitleEl.textContent = 'Vous préparez la première présentation publique de l’œuvre.';
         return;
     }
     if (state === 'dirty') {
-        stateTitleEl.textContent = 'Modifications non enregistrées';
         stateSubtitleEl.textContent = 'Enregistrez ou annulez vos changements avant de quitter la rédaction.';
         return;
     }
     if (state === 'error') {
-        stateTitleEl.textContent = 'Chargement incomplet';
         stateSubtitleEl.textContent = 'La présentation n’a pas pu être récupérée correctement pour cette œuvre.';
         return;
     }
-    stateTitleEl.textContent = 'Aucune présentation enregistrée';
     stateSubtitleEl.textContent = 'Commencez la rédaction pour préparer la fiche publique de l’œuvre.';
 }
 
@@ -468,7 +416,7 @@ function updateStatusCheck(hasContent, hide = false) {
         tootltipTitle = 'La présentation est complétée';
     } else {
         statusCheck.classList.add('admin-card-check--missing');
-        statusCheck.textContent = 'Présentation manquante';
+        statusCheck.textContent = 'Aucune présentation enregistrée';
         tootltipTitle = 'La présentation est vide';
     }
 }

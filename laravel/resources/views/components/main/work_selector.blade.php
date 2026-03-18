@@ -1,19 +1,12 @@
 <!-- work_selector.blade.php -->
 
 <div class="card" id ="container-work-selector">
-    <div class="card-header fw-semibold d-flex align-items-start gap-2">
-        <span class="admin-card-heading-text">
-            <span class="admin-card-title">Œuvre</span>
-            <span class="admin-card-subtitle">Choisissez l’auteur et l’œuvre à éditer</span>
-        </span>
+    <div class="card-header work-selector-card-header fw-semibold">
+        @include('components.admin.chrome_controls', ['embedded' => true])
     </div>
     <div class="card-body">
         <div class="work-selector-grid">
             <section class="work-selector-panel" id="author-selector-panel">
-                <div class="work-selector-panel-head">
-                    <div class="work-selector-panel-kicker">Entrée</div>
-                    <h3 class="work-selector-panel-title">Auteur</h3>
-                </div>
                 <div class="work-selector-panel-row">
                     <select id="author-selector" class="form-select flex-grow-1">
                         <option value="" disabled selected>Sélectionner un auteur</option>
@@ -27,10 +20,6 @@
             </section>
 
             <section class="work-selector-panel work-selector-panel--work is-inactive" id="work-selector-panel">
-                <div class="work-selector-panel-head">
-                    <div class="work-selector-panel-kicker">Contexte éditorial</div>
-                    <h3 class="work-selector-panel-title">Œuvre</h3>
-                </div>
                 <div class="work-selector-panel-row">
                     <select id="work-selector" class="form-select flex-grow-1" disabled>
                         <option value="" disabled selected>Sélectionner une œuvre</option>
@@ -43,6 +32,36 @@
                 </div>
             </section>
         </div>
+    </div>
+    <div class="work-selector-steps" role="tablist" aria-label="Étapes de l’atelier">
+        <button type="button" class="editorial-step-chip is-active" id="editorial-step-chip-0" data-editorial-step-target="0" role="tab" aria-selected="true" aria-controls="editorial-step-0">
+            <span class="editorial-step-chip-number">1</span>
+            <span class="editorial-step-chip-copy">
+                <span class="editorial-step-chip-label">Choisir l’œuvre</span>
+                <span class="editorial-step-chip-detail">Auteur et contexte</span>
+            </span>
+        </button>
+        <button type="button" class="editorial-step-chip" id="editorial-step-chip-1" data-editorial-step-target="1" role="tab" aria-selected="false" aria-controls="editorial-step-1">
+            <span class="editorial-step-chip-number">2</span>
+            <span class="editorial-step-chip-copy">
+                <span class="editorial-step-chip-label">Décrire l’œuvre</span>
+                <span class="editorial-step-chip-detail">Présentation et notice</span>
+            </span>
+        </button>
+        <button type="button" class="editorial-step-chip" id="editorial-step-chip-2" data-editorial-step-target="2" role="tab" aria-selected="false" aria-controls="editorial-step-2">
+            <span class="editorial-step-chip-number">3</span>
+            <span class="editorial-step-chip-copy">
+                <span class="editorial-step-chip-label">Préparer les témoins</span>
+                <span class="editorial-step-chip-detail">Versions et fac-similés</span>
+            </span>
+        </button>
+        <button type="button" class="editorial-step-chip" id="editorial-step-chip-3" data-editorial-step-target="3" role="tab" aria-selected="false" aria-controls="editorial-step-3">
+            <span class="editorial-step-chip-number">4</span>
+            <span class="editorial-step-chip-copy">
+                <span class="editorial-step-chip-label">Comparer et publier</span>
+                <span class="editorial-step-chip-detail">Alignement et résultats</span>
+            </span>
+        </button>
     </div>
 </div>
 
@@ -139,6 +158,113 @@
 
 @push('styles')
 <style>
+  #container-work-selector .work-selector-card-header {
+    padding: 0.6rem 0.85rem;
+  }
+  #container-work-selector .work-selector-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.8rem;
+    padding: 0 0.95rem 0.95rem;
+  }
+  #container-work-selector .admin-chrome {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.9rem;
+    width: 100%;
+  }
+  #container-work-selector .admin-chrome--embedded {
+    justify-content: space-between;
+  }
+  #container-work-selector .admin-embedded-title {
+    flex: 0 0 auto;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.38em;
+    text-transform: uppercase;
+    color: #6b6258;
+    white-space: nowrap;
+  }
+  #container-work-selector .admin-chrome-actions {
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  #container-work-selector .admin-brand {
+    min-width: 0;
+  }
+  #container-work-selector .admin-brand a {
+    padding: 0.16rem 0.42rem;
+  }
+  #container-work-selector .admin-wordmark {
+    font-size: clamp(1.35rem, 2.1vw, 1.95rem);
+  }
+  #container-work-selector .admin-user-toggle {
+    padding: 0.28rem 0.58rem;
+    font-size: 0.82rem;
+  }
+  #container-work-selector .editorial-step-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.8rem 0.95rem;
+    border: 1px solid rgba(117, 107, 94, 0.18);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.78);
+    color: #5f564b;
+    text-align: left;
+    transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease, background 0.28s ease;
+  }
+  #container-work-selector .editorial-step-chip:hover {
+    border-color: rgba(104, 92, 78, 0.32);
+    box-shadow: 0 8px 18px rgba(94, 78, 56, 0.08);
+    transform: translateY(-1px);
+  }
+  #container-work-selector .editorial-step-chip.is-active {
+    border-color: rgba(91, 116, 173, 0.26);
+    background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+    box-shadow: 0 10px 20px rgba(69, 101, 163, 0.12);
+  }
+  #container-work-selector .editorial-step-chip-number {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    border: 1px solid rgba(117, 107, 94, 0.18);
+    background: linear-gradient(180deg, #f5f2ec 0%, #ebe6dd 100%);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #5f564b;
+  }
+  #container-work-selector .editorial-step-chip.is-active .editorial-step-chip-number {
+    border-color: rgba(91, 116, 173, 0.22);
+    background: linear-gradient(180deg, #f8fbff 0%, #e6eefb 100%);
+    color: #38548f;
+  }
+  #container-work-selector .editorial-step-chip-label {
+    min-width: 0;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  #container-work-selector .editorial-step-chip-copy {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+  #container-work-selector .editorial-step-chip-detail {
+    font-size: 0.75rem;
+    line-height: 1.25;
+    color: #7a7165;
+    white-space: nowrap;
+  }
+  #container-work-selector .editorial-step-chip.is-active .editorial-step-chip-detail {
+    color: #586f9d;
+  }
   #container-work-selector .work-selector-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -147,8 +273,8 @@
   #container-work-selector .work-selector-panel {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
-    padding: 1rem 1.05rem;
+    gap: 0.65rem;
+    padding: 0.9rem 1rem;
     border: 1px solid #ddd6ca;
     border-radius: 0.95rem;
     background: linear-gradient(180deg, #fbfaf7 0%, #f3efe8 100%);
@@ -159,23 +285,6 @@
   }
   #container-work-selector .work-selector-panel.is-inactive {
     opacity: 0.72;
-  }
-  #container-work-selector .work-selector-panel-head {
-    display: grid;
-    gap: 0.2rem;
-  }
-  #container-work-selector .work-selector-panel-kicker {
-    font-size: 0.74rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #7a7165;
-  }
-  #container-work-selector .work-selector-panel-title {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 700;
-    color: #463f38;
   }
   #container-work-selector .work-selector-panel-row {
     display: flex;
@@ -188,11 +297,36 @@
     cursor: not-allowed;
   }
   @media (max-width: 991.98px) {
+    #container-work-selector .work-selector-steps {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    #container-work-selector .admin-chrome {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    #container-work-selector .admin-chrome-actions {
+      justify-content: flex-start;
+    }
     #container-work-selector .work-selector-grid {
       grid-template-columns: 1fr;
     }
   }
   @media (max-width: 767.98px) {
+    #container-work-selector .work-selector-card-header {
+      padding: 0.55rem 0.7rem;
+    }
+    #container-work-selector .admin-wordmark {
+      font-size: clamp(1.18rem, 6.2vw, 1.5rem);
+      letter-spacing: 0.04em;
+    }
+    #container-work-selector .admin-embedded-title {
+      font-size: 0.88rem;
+      letter-spacing: 0.24em;
+    }
+    #container-work-selector .work-selector-steps {
+      grid-template-columns: 1fr;
+      padding: 0 0.7rem 0.7rem;
+    }
     #container-work-selector .work-selector-panel-row {
       flex-wrap: wrap;
     }

@@ -131,9 +131,9 @@ class Version extends Model
             $ext  = pathinfo($file, PATHINFO_EXTENSION);
             $thumbName = $base . '_thumb.' . $ext;
 
-            $big   = "/uploads/{$this->work->author->folder}/{$this->work->folder}/{$this->folder}/{$file}";
+            $big   = admin_path("storage/uploads/{$this->work->author->folder}/{$this->work->folder}/{$this->folder}/{$file}");
             $small = $disk->exists("{$prefix}/{$thumbName}")
-                ? "/uploads/{$this->work->author->folder}/{$this->work->folder}/{$this->folder}/{$thumbName}"
+                ? admin_path("storage/uploads/{$this->work->author->folder}/{$this->work->folder}/{$this->folder}/{$thumbName}")
                 : $big;
 
             return [

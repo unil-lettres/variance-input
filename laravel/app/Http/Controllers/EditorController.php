@@ -9,9 +9,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\PublishController;
 use App\Models\Version;
+use App\Services\PageMarkerService;
 
 class EditorController extends Controller
 {
+    public function __construct(private PageMarkerService $pageMarkerService)
+    {
+    }
+
     private const COMPARISON_COMPONENTS = [
         'source' => ['filename' => 'source.xhtml', 'label' => 'Texte source'],
         'target' => ['filename' => 'target.xhtml', 'label' => 'Texte cible'],
@@ -32,6 +37,10 @@ class EditorController extends Controller
         $encoding = $this->detectEncoding($xmlContent);
         if ($encoding !== 'UTF-8') {
             $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', $encoding);
+        }
+        $editorPayload = $this->pageMarkerService->buildVersionEditorXml($version);
+        if (is_string($editorPayload['xml'] ?? null) && $editorPayload['xml'] !== '') {
+            $xmlContent = $editorPayload['xml'];
         }
         $editorPath = 'version/' . $version->id . '/editor';
         $ignoredPages = $version->getIgnoredPages();
@@ -69,6 +78,7 @@ class EditorController extends Controller
             : mb_convert_encoding($newXml, $originalEncoding, 'UTF-8');
 
         file_put_contents($path, $contentToWrite);
+        $this->pageMarkerService->syncSidecarWithPb($version);
 
         return response()->json(['message' => 'Fichier mis à jour avec succès']);
     }

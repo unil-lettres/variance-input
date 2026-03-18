@@ -158,57 +158,82 @@ class VersionController extends Controller
         $shortTitle  = $work->short_title;
         $nextNumber  = Version::where('work_id', $work->id)->count() + 1;
         $baseName    = "{$nextNumber}{$shortTitle}";
+        $authorFolder = $work->author->folder ?? null;
+        $workFolder   = $work->folder ?? null;
         $folderPath  = 'uploads/versions'; // storage/app/public
+
+        if ($authorFolder && $workFolder) {
+            $removedStaleFacsimiles = $this->purgeFacsimileStorageByFolders(
+                $authorFolder,
+                $workFolder,
+                $baseName,
+                includePublished: true
+            );
+
+            if ($removedStaleFacsimiles) {
+                Log::info('Removed stale facsimile artifacts before version import', [
+                    'work_id' => $work->id,
+                    'author_folder' => $authorFolder,
+                    'work_folder' => $workFolder,
+                    'version_folder' => $baseName,
+                ]);
+            }
+        }
 
         /* 3. Persist raw .txt (no conversion) */
         $txtFilename    = "{$baseName}.txt";
         $txtStoragePath = "{$folderPath}/{$txtFilename}";
         $request->file('versionFile')->storeAs($folderPath, $txtFilename, 'public');
 
-        /* 4. Read & normalise → UTF‑8 LF */
+        /* 4. Read & normalise */
         $options = $this->resolveImportOptions($request);
         $fullTxt = storage_path("app/public/{$txtStoragePath}");
+        $useLegacyTxt2Tei = $this->useLegacyTxt2TeiImport();
         $utf8    = $this->readFileAsUtf8(
             $fullTxt,
             $request->input('original_encoding'),
-            $options['normalize_line_endings']
+            $useLegacyTxt2Tei ? false : $options['normalize_line_endings']
         );
         if (!$this->isLikelyTextContent($utf8)) {
             throw ValidationException::withMessages([
                 'versionFile' => 'Le fichier importé ne semble pas être un texte lisible.',
             ]);
         }
-        if ($options['strip_invisible_chars']) {
-            $utf8 = $this->stripInvisibleCharacters($utf8, $options['preserve_nbsp']);
-        }
-        if ($options['legacy_typography']) {
-            $utf8 = $this->applyLegacyTypographicNormalisation($utf8);
-        }
-        $utf8 = $this->removeTabs($utf8);
-        if ($options['strip_indentation']) {
-            $utf8 = $this->stripLeadingIndentation($utf8);
-        }
-        if ($options['trim_line_ends']) {
-            $utf8 = $this->trimLineEndSpaces($utf8);
-        }
-        if ($options['collapse_double_spaces']) {
-            $utf8 = $this->collapseDoubleSpaces($utf8);
-        }
-        if ($options['trim_file_edges']) {
-            $utf8 = $this->trimFileEdges($utf8);
-        }
+        if ($useLegacyTxt2Tei) {
+            $tei = $this->buildLegacyTxt2TeiXml($utf8, $validated['name'], $nextNumber);
+        } else {
+            if ($options['strip_invisible_chars']) {
+                $utf8 = $this->stripInvisibleCharacters($utf8, $options['preserve_nbsp']);
+            }
+            if ($options['legacy_typography']) {
+                $utf8 = $this->applyLegacyTypographicNormalisation($utf8);
+            }
+            $utf8 = $this->removeTabs($utf8);
+            if ($options['strip_indentation']) {
+                $utf8 = $this->stripLeadingIndentation($utf8);
+            }
+            if ($options['trim_line_ends']) {
+                $utf8 = $this->trimLineEndSpaces($utf8);
+            }
+            if ($options['collapse_double_spaces']) {
+                $utf8 = $this->collapseDoubleSpaces($utf8);
+            }
+            if ($options['trim_file_edges']) {
+                $utf8 = $this->trimFileEdges($utf8);
+            }
 
-        /* 5. Insert line‑break tags */
-        $lines        = preg_split('/\r\n|\r|\n/', $utf8) ?: [''];
-        $escapedLines = array_map(fn($l) => htmlspecialchars($l, ENT_XML1 | ENT_COMPAT, 'UTF-8'), $lines);
-        $bodyWithLb   = implode("\n          <lb/>\n", $escapedLines);
-        $bodyWithLb   = $this->restoreInlineTags($bodyWithLb, self::INLINE_TAG_WHITELIST);
+            /* 5. Insert line‑break tags */
+            $lines        = preg_split('/\r\n|\r|\n/', $utf8) ?: [''];
+            $escapedLines = array_map(fn($l) => htmlspecialchars($l, ENT_XML1 | ENT_COMPAT, 'UTF-8'), $lines);
+            $bodyWithLb   = implode("\n          <lb/>\n", $escapedLines);
+            $bodyWithLb   = $this->restoreInlineTags($bodyWithLb, self::INLINE_TAG_WHITELIST);
 
-        /* 6. TEI skeleton */
-        $xmlId = 'v' . $nextNumber . preg_replace('/[^A-Za-z0-9]/', '', strtolower($shortTitle));
-        $tei = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".
-               "<TEI xml:id=\"{$xmlId}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n".
-               "  <teiHeader>\n    <fileDesc>\n      <titleStmt><title>{$validated['name']}</title></titleStmt>\n      <publicationStmt><p>Imported via Variance</p></publicationStmt>\n      <sourceDesc><p>Generated automatically</p></sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n      <div>\n        <p>\n          {$bodyWithLb}\n        </p>\n      </div>\n    </body>\n  </text>\n</TEI>";
+            /* 6. TEI skeleton */
+            $xmlId = 'v' . $nextNumber . preg_replace('/[^A-Za-z0-9]/', '', strtolower($shortTitle));
+            $tei = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".
+                   "<TEI xml:id=\"{$xmlId}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n".
+                   "  <teiHeader>\n    <fileDesc>\n      <titleStmt><title>{$validated['name']}</title></titleStmt>\n      <publicationStmt><p>Imported via Variance</p></publicationStmt>\n      <sourceDesc><p>Generated automatically</p></sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n      <div>\n        <p>\n          {$bodyWithLb}\n        </p>\n      </div>\n    </body>\n  </text>\n</TEI>";
+        }
 
         /* 7. Save .xml */
         Storage::disk('public')->put("{$folderPath}/{$baseName}.xml", $tei);
@@ -1031,6 +1056,98 @@ class VersionController extends Controller
         return $resolved;
     }
 
+    private function useLegacyTxt2TeiImport(): bool
+    {
+        $value = env('TXT_IMPORT_MODE');
+        if (is_string($value) && strtolower($value) === 'laravel') {
+            return false;
+        }
+
+        return app()->isLocal();
+    }
+
+    private function buildLegacyTxt2TeiXml(string $txt, string $title, int $versionNumber): string
+    {
+        $txt = $this->normalizeTxt2TeiCharacters($txt);
+        $txt = $this->collapseTxt2TeiSpacesAndTabs($txt);
+
+        $escapedTitle = htmlspecialchars($title, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+        $escapedText = htmlspecialchars($txt, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            . "<TEI xml:id=\"v{$versionNumber}\" xmlns=\"http://www.tei-c.org/ns/1.0\">"
+            . "<teiHeader><fileDesc><titleStmt><title>{$escapedTitle}</title></titleStmt>"
+            . "<publicationStmt><date></date></publicationStmt>"
+            . "<sourceDesc><p>Generated by txt2tei.py</p></sourceDesc>"
+            . "</fileDesc></teiHeader><text><body><p>{$escapedText}</p></body></text></TEI>\n";
+    }
+
+    private function normalizeTxt2TeiCharacters(string $txt): string
+    {
+        return str_replace(
+            [
+                "\u{2013}",
+                "\u{2212}",
+                "\u{2010}",
+                "\u{2011}",
+                "\u{00AD}",
+                "\u{2026}",
+                "\u{201C}",
+                "\u{201D}",
+                "\u{201E}",
+                "\u{201F}",
+                "\u{2018}",
+                "\u{2019}",
+                "\u{02BC}",
+                "\u{00B4}",
+                "\u{02C8}",
+                "\u{00A0}",
+                "\u{2002}",
+                "\u{2003}",
+                "\u{2009}",
+                "\u{202F}",
+                "\u{200B}",
+                "\u{FEFF}",
+                "\r\n",
+                "\r",
+            ],
+            [
+                "\u{2014}",
+                "-",
+                "-",
+                "-",
+                "",
+                "...",
+                '"',
+                '"',
+                '"',
+                '"',
+                "'",
+                "'",
+                "'",
+                "'",
+                "'",
+                " ",
+                " ",
+                " ",
+                " ",
+                " ",
+                "",
+                "",
+                "\n",
+                "\n",
+            ],
+            $txt
+        );
+    }
+
+    private function collapseTxt2TeiSpacesAndTabs(string $txt): string
+    {
+        $txt = str_replace("\t", ' ', $txt);
+
+        return preg_replace('/ {2,}/', ' ', $txt) ?? $txt;
+    }
+
     /** Remove invisible/spacing control characters while preserving text flow. */
     private function stripInvisibleCharacters(string $txt, bool $preserveNbsp = false): string
     {
@@ -1224,27 +1341,46 @@ class VersionController extends Controller
     private function purgeFacsimileStorage(Version $version, bool $includePublished = true): bool
     {
         $version->loadMissing('work.author');
-        $removed = false;
-        $paths   = $this->facsimilePaths($version);
-        $disk    = Storage::disk('public');
+        return $this->purgeFacsimileStorageByFolders(
+            $version->work->author->folder ?? '',
+            $version->work->folder ?? '',
+            $version->folder ?? '',
+            $includePublished
+        );
+    }
 
-        if ($disk->deleteDirectory($paths['source_prefix'])) {
+    private function purgeFacsimileStorageByFolders(
+        string $authorFolder,
+        string $workFolder,
+        string $versionFolder,
+        bool $includePublished = true
+    ): bool {
+        if ($authorFolder === '' || $workFolder === '' || $versionFolder === '') {
+            return false;
+        }
+
+        $removed = false;
+        $sourcePrefix = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $destDir = "/var/www/variance/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $disk = Storage::disk('public');
+
+        if ($disk->deleteDirectory($sourcePrefix)) {
             $removed = true;
         }
 
-        $legacySourceDir = base_path('../variance/' . $paths['source_prefix']);
+        $legacySourceDir = base_path('../variance/' . $sourcePrefix);
         if (is_dir($legacySourceDir)) {
             File::deleteDirectory($legacySourceDir);
             $removed = true;
         }
 
-        if ($includePublished && !empty($paths['dest_dir']) && File::isDirectory($paths['dest_dir'])) {
-            File::deleteDirectory($paths['dest_dir']);
+        if ($includePublished && File::isDirectory($destDir)) {
+            File::deleteDirectory($destDir);
             $removed = true;
         }
 
-        $queuePrefix = $this->queuePrefix($version);
-        $queueDisk   = Storage::disk('local');
+        $queuePrefix = $this->queuePrefixFromFolders($authorFolder, $workFolder, $versionFolder);
+        $queueDisk = Storage::disk('local');
         if ($queueDisk->deleteDirectory($queuePrefix)) {
             $removed = true;
         } else {
@@ -1272,10 +1408,15 @@ class VersionController extends Controller
 
     private function queuePrefix(Version $version): string
     {
-        $authorFolder  = $version->work->author->folder ?? '';
-        $workFolder    = $version->work->folder ?? '';
-        $versionFolder = $version->folder ?? '';
+        return $this->queuePrefixFromFolders(
+            $version->work->author->folder ?? '',
+            $version->work->folder ?? '',
+            $version->folder ?? ''
+        );
+    }
 
+    private function queuePrefixFromFolders(string $authorFolder, string $workFolder, string $versionFolder): string
+    {
         return trim(sprintf('facsimile_queue/%s/%s/%s', $authorFolder, $workFolder, $versionFolder), '/');
     }
 
