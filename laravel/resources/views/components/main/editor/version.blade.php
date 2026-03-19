@@ -1,116 +1,189 @@
 @extends('layouts.app')
 
 @section('content')
-    <a href="{{ admin_path(sprintf('select/%s/%s', $version->work->author->folder, $version->work->folder)) }}" class="btn btn-outline-secondary btn-sm mb-3 d-inline-flex align-items-center gap-2">
-        <i class="bi bi-arrow-left-circle"></i>
-        <span>Retour à l’accueil</span>
-    </a>
-
-    <h1 class="border-bottom pb-2">Version <b>{{ $version->name }}</b> | Œuvre <b>{{ $version->work->title }}</b> | Auteur <b>{{ $version->work->author->name }}</b></h1>
-
-    <div class="border border-top-0 p-3 row m-0 overflow-auto editor" style="height: calc(100vh - 200px);">
-        <div class="col-md-6 col-12 order-last order-md-first h-100 d-flex flex-column">
-            <div>
-                <span
+    <div class="border border-top-0 p-3 editor d-flex flex-column">
+        <div class="editor-toolbar d-flex flex-wrap align-items-start gap-2">
+                <div class="editor-toolbar-group editor-toolbar-status">
+                    <a
+                        href="{{ $returnTo ?? admin_path(sprintf('select/%s/%s#etape-2', $version->work->author->folder, $version->work->folder)) }}"
+                        class="btn btn-outline-secondary btn-sm"
+                        data-bs-toggle="tooltip"
+                        title="Quitter l’éditeur"
+                    ><i class="bi bi-x-circle"></i></a>
+                    <span
                     id="file-status"
-                    class="btn btn-success mb-2"
+                    class="btn btn-success btn-sm"
                     style="cursor: default;"
                     data-bs-toggle="tooltip"
                     title="Le fichier a été sauvegardé et est à jour"
-                ><i class="bi bi-check-circle-fill"></i></span>
-                <button
+                    ><i class="bi bi-check-circle-fill"></i></span>
+                    <button
                     id="save-xml"
-                    class="btn btn-success mb-2 d-none"
+                    class="btn btn-success btn-sm d-none"
                     data-bs-toggle="tooltip"
                     title="Sauvegarder les modifications"
-                ><i class="bi bi-floppy-fill"></i></button>
-                <div class="btn-group" role="group" aria-label="Editor utility buttons">
+                    ><i class="bi bi-floppy-fill"></i></button>
+                </div>
+
+                <div class="editor-toolbar-group">
+                    <div class="editor-toolbar-label">Affichage</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Editor utility buttons">
                     <button
                         id="toggle-readonly"
-                        class="btn btn-outline-primary mb-2"
+                        class="btn btn-outline-primary"
                         data-bs-toggle="tooltip"
                         title="Activer / Désactiver le mode édition"
                     ><i class="bi bi-pencil-square"></i></button>
                     <button
                         id="toggle-tags"
                         data-bs-toggle="tooltip"
-                        class="btn btn-outline-primary mb-2"
+                        class="btn btn-outline-primary"
                         title="Afficher / Masquer les balises"
                     ><i class="bi bi-code-square"></i></button>
                     <button
                         id="toggle-line-numbers"
                         data-bs-toggle="tooltip"
-                        class="btn btn-outline-primary mb-2"
+                        class="btn btn-outline-primary"
                         title="Afficher / Masquer les numéros de ligne"
                     ><i class="bi bi-list-ol"></i></button>
+                    </div>
                 </div>
-                <div class="btn-group" role="group" aria-label="Editor italic buttons">
+
+                <div class="editor-toolbar-group">
+                    <div class="editor-toolbar-label">Import</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Import tools">
+                    <input
+                        type="file"
+                        id="upload-lignes-input"
+                        accept=".txt,text/plain"
+                        class="d-none"
+                    >
+                    <button
+                        id="upload-lignes-btn"
+                        type="button"
+                        class="btn btn-outline-primary"
+                        data-bs-toggle="tooltip"
+                        title="Importer et appliquer un fichier _lignes"
+                    ><span id="upload-lignes-spinner" class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span><i class="bi bi-upload"></i> <code>_lignes</code></button>
+                    <input
+                        type="file"
+                        id="upload-facsimiles-input"
+                        class="d-none"
+                        webkitdirectory
+                        directory
+                        multiple
+                        accept="image/*,.tif,.tiff"
+                    >
+                    <button
+                        id="upload-facsimiles-btn"
+                        type="button"
+                        class="btn btn-outline-primary"
+                        data-bs-toggle="tooltip"
+                        title="Importer un dossier de fac-similés"
+                    ><span id="upload-facsimiles-spinner" class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span><i class="bi bi-images"></i> Fac-similés</button>
+                    </div>
+                </div>
+
+                <div class="editor-toolbar-group">
+                    <div class="editor-toolbar-label">Balises</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Editor italic buttons">
                     <button
                         id="italic-open-btn"
                         data-bs-toggle="tooltip"
-                        class="btn btn-outline-primary mb-2"
+                        class="btn btn-outline-primary"
                         title="Insérer balise italique ouvrante"
                     ><i class="bi bi-code"></i><i class="bi bi-type-italic"></i></button>
                     <button
                         id="italic-close-btn"
-                        class="btn btn-outline-primary mb-2"
+                        class="btn btn-outline-primary"
                         data-bs-toggle="tooltip"
                         title="Insérer balise italique fermante"
                     ><i class="bi bi-code-slash"></i><i class="bi bi-type-italic"></i></button>
                     <button
                         id="italic-report-btn"
-                        class="btn btn-outline-primary mb-2"
+                        class="btn btn-outline-primary"
                         data-bs-toggle="modal" 
                         data-bs-target="#italicErrorsModal"
                         title="Rapport d'erreurs des tags italiques"
                     ><i class="bi bi-exclamation-triangle-fill"></i></button>
+                    </div>
                 </div>
-                <button
-                    id="search-btn"
-                    class="btn btn-outline-primary mb-2"
-                    data-bs-toggle="tooltip"
-                    title="Rechercher du texte"
-                ><i class="bi bi-search"></i></button>
-            </div>
+
+                <div class="editor-toolbar-group">
+                    <div class="editor-toolbar-label">Recherche</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Search tools">
+                        <button
+                            id="search-btn"
+                            class="btn btn-outline-primary"
+                            data-bs-toggle="tooltip"
+                            title="Rechercher du texte"
+                        ><i class="bi bi-search"></i></button>
+                    </div>
+                </div>
+        </div>
+
+        <div class="row g-3 mt-1 editor-workspace align-items-start">
+        <div class="col-md-6 col-12 order-last order-md-first d-flex flex-column">
             <div
                 id="editor-container"
                 style="border:1px solid #ccc;"
-                class="mt-2 overflow-scroll"
+                class="editor-text-frame"
             ></div>
         </div>
-        <div class="col-md-2 col-12 h-100 d-flex flex-column justify-content-between gap-2">
-            <div class="d-flex align-items-center gap-1 px-1" aria-label="Page tools buttons">
+        <div class="col-md-1 col-12 d-flex flex-column justify-content-between gap-2">
+            <div class="editor-page-tools d-flex flex-wrap align-items-center gap-1 px-1" aria-label="Page tools buttons">
+                <button
+                    id="select-prev-facsimile"
+                    class="btn btn-outline-secondary editor-page-tool-btn"
+                    data-bs-toggle="tooltip"
+                    title="Fac-similé précédent"
+                    disabled
+                ><i class="bi bi-chevron-up"></i></button>
+                <button
+                    id="select-next-facsimile"
+                    class="btn btn-outline-secondary editor-page-tool-btn"
+                    data-bs-toggle="tooltip"
+                    title="Fac-similé suivant"
+                    disabled
+                ><i class="bi bi-chevron-down"></i></button>
                 <button
                     id="generate-page-numbers"
-                    class="btn btn-outline-primary"
+                    class="btn btn-outline-primary editor-page-tool-btn"
                     data-bs-toggle="modal" data-bs-target="#generatePageNumbersModal"
                     title="Générer les numéros de page"
                 ><i class="bi bi-file-earmark mr-1"></i><i class="bi bi-123"></i></button>
-                  @if($urlToggleIgnored)
-                  <button
-                      id="toggle-ignored-page"
-                      class="btn btn-outline-danger"
-                      data-bs-toggle="tooltip"
-                      title="Ignorer / Restaurer la page sélectionnée"
-                      disabled
-                  ><i class="bi bi-eye-slash"></i></button>
-                  @endif
-                  <button
-                      id="remove-page-marker"
-                      class="btn btn-outline-danger"
-                      data-bs-toggle="tooltip"
-                      title="Retirer le marqueur de page"
-                      disabled
-                  ><i class="bi bi-file-earmark-x"></i></button>
-                  <i
-                      id="page-number-warning"
-                      class="bi bi-exclamation-triangle-fill text-warning ms-2"
-                      style="font-size: 1.1rem; display: none;"
-                      data-bs-toggle="tooltip"
-                      title="Certains numéros de page ne sont pas encore insérés dans le document. Si vous quittez cette page, ces numéros seront perdus."
-                  ></i>
+                @if($urlToggleIgnored)
+                <button
+                    id="toggle-ignored-page"
+                    class="btn btn-outline-danger editor-page-tool-btn"
+                    data-bs-toggle="tooltip"
+                    title="Ignorer / Restaurer la page sélectionnée"
+                    disabled
+                ><i class="bi bi-eye-slash"></i></button>
+                @endif
+                <button
+                    id="remove-page-marker"
+                    class="btn btn-outline-danger editor-page-tool-btn"
+                    data-bs-toggle="tooltip"
+                    title="Retirer le marqueur de page"
+                    disabled
+                ><i class="bi bi-file-earmark-x"></i></button>
+                <button
+                    id="clear-all-page-markers"
+                    class="btn btn-outline-danger editor-page-tool-btn"
+                    data-bs-toggle="tooltip"
+                    title="Retirer tous les marqueurs de page"
+                    disabled
+                ><i class="bi bi-file-earmark-minus"></i><i class="bi bi-x-lg"></i></button>
+                <i
+                    id="page-number-warning"
+                    class="bi bi-exclamation-triangle-fill text-warning ms-2"
+                    style="font-size: 1.1rem; display: none;"
+                    data-bs-toggle="tooltip"
+                    title="Certains numéros de page ne sont pas encore insérés dans le document. Si vous quittez cette page, ces numéros seront perdus."
+                ></i>
             </div>
-            <div class="overflow-auto mb-auto">
+            <div class="editor-marker-gallery">
                 <div id="buttons-container" class="row row-cols-3 px-1 py-2 g-1 align-items-start w-100">
                     @foreach ($imagesData ?? [] as $facsimile)
                         <div class="col button-item {{ ($facsimile['ignored'] ?? false) ? 'page-ignored' : '' }}" style="display: none;" data-filename="{{ $facsimile['filename'] }}">
@@ -134,29 +207,30 @@
                     Aucun fac-similé importé pour cette version.
                 </div>
             </div>
-            <nav aria-label="Page navigation">
+            <nav aria-label="Page navigation" class="mt-2">
                 <ul id="pagination" class="pagination pagination-sm mb-0 flex-wrap justify-content-center"></ul>
             </nav>
         </div>
-        <div class="col-md-4 col-12 h-100 d-flex flex-column align-items-center">
-            <a id="image-name" class="btn btn-link mb-2" style="display: none;" href="#" target="_blank"></a>
+        <div class="col-md-5 col-12 d-flex flex-column align-items-center editor-preview-column">
+            <a id="image-name" class="d-none" href="#" target="_blank" aria-hidden="true" tabindex="-1"></a>
             <div id="loading-spinner" style="display: none;">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Chargement...</span>
                 </div>
             </div>
             <div
-                    style="display: none; min-height: 0;"
-                    class="w-100 overflow-hidden position-relative"
+                    style="display: none;"
+                    class="w-100 overflow-auto position-relative editor-preview-frame"
             >
                 <img 
                     id="facsimile-preview" 
                     src="" 
                     alt="Aperçu du facsimilé" 
-                    class="w-100 h-100 object-fit-contain"
+                    class="w-100"
                 >
             </div>
             <p id="no-preview" class="text-muted"></p>
+        </div>
         </div>
     </div>
 
@@ -217,9 +291,44 @@
                 xmlContent: @json($xmlContent),
                 urlFileSave: @json($urlFileSave),
                 urlToggleIgnored: @json($urlToggleIgnored),
+                versionId: @json($version->id),
+                urlLignesUpload: @json(admin_url("api/versions/{$version->id}/lignes")),
+                urlLignesProgress: @json(admin_url("api/versions/{$version->id}/page-markers/progress")),
+                urlFacsimilesUpload: @json(admin_url('api/upload_facsimiles')),
+                urlFacsimilesProgress: @json(admin_url("api/versions/{$version->id}/facsimiles/progress")),
             };
         </script>
         @vite('resources/js/editor.js')
+    @endpush
+
+    @push('styles')
+        <style>
+            .editor-page-tool-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.2rem;
+                min-width: 0;
+                flex: 0 0 auto;
+                padding: 0.2rem 0.28rem;
+                font-size: 0.8rem;
+                line-height: 1;
+            }
+
+            .editor-page-tool-btn i {
+                pointer-events: none;
+            }
+
+            .editor-page-tools {
+                max-width: 100%;
+                align-content: flex-start;
+            }
+
+            #buttons-container .btn {
+                font-size: 0.78rem;
+                padding: 0.26rem 0.2rem;
+            }
+        </style>
     @endpush
 
 @endsection

@@ -1,7 +1,16 @@
 import initEditor from './codemirror-editor';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const { xmlContent, urlFileSave, urlToggleIgnored } = window.editorParams;
+    const {
+        xmlContent,
+        urlFileSave,
+        urlToggleIgnored,
+        versionId,
+        urlLignesUpload,
+        urlLignesProgress,
+        urlFacsimilesUpload,
+        urlFacsimilesProgress,
+    } = window.editorParams;
 
     // Initialize Bootstrap tooltips.
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"], [data-bs-toggle="modal"]');
@@ -27,9 +36,18 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtn: document.getElementById('toggle-readonly'),
         toggleTagsBtn: document.getElementById('toggle-tags'),
         toggleLineNumbersBtn: document.getElementById('toggle-line-numbers'),
+        uploadLignesBtn: document.getElementById('upload-lignes-btn'),
+        uploadLignesInput: document.getElementById('upload-lignes-input'),
+        uploadLignesSpinner: document.getElementById('upload-lignes-spinner'),
+        uploadFacsimilesBtn: document.getElementById('upload-facsimiles-btn'),
+        uploadFacsimilesInput: document.getElementById('upload-facsimiles-input'),
+        uploadFacsimilesSpinner: document.getElementById('upload-facsimiles-spinner'),
+        selectPrevFacsimileBtn: document.getElementById('select-prev-facsimile'),
+        selectNextFacsimileBtn: document.getElementById('select-next-facsimile'),
         generatePageNumbersBtn: document.getElementById('generate-page-numbers'),
         toggleIgnoredPageBtn: document.getElementById('toggle-ignored-page'),
         removePageMarkerBtn: document.getElementById('remove-page-marker'),
+        clearAllPageMarkersBtn: document.getElementById('clear-all-page-markers'),
         searchBtn: document.getElementById('search-btn'),
         italicOpenBtn: document.getElementById('italic-open-btn'),
         italicCloseBtn: document.getElementById('italic-close-btn'),
@@ -58,6 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
         INSERTED: 'btn-success',
         NOT_NAMED: 'btn-warning',
     };
+    const MAX_FAC_BATCH_FILES = 10;
+    const MAX_FAC_BATCH_BYTES = 7.5 * 1024 * 1024;
 
     // State - only one active button at a time, either in insert or delete mode
     let activeButton = null;
@@ -68,7 +88,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let hasUnsavedChanges = false;
     let isEditMode = false;
     let initialXmlContent = xmlContent;
+    let fullXmlContent = xmlContent;
+    let bodyPreviewActive = false;
     let refreshButtonStatesTimeout = null;
+    let lignesPoller = null;
+    let facsimilesPoller = null;
+    let facsimilesUploadInProgress = false;
 
     const editor = initEditor(document.getElementById('editor-container'), xmlContent);
 
@@ -235,6 +260,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const getTagButtons = () => Array.from(document.querySelectorAll('.editor [data-tag]'));
+
+    const syncFacsimileNavigationButtons = () => {
+        const buttons = getTagButtons();
+        const activeIndex = activeButton ? buttons.indexOf(activeButton) : -1;
+
+        if (elements.selectPrevFacsimileBtn) {
+            elements.selectPrevFacsimileBtn.disabled = activeIndex <= 0;
+        }
+
+        if (elements.selectNextFacsimileBtn) {
+            elements.selectNextFacsimileBtn.disabled = activeIndex === -1 || activeIndex >= buttons.length - 1;
+        }
+    };
+
     // Utility functions
     const setButtonState = (button, state, active = false) => {
         // Remove all button state classes.
@@ -256,6 +296,269 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     showMessage(MESSAGES.DEFAULT);
+
+    const setSpinnerVisible = (spinnerEl, visible) => {
+        if (!spinnerEl) return;
+        spinnerEl.classList.toggle('d-none', !visible);
+    };
+
+    const setLignesBusy = (isBusy) => {
+        setSpinnerVisible(elements.uploadLignesSpinner, isBusy);
+        if (elements.uploadLignesBtn) {
+            elements.uploadLignesBtn.disabled = !!isBusy;
+        }
+        if (elements.uploadLignesInput) {
+            elements.uploadLignesInput.disabled = !!isBusy;
+        }
+    };
+
+    const stopLignesPolling = () => {
+        if (lignesPoller) {
+            window.clearInterval(lignesPoller);
+            lignesPoller = null;
+        }
+    };
+
+    const stopFacsimilesPolling = () => {
+        if (facsimilesPoller) {
+            window.clearInterval(facsimilesPoller);
+            facsimilesPoller = null;
+        }
+    };
+
+    const pollLignesProgress = async () => {
+        if (!urlLignesProgress) return;
+        try {
+            const response = await fetch(`${urlLignesProgress}${urlLignesProgress.includes('?') ? '&' : '?'}ts=${Date.now()}`, {
+                headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const payload = await response.json();
+            const status = payload?.status || 'idle';
+            if (status === 'queued') {
+                setLignesBusy(true);
+                return;
+            }
+            if (status === 'running') {
+                setLignesBusy(true);
+                return;
+            }
+            if (status === 'completed' || status === 'done') {
+                stopLignesPolling();
+                setLignesBusy(true);
+                window.setTimeout(() => window.location.reload(), 350);
+                return;
+            }
+            if (status === 'failed') {
+                stopLignesPolling();
+                setLignesBusy(false);
+                alert(payload?.message || 'Le traitement _lignes a échoué.');
+                return;
+            }
+
+            stopLignesPolling();
+            setLignesBusy(false);
+        } catch (err) {
+            stopLignesPolling();
+            setLignesBusy(false);
+            alert('Impossible de suivre le traitement _lignes.');
+        }
+    };
+
+    const startLignesPolling = () => {
+        stopLignesPolling();
+        pollLignesProgress();
+        lignesPoller = window.setInterval(pollLignesProgress, 1500);
+    };
+
+    const updateFacsimilesUploadState = (isBusy) => {
+        facsimilesUploadInProgress = !!isBusy;
+        setSpinnerVisible(elements.uploadFacsimilesSpinner, facsimilesUploadInProgress);
+        if (elements.uploadFacsimilesBtn) {
+            elements.uploadFacsimilesBtn.disabled = facsimilesUploadInProgress;
+        }
+        if (elements.uploadFacsimilesInput) {
+            elements.uploadFacsimilesInput.disabled = facsimilesUploadInProgress;
+        }
+    };
+
+    const isDsStoreFile = (file) => {
+        const rawName = file?.name || '';
+        const rawPath = file?.webkitRelativePath || '';
+        const path = String(rawPath || rawName);
+        const parts = path.split('/');
+        const base = parts.length ? parts[parts.length - 1] : path;
+        return base === '.DS_Store';
+    };
+
+    const sortFacsimileFiles = (files) => {
+        return [...files].sort((a, b) => {
+            const left = (a.webkitRelativePath || a.name || '').toLowerCase();
+            const right = (b.webkitRelativePath || b.name || '').toLowerCase();
+            return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+        });
+    };
+
+    const pollFacsimilesProgress = async () => {
+        if (!urlFacsimilesProgress) return;
+        try {
+            const response = await fetch(`${urlFacsimilesProgress}${urlFacsimilesProgress.includes('?') ? '&' : '?'}ts=${Date.now()}`, {
+                headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const payload = await response.json();
+            const queueCount = Number(payload?.queue_count ?? 0);
+            const sourceCount = Number(payload?.source_count ?? 0);
+
+            if (queueCount > 0) {
+                updateFacsimilesUploadState(true);
+                return;
+            }
+
+            stopFacsimilesPolling();
+            updateFacsimilesUploadState(false);
+
+            if (sourceCount > 0) {
+                updateFacsimilesUploadState(true);
+                window.setTimeout(() => window.location.reload(), 350);
+                return;
+            }
+        } catch (err) {
+            stopFacsimilesPolling();
+            updateFacsimilesUploadState(false);
+            alert('Impossible de suivre le traitement des fac-similés.');
+        }
+    };
+
+    const startFacsimilesPolling = () => {
+        stopFacsimilesPolling();
+        pollFacsimilesProgress();
+        facsimilesPoller = window.setInterval(pollFacsimilesProgress, 1500);
+    };
+
+    const uploadFacsimilesFolder = async (files) => {
+        if (!urlFacsimilesUpload || !Number.isFinite(Number(versionId))) return;
+
+        const selected = sortFacsimileFiles(
+            [...files].filter((file) => !isDsStoreFile(file))
+        );
+
+        if (!selected.length) {
+            alert('Aucun fichier image exploitable dans ce dossier.');
+            return;
+        }
+
+        updateFacsimilesUploadState(true);
+
+        let cursor = 0;
+        let batchIndex = 0;
+
+        try {
+            while (cursor < selected.length) {
+                let batchSize = 0;
+                let byteTotal = 0;
+                const chunk = [];
+
+                while (cursor < selected.length && batchSize < MAX_FAC_BATCH_FILES) {
+                    const file = selected[cursor];
+                    const tentative = byteTotal + (file.size || 0);
+                    if (batchSize > 0 && tentative > MAX_FAC_BATCH_BYTES) break;
+
+                    chunk.push(file);
+                    byteTotal = tentative;
+                    batchSize += 1;
+                    cursor += 1;
+
+                    if (byteTotal >= MAX_FAC_BATCH_BYTES) break;
+                }
+
+                if (!chunk.length) {
+                    chunk.push(selected[cursor]);
+                    cursor += 1;
+                }
+
+                const start = cursor - chunk.length + 1;
+                const end = cursor;
+
+                const form = new FormData();
+                form.append('version_id', String(versionId));
+                form.append('reset', batchIndex === 0 ? '1' : '0');
+                chunk.forEach((file) => form.append('images[]', file));
+
+                const response = await fetch(urlFacsimilesUpload, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: form,
+                });
+
+                let payload = {};
+                try {
+                    payload = await response.json();
+                } catch (err) {
+                    payload = {};
+                }
+
+                if (!response.ok) {
+                    throw new Error(payload?.message || payload?.error || `HTTP ${response.status}`);
+                }
+
+                if (elements.uploadFacsimilesBtn) {
+                    elements.uploadFacsimilesBtn.title = `Envoi des fac-similés ${start}-${end} / ${selected.length}`;
+                }
+
+                batchIndex += 1;
+            }
+
+            startFacsimilesPolling();
+        } catch (err) {
+            updateFacsimilesUploadState(false);
+            alert(err.message || 'Échec de l’import des fac-similés.');
+        }
+    };
+
+    const uploadLignesFile = async (file) => {
+        if (!file || !urlLignesUpload) return;
+        if (hasUnsavedChanges) {
+            alert('Veuillez d’abord sauvegarder les modifications XML avant d’importer un fichier _lignes.');
+            return;
+        }
+
+        setLignesBusy(true);
+
+        try {
+            const form = new FormData();
+            form.append('lignes', file);
+
+            const response = await fetch(urlLignesUpload, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                },
+                body: form,
+            });
+
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch (err) {
+                payload = {};
+            }
+
+            if (!response.ok) {
+                throw new Error(payload?.message || `HTTP ${response.status}`);
+            }
+
+            startLignesPolling();
+        } catch (err) {
+            setLignesBusy(false);
+            alert(err.message || 'Échec de l’import du fichier _lignes.');
+        }
+    };
 
     const refreshButtonName = (button) => {
         const imageName = button.getAttribute('data-tag');
@@ -307,10 +610,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             elements.noPreviewText.style.display = 'block';
             elements.previewImg.parentElement.style.display = 'none';
-            elements.imageName.style.display = 'none';
+            if (elements.imageName) {
+                elements.imageName.style.display = 'none';
+            }
 
             elements.toggleIgnoredPageBtn.setAttribute('disabled', 'true');
             elements.removePageMarkerBtn.setAttribute('disabled', 'true');
+            syncFacsimileNavigationButtons();
         }
     };
 
@@ -318,9 +624,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!imgSrc) return;
 
         if (elements.noPreviewText) elements.noPreviewText.style.display = 'none';
-
-        // Extract filename from URL
-        const filename = imgSrc.split('/').pop();
 
         // Set a timeout to show spinner only if loading takes more than 500ms
         let spinnerTimeout = setTimeout(() => {
@@ -334,13 +637,6 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.loadingSpinner.style.display = 'none';
             elements.previewImg.src = imgSrc;
             elements.previewImg.parentElement.style.display = 'block';
-
-            // Show filename
-            if (elements.imageName) {
-                elements.imageName.textContent = filename;
-                elements.imageName.href = imgSrc;
-                elements.imageName.style.display = 'block';
-            }
         };
         img.onerror = () => {
             clearTimeout(spinnerTimeout);
@@ -355,6 +651,36 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         img.src = imgSrc;
     };
+
+    elements.uploadLignesBtn?.addEventListener('click', () => {
+        if (hasUnsavedChanges) {
+            alert('Veuillez d’abord sauvegarder les modifications XML avant d’importer un fichier _lignes.');
+            return;
+        }
+        if (elements.uploadLignesInput) {
+            elements.uploadLignesInput.value = '';
+            elements.uploadLignesInput.click();
+        }
+    });
+
+    elements.uploadLignesInput?.addEventListener('change', () => {
+        const file = elements.uploadLignesInput?.files?.[0];
+        if (!file) return;
+        uploadLignesFile(file);
+    });
+
+    elements.uploadFacsimilesBtn?.addEventListener('click', () => {
+        if (elements.uploadFacsimilesInput) {
+            elements.uploadFacsimilesInput.value = '';
+            elements.uploadFacsimilesInput.click();
+        }
+    });
+
+    elements.uploadFacsimilesInput?.addEventListener('change', () => {
+        const files = Array.from(elements.uploadFacsimilesInput?.files || []);
+        if (!files.length) return;
+        uploadFacsimilesFolder(files);
+    });
 
     const updateTagCountBadges = () => {
         const { markerCounts } = editor.getAllMarkers();
@@ -377,6 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editor.stopEnsureCacheUpdate();
 
         const { insertedMarkers } = editor.getAllMarkers();
+        const totalInsertedMarkers = insertedMarkers.size;
 
         let hasTagNumberNotInserted = false;
 
@@ -430,13 +757,113 @@ document.addEventListener('DOMContentLoaded', () => {
             warningIcon.style.display = hasTagNumberNotInserted ? 'inline' : 'none';
         }
 
+        if (elements.clearAllPageMarkersBtn) {
+            if (totalInsertedMarkers > 0) {
+                elements.clearAllPageMarkersBtn.removeAttribute('disabled');
+            } else {
+                elements.clearAllPageMarkersBtn.setAttribute('disabled', 'true');
+            }
+        }
+
         updateTagCountBadges();
         updatePaginationColors();
+        syncFacsimileNavigationButtons();
         editor.resumeEnsureCacheUpdate();
     };
 
     const updateTagsButtonUI = (tagsHidden) => {
-        elements.toggleTagsBtn.classList.toggle('active', !tagsHidden);
+        elements.toggleTagsBtn.classList.toggle('active', tagsHidden);
+    };
+
+    const extractBodyInnerXml = (xml) => {
+        if (!xml) return '';
+        const match = xml.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+        return match ? match[1] : xml;
+    };
+
+    const mergeBodyIntoFullXml = (xml, bodyInnerXml) => {
+        if (!xml) return bodyInnerXml;
+        if (!/<body\b[^>]*>[\s\S]*<\/body>/i.test(xml)) {
+            return bodyInnerXml;
+        }
+
+        return xml.replace(
+            /(<body\b[^>]*>)([\s\S]*?)(<\/body>)/i,
+            `$1${bodyInnerXml}$3`
+        );
+    };
+
+    const syncHiddenBodyIntoFullXml = () => {
+        if (!bodyPreviewActive) {
+            return fullXmlContent;
+        }
+
+        const currentBody = editor.view.state.doc.toString();
+        fullXmlContent = mergeBodyIntoFullXml(fullXmlContent, currentBody);
+        return fullXmlContent;
+    };
+
+    const formatXmlForReadonlyDisplay = (xml) => {
+        if (!xml) return '';
+
+        const normalized = xml
+            .replace(/\r\n?/g, '\n')
+            .replace(/>\s*</g, '>\n<');
+
+        const lines = normalized.split('\n');
+        let indent = 0;
+
+        return lines
+            .map((line) => {
+                const trimmed = line.trim();
+                if (trimmed === '') {
+                    return '';
+                }
+
+                if (/^<\//.test(trimmed)) {
+                    indent = Math.max(0, indent - 1);
+                }
+
+                const rendered = `${'  '.repeat(indent)}${trimmed}`;
+
+                if (
+                    /^<[^!?/][^>]*>$/.test(trimmed) &&
+                    !/\/>$/.test(trimmed) &&
+                    !/<[^>]+>.*<\/[^>]+>$/.test(trimmed)
+                ) {
+                    indent += 1;
+                }
+
+                return rendered;
+            })
+            .join('\n');
+    };
+
+    const applyTagsHiddenView = () => {
+        fullXmlContent = editor.view.state.doc.toString();
+        editor.replaceDocument(extractBodyInnerXml(fullXmlContent), { silent: true });
+        if (!editor.getTagVisibility()) {
+            editor.toggleTagVisibility();
+        }
+        bodyPreviewActive = true;
+        updateTagsButtonUI(true);
+    };
+
+    const restoreFullXmlView = () => {
+        if (!bodyPreviewActive) {
+            if (editor.getTagVisibility()) {
+                editor.toggleTagVisibility();
+            }
+            updateTagsButtonUI(false);
+            return;
+        }
+        syncHiddenBodyIntoFullXml();
+        editor.replaceDocument(formatXmlForReadonlyDisplay(fullXmlContent), { silent: true });
+        if (editor.getTagVisibility()) {
+            editor.toggleTagVisibility();
+        }
+        bodyPreviewActive = false;
+        updateTagsButtonUI(false);
     };
 
     const updateSaveButtonUI = (isEditMode) => {
@@ -465,25 +892,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             refreshButtonStates();
             if (tagsWereHiddenBeforeEdit) {
-                if (!editor.getTagVisibility()) {
-                    editor.toggleTagVisibility();
-                    updateTagsButtonUI(true);
-                }
+                applyTagsHiddenView();
             }
         } else {
-            tagsWereHiddenBeforeEdit = editor.getTagVisibility();
+            tagsWereHiddenBeforeEdit = bodyPreviewActive || editor.getTagVisibility();
             deactivateActiveButton();
 
             if (tagsWereHiddenBeforeEdit) {
-                editor.toggleTagVisibility();
-                updateTagsButtonUI(false);
+                restoreFullXmlView();
             }
         }
     });
 
     elements.toggleTagsBtn.addEventListener('click', () => {
-        const tagsHidden = editor.toggleTagVisibility();
-        updateTagsButtonUI(tagsHidden);
+        if (bodyPreviewActive) {
+            restoreFullXmlView();
+        } else {
+            applyTagsHiddenView();
+        }
     });
 
     elements.toggleLineNumbersBtn.addEventListener('click', () => {
@@ -699,6 +1125,83 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (elements.clearAllPageMarkersBtn) {
+        elements.clearAllPageMarkersBtn.addEventListener('click', () => {
+            const { insertedMarkers } = editor.getAllMarkers();
+            if (!insertedMarkers.size) return;
+
+            const confirmed = window.confirm('Supprimer tous les marqueurs de pagination <pb/> du texte ?');
+            if (!confirmed) return;
+
+            editor.removeAllPageMarkers();
+            refreshButtonStates();
+            deactivateActiveButton();
+        });
+    }
+
+    const activateFacsimileButton = (button) => {
+        if (!button) return;
+
+        const imgSrc = button.getAttribute('data-img-src');
+        const imageName = button.getAttribute('data-tag');
+        const isInserted = editor.isPageMarkerInserted(imageName);
+
+        if (activeButton === button) {
+            if (isInserted) {
+                editor.scrollToPageMarker(imageName);
+            } else {
+                deactivateActiveButton();
+            }
+        } else {
+            if (activeButton) {
+                deactivateActiveButton();
+            }
+
+            const buttonItem = button.closest('.button-item');
+            const page = parseInt(buttonItem?.getAttribute('data-page') || '1', 10);
+            showPage(page);
+
+            activeButton = button;
+            loadImage(imgSrc);
+            elements.toggleIgnoredPageBtn.removeAttribute('disabled');
+
+            const isIgnored = button.getAttribute('data-ignored') === 'true';
+            if (isIgnored) {
+                elements.toggleIgnoredPageBtn.classList.add('active');
+            } else {
+                elements.toggleIgnoredPageBtn.classList.remove('active');
+            }
+
+            if (isInserted) {
+                elements.removePageMarkerBtn.removeAttribute('disabled');
+                editor.scrollToPageMarker(imageName);
+                setButtonState(button, BUTTON_STATES.INSERTED, true);
+            } else {
+                elements.removePageMarkerBtn.setAttribute('disabled', 'true');
+                setButtonState(button, BUTTON_STATES.INSERT, true);
+                refreshButtonName(button);
+                elements.editorContainer.classList.add('insert-page');
+            }
+        }
+
+        syncFacsimileNavigationButtons();
+        tooltipsMap.get(button)?.show();
+    };
+
+    const navigateFacsimile = (delta) => {
+        const buttons = getTagButtons();
+        if (!buttons.length) return;
+
+        const currentIndex = activeButton ? buttons.indexOf(activeButton) : -1;
+        const targetIndex = currentIndex === -1
+            ? (delta > 0 ? 0 : buttons.length - 1)
+            : currentIndex + delta;
+
+        if (targetIndex < 0 || targetIndex >= buttons.length) return;
+
+        activateFacsimileButton(buttons[targetIndex]);
+    };
+
     // Insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
         const imgSrc = button.getAttribute('data-img-src');
@@ -730,43 +1233,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tooltipsMap.set(button, tooltip);
 
         button.addEventListener('click', () => {
-            const isInserted = editor.isPageMarkerInserted(imageName);
-
-            if (activeButton === button) {
-                if (isInserted) {
-                    editor.scrollToPageMarker(imageName);
-                } else {
-                    deactivateActiveButton();
-                }
-            } else {
-              if (activeButton) {
-                  deactivateActiveButton();
-              }
-
-              activeButton = button;
-              loadImage(imgSrc);
-              elements.toggleIgnoredPageBtn.removeAttribute('disabled');
-
-              const isIgnored = button.getAttribute('data-ignored') === 'true';
-              if (isIgnored) {
-                elements.toggleIgnoredPageBtn.classList.add('active');
-              } else {
-                elements.toggleIgnoredPageBtn.classList.remove('active');
-              }
-
-              if (isInserted) {
-                  elements.removePageMarkerBtn.removeAttribute('disabled');
-                  editor.scrollToPageMarker(imageName);
-                  setButtonState(button, BUTTON_STATES.INSERTED, true);
-              } else {
-                  elements.removePageMarkerBtn.setAttribute('disabled', 'true');
-                  setButtonState(button, BUTTON_STATES.INSERT, true);
-                  refreshButtonName(button);
-                  elements.editorContainer.classList.add('insert-page');
-              }
-            }
-            tooltipsMap.get(button)?.show();
+            activateFacsimileButton(button);
         });
+    });
+
+    elements.selectPrevFacsimileBtn?.addEventListener('click', () => {
+        navigateFacsimile(-1);
+    });
+
+    elements.selectNextFacsimileBtn?.addEventListener('click', () => {
+        navigateFacsimile(1);
     });
 
     // Editor click to insert tag
@@ -804,13 +1280,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const isClickOnImageUrl = e.target.id === 'image-name';
             const isClickOnToggleIgnored = e.target.closest('#toggle-ignored-page');
             const isClickOnSearchBtn = e.target.closest('#search-btn');
+            const isClickOnSearchPanel = e.target.closest('.cm-search');
             const isClickOnToggleTagsBtn = e.target.closest('#toggle-tags');
             const isClickOnRemovePageMarkerBtn = e.target.closest('#remove-page-marker');
+            const isClickOnClearAllPageMarkersBtn = e.target.closest('#clear-all-page-markers');
             const isClickOnToggleReadonlyBtn = e.target.closest('#toggle-readonly');
 
             if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl &&
-                !isClickOnToggleIgnored && !isClickOnSearchBtn && !isClickOnToggleTagsBtn && 
-                !isClickOnRemovePageMarkerBtn && !isClickOnToggleReadonlyBtn
+                !isClickOnToggleIgnored && !isClickOnSearchBtn && !isClickOnSearchPanel && !isClickOnToggleTagsBtn && 
+                !isClickOnRemovePageMarkerBtn && !isClickOnClearAllPageMarkersBtn && !isClickOnToggleReadonlyBtn
             ) {
                 deactivateActiveButton();
             }
@@ -818,7 +1296,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const saveFile = async () => {
-        const updatedXml = editor.view.state.doc.toString();
+        const updatedXml = bodyPreviewActive
+            ? syncHiddenBodyIntoFullXml()
+            : editor.view.state.doc.toString();
         
         // Trigger saving animation
         const animTarget = elements.fileStatus.classList.contains('d-none') ? elements.saveBtn : elements.fileStatus;
@@ -876,6 +1356,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (response.ok) {
                 hasUnsavedChanges = false;
                 initialXmlContent = updatedXml;
+                fullXmlContent = updatedXml;
 
                 // Reset button to success state
                 elements.saveBtn.classList.remove('btn-danger');
@@ -897,38 +1378,17 @@ document.addEventListener('DOMContentLoaded', () => {
         await saveFile();
     });
 
-    // Image zoom on mouse hover
-    if (elements.previewImg) {
-        elements.previewImg.addEventListener('mousemove', (e) => {
-            const rect = elements.previewImg.getBoundingClientRect();
-            const x = ((e.clientX - rect.left) / rect.width) * 100;
-            const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-            elements.previewImg.style.transformOrigin = `${x}% ${y}%`;
-            elements.previewImg.style.transform = 'scale(4)';
-            elements.previewImg.style.cursor = 'zoom-in';
-        });
-
-        elements.previewImg.addEventListener('mouseleave', () => {
-            elements.previewImg.style.transform = 'scale(1)';
-            elements.previewImg.style.transformOrigin = 'center center';
-            elements.previewImg.style.cursor = 'default';
-        });
-    }
-
     initPagination();
     refreshButtonStates();
 
     // Initialize line numbers button state from localStorage
     const initialLineNumbersState = localStorage.getItem('editor-line-numbers') === 'true';
     elements.toggleLineNumbersBtn.classList.toggle('active', initialLineNumbersState);
+    syncFacsimileNavigationButtons();
 
     // Use CodeMirror's ready event to hide tags after initial render
     // This fixes Firefox's slow rendering when tags are hidden from the start
     editor.onEditorReady(() => {
-        if (editor.getTagVisibility() === false) {
-            editor.toggleTagVisibility();
-            updateTagsButtonUI(true);
-        }
+        applyTagsHiddenView();
     });
 });

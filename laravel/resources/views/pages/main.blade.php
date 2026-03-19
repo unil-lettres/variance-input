@@ -119,7 +119,7 @@
     .editorial-carousel-viewport {
         position: relative;
         overflow: hidden;
-        border-radius: 1.2rem;
+        border-radius: 0.5rem;
         transition: height 0.42s ease;
     }
     .editorial-carousel-track {
@@ -144,11 +144,11 @@
         gap: 24px;
     }
     .editorial-welcome {
-        padding: 0.35rem 0.2rem 0.1rem;
-        font-size: 1.18rem;
+        padding: 0.25rem 0.2rem 0;
+        font-size: 1.1rem;
         font-style: italic;
         line-height: 1.6;
-        color: #5d554b;
+        color: #495057;
         text-align: center;
     }
     .editorial-welcome span {
@@ -165,7 +165,7 @@
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: #7a7165;
+        color: #6c757d;
         text-align: center;
     }
     .editorial-history-list {
@@ -175,19 +175,30 @@
         display: grid;
         gap: 0.55rem;
     }
-    .editorial-history-list a {
+    .editorial-history-list a,
+    .editorial-history-entry {
         display: block;
         padding: 0.7rem 0.85rem;
         padding-right: 2.6rem;
-        border: 1px solid rgba(117, 107, 94, 0.14);
-        border-radius: 0.95rem;
-        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        background: #fff;
         text-decoration: none;
-        box-shadow: 0 6px 14px rgba(94, 78, 56, 0.05);
+    }
+    .editorial-history-entry {
+        padding-right: 0.85rem;
+    }
+    .editorial-history-entry > a {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+    .editorial-history-entry > a:hover {
+        border-color: transparent;
     }
     .editorial-history-list a:hover {
-        border-color: rgba(104, 92, 78, 0.28);
-        box-shadow: 0 10px 20px rgba(94, 78, 56, 0.08);
+        border-color: #adb5bd;
     }
     .editorial-history-item {
         position: relative;
@@ -195,7 +206,7 @@
     .editorial-history-work {
         display: block;
         font-weight: 700;
-        color: #4d463d;
+        color: #495057;
         line-height: 1.35;
     }
     .editorial-history-author {
@@ -205,14 +216,14 @@
         gap: 0.75rem;
         margin-top: 0.08rem;
         font-size: 0.84rem;
-        color: #7a7165;
+        color: #6c757d;
         line-height: 1.35;
     }
     .editorial-history-opened-at {
         display: inline-block;
         margin-top: 0;
         font-size: 0.76rem;
-        color: #978d80;
+        color: #6c757d;
         line-height: 1.3;
         text-align: right;
         white-space: nowrap;
@@ -229,7 +240,7 @@
         border: 0;
         border-radius: 999px;
         background: transparent;
-        color: #9b9184;
+        color: #6c757d;
         font-size: 1rem;
         line-height: 1;
         cursor: pointer;
@@ -237,14 +248,56 @@
     }
     .editorial-history-remove:hover,
     .editorial-history-remove:focus-visible {
-        background: rgba(117, 107, 94, 0.1);
-        color: #6a6157;
+        background: #e9ecef;
+        color: #495057;
         outline: none;
     }
     .editorial-history-empty {
         padding: 0.1rem 0;
         font-size: 0.95rem;
-        color: #7a7165;
+        color: #6c757d;
+        font-style: italic;
+    }
+    .editorial-history-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.08rem;
+        font-size: 0.84rem;
+        color: #6c757d;
+        line-height: 1.35;
+    }
+    .editorial-history-count {
+        font-size: 0.76rem;
+        color: #6c757d;
+        white-space: nowrap;
+    }
+    .editorial-history-comparisons {
+        margin-top: 0.55rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
+    .editorial-history-comparison {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        padding: 0.22rem 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 999px;
+        background: #f8f9fa;
+        font-size: 0.76rem;
+        line-height: 1.25;
+        color: #495057;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .editorial-history-comparison-empty {
+        margin-top: 0.55rem;
+        font-size: 0.8rem;
+        color: #6c757d;
         font-style: italic;
     }
     .editorial-carousel-actions {
@@ -259,17 +312,15 @@
         place-items: center;
         width: 2.5rem;
         height: 2.5rem;
-        border: 1px solid rgba(117, 107, 94, 0.18);
+        border: 1px solid #ced4da;
         border-radius: 999px;
-        background: linear-gradient(180deg, #f5f2ec 0%, #ebe6dd 100%);
-        color: #5f564b;
-        box-shadow: 0 6px 14px rgba(94, 78, 56, 0.08);
-        transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, color 0.22s ease;
+        background: #fff;
+        color: #495057;
+        transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
     }
     .editorial-carousel-arrow:hover:not([disabled]) {
-        transform: translateY(-1px);
-        border-color: rgba(104, 92, 78, 0.3);
-        box-shadow: 0 10px 18px rgba(94, 78, 56, 0.12);
+        border-color: #adb5bd;
+        background: #f8f9fa;
     }
     .editorial-carousel-arrow:focus-visible {
         outline: 2px solid rgba(69, 101, 163, 0.4);
@@ -283,7 +334,6 @@
     }
     .editorial-carousel-arrow[disabled] {
         opacity: 0.45;
-        box-shadow: none;
         cursor: default;
     }
     #admin-main .card-header[role="button"] {
@@ -292,11 +342,11 @@
         min-height: 3.35rem;
     }
     #admin-main .card-header {
-        background: linear-gradient(180deg, #f1f0ec 0%, #e6e3de 100%);
-        color: #3f3c36;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-        letter-spacing: 0.02em;
+        background: #f8f9fa;
+        color: #495057;
+        border-bottom: 1px solid #dee2e6;
+        box-shadow: none;
+        letter-spacing: 0.01em;
     }
     #admin-main .card-header .collapse-chevron::before {
         color: rgba(63, 60, 54, 0.75);
@@ -314,7 +364,7 @@
     #admin-main .admin-card-title {
         font-size: 0.98rem;
         font-weight: 700;
-        color: #403a34;
+        color: #495057;
     }
     #admin-main .admin-card-subtitle {
         margin-top: 0.12rem;
@@ -322,7 +372,7 @@
         font-weight: 500;
         letter-spacing: 0.02em;
         text-transform: uppercase;
-        color: #7a7165;
+        color: #6c757d;
         white-space: normal;
     }
     #admin-main .admin-card-checks {
@@ -437,6 +487,7 @@ window.setAllBladesLoading = (isLoading) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     const HISTORY_KEY = 'variance:history:v1';
+    const historyTitle = document.getElementById('editorial-history-title');
     const historyList = document.getElementById('editorial-history-list');
 
     const readHistory = () => {
@@ -485,8 +536,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const renderEditorialHistory = () => {
+    const selectedAuthorOption = () => {
+        const authorSelector = document.getElementById('author-selector');
+        if (!authorSelector || !authorSelector.value) return null;
+        return authorSelector.options[authorSelector.selectedIndex] || null;
+    };
+
+    const buildSelectUrlFromSlugs = (authorSlug, workSlug, stepHash = '') => {
+        const normalizedAuthorSlug = String(authorSlug ?? '').trim();
+        const normalizedWorkSlug = String(workSlug ?? '').trim();
+        if (!normalizedAuthorSlug || !normalizedWorkSlug) return null;
+        const path = `/select/${encodeURIComponent(normalizedAuthorSlug)}/${encodeURIComponent(normalizedWorkSlug)}`;
+        const base = typeof window.withBasePath === 'function' ? window.withBasePath(path) : path;
+        return `${base}${stepHash}`;
+    };
+
+    let currentAuthorId = null;
+    let currentAuthorSlug = null;
+    let currentAuthorLabel = null;
+    let currentWorkId = null;
+    let authorOverviewRequest = 0;
+
+    const resolveCurrentAuthorLabel = () => {
+        const option = selectedAuthorOption();
+        if (option?.textContent?.trim()) {
+            currentAuthorLabel = option.textContent.trim();
+        }
+        return currentAuthorLabel || 'auteur sélectionné';
+    };
+
+    const resolveCurrentAuthorSlug = () => {
+        const option = selectedAuthorOption();
+        if (option?.dataset?.folder?.trim()) {
+            currentAuthorSlug = option.dataset.folder.trim();
+        }
+        return currentAuthorSlug || null;
+    };
+
+    const buildComparisonLabel = (comparison) => {
+        const sourceName = comparison?.source_version?.name ?? `Version ${comparison?.source_id ?? '?'}`;
+        const targetName = comparison?.target_version?.name ?? `Version ${comparison?.target_id ?? '?'}`;
+        return `${sourceName} - ${targetName}`;
+    };
+
+    const renderRecentHistory = () => {
         if (!historyList) return;
+        if (historyTitle) {
+            historyTitle.textContent = 'Oeuvres récemment ouvertes en édition';
+        }
         const items = readHistory().filter(Boolean);
         if (items.length === 0) {
             historyList.innerHTML = '<li class="editorial-history-empty">Aucun historique</li>';
@@ -525,7 +622,93 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     };
 
-    renderEditorialHistory();
+    const renderAuthorOverview = async () => {
+        if (!historyList) return;
+        if (!currentAuthorId || currentWorkId) {
+            renderRecentHistory();
+            return;
+        }
+
+        const requestId = ++authorOverviewRequest;
+        const authorLabel = resolveCurrentAuthorLabel();
+        const authorSlug = resolveCurrentAuthorSlug();
+
+        if (historyTitle) {
+            historyTitle.textContent = `Oeuvres et comparaisons de ${authorLabel}`;
+        }
+        historyList.innerHTML = '<li class="editorial-history-empty">Chargement…</li>';
+
+        try {
+            const worksUrl = typeof window.withBasePath === 'function'
+                ? window.withBasePath(`/api/author/${encodeURIComponent(currentAuthorId)}/works`)
+                : `/api/author/${encodeURIComponent(currentAuthorId)}/works`;
+            const worksRes = await fetch(worksUrl, { headers: { Accept: 'application/json' } });
+            if (!worksRes.ok) throw new Error(`HTTP ${worksRes.status}`);
+            const works = await worksRes.json();
+
+            if (requestId !== authorOverviewRequest) return;
+
+            if (!Array.isArray(works) || works.length === 0) {
+                historyList.innerHTML = '<li class="editorial-history-empty">Aucune oeuvre pour cet auteur.</li>';
+                return;
+            }
+
+            const sortedWorks = [...works].sort((a, b) => String(a?.title ?? '').localeCompare(String(b?.title ?? ''), 'fr', { sensitivity: 'base' }));
+
+            const entries = await Promise.all(sortedWorks.map(async (work) => {
+                try {
+                    const comparisonsUrl = typeof window.withBasePath === 'function'
+                        ? window.withBasePath(`/comparisons/by-work?work_id=${encodeURIComponent(work.id)}&light=1`)
+                        : `/comparisons/by-work?work_id=${encodeURIComponent(work.id)}&light=1`;
+                    const response = await fetch(comparisonsUrl, { headers: { Accept: 'application/json' } });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const comparisons = await response.json();
+                    return { work, comparisons: Array.isArray(comparisons) ? comparisons : [], failed: false };
+                } catch (err) {
+                    return { work, comparisons: [], failed: true };
+                }
+            }));
+
+            if (requestId !== authorOverviewRequest) return;
+
+            historyList.innerHTML = entries.map(({ work, comparisons, failed }) => {
+                const count = comparisons.length;
+                const workHref = buildSelectUrlFromSlugs(authorSlug, work?.folder)
+                    || (typeof window.withBasePath === 'function' ? window.withBasePath('/') : '/');
+                const comparisonsMarkup = failed
+                    ? '<div class="editorial-history-comparison-empty">Comparaisons indisponibles pour le moment.</div>'
+                    : count > 0
+                        ? `<div class="editorial-history-comparisons">${comparisons.map((comparison) => `<span class="editorial-history-comparison" title="${escapeHtml(buildComparisonLabel(comparison))}">${escapeHtml(buildComparisonLabel(comparison))}</span>`).join('')}</div>`
+                        : '<div class="editorial-history-comparison-empty">Aucune comparaison pour cette oeuvre.</div>';
+
+                return `
+                    <li class="editorial-history-item">
+                        <div class="editorial-history-entry">
+                            <a href="${escapeHtml(workHref)}">
+                                <span class="editorial-history-work">${escapeHtml(work?.title || 'Œuvre')}</span>
+                            </a>
+                            <div class="editorial-history-meta">
+                                <span>${escapeHtml(authorLabel)}</span>
+                                <span class="editorial-history-count">${count} comparaison${count > 1 ? 's' : ''}</span>
+                            </div>
+                            ${comparisonsMarkup}
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        } catch (err) {
+            if (requestId !== authorOverviewRequest) return;
+            historyList.innerHTML = '<li class="editorial-history-empty">Impossible de charger les oeuvres de cet auteur.</li>';
+        }
+    };
+
+    const renderStepOneList = () => {
+        if (currentAuthorId && !currentWorkId) {
+            renderAuthorOverview();
+            return;
+        }
+        renderRecentHistory();
+    };
 
     historyList?.addEventListener('click', (event) => {
         const removeButton = event.target.closest('[data-history-remove]');
@@ -543,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return entryKey !== key;
         });
         writeHistory(nextItems);
-        renderEditorialHistory();
+        renderStepOneList();
     });
 
     document.querySelectorAll('#admin-main .modal').forEach((modalEl) => {
@@ -574,7 +757,9 @@ document.addEventListener('DOMContentLoaded', () => {
         .map((panel) => Number(panel.dataset.editorialStep))
         .filter((step) => Number.isFinite(step))
         .sort((a, b) => a - b);
-    let currentWorkId = (adminMain?.dataset?.initialWorkId || '').trim() || null;
+    currentAuthorId = (adminMain?.dataset?.initialAuthorId || '').trim() || null;
+    currentAuthorSlug = (adminMain?.dataset?.initialAuthorSlug || '').trim() || null;
+    currentWorkId = (adminMain?.dataset?.initialWorkId || '').trim() || null;
     let currentStep = currentWorkId ? 1 : 0;
     if (currentWorkId) {
         window.setAllBladesLoading(true);
@@ -658,6 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateStepUi = () => {
         if (!track) return;
         const index = Math.max(0, orderedSteps.indexOf(currentStep));
+        const hasWorkSelected = !!currentWorkId;
         track.style.transform = `translateX(-${index * 100}%)`;
         stepPanels.forEach((panel) => {
             const panelStep = Number(panel.dataset.editorialStep);
@@ -668,17 +854,22 @@ document.addEventListener('DOMContentLoaded', () => {
         stepButtons.forEach((button) => {
             const buttonStep = Number(button.dataset.editorialStepTarget);
             const isActive = buttonStep === currentStep;
+            const isDisabled = !hasWorkSelected && buttonStep > 0;
             button.classList.toggle('is-active', isActive);
+            button.classList.toggle('is-disabled', isDisabled);
             button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            button.disabled = isDisabled;
+            button.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
         });
         if (prevButton) prevButton.disabled = index <= 0;
-        if (nextButton) nextButton.disabled = index >= orderedSteps.length - 1;
+        if (nextButton) nextButton.disabled = !hasWorkSelected || index >= orderedSteps.length - 1;
         updateViewportHeight();
     };
 
     const openEditorialStep = (step, options = {}) => {
         const parsedStep = Number(step);
         if (!Number.isFinite(parsedStep) || !orderedSteps.includes(parsedStep)) return;
+        if (!currentWorkId && parsedStep > 0) return;
         currentStep = parsedStep;
         updateStepUi();
         if (options.focusPanel !== false) {
@@ -732,24 +923,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.addEventListener('workSelected', (event) => {
+        currentAuthorId = (event?.detail?.authorId ?? '').toString().trim() || null;
+        currentAuthorSlug = (event?.detail?.author_folder ?? '').toString().trim() || null;
+        currentAuthorLabel = (event?.detail?.author_label ?? '').toString().trim() || null;
         currentWorkId = (event?.detail?.workId ?? '').toString().trim() || null;
         toggleBladesDisabled(!currentWorkId);
         if (currentWorkId) {
-            window.setAllBladesLoading(true);
             window.setBladeLoading('facsimilesCollapse', false);
             if (currentStep === 0) {
                 openEditorialStep(1, { focusPanel: false });
             }
         } else {
+            currentStep = 0;
             window.setAllBladesLoading(false);
         }
         applyStateForWork(currentWorkId);
-        renderEditorialHistory();
+        updateStepUi();
+        renderStepOneList();
         updateViewportHeight();
     });
 
     toggleBladesDisabled(!currentWorkId);
     applyStateForWork(currentWorkId);
+    renderStepOneList();
     updateStepUi();
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {

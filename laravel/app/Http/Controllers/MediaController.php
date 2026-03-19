@@ -13,10 +13,6 @@ class MediaController extends Controller
      */
     public function index(Work $work)
     {
-        if ($work->image_url) {
-            $this->mirrorToLegacy($work->image_url);
-        }
-
         return response()->json([
             'image_url' => $work->image_url
                 ? '/uploads_images/' . $work->image_url

@@ -1042,11 +1042,13 @@ class PageMarkerService
      * Materialize sidecar markers as inline <pb/> nodes for the version editor,
      * while keeping any <pb/> tags already present in the TEI.
      *
+     * @param  array<int,array{small:string,big:string}>|null  $manifestEntries
      * @return array{xml:string|null,injected:int,total_sidecar:int,existing_pb:int}
      */
-    public function buildVersionEditorXml(Version $version): array
+    public function buildVersionEditorXml(Version $version, ?array $manifestEntries = null): array
     {
-        $contents = $this->readVersionXml($version);
+        $xmlPath = $this->resolveVersionXmlPath($version);
+        $contents = $xmlPath ? $this->readVersionXmlFromPath($xmlPath) : null;
         if ($contents === null) {
             return [
                 'xml'          => null,
@@ -1054,6 +1056,12 @@ class PageMarkerService
                 'total_sidecar'=> 0,
                 'existing_pb'  => 0,
             ];
+        }
+
+        $cacheFingerprint = $this->versionEditorCacheFingerprint($version, $xmlPath);
+        $cached = $this->loadVersionEditorCache($version->id, $cacheFingerprint);
+        if ($cached !== null) {
+            return $cached;
         }
 
         $existingPb = $this->extractPbMarkers($contents);
@@ -1076,7 +1084,7 @@ class PageMarkerService
             ];
         }
 
-        $imageMap = $this->versionEditorImageMap($version);
+        $imageMap = $this->versionEditorImageMap($version, $manifestEntries);
         $missing = [];
 
         foreach ($markers as $marker) {
@@ -1095,22 +1103,27 @@ class PageMarkerService
         }
 
         if (empty($missing)) {
-            return [
+            $payload = [
                 'xml'          => $contents,
                 'injected'     => 0,
                 'total_sidecar'=> count($markers),
                 'existing_pb'  => count($existingPb),
             ];
+            $this->storeVersionEditorCache($version->id, $cacheFingerprint, $payload);
+            return $payload;
         }
 
         $result = $this->insertPbTagsFromOffsets($contents, $missing);
 
-        return [
+        $payload = [
             'xml'          => $result['xml'],
             'injected'     => $result['inserted'],
             'total_sidecar'=> count($markers),
             'existing_pb'  => count($existingPb),
         ];
+        $this->storeVersionEditorCache($version->id, $cacheFingerprint, $payload);
+
+        return $payload;
     }
 
     /**
@@ -1156,31 +1169,17 @@ class PageMarkerService
      */
     private function readVersionXml(Version $version): ?string
     {
-        $candidates = [
-            storage_path("app/public/uploads/versions/{$version->folder}.xml"),
-            public_path("uploads/versions/{$version->folder}.xml"),
-            base_path("../variance/uploads/versions/{$version->folder}.xml"),
-        ];
-
-        foreach ($candidates as $path) {
-            if (is_file($path)) {
-                $contents = @file_get_contents($path);
-                if ($contents !== false && $contents !== '') {
-                    return $contents;
-                }
-            }
-        }
-
-        return null;
+        $path = $this->resolveVersionXmlPath($version);
+        return $path ? $this->readVersionXmlFromPath($path) : null;
     }
 
     /** @return array<string,string> image_code => facsimile filename */
-    private function versionEditorImageMap(Version $version): array
+    private function versionEditorImageMap(Version $version, ?array $manifestEntries = null): array
     {
         $version->loadMissing('work.author');
         $map = [];
 
-        foreach ($version->collectManifestEntries() as $entry) {
+        foreach ($manifestEntries ?? $version->collectManifestEntries() as $entry) {
             $file = basename((string) ($entry['big'] ?? ''));
             if ($file === '') {
                 continue;
@@ -1192,6 +1191,113 @@ class PageMarkerService
         }
 
         return $map;
+    }
+
+    private function resolveVersionXmlPath(Version $version): ?string
+    {
+        $candidates = [
+            storage_path("app/public/uploads/versions/{$version->folder}.xml"),
+            public_path("uploads/versions/{$version->folder}.xml"),
+            base_path("../variance/uploads/versions/{$version->folder}.xml"),
+        ];
+
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    private function readVersionXmlFromPath(string $path): ?string
+    {
+        $contents = @file_get_contents($path);
+        if ($contents === false || $contents === '') {
+            return null;
+        }
+
+        return $contents;
+    }
+
+    /** @return array{xml_mtime:int,sidecar_mtime:int,facsimiles_mtime:int} */
+    private function versionEditorCacheFingerprint(Version $version, string $xmlPath): array
+    {
+        $version->loadMissing('work.author');
+
+        $facsimilesPath = storage_path(sprintf(
+            'app/public/uploads/%s/%s/%s',
+            $version->work->author->folder,
+            $version->work->folder,
+            $version->folder
+        ));
+        $sidecarRelative = $this->paginationRelativePath($version->id);
+
+        return [
+            'xml_mtime' => is_file($xmlPath) ? (int) @filemtime($xmlPath) : 0,
+            'sidecar_mtime' => Storage::disk('local')->exists($sidecarRelative)
+                ? (int) Storage::disk('local')->lastModified($sidecarRelative)
+                : 0,
+            'facsimiles_mtime' => is_dir($facsimilesPath) ? (int) @filemtime($facsimilesPath) : 0,
+        ];
+    }
+
+    private function versionEditorCacheRelativePath(int $versionId): string
+    {
+        return "cache/version-editor/{$versionId}.json";
+    }
+
+    /** @param array{xml_mtime:int,sidecar_mtime:int,facsimiles_mtime:int} $fingerprint */
+    private function loadVersionEditorCache(int $versionId, array $fingerprint): ?array
+    {
+        $relative = $this->versionEditorCacheRelativePath($versionId);
+        if (!Storage::disk('local')->exists($relative)) {
+            return null;
+        }
+
+        try {
+            $decoded = json_decode(Storage::disk('local')->get($relative), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        $cachedFingerprint = $decoded['fingerprint'] ?? null;
+        $payload = $decoded['payload'] ?? null;
+
+        if (!is_array($cachedFingerprint) || !is_array($payload)) {
+            return null;
+        }
+
+        if ((int) ($cachedFingerprint['xml_mtime'] ?? -1) !== $fingerprint['xml_mtime']
+            || (int) ($cachedFingerprint['sidecar_mtime'] ?? -1) !== $fingerprint['sidecar_mtime']
+            || (int) ($cachedFingerprint['facsimiles_mtime'] ?? -1) !== $fingerprint['facsimiles_mtime']) {
+            return null;
+        }
+
+        return [
+            'xml' => is_string($payload['xml'] ?? null) ? $payload['xml'] : null,
+            'injected' => (int) ($payload['injected'] ?? 0),
+            'total_sidecar' => (int) ($payload['total_sidecar'] ?? 0),
+            'existing_pb' => (int) ($payload['existing_pb'] ?? 0),
+        ];
+    }
+
+    /** @param array{xml_mtime:int,sidecar_mtime:int,facsimiles_mtime:int} $fingerprint
+     *  @param array{xml:string|null,injected:int,total_sidecar:int,existing_pb:int} $payload
+     */
+    private function storeVersionEditorCache(int $versionId, array $fingerprint, array $payload): void
+    {
+        Storage::disk('local')->put(
+            $this->versionEditorCacheRelativePath($versionId),
+            json_encode([
+                'fingerprint' => $fingerprint,
+                'payload' => $payload,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
     }
 
     /**

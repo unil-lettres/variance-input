@@ -748,44 +748,6 @@ function initComparisonsTable() {
       container.appendChild(hint);
     }
 
-    const statusEl = document.createElement('div');
-    statusEl.className = 'text-muted small';
-    container.appendChild(statusEl);
-    const progressSnapshot = comp.comparison_progress || null;
-    statusEl.dataset.comparisonId = String(comp.id);
-    statusEl.dataset.paginationRole = role;
-
-    const options = document.createElement('div');
-    options.className = 'mt-2';
-    const clearId = `cmp-${comp.id}-${role}-clear`;
-    const replaceId = `cmp-${comp.id}-${role}-replace`;
-    options.innerHTML = `
-        <div class="form-check form-check-sm">
-            <input class="form-check-input" type="checkbox" id="${clearId}" checked>
-            <label class="form-check-label small" for="${clearId}">
-                Supprimer tous les marqueurs existants
-            </label>
-        </div>
-        <div class="form-check form-check-sm">
-            <input class="form-check-input" type="checkbox" id="${replaceId}" checked>
-            <label class="form-check-label small" for="${replaceId}">
-                Remplacer les marqueurs existants du même fac-similé
-            </label>
-        </div>`;
-    container.appendChild(options);
-
-    const clearToggle = options.querySelector(`#${clearId}`);
-    const replaceToggle = options.querySelector(`#${replaceId}`);
-    if (clearToggle && replaceToggle) {
-      replaceToggle.disabled = clearToggle.checked;
-      clearToggle.addEventListener('change', () => {
-        replaceToggle.disabled = clearToggle.checked;
-        if (clearToggle.checked) {
-          replaceToggle.checked = true;
-        }
-      });
-    }
-
     const feedback = document.createElement('div');
     feedback.className = 'small text-muted';
     container.appendChild(feedback);
@@ -816,55 +778,10 @@ function initComparisonsTable() {
     buildSidecarBtn.hidden = !!sidecarAvailable;
     btnGroup.appendChild(buildSidecarBtn);
 
-    const runBtn = document.createElement('button');
-    runBtn.type = 'button';
-    runBtn.className = 'btn btn-sm btn-outline-secondary';
-    runBtn.textContent = 'Injecter la pagination';
-    btnGroup.appendChild(runBtn);
-
-    const restoreBtn = document.createElement('button');
-    restoreBtn.type = 'button';
-    restoreBtn.className = 'btn btn-sm btn-outline-danger';
-    restoreBtn.textContent = 'Restaurer les originaux';
-    btnGroup.appendChild(restoreBtn);
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'btn btn-sm btn-outline-warning';
-    cancelBtn.textContent = 'Annuler l\'injection';
-    btnGroup.appendChild(cancelBtn);
-
-    statusEl.__cancelBtn = cancelBtn;
-    const statusRef = { role, statusEl, label: versionName, cancelBtn };
-    registerPaginationStatus(comp.id, statusEl, progressSnapshot, versionName, role);
-
     const hasPaginationData = !!sidecarAvailable || !!(data.lignes_available ?? false);
     if (!hasPaginationData && !isLegacy) {
-      runBtn.disabled = true;
       feedback.textContent = 'Associez un fichier _lignes ou générez le sidecar depuis les balises <pb>.';
     }
-
-    const currentRoleStatus = normalizeStatus(
-      (progressSnapshot?.roles?.[role]?.status ?? progressSnapshot?.status) || ''
-    );
-    if (!isLegacy && !['queued', 'running'].includes(currentRoleStatus)) {
-      cancelBtn.disabled = true;
-    }
-
-    runBtn.addEventListener('click', () => {
-      if (isLegacy || ownershipBlocked || publishedLocked) return;
-      const clearExisting = clearToggle ? clearToggle.checked : true;
-      const replaceExisting = replaceToggle ? replaceToggle.checked : true;
-      cancelBtn.disabled = false;
-      triggerComparisonPagination(comp, {
-        role,
-        clearExisting,
-        replaceExisting,
-        button: runBtn,
-        feedback,
-        statusRefs: [statusRef]
-      });
-    });
 
     uploadLignesBtn.addEventListener('click', () => {
       if (isLegacy || ownershipBlocked || publishedLocked) return;
@@ -906,7 +823,6 @@ function initComparisonsTable() {
         if (feedback) {
           feedback.textContent = payload.message || 'Fichier _lignes importé, traitement en cours…';
         }
-        runBtn.disabled = false;
         // refresh table after a short delay to reflect new sidecar status
         setTimeout(() => {
           if (typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
@@ -932,61 +848,28 @@ function initComparisonsTable() {
         button: buildSidecarBtn,
         feedback,
         onSuccess: () => {
-          runBtn.disabled = false;
-          feedback.textContent = 'Sidecar généré. Vous pouvez injecter la pagination.';
+          feedback.textContent = 'Sidecar généré.';
         }
       });
     });
 
-    restoreBtn.addEventListener('click', () => {
-      if (isLegacy || ownershipBlocked || publishedLocked) return;
-      if (!confirm('Les fichiers originaux de sortie Medite vont être restaurés; tous les marqueurs de pagination seront supprimés.')) {
-        return;
-      }
-      restoreComparisonPagination(comp, {
-        role,
-        button: restoreBtn,
-        feedback,
-        statusRefs: [statusRef],
-      });
-    });
-
-    cancelBtn.addEventListener('click', () => {
-      if (isLegacy || ownershipBlocked) return;
-      if (!confirm('Annuler la pagination en cours pour cette version ?')) {
-        return;
-      }
-      cancelComparisonPagination(comp, {
-        role,
-        button: cancelBtn,
-        feedback,
-        statusRefs: [statusRef],
-      });
-    });
-
     if (isLegacy) {
-      applyLegacyDisabledState(clearToggle);
-      applyLegacyDisabledState(replaceToggle);
       applyLegacyDisabledState(lignesInput);
-      [uploadLignesBtn, buildSidecarBtn, runBtn, restoreBtn, cancelBtn].forEach(applyLegacyButtonState);
+      [uploadLignesBtn, buildSidecarBtn].forEach(applyLegacyButtonState);
     } else if (publishedLocked) {
-      applyPublishedDisabledState(clearToggle);
-      applyPublishedDisabledState(replaceToggle);
       applyPublishedDisabledState(lignesInput);
-      [uploadLignesBtn, buildSidecarBtn, runBtn, restoreBtn].forEach(applyPublishedButtonState);
+      [uploadLignesBtn, buildSidecarBtn].forEach(applyPublishedButtonState);
       if (feedback) {
         feedback.textContent = publishedNote;
       }
     } else if (ownershipBlocked) {
-      applyOwnershipDisabledState(clearToggle);
-      applyOwnershipDisabledState(replaceToggle);
       applyOwnershipDisabledState(lignesInput);
-      [uploadLignesBtn, buildSidecarBtn, runBtn, restoreBtn, cancelBtn].forEach(applyOwnershipButtonState);
+      [uploadLignesBtn, buildSidecarBtn].forEach(applyOwnershipButtonState);
     }
 
     return {
       element: container,
-      statusRef,
+      statusRef: null,
       updateManifest,
       getManifestInfo: () => ({ ...(currentManifestInfo || {}) }),
     };
@@ -997,6 +880,7 @@ function initComparisonsTable() {
       return '<span class="text-muted">n/a</span>';
     }
     const chips = [];
+    const progress = comp?.comparison_progress || null;
 
     const pushChip = (html, variant) => {
       let variantClass = 'comparison-param-chip--input';
@@ -1051,6 +935,24 @@ function initComparisonsTable() {
       pushChip(`<strong>${formatNumber(num)}</strong> ${label}`, 'output');
     };
 
+    const addPaginationMarkers = (label, raw, roleName = null) => {
+      const num = Number(raw);
+      const hasRawCount = Number.isFinite(num) && num >= 0;
+      const roleProgress = roleName ? progress?.roles?.[roleName] : null;
+      const inserted = Number(roleProgress?.inserted);
+      const missed = Number(roleProgress?.missed);
+      const hasDetailedProgress = Number.isFinite(inserted) && inserted >= 0
+        && Number.isFinite(missed) && missed >= 0;
+
+      if (hasDetailedProgress) {
+        pushChip(`<strong>${label}</strong> ${formatNumber(inserted)} ins. · ${formatNumber(missed)} manq.`, 'output');
+        return;
+      }
+
+      if (!hasRawCount) return;
+      pushChip(`<strong>${label}</strong> ${formatNumber(num)} pb`, 'output');
+    };
+
     const addSeparators = (rawSep) => {
       const trimmed = rawSep === null || rawSep === undefined ? '' : String(rawSep).trim();
       if (!trimmed) {
@@ -1060,18 +962,44 @@ function initComparisonsTable() {
       pushChip(`<strong>Séparateurs</strong> ${escapeHtml(trimmed)}`, 'input');
     };
 
+    const addPaginationPhase = () => {
+      if (!progress || typeof progress !== 'object') return;
+      const roles = Object.values(progress.roles || {});
+      const statuses = roles
+        .map(role => normalizeStatus(role?.status ?? ''))
+        .filter(Boolean);
+      if (!statuses.length) return;
+
+      const hasRunning = statuses.some(status => status === 'queued' || status === 'running');
+      const hasFailed = statuses.some(status => status === 'failed');
+      const allDone = statuses.every(status => ['done', 'ok'].includes(status));
+
+      if (hasRunning) {
+        pushChip('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Pagination</strong> injection en cours', 'running');
+        return;
+      }
+      if (hasFailed) {
+        pushChip('<strong>Pagination</strong> injection en échec', 'output');
+        return;
+      }
+      if (allDone) {
+        pushChip('<strong>Pagination</strong> injectée', 'output');
+      }
+    };
+
     addNumeric('Pivot', comp.lg_pivot);
     addNumeric('Ratio', comp.ratio);
     addNumeric('Seuil', comp.seuil);
     addBoolean('Sensibilité casse', comp.case_sensitive);
     addSeparators(comp.sep);
     if (isRunning) {
-      pushChip('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Exécution</strong> en cours', 'running');
+      pushChip('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Alignement</strong> Medite en cours', 'running');
       const elapsed = formatElapsedSince(comp.created_at);
       if (elapsed) {
         pushChip(`<strong>Temps écoulé</strong> ${elapsed}`, 'running');
       }
     }
+    addPaginationPhase();
     addDuration('Durée', comp.medite_runtime_ms);
     addMemory('Pic mémoire', comp.medite_peak_rss_kb);
     const counts = comp.medite_component_counts || comp.component_counts || {};
@@ -1079,6 +1007,10 @@ function initComparisonsTable() {
     addCount(counts.i ?? counts['i.xhtml'], 'insertion', 'insertions');
     addCount(counts.r ?? counts['r.xhtml'], 'remplacement', 'remplacements');
     addCount(counts.s ?? counts['s.xhtml'], 'suppression', 'suppressions');
+    if (comp?.pagination && typeof comp.pagination === 'object') {
+      addPaginationMarkers('PB source', comp.pagination?.source?.markers, 'source');
+      addPaginationMarkers('PB cible', comp.pagination?.target?.markers, 'target');
+    }
 
     if (!chips.length) {
       return '<span class="text-muted">n/a</span>';

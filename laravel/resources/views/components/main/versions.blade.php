@@ -1,48 +1,29 @@
 @php /**  components/main/versions.blade.php  **/ @endphp
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center fw-semibold versions-toggle"
-         role="button"
-         data-bs-toggle="collapse"
-         data-bs-target="#versionsCollapse"
-         aria-expanded="true"
-         aria-controls="versionsCollapse">
-        <div class="d-flex align-items-start gap-2 admin-card-heading">
-            <span class="collapse-chevron" aria-hidden="true"></span>
-            <span class="admin-card-heading-text">
-                <span class="admin-card-title">Versions textuelles <span id="versions-title-count">(0)</span></span>
-                <span class="admin-card-subtitle">Témoins textuels utilisés pour l’alignement</span>
-            </span>
+    <div class="card-header d-flex justify-content-between align-items-center gap-3 fw-semibold">
+        <div class="versions-toggle d-flex align-items-center flex-grow-1"
+             role="button"
+             data-bs-toggle="collapse"
+             data-bs-target="#versionsCollapse"
+             aria-expanded="true"
+             aria-controls="versionsCollapse">
+            <div class="d-flex align-items-start gap-2 admin-card-heading">
+                <span class="collapse-chevron" aria-hidden="true"></span>
+                <span class="admin-card-heading-text">
+                    <span class="admin-card-title">Versions <span id="versions-title-count">(0)</span></span>
+                </span>
+            </div>
         </div>
+        <button type="button"
+                class="btn btn-sm btn-primary"
+                id="open-upload-version-modal"
+                disabled
+                aria-label="Téléverser une version">
+            Téléverser une version
+        </button>
     </div>
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
-        <div class="versions-toolbar mb-4">
-            <div class="versions-toolbar-primary">
-                <div class="versions-toolbar-label">Actions éditoriales</div>
-                <button type="button"
-                        class="btn btn-primary"
-                        id="open-upload-version-modal"
-                        disabled
-                        aria-label="Téléverser une version">
-                    Téléverser une version
-                </button>
-            </div>
-            <div class="versions-toolbar-guides">
-                <div class="versions-guide-card">
-                    <div class="versions-guide-title">Pagination</div>
-                    <div class="versions-guide-text">
-                        Préparez les données de pagination pour chaque version, en téléversant un fichier <code>_lignes</code> ou depuis l’éditeur.
-                    </div>
-                </div>
-                <div class="versions-guide-card">
-                    <div class="versions-guide-title">Fac-similés</div>
-                    <div class="versions-guide-text">
-                        Téléversez et consultez les images depuis la colonne dédiée, puis retrouvez-les dans la section Fac-similés.
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- ────────────── Versions list  ────────────── -->
         <ul id="versions-list" class="list-group versions-list-shell">
             <li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>
@@ -53,60 +34,14 @@
 
 @push('styles')
 <style>
-    .versions-toolbar {
-        display: grid;
-        gap: 1rem;
-        margin-bottom: 1.25rem;
-        padding: 1rem 1.1rem;
-        border: 1px solid #ddd6ca;
-        border-radius: 0.95rem;
-        background: linear-gradient(180deg, #fbfaf7 0%, #f2efe8 100%);
-    }
-    .versions-toolbar-primary {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-    }
-    .versions-toolbar-label {
-        font-size: 0.76rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #7a7165;
-    }
-    .versions-toolbar-guides {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.75rem;
-    }
-    .versions-guide-card {
-        padding: 0.85rem 0.95rem;
-        border: 1px solid #e1dbd0;
-        border-radius: 0.8rem;
-        background: rgba(255, 255, 255, 0.72);
-    }
-    .versions-guide-title {
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: #5f584f;
-        margin-bottom: 0.3rem;
-    }
-    .versions-guide-text {
-        font-size: 0.88rem;
-        line-height: 1.45;
-        color: #5c554b;
-    }
     .versions-list-shell {
         border-radius: 0.85rem;
         overflow: hidden;
     }
     @media (max-width: 767.98px) {
-        .versions-toolbar-guides {
-            grid-template-columns: 1fr;
+        .card-header > #open-upload-version-modal,
+        .card-header > .btn#open-upload-version-modal {
+            width: 100%;
         }
     }
 </style>
@@ -335,6 +270,93 @@
     .version-table .download-btn .download-label {
       font-size: 0.6rem;
       letter-spacing: 0.04em;
+    }
+    .version-table .version-name-cell {
+      white-space: nowrap;
+    }
+    .version-table .version-name-label {
+      display: inline-block;
+      max-width: calc(100% - 1.75rem);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .version-table .versions-inline-cell {
+      display: grid;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+    }
+    .version-table .versions-inline-cell--facsimiles {
+      grid-template-columns: 7.4rem auto;
+    }
+    .version-table .versions-inline-cell--pagination {
+      grid-template-columns: 7.4rem 4.5rem 4.8rem;
+    }
+    .version-table .versions-count-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 7.4rem;
+      max-width: 7.4rem;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 0.74rem;
+    }
+    .version-table .versions-icon-btn {
+      position: relative;
+      width: 2.2rem;
+      min-width: 2.2rem;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .version-table .versions-action-group {
+      display: inline-flex;
+      align-items: center;
+    }
+    .version-table .versions-switch-wrap {
+      width: 4.8rem;
+      min-width: 4.8rem;
+      justify-content: flex-start !important;
+    }
+    .version-table .versions-switch-wrap .form-check-label {
+      font-size: 0.74rem;
+    }
+    .version-table .versions-btn-icon,
+    .version-table .versions-btn-spinner {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+    .version-table .versions-btn-spinner[hidden] {
+      display: none;
+    }
+    .version-table .versions-btn-activity {
+      position: absolute;
+      top: 0.15rem;
+      right: 0.15rem;
+      width: 0.65rem;
+      height: 0.65rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.2);
+    }
+    .version-table .versions-btn-activity[hidden] {
+      display: none;
+    }
+    .version-table .versions-btn-activity .spinner-border {
+      width: 0.55rem;
+      height: 0.55rem;
+      border-width: 0.11rem;
+      color: #0d6efd;
     }
 </style>
 
@@ -589,6 +611,7 @@ async function requestLignesProgress(versionId){
             const refreshed = await refreshPaginationInfo(id);
             if (refreshed) {
                 paginationInfo = refreshed;
+                cached.pagination = refreshed;
             }
         }
         versionsCache.set(id, cached);
@@ -597,6 +620,9 @@ async function requestLignesProgress(versionId){
         const status = data?.status || 'idle';
         if (['idle', 'done', 'failed'].includes(status)) {
             stopLignesPolling(id);
+            if (status === 'done' && Number.isFinite(selectedWorkId)) {
+                fetchVersions(selectedWorkId, true);
+            }
         }
     } catch (err) {
         console.error('Could not refresh _lignes progress', err);
@@ -692,13 +718,14 @@ function renderFacsimileStatus(versionId, facsimileData){
     };
 
     if (facsimileData?.loading) {
-        if (state.viewBadge) state.viewBadge.textContent = '…';
+        if (state.facCountPill) state.facCountPill.textContent = '… fac-similé(s)';
         if (state.viewBtn) {
             state.viewBtn.disabled = false;
             state.viewBtn.title = 'Charger les fac-similés';
             state.viewBtn.dataset.facsimileLoading = '1';
         }
         if (state.uploadBtn) {
+            if (state.uploadBtnSpinner) state.uploadBtnSpinner.hidden = false;
             if (isLegacy) {
                 applyLegacyState(state.uploadBtn);
             } else {
@@ -716,10 +743,6 @@ function renderFacsimileStatus(versionId, facsimileData){
                 state.clearBtn.title = 'Chargement des fac-similés…';
             }
         }
-        if (state.statusNote && state.statusText) {
-            state.statusText.textContent = 'Chargement des fac-similés…';
-            state.statusNote.className = 'small mt-2 d-flex align-items-center gap-2 flex-wrap text-muted';
-        }
         return;
     }
 
@@ -735,7 +758,9 @@ function renderFacsimileStatus(versionId, facsimileData){
     const totalImages = expected > 0 ? expected : (ready + queued);
     const outstanding = Math.max(0, ready - published);
 
-    if (state.viewBadge) state.viewBadge.textContent = ready;
+    if (state.facCountPill) {
+        state.facCountPill.textContent = `${ready.toLocaleString('fr-FR')} fac-similé(s)`;
+    }
     if (state.viewBtn) {
         const disableView = queued > 0 || ready === 0;
         state.viewBtn.disabled = disableView;
@@ -745,6 +770,7 @@ function renderFacsimileStatus(versionId, facsimileData){
     }
 
     if (state.uploadBtn) {
+        if (state.uploadBtnSpinner) state.uploadBtnSpinner.hidden = !(queued > 0);
         if (isLegacy) {
             applyLegacyState(state.uploadBtn);
         } else {
@@ -772,62 +798,6 @@ function renderFacsimileStatus(versionId, facsimileData){
         }
     }
 
-    if (state.statusNote && state.statusText) {
-        const baseClass = 'small mt-2 d-flex align-items-center gap-2 flex-wrap';
-        if (ready === 0 && queued === 0) {
-            state.statusText.textContent = 'Aucun fac-similé importé.';
-            state.statusNote.className = `${baseClass} text-muted`;
-            if (state.cancelBtn) state.cancelBtn.hidden = true;
-        } else if (queued > 0) {
-            const totalForProgress = totalImages > 0 ? totalImages : ready + queued;
-            state.statusText.textContent = `🛠️ Traitement en cours : ${ready}/${totalForProgress} image(s) prêtes (${queued} en attente).`;
-            state.statusNote.className = `${baseClass} text-info`;
-            if (state.cancelBtn) {
-                state.cancelBtn.hidden = false;
-                state.cancelBtn.disabled = false;
-            }
-            if (state.progressWrap && state.progressBar) {
-                state.progressWrap.hidden = false;
-                let safePercent = 0;
-                if (totalForProgress > 0) {
-                    safePercent = Math.floor((ready / totalForProgress) * 100);
-                }
-                if (queued > 0) {
-                    if (safePercent >= 100) safePercent = 99;
-                    if (safePercent <= 0) {
-                        safePercent = ready > 0 ? 5 : 3;
-                    }
-                }
-                state.progressBar.style.width = `${safePercent}%`;
-                state.progressBar.setAttribute('aria-valuenow', ready.toString());
-                state.progressBar.setAttribute('aria-valuemax', totalForProgress.toString());
-                state.progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-            }
-        } else if (outstanding > 0) {
-            const totalReady = outstanding;
-            state.statusText.textContent = `✅ ${totalReady} fac-similé(s) prêt(s) à publier.`;
-            state.statusNote.className = `${baseClass} text-success`;
-            if (state.cancelBtn) state.cancelBtn.hidden = true;
-            if (state.progressWrap && state.progressBar) {
-                state.progressWrap.hidden = true;
-                state.progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-            }
-        } else {
-            state.statusText.textContent = `✅ ${ready} fac-similé(s) publiés.`;
-            state.statusNote.className = `${baseClass} text-success`;
-            if (state.cancelBtn) state.cancelBtn.hidden = true;
-            if (state.progressWrap && state.progressBar) {
-                state.progressWrap.hidden = true;
-                state.progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-            }
-        }
-    }
-
-    if (queued === 0 && state.progressWrap && state.progressBar) {
-        state.progressWrap.hidden = true;
-        state.progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-    }
-
     if (versionsCache.has(id)) {
         const cached = versionsCache.get(id);
         cached.facsimiles = { ...(cached.facsimiles ?? {}), ...(facsimileData ?? {}) };
@@ -841,205 +811,46 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
     if (!state) return;
     const isLegacy = !!state.isLegacy;
 
-    const hasFile = lignesInfo && typeof lignesInfo === 'object';
     const hasSidecar = paginationInfo && typeof paginationInfo === 'object';
-    const hasData = hasFile || hasSidecar;
     const progressData = progress ?? null;
     const status = progressData?.status ?? null;
-    const stage = progressData?.stage ?? null;
-    const baseClass = 'small mt-2 d-flex align-items-center gap-2 flex-wrap';
-    const totalEntries = Number(progressData?.entries_total ?? 0);
-    const srcProcessed = Number(progressData?.source?.processed ?? 0);
-    const tgtProcessed = Number(progressData?.target?.processed ?? 0);
-    const processedTotal = Number(progressData?.processed_total ?? (srcProcessed + tgtProcessed));
-    const processed = Math.max(processedTotal, srcProcessed, tgtProcessed);
-    const comparisonTotal = Number(progressData?.comparison_total ?? 0);
-    const comparisonCurrent = Number(progressData?.comparison_current ?? 0);
-    const lineCount = Number(lignesInfo?.line_count ?? 0);
-    const linesLabel = Number.isFinite(lineCount) && lineCount > 0
-        ? `${lineCount.toLocaleString('fr-FR')} ligne${lineCount > 1 ? 's' : ''}`
-        : null;
-    let message = '';
-    let cssClass = 'small text-muted';
-    const showSpinner = () => {
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
-    };
-    const hideSpinner = () => {
-        if (state.lignesSpinner) state.lignesSpinner.style.display = 'none';
-    };
+    let markerCount = hasSidecar
+        ? Math.max(0, Number(paginationInfo?.details?.marker_count ?? 0))
+        : 0;
 
-    if (stage === 'queued' || status === 'queued') {
-        message = '🕓 Pagination en attente de traitement…';
-        cssClass = `${baseClass} text-info`;
-        showSpinner();
-    } else if (stage === 'preparing') {
-        message = 'Création du fichier de données de pagination';
-        cssClass = `${baseClass} text-info`;
-        showSpinner();
-    } else if (status === 'running') {
-        const markersTotal = totalEntries || lineCount || null;
-        const processedMarkers = processed > 0 ? processed : (srcProcessed || tgtProcessed || null);
-        const progressLabel = markersTotal
-            ? ` (${(processedMarkers ?? 0).toLocaleString('fr-FR')}/${markersTotal.toLocaleString('fr-FR')} lignes)`
-            : (processedMarkers
-                ? ` (${processedMarkers.toLocaleString('fr-FR')} lignes traitées)`
-                : '');
-        message = `🛠️ Analyse des marqueurs…${progressLabel}`;
-        cssClass = `${baseClass} text-info`;
-        showSpinner();
-    } else if (status === 'failed') {
-        const error = String(progressData?.error || 'Erreur inconnue');
-        message = `❌ Échec du traitement : ${error}`;
-        cssClass = `${baseClass} text-danger`;
-        hideSpinner();
-    } else if (status === 'cancelled') {
-        message = '🚫 Traitement annulé.';
-        cssClass = `${baseClass} text-warning`;
-        hideSpinner();
-    } else if (status === 'done') {
+    if (status === 'done') {
         const sidecarMeta = progressData?.sidecar ?? paginationInfo ?? null;
-        const summaryTotal = Number(progressData?.summary?.total ?? sidecarMeta?.marker_count ?? 0);
-        const summaryMissed = Number(progressData?.missed_total ?? sidecarMeta?.missed_count ?? 0);
-        const markerPart = Number.isFinite(summaryTotal) && summaryTotal > 0
-            ? `${summaryTotal} marqueur(s)`
-            : null;
-        message = markerPart
-            ? `✅ Données de pagination prêtes — ${markerPart}`
-            : '✅ Données de pagination prêtes';
-        cssClass = `${baseClass} text-success`;
-        hideSpinner();
-    } else if (hasFile && !hasSidecar) {
-        const mainLabel = linesLabel ?? 'Fichier _lignes prêt';
-        message = `⌛ ${mainLabel} — en attente du traitement pagination.`;
-        cssClass = `${baseClass} text-warning`;
-        hideSpinner();
-    } else if (hasSidecar) {
-        const markerCount = Number(paginationInfo?.details?.marker_count ?? 0);
-        const markerPart = markerCount > 0 ? `${markerCount} marqueur(s)` : null;
-        message = markerPart
-            ? `✅ Données de pagination prêtes — ${markerPart}`
-            : '✅ Données de pagination prêtes';
-        cssClass = `${baseClass} text-success`;
-        hideSpinner();
-    } else if (hasFile) {
-        const fallbackSize = formatBytes(lignesInfo.size);
-        const updated = formatTimestamp(lignesInfo.updated_at);
-        const mainLabel = linesLabel ?? fallbackSize ?? 'Fichier _lignes';
-        message = updated
-            ? `✅ ${mainLabel} — mis à jour le ${updated}`
-            : `✅ ${mainLabel}`;
-        cssClass = `${baseClass} text-success`;
-        hideSpinner();
-    } else {
-        message = 'Aucun fichier _lignes importé.';
-        cssClass = `${baseClass} text-muted`;
-        hideSpinner();
+        const sidecarTotal = Number(paginationInfo?.details?.marker_count ?? sidecarMeta?.details?.marker_count ?? sidecarMeta?.marker_count ?? NaN);
+        const summaryTotal = Number.isFinite(sidecarTotal)
+            ? sidecarTotal
+            : Number(progressData?.summary?.total ?? 0);
+        markerCount = Math.max(0, Number.isFinite(summaryTotal) ? summaryTotal : 0);
     }
 
-    if (state.lignesStatusText) {
-        state.lignesStatusText.textContent = message;
-    }
-    if (state.lignesStatus) {
-        state.lignesStatus.className = cssClass;
+    if (state.markerCountPill) {
+        state.markerCountPill.textContent = `${markerCount.toLocaleString('fr-FR')} marqueur(s)`;
     }
 
-    if (state.lignesCountsWrap && state.lignesCountPill && state.editorCountPill) {
-        const counts = paginationInfo?.details?.counts ?? null;
-        const lignesCount = Number(counts?.lignes ?? NaN);
-        const editorCount = Number(counts?.editor ?? NaN);
-        const canShowCounts = !(status && ['queued', 'running', 'failed', 'cancelled'].includes(String(status)));
-        if (canShowCounts && Number.isFinite(lignesCount) && Number.isFinite(editorCount)) {
-            state.lignesCountsWrap.hidden = false;
-            state.lignesCountPill.textContent = `_lignes: ${lignesCount.toLocaleString('fr-FR')}`;
-            state.editorCountPill.textContent = `éditeur: ${editorCount.toLocaleString('fr-FR')}`;
-        } else {
-            state.lignesCountsWrap.hidden = true;
-        }
-    }
-
-    if (state.lignesCancelBtn) {
-        if (status && ['queued', 'running'].includes(status)) {
-            state.lignesCancelBtn.hidden = false;
-            state.lignesCancelBtn.disabled = false;
-        } else {
-            state.lignesCancelBtn.hidden = true;
-        }
-    }
-
-    if (state.lignesProgressWrap && state.lignesProgressBar) {
-        if (status && ['queued', 'running'].includes(status)) {
-            state.lignesProgressWrap.hidden = false;
-            let percent = 0;
-            let ariaNow = processed;
-            let ariaMax = totalEntries || processed || 1;
-
-            if (stage === 'preparing') {
-                if (comparisonTotal > 0) {
-                    percent = Math.floor((comparisonCurrent / comparisonTotal) * 100);
-                    ariaNow = comparisonCurrent;
-                    ariaMax = comparisonTotal;
-                }
-                if (percent <= 0) {
-                    percent = 5;
-                }
-            } else if (status === 'running' && totalEntries > 0) {
-                percent = Math.floor((processed / totalEntries) * 100);
-            }
-
-            if (percent <= 0) {
-                percent = status === 'queued' ? 3 : (processed > 0 ? 10 : 5);
-            }
-            percent = Math.max(Math.min(percent, 99), 3);
-            state.lignesProgressBar.style.width = `${percent}%`;
-            state.lignesProgressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-            state.lignesProgressBar.setAttribute('aria-valuenow', String(ariaNow));
-            state.lignesProgressBar.setAttribute('aria-valuemax', String(ariaMax));
-        } else {
-            state.lignesProgressWrap.hidden = true;
-            state.lignesProgressBar.style.width = '0%';
-            state.lignesProgressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-        }
-    }
-
-    if (state.lignesDownloadBtn) {
-        const disableDownload = !hasFile || (status && ['queued', 'running'].includes(status));
-        state.lignesDownloadBtn.disabled = disableDownload;
-    }
     if (state.lignesUploadBtn) {
+        const inProgress = !!(status && ['queued', 'running'].includes(status));
+        if (state.lignesUploadSpinner) state.lignesUploadSpinner.hidden = !inProgress;
         if (isLegacy) {
             state.lignesUploadBtn.disabled = true;
         } else {
-            state.lignesUploadBtn.disabled = !!(status && ['queued', 'running'].includes(status));
+            state.lignesUploadBtn.disabled = inProgress;
         }
         if (!isLegacy) {
             state.lignesUploadBtn.title = state.lignesUploadBtn.disabled
                 ? 'Traitement en cours — veuillez patienter'
                 : 'Importer un fichier _lignes';
         }
-    }
-    if (state.lignesMergePbBtn) {
-        const pbAvailable = state.lignesMergePbBtn.dataset.pbAvailable === '1';
-        if (isLegacy) {
-            state.lignesMergePbBtn.disabled = true;
-        } else {
-            state.lignesMergePbBtn.disabled = !pbAvailable || !!(status && ['queued', 'running'].includes(status));
-        }
-        if (!isLegacy) {
-            if (!pbAvailable) {
-                state.lignesMergePbBtn.title = "Aucune balise <pb> détectée dans l'éditeur.";
-            } else if (state.lignesMergePbBtn.disabled) {
-                state.lignesMergePbBtn.title = 'Traitement en cours — veuillez patienter';
-            } else {
-                state.lignesMergePbBtn.title = "Ajouter les marqueurs de l'éditeur aux données de pagination";
-            }
+        if (state.clearMarkersBtn && !isLegacy) {
+            state.clearMarkersBtn.disabled = inProgress;
+            state.clearMarkersBtn.title = inProgress
+                ? 'Traitement en cours — veuillez patienter'
+                : 'Supprimer tous les marqueurs de pagination';
         }
     }
-    if (state.lignesDeleteBtn) {
-        const disableDelete = !hasData || (status && ['queued', 'running'].includes(status));
-        state.lignesDeleteBtn.hidden = !hasData;
-        state.lignesDeleteBtn.disabled = disableDelete;
-    }
-
     if (versionsCache.has(id)) {
         const cached = versionsCache.get(id) ?? {};
         cached.lignes = lignesInfo ?? null;
@@ -1061,27 +872,6 @@ function renderPaginationDoneState(versionId, data = null){
         state.completionToggle.checked = done;
     }
 
-    if (state.completionMeta) {
-        if (done) {
-            const parts = [];
-            if (Number.isFinite(doneAt) && doneAt > 0) {
-                const label = formatTimestamp(doneAt);
-                if (label && label !== 'Date inconnue') {
-                    parts.push(label);
-                }
-            }
-            if (doneByName) {
-                parts.push(doneByName);
-            }
-            const suffix = parts.length ? ` — ${parts.join(' · ')}` : '';
-            state.completionMeta.textContent = `Validée${suffix}`;
-            state.completionMeta.className = 'small text-success';
-        } else {
-            state.completionMeta.textContent = 'À cocher une fois la pagination validée.';
-            state.completionMeta.className = 'small text-muted';
-        }
-    }
-
     if (versionsCache.has(id)) {
         const cached = versionsCache.get(id) ?? {};
         cached.pagination_done = done;
@@ -1097,9 +887,6 @@ async function togglePaginationDone(versionId, done){
     const state = facsimileRowState.get(id);
     if (state?.completionToggle) {
         state.completionToggle.disabled = true;
-    }
-    if (state?.completionMeta) {
-        state.completionMeta.textContent = done ? 'Marquage…' : 'Mise à jour…';
     }
 
     try {
@@ -1451,14 +1238,6 @@ window.addEventListener('DOMContentLoaded',()=>{
                 if (Number.isFinite(selectedWorkId)) {
                     await fetchVersions(selectedWorkId, true);
                 }
-                [1200, 3500, 7000].forEach((delayMs) => {
-                    setTimeout(async () => {
-                        await requestFacsimileProgress(uploadVersionId);
-                        if (Number.isFinite(selectedWorkId)) {
-                            await fetchVersions(selectedWorkId, true);
-                        }
-                    }, delayMs);
-                });
                 document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
                     detail: { versionId: uploadVersionId }
                 }));
@@ -1577,6 +1356,13 @@ window.addEventListener('DOMContentLoaded',()=>{
         if(e.detail.workId){
             selectedWorkId=e.detail.workId;
             fetchVersions(selectedWorkId, true);
+        }
+    });
+    document.addEventListener('comparisonDeleted', e => {
+        const workId = Number(e.detail?.workId || selectedWorkId);
+        if (Number.isFinite(workId) && workId > 0) {
+            selectedWorkId = workId;
+            fetchVersions(workId, true);
         }
     });
 
@@ -1952,8 +1738,11 @@ async function purgeFacsimiles(versionId, { reason = 'clear' } = {}){
 
     const state = facsimileRowState.get(id);
     const buttonsToDisable = [];
-    if (isCancel && state?.cancelBtn) {
-        buttonsToDisable.push(state.cancelBtn);
+    if (state?.viewBtn) {
+        buttonsToDisable.push(state.viewBtn);
+    }
+    if (state?.uploadBtn) {
+        buttonsToDisable.push(state.uploadBtn);
     }
     if (!isCancel && state?.clearBtn) {
         buttonsToDisable.push(state.clearBtn);
@@ -1969,13 +1758,17 @@ async function purgeFacsimiles(versionId, { reason = 'clear' } = {}){
             }
         });
         const payload = await readJsonResponse(res);
-        if (payload?.message) {
-            alert(payload.message);
-        }
         stopFacsimilePolling(id);
-        await requestFacsimileProgress(id);
+        if (payload?.facsimiles) {
+            const cached = versionsCache.get(id) ?? {};
+            cached.facsimiles = payload.facsimiles;
+            versionsCache.set(id, cached);
+            renderFacsimileStatus(id, payload.facsimiles);
+        } else {
+            await requestFacsimileProgress(id);
+        }
         if (Number.isFinite(selectedWorkId)) {
-            fetchVersions(selectedWorkId, true);
+            await fetchVersions(selectedWorkId, true);
         }
     } catch (err) {
         console.error(err);
@@ -1992,9 +1785,8 @@ async function uploadLignesFile(versionId, file){
     if (!Number.isFinite(id) || !file) return;
 
     const state = facsimileRowState.get(id);
-    if (state?.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
     if (state?.lignesUploadBtn) state.lignesUploadBtn.disabled = true;
-    if (state?.lignesDownloadBtn) state.lignesDownloadBtn.disabled = true;
+    if (state?.lignesUploadSpinner) state.lignesUploadSpinner.hidden = false;
 
     try{
         const form = new FormData();
@@ -2032,20 +1824,49 @@ async function uploadLignesFile(versionId, file){
         console.error(err);
         alert(err.message || 'Échec de l’import du fichier _lignes.');
     }finally{
-        if (state?.lignesUploadBtn) state.lignesUploadBtn.disabled = false;
-        if (state?.lignesDownloadBtn) {
-            const cache = versionsCache.get(id);
-            const hasFile = !!(cache?.lignes);
-            const progressStatus = cache?.page_marker_progress?.status;
-            state.lignesDownloadBtn.disabled = !hasFile || (progressStatus && ['queued','running'].includes(progressStatus));
+        const progressStatus = versionsCache.get(id)?.page_marker_progress?.status;
+        const stillRunning = !!(progressStatus && ['queued', 'running'].includes(progressStatus));
+        if (state?.lignesUploadBtn) state.lignesUploadBtn.disabled = stillRunning;
+        if (state?.lignesUploadSpinner) state.lignesUploadSpinner.hidden = !stillRunning;
+    }
+}
+
+async function clearVersionPageMarkers(versionId){
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return;
+    if (!confirm('Supprimer tous les marqueurs de pagination de cette version ?')) return;
+
+    const state = facsimileRowState.get(id);
+    const controls = [state?.lignesUploadBtn, state?.clearMarkersBtn].filter(Boolean);
+    controls.forEach(btn => btn.disabled = true);
+
+    try {
+        const res = await fetch(withBasePath(`/api/versions/${id}/page-markers`), {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        const payload = await readJsonResponse(res);
+        const paginationInfo = payload?.pagination ?? null;
+        if (versionsCache.has(id)) {
+            const cached = versionsCache.get(id) ?? {};
+            cached.pagination = paginationInfo;
+            versionsCache.set(id, cached);
         }
-        if (state?.lignesDeleteBtn) {
-            const cache = versionsCache.get(id);
-            const hasData = !!(cache?.lignes) || !!(cache?.pagination);
-            const progressStatus = cache?.page_marker_progress?.status;
-            state.lignesDeleteBtn.hidden = !hasData;
-            state.lignesDeleteBtn.disabled = !hasData || (progressStatus && ['queued','running'].includes(progressStatus));
+        renderLignesStatus(id, versionsCache.get(id)?.lignes ?? null, versionsCache.get(id)?.page_marker_progress ?? null, paginationInfo);
+        if (Number.isFinite(selectedWorkId)) {
+            await fetchVersions(selectedWorkId, true);
         }
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Impossible de supprimer les marqueurs de pagination.');
+    } finally {
+        const progressStatus = versionsCache.get(id)?.page_marker_progress?.status;
+        const stillRunning = !!(progressStatus && ['queued', 'running'].includes(progressStatus));
+        if (state?.lignesUploadBtn) state.lignesUploadBtn.disabled = stillRunning;
+        if (state?.clearMarkersBtn) state.clearMarkersBtn.disabled = false;
     }
 }
 
@@ -2076,63 +1897,10 @@ async function createPaginationFromPb(versionId){
     }
 }
 
-async function mergePaginationFromPb(versionId, pbCount = null){
-    const id = Number(versionId);
-    if (!Number.isFinite(id)) return;
-
-    const count = Number(pbCount);
-    const countLabel = Number.isFinite(count) && count > 0 ? count : null;
-    const confirmLabel = countLabel
-        ? `Ajouter ${countLabel} marqueur(s) depuis l’éditeur aux données de pagination ?`
-        : "Ajouter les marqueurs de l’éditeur aux données de pagination ?";
-    if (!confirm(confirmLabel)) return;
-
-    const state = facsimileRowState.get(id);
-    if (state?.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
-    if (state?.lignesMergePbBtn) state.lignesMergePbBtn.disabled = true;
-
-    try {
-        const res = await fetch(withBasePath(`/api/versions/${id}/pagination/merge-from-pb`), {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            }
-        });
-        const payload = await readJsonResponse(res);
-
-        const refreshed = await refreshPaginationInfo(id);
-        if (versionsCache.has(id)) {
-            const cached = versionsCache.get(id);
-            if (refreshed) {
-                cached.pagination = refreshed;
-            }
-            versionsCache.set(id, cached);
-        }
-
-        const cached = versionsCache.get(id) ?? {};
-        renderLignesStatus(id, cached.lignes ?? null, cached.page_marker_progress ?? null, cached.pagination ?? null);
-
-        if (payload?.message) {
-            alert(payload.message);
-        }
-    } catch (err) {
-        console.error(err);
-        alert(err.message || 'Impossible de fusionner les marqueurs depuis l’éditeur.');
-    } finally {
-        if (state?.lignesSpinner) state.lignesSpinner.style.display = 'none';
-        renderLignesStatus(id, versionsCache.get(id)?.lignes ?? null, versionsCache.get(id)?.page_marker_progress ?? null, versionsCache.get(id)?.pagination ?? null);
-    }
-}
-
 async function deleteLignesFile(versionId){
     const id = Number(versionId);
     if (!Number.isFinite(id)) return;
     if (!confirm('Supprimer les données de pagination pour cette version ?')) return;
-
-    const state = facsimileRowState.get(id);
-    if (state?.lignesDeleteBtn) state.lignesDeleteBtn.disabled = true;
-    if (state?.lignesSpinner) state.lignesSpinner.style.display = 'inline-block';
 
     try {
         const res = await fetch(withBasePath(`/api/versions/${id}/lignes/file`), {
@@ -2167,17 +1935,8 @@ async function deleteLignesFile(versionId){
         console.error(err);
         alert(err.message || 'Impossible de supprimer le fichier _lignes.');
     } finally {
-        const cache = versionsCache.get(id);
-        const hasData = !!(cache?.lignes) || !!(cache?.pagination);
-        const progressStatus = cache?.page_marker_progress?.status;
-        if (state?.lignesSpinner) state.lignesSpinner.style.display = 'none';
-        if (state?.lignesDeleteBtn) {
-            state.lignesDeleteBtn.hidden = !hasData;
-            state.lignesDeleteBtn.disabled = !hasData || (progressStatus && ['queued','running'].includes(progressStatus));
-        }
-        if (state?.lignesDownloadBtn) {
-            state.lignesDownloadBtn.disabled = !hasData || (progressStatus && ['queued','running'].includes(progressStatus));
-        }
+        const progressStatus = versionsCache.get(id)?.page_marker_progress?.status;
+        const state = facsimileRowState.get(id);
         if (state?.lignesUploadBtn) {
             state.lignesUploadBtn.disabled = !!(progressStatus && ['queued','running'].includes(progressStatus));
         }
@@ -2188,9 +1947,6 @@ async function cancelLignesProcessing(versionId){
     const id = Number(versionId);
     if (!Number.isFinite(id)) return;
     if (!confirm('Annuler le traitement des balises de pagination pour cette version ?')) return;
-
-    const state = facsimileRowState.get(id);
-    if (state?.lignesCancelBtn) state.lignesCancelBtn.disabled = true;
 
     try {
         const res = await fetch(withBasePath(`/api/versions/${id}/lignes`), {
@@ -2220,8 +1976,6 @@ async function cancelLignesProcessing(versionId){
     } catch (err) {
         console.error(err);
         alert(err.message || 'Impossible d’annuler le traitement _lignes.');
-    } finally {
-        if (state?.lignesCancelBtn) state.lignesCancelBtn.disabled = false;
     }
 }
 
@@ -2277,7 +2031,9 @@ async function fetchVersions(workId, force = false){
             tr.appendChild(tdId);
 
             const tdName = document.createElement('td');
+            tdName.className = 'version-name-cell';
             const nameText = document.createElement('span');
+            nameText.className = 'version-name-label';
             nameText.textContent = v.name;
             tdName.appendChild(nameText);
 
@@ -2319,19 +2075,24 @@ async function fetchVersions(workId, force = false){
             const queueCount = Number(facsimileData?.queue_count ?? 0);
             const totalExpected = Number(facsimileData?.total_expected ?? (sourceCount + queueCount));
 
+            const facWrap = document.createElement('div');
+            facWrap.className = 'versions-inline-cell versions-inline-cell--facsimiles';
+
+            const facCountPill = document.createElement('span');
+            facCountPill.className = 'badge rounded-pill bg-light text-muted border versions-count-pill';
+            facCountPill.textContent = `${sourceCount.toLocaleString('fr-FR')} fac-similé(s)`;
+            facWrap.appendChild(facCountPill);
+
             const facButtons = document.createElement('div');
-            facButtons.className = 'btn-group btn-group-sm';
+            facButtons.className = 'btn-group btn-group-sm versions-action-group';
 
             const btnFacView = document.createElement('button');
             btnFacView.type = 'button';
-            btnFacView.className = 'btn btn-outline-secondary d-inline-flex align-items-center gap-1';
-            const viewBadge = document.createElement('span');
-            viewBadge.className = 'badge bg-light text-muted border';
-            viewBadge.textContent = sourceCount;
-            btnFacView.appendChild(viewBadge);
-            btnFacView.appendChild(document.createTextNode(' Voir'));
+            btnFacView.className = 'btn btn-outline-secondary versions-icon-btn';
+            btnFacView.innerHTML = '<i class="bi bi-eye"></i>';
             btnFacView.disabled = sourceCount === 0;
             btnFacView.title = sourceCount === 0 ? 'Aucune image à afficher' : 'Afficher la galerie de fac-similés';
+            btnFacView.setAttribute('aria-label', 'Voir les fac-similés');
             btnFacView.addEventListener('click', () => {
                 if (btnFacView.dataset.facsimileLoading === '1') {
                     requestFacsimileProgress(v.id);
@@ -2356,9 +2117,19 @@ async function fetchVersions(workId, force = false){
 
             const btnFacUpload = document.createElement('button');
             btnFacUpload.type = 'button';
-            btnFacUpload.className = 'btn btn-outline-primary';
-            btnFacUpload.textContent = 'Téléverser';
+            btnFacUpload.className = 'btn btn-outline-primary versions-icon-btn';
+            const facUploadIcon = document.createElement('span');
+            facUploadIcon.className = 'versions-btn-icon';
+            facUploadIcon.innerHTML = '<i class="bi bi-upload"></i>';
+            const facUploadSpinner = document.createElement('span');
+            facUploadSpinner.className = 'versions-btn-activity versions-btn-spinner';
+            facUploadSpinner.hidden = true;
+            facUploadSpinner.setAttribute('aria-hidden', 'true');
+            facUploadSpinner.innerHTML = '<span class="spinner-border" role="status" aria-hidden="true"></span>';
+            btnFacUpload.appendChild(facUploadIcon);
+            btnFacUpload.appendChild(facUploadSpinner);
             btnFacUpload.title = 'Importer de nouveaux fac-similés';
+            btnFacUpload.setAttribute('aria-label', 'Importer des fac-similés');
             btnFacUpload.addEventListener('click', () => {
                 if (!v.is_legacy) {
                     openFacsimileUploadModal(v);
@@ -2368,8 +2139,8 @@ async function fetchVersions(workId, force = false){
 
             const btnFacClear = document.createElement('button');
             btnFacClear.type = 'button';
-            btnFacClear.className = 'btn btn-outline-danger';
-            btnFacClear.textContent = 'Supprimer';
+            btnFacClear.className = 'btn btn-outline-danger versions-icon-btn';
+            btnFacClear.innerHTML = '<i class="bi bi-x-lg"></i>';
             const hasAnyFacsimiles = (sourceCount + publishedCount + queueCount) > 0;
             btnFacClear.disabled = !hasAnyFacsimiles;
             btnFacClear.title = hasAnyFacsimiles
@@ -2382,40 +2153,13 @@ async function fetchVersions(workId, force = false){
                 }
             });
             facButtons.appendChild(btnFacClear);
-
-            const progressWrap = document.createElement('div');
-            progressWrap.className = 'progress mt-1';
-            progressWrap.style.height = '4px';
-            progressWrap.hidden = true;
-            const progressBar = document.createElement('div');
-            progressBar.className = 'progress-bar bg-info';
-            progressBar.style.width = '0%';
-            progressBar.setAttribute('role', 'progressbar');
-            progressWrap.appendChild(progressBar);
-
-            const statusNote = document.createElement('div');
-            statusNote.className = 'small text-muted mt-2 d-flex align-items-center gap-2 flex-wrap';
-            const statusText = document.createElement('span');
-            statusText.textContent = '';
-            statusNote.appendChild(statusText);
-            const cancelBtn = document.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.className = 'btn btn-link btn-sm text-danger p-0 ms-1';
-            cancelBtn.innerHTML = '&times;';
-            cancelBtn.hidden = true;
-            cancelBtn.title = 'Annuler le traitement et supprimer les fac-similés importés';
-            cancelBtn.setAttribute('aria-label', 'Annuler le traitement des fac-similés');
-            cancelBtn.addEventListener('click', () => purgeFacsimiles(v.id, { reason: 'cancel' }));
-            statusNote.appendChild(cancelBtn);
-
-            tdFac.appendChild(facButtons);
-            tdFac.appendChild(progressWrap);
-            tdFac.appendChild(statusNote);
+            facWrap.appendChild(facButtons);
+            tdFac.appendChild(facWrap);
 
             const tdCompletion = document.createElement('td');
             tdCompletion.className = 'align-middle text-center';
             const completionSwitch = document.createElement('div');
-            completionSwitch.className = 'form-check form-switch d-inline-flex align-items-center justify-content-center gap-2 mb-1';
+            completionSwitch.className = 'form-check form-switch d-inline-flex align-items-center justify-content-center gap-2 m-0 versions-switch-wrap';
             const completionToggle = document.createElement('input');
             completionToggle.type = 'checkbox';
             completionToggle.role = 'switch';
@@ -2431,103 +2175,61 @@ async function fetchVersions(workId, force = false){
             completionLabel.textContent = 'Validée';
             completionSwitch.appendChild(completionToggle);
             completionSwitch.appendChild(completionLabel);
-            const completionMeta = document.createElement('div');
-            completionMeta.className = 'small text-muted';
-            completionMeta.textContent = 'À cocher une fois la pagination validée.';
 
             const lignesWrap = document.createElement('div');
-            lignesWrap.className = 'mt-2 d-flex flex-column align-items-center gap-1';
-            const lignesTitle = document.createElement('div');
-            lignesTitle.className = 'small text-muted fw-semibold';
-            lignesTitle.textContent = 'Données de pagination';
-            lignesWrap.appendChild(lignesTitle);
+            lignesWrap.className = 'versions-inline-cell versions-inline-cell--pagination';
+
+            const markerCountPill = document.createElement('span');
+            markerCountPill.className = 'badge rounded-pill bg-light text-muted border versions-count-pill';
+            markerCountPill.textContent = '0 marqueur(s)';
+            lignesWrap.appendChild(markerCountPill);
 
             const lignesActions = document.createElement('div');
-            lignesActions.className = 'd-flex align-items-center gap-1 mt-1 flex-wrap justify-content-center';
+            lignesActions.className = 'btn-group btn-group-sm versions-action-group';
             const lignesInput = document.createElement('input');
             lignesInput.type = 'file';
             lignesInput.accept = '.txt,text/plain';
             lignesInput.style.display = 'none';
             const lignesUploadBtn = document.createElement('button');
             lignesUploadBtn.type = 'button';
-            lignesUploadBtn.className = 'btn btn-sm btn-outline-primary';
-            lignesUploadBtn.textContent = '_lignes';
+            lignesUploadBtn.className = 'btn btn-outline-primary versions-icon-btn';
+            const lignesUploadIcon = document.createElement('span');
+            lignesUploadIcon.className = 'versions-btn-icon';
+            lignesUploadIcon.innerHTML = '<i class="bi bi-upload"></i>';
+            const lignesUploadSpinner = document.createElement('span');
+            lignesUploadSpinner.className = 'versions-btn-activity versions-btn-spinner';
+            lignesUploadSpinner.hidden = true;
+            lignesUploadSpinner.setAttribute('aria-hidden', 'true');
+            lignesUploadSpinner.innerHTML = '<span class="spinner-border" role="status" aria-hidden="true"></span>';
+            lignesUploadBtn.appendChild(lignesUploadIcon);
+            lignesUploadBtn.appendChild(lignesUploadSpinner);
             lignesUploadBtn.title = 'Importer un fichier _lignes';
-            const lignesMergePbBtn = document.createElement('button');
-            lignesMergePbBtn.type = 'button';
-            lignesMergePbBtn.className = 'btn btn-sm btn-outline-secondary';
-            lignesMergePbBtn.textContent = 'Editeur';
-            lignesMergePbBtn.title = "Ajouter les marqueurs de l'éditeur aux données de pagination";
-            const lignesDeleteBtn = document.createElement('button');
-            lignesDeleteBtn.type = 'button';
-            lignesDeleteBtn.className = 'btn btn-sm btn-outline-danger';
-            lignesDeleteBtn.textContent = 'Supprimer';
-            lignesDeleteBtn.title = 'Supprimer les données de pagination';
-            const lignesCancelBtn = document.createElement('button');
-            lignesCancelBtn.type = 'button';
-            lignesCancelBtn.className = 'btn btn-sm btn-outline-warning';
-            lignesCancelBtn.textContent = 'Annuler';
-            lignesCancelBtn.hidden = true;
-            lignesCancelBtn.title = 'Annuler le traitement _lignes';
             lignesActions.appendChild(lignesUploadBtn);
-            lignesActions.appendChild(lignesMergePbBtn);
-            lignesActions.appendChild(lignesDeleteBtn);
             lignesActions.appendChild(lignesInput);
+
+            const clearMarkersBtn = document.createElement('button');
+            clearMarkersBtn.type = 'button';
+            clearMarkersBtn.className = 'btn btn-outline-danger versions-icon-btn';
+            clearMarkersBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+            clearMarkersBtn.title = 'Supprimer tous les marqueurs de pagination';
+            clearMarkersBtn.setAttribute('aria-label', 'Supprimer tous les marqueurs de pagination');
+            clearMarkersBtn.addEventListener('click', () => {
+                if (v.is_legacy) return;
+                clearVersionPageMarkers(v.id);
+            });
+            lignesActions.appendChild(clearMarkersBtn);
             lignesWrap.appendChild(lignesActions);
+            lignesWrap.appendChild(completionSwitch);
 
-            const lignesCountsWrap = document.createElement('div');
-            lignesCountsWrap.className = 'd-flex align-items-center gap-2 flex-wrap justify-content-center mt-1';
-            lignesCountsWrap.hidden = true;
-            const lignesCountPill = document.createElement('span');
-            lignesCountPill.className = 'badge rounded-pill bg-light text-muted border';
-            const editorCountPill = document.createElement('span');
-            editorCountPill.className = 'badge rounded-pill bg-light text-muted border';
-            lignesCountsWrap.appendChild(lignesCountPill);
-            lignesCountsWrap.appendChild(editorCountPill);
-            lignesWrap.appendChild(lignesCountsWrap);
-
-            const lignesStatus = document.createElement('div');
-            lignesStatus.className = 'small text-muted d-flex align-items-center gap-2 flex-wrap justify-content-center';
-            const lignesSpinner = document.createElement('span');
-            lignesSpinner.className = 'spinner-border spinner-border-sm text-primary';
-            lignesSpinner.setAttribute('role', 'status');
-            lignesSpinner.style.display = 'none';
-            const lignesStatusText = document.createElement('span');
-            lignesStatus.appendChild(lignesSpinner);
-            lignesStatus.appendChild(lignesStatusText);
-            lignesStatus.appendChild(lignesCancelBtn);
-            lignesWrap.appendChild(lignesStatus);
-
-            const lignesProgressWrap = document.createElement('div');
-            lignesProgressWrap.className = 'progress w-100';
-            lignesProgressWrap.style.height = '4px';
-            lignesProgressWrap.hidden = true;
-            const lignesProgressBar = document.createElement('div');
-            lignesProgressBar.className = 'progress-bar bg-info';
-            lignesProgressBar.style.width = '0%';
-            lignesProgressBar.setAttribute('role', 'progressbar');
-            lignesProgressWrap.appendChild(lignesProgressBar);
-            lignesWrap.appendChild(lignesProgressWrap);
             tdCompletion.appendChild(lignesWrap);
-
-            const hasPbMarkers = pbCount > 0;
-            lignesMergePbBtn.dataset.pbAvailable = hasPbMarkers ? '1' : '0';
-            lignesMergePbBtn.disabled = !hasPbMarkers;
-            if (!hasPbMarkers) {
-                lignesMergePbBtn.title = "Aucune balise <pb> détectée dans l'éditeur.";
-            }
 
             if (v.is_legacy) {
                 lignesUploadBtn.disabled = true;
                 lignesUploadBtn.classList.add('legacy-disabled');
                 lignesUploadBtn.title = 'Import _lignes désactivé pour les versions legacy.';
-                lignesMergePbBtn.disabled = true;
-                lignesMergePbBtn.classList.add('legacy-disabled');
-                lignesMergePbBtn.title = "Import depuis l'éditeur désactivé pour les versions legacy.";
-                lignesDeleteBtn.disabled = true;
-                lignesDeleteBtn.classList.add('legacy-disabled');
-                lignesDeleteBtn.title = 'Suppression désactivée pour les versions legacy.';
-                lignesCancelBtn.disabled = true;
+                clearMarkersBtn.disabled = true;
+                clearMarkersBtn.classList.add('legacy-disabled');
+                clearMarkersBtn.title = 'Suppression des marqueurs désactivée pour les versions legacy.';
             }
 
             lignesUploadBtn.addEventListener('click', () => {
@@ -2535,50 +2237,26 @@ async function fetchVersions(workId, force = false){
                 lignesInput.value = '';
                 lignesInput.click();
             });
-            lignesMergePbBtn.addEventListener('click', () => {
-                if (v.is_legacy) return;
-                if (!hasPbMarkers) return;
-                mergePaginationFromPb(v.id, pbCount);
-            });
-            lignesDeleteBtn.addEventListener('click', () => {
-                if (v.is_legacy) return;
-                deleteLignesFile(v.id);
-            });
             lignesInput.addEventListener('change', () => {
                 if (v.is_legacy) return;
                 if (!lignesInput.files || !lignesInput.files.length) return;
                 uploadLignesFile(v.id, lignesInput.files[0]);
             });
-            lignesCancelBtn.addEventListener('click', () => {
-                if (v.is_legacy) return;
-                cancelLignesProcessing(v.id);
-            });
 
             const rowState = {
                 isLegacy: v.is_legacy,
                 viewBtn: btnFacView,
-                viewBadge,
+                facCountPill,
                 uploadBtn: btnFacUpload,
-                statusNote,
-                statusText,
-                cancelBtn,
+                uploadBtnIcon: facUploadIcon,
+                uploadBtnSpinner: facUploadSpinner,
                 clearBtn: btnFacClear,
-                progressWrap,
-                progressBar,
                 completionToggle,
-                completionMeta,
-                lignesStatus,
-                lignesStatusText,
-                lignesSpinner,
-                lignesCountsWrap,
-                lignesCountPill,
-                editorCountPill,
-                lignesProgressWrap,
-                lignesProgressBar,
+                markerCountPill,
                 lignesUploadBtn,
-                lignesMergePbBtn,
-                lignesDeleteBtn,
-                lignesCancelBtn,
+                lignesUploadIcon,
+                lignesUploadSpinner,
+                clearMarkersBtn,
             };
 
             facsimileRowState.set(Number(v.id), rowState);
@@ -2613,7 +2291,9 @@ async function fetchVersions(workId, force = false){
             activeFacsimileIds.add(Number(v.id));
             const tdActions = document.createElement('td');
             tdActions.className='text-center align-middle';
-            const editorUrl = withBasePath(`/version/${v.id}/editor`);
+            const currentBaseUrl = `${window.location.pathname}${window.location.search}`;
+            const returnTo = `${currentBaseUrl}#etape-2`;
+            const editorUrl = withBasePath(`/version/${v.id}/editor?return_to=${encodeURIComponent(returnTo)}`);
 
             const canEditXml = (typeof v.xml_available === 'boolean') ? v.xml_available : true;
             let editorControl = null;
@@ -2621,7 +2301,7 @@ async function fetchVersions(workId, force = false){
                 const btnEditor = document.createElement('a');
                 btnEditor.href = editorUrl;
                 btnEditor.setAttribute('data-bs-toggle', 'tooltip');
-                btnEditor.className = 'btn btn-outline-primary';
+                btnEditor.className = 'btn btn-outline-primary versions-icon-btn';
                 btnEditor.innerHTML = '<i class="bi bi-pencil-square"></i>';
                 const tooltipEditor = new bootstrap.Tooltip(
                     btnEditor,
@@ -2639,7 +2319,7 @@ async function fetchVersions(workId, force = false){
                 wrapper.setAttribute('data-bs-toggle', 'tooltip');
                 wrapper.setAttribute('title', 'Fichier texte non disponible pour cette version.');
                 const disabledBtn = document.createElement('span');
-                disabledBtn.className = 'btn btn-outline-secondary disabled';
+                disabledBtn.className = 'btn btn-outline-secondary versions-icon-btn disabled';
                 disabledBtn.setAttribute('tabindex', '-1');
                 disabledBtn.setAttribute('aria-disabled', 'true');
                 disabledBtn.innerHTML = '<i class="bi bi-pencil-square"></i>';
@@ -2656,55 +2336,20 @@ async function fetchVersions(workId, force = false){
                 editorControl = wrapper;
             }
 
-            let downloadControl = null;
-            if (v.text_available) {
-                const btnDownload = document.createElement('a');
-                btnDownload.href = withBasePath(`/versions/${v.id}/download`);
-                btnDownload.className = 'btn btn-outline-secondary d-flex flex-column align-items-center justify-content-center download-btn';
-                btnDownload.innerHTML = '<i class="bi bi-download download-icon"></i><span class="download-label">TXT</span>';
-                btnDownload.setAttribute('data-bs-toggle', 'tooltip');
-                btnDownload.setAttribute('download', '');
-                const tooltipDownload = new bootstrap.Tooltip(
-                    btnDownload,
-                    {
-                        title: 'Télécharger la version (TXT)',
-                        delay: { show: 500, hide: 0 },
-                        trigger: 'hover'
-                    }
-                );
-                actionButtonsTooltips.push(tooltipDownload);
-                downloadControl = btnDownload;
-            }
-
-            let downloadXmlControl = null;
-            if (v.xml_available) {
-                const btnDownloadXml = document.createElement('a');
-                btnDownloadXml.href = withBasePath(`/versions/${v.id}/download-xml`);
-                btnDownloadXml.className = 'btn btn-outline-secondary d-flex flex-column align-items-center justify-content-center download-btn';
-                btnDownloadXml.innerHTML = '<i class="bi bi-download download-icon"></i><span class="download-label">XML</span>';
-                btnDownloadXml.setAttribute('data-bs-toggle', 'tooltip');
-                btnDownloadXml.setAttribute('download', '');
-                const tooltipDownloadXml = new bootstrap.Tooltip(
-                    btnDownloadXml,
-                    {
-                        title: 'Télécharger la version (XML)',
-                        delay: { show: 500, hide: 0 },
-                        trigger: 'hover'
-                    }
-                );
-                actionButtonsTooltips.push(tooltipDownloadXml);
-                downloadXmlControl = btnDownloadXml;
-            }
-
             const btnDel = document.createElement('button');
-            btnDel.className = 'btn btn-outline-danger';
-            btnDel.innerHTML = '<i class="bi bi-trash3"></i>';
+            btnDel.className = 'btn btn-outline-danger versions-icon-btn';
+            btnDel.innerHTML = '<i class="bi bi-x-lg"></i>';
             btnDel.setAttribute('data-bs-toggle', 'tooltip');
-            btnDel.addEventListener('click',()=>confirmDeleteVersion(v));
+            const deleteDisabled = !!(v.is_legacy || v.is_in_use);
+            if (!deleteDisabled) {
+                btnDel.addEventListener('click',()=>confirmDeleteVersion(v));
+            }
             const deleteTitle = v.is_legacy
                 ? 'La suppression est désactivée pour les versions legacy.'
-                : 'Supprimer la version';
-            if (v.is_legacy) {
+                : (v.is_in_use
+                    ? 'La suppression est désactivée car cette version est utilisée dans une comparaison.'
+                    : 'Supprimer la version');
+            if (deleteDisabled) {
                 btnDel.disabled = true;
                 btnDel.classList.add('legacy-disabled');
             }
@@ -2718,30 +2363,16 @@ async function fetchVersions(workId, force = false){
                 }
             );
             actionButtonsTooltips.push(tooltipDel);
-            tdActions.appendChild(btnDel);
-
             const btnGroup = document.createElement('div');
-            btnGroup.className = 'btn-group';
+            btnGroup.className = 'btn-group btn-group-sm versions-action-group';
             btnGroup.role = 'group';
             btnGroup.ariaLabel = 'Version utility buttons';
 
             if (editorControl) {
                 btnGroup.appendChild(editorControl);
             }
-            if (downloadControl) {
-                btnGroup.appendChild(downloadControl);
-            }
-            if (downloadXmlControl) {
-                btnGroup.appendChild(downloadXmlControl);
-            }
             btnGroup.appendChild(btnDel);
             tdActions.appendChild(btnGroup);
-
-            const completionWrap = document.createElement('div');
-            completionWrap.className = 'mt-2 d-flex flex-column align-items-center gap-1';
-            completionWrap.appendChild(completionSwitch);
-            completionWrap.appendChild(completionMeta);
-            tdActions.appendChild(completionWrap);
 
             tr.appendChild(tdActions);
             tbody.appendChild(tr);

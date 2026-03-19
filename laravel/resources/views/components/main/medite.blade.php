@@ -270,6 +270,106 @@ function notifyComparison(eventName, comparisonId) {
     }));
 }
 
+function refreshComparisonsTable() {
+    document.dispatchEvent(new CustomEvent('refreshComparisons'));
+}
+
+function normalizePaginationStatus(status) {
+    return String(status || '').toLowerCase();
+}
+
+function renderMeditePhase(message, variant = 'info') {
+    $progress.style.display = 'block';
+    $progress.innerHTML = `<div class="alert alert-${variant} mb-0">${message}</div>`;
+}
+
+function summarizePaginationProgress(progress) {
+    const roles = Object.values(progress?.roles || {});
+    const statuses = roles
+        .map(role => normalizePaginationStatus(role?.status))
+        .filter(Boolean);
+
+    if (!statuses.length) {
+        return { state: 'idle', message: 'Alignement Medite terminé.' };
+    }
+
+    if (statuses.some(status => status === 'failed')) {
+        return { state: 'failed', message: 'Alignement Medite terminé. Échec de l’injection de la pagination.' };
+    }
+
+    if (statuses.some(status => status === 'queued' || status === 'running')) {
+        return { state: 'running', message: 'Alignement Medite terminé. Injection de la pagination en cours…' };
+    }
+
+    if (statuses.every(status => ['done', 'ok'].includes(status))) {
+        const sourceInserted = Number(progress?.roles?.source?.inserted ?? 0) || 0;
+        const targetInserted = Number(progress?.roles?.target?.inserted ?? 0) || 0;
+        return {
+            state: 'done',
+            message: `Alignement Medite terminé. Pagination injectée (source : ${sourceInserted}, cible : ${targetInserted}).`
+        };
+    }
+
+    if (statuses.every(status => ['missing', 'idle', 'skipped', 'cancelled'].includes(status))) {
+        return { state: 'idle', message: 'Alignement Medite terminé. Aucune pagination à injecter.' };
+    }
+
+    return { state: 'idle', message: 'Alignement Medite terminé.' };
+}
+
+function pollComparisonPagination(comparisonId) {
+    let attempts = 0;
+    let idleStreak = 0;
+    const intervalMs = 1500;
+    const max = Math.ceil((5 * 60 * 1000) / intervalMs);
+
+    renderMeditePhase('Alignement Medite terminé. Vérification de la pagination…', 'info');
+
+    const timer = setInterval(async () => {
+        if (++attempts > max) {
+            clearInterval(timer);
+            refreshComparisonsTable();
+            renderMeditePhase('Alignement Medite terminé. Le suivi de l’injection de pagination continue en arrière-plan.', 'info');
+            return;
+        }
+
+        try {
+            const r = await fetch(withBasePath(`/api/comparisons/${comparisonId}/page-markers/progress?ts=${Date.now()}`), {
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store'
+            });
+            if (!r.ok) return;
+            const progress = await r.json();
+            const summary = summarizePaginationProgress(progress);
+
+            if (summary.state === 'running') {
+                idleStreak = 0;
+                renderMeditePhase(summary.message, 'info');
+                return;
+            }
+
+            if (summary.state === 'idle' && idleStreak < 3) {
+                idleStreak += 1;
+                renderMeditePhase('Alignement Medite terminé. Vérification de la pagination…', 'info');
+                return;
+            }
+
+            clearInterval(timer);
+            refreshComparisonsTable();
+
+            if (summary.state === 'done') {
+                renderMeditePhase(summary.message, 'success');
+            } else if (summary.state === 'failed') {
+                renderMeditePhase(summary.message, 'warning');
+            } else {
+                renderMeditePhase(summary.message, 'success');
+            }
+        } catch (_error) {
+            // Keep polling quietly; the table refresh after timeout still repairs UI state.
+        }
+    }, intervalMs);
+}
+
 function updateSubmitState() {
   if (!$submitBtn || !$srcSel || !$tgtSel) return;
   const src = $srcSel.value;
@@ -542,7 +642,7 @@ function pollTask(taskId, cmpId){
                 return;
             }
 
-            $progress.innerHTML = '<div class="alert alert-success mb-0">Alignement terminé.</div>';
+            renderMeditePhase('Alignement Medite terminé.', 'success');
             $results.style.display = 'block';
             $results.innerHTML = `
                 <div class="alert alert-light border mb-0">
@@ -556,7 +656,7 @@ function pollTask(taskId, cmpId){
                 </div>`;
 
             notifyComparison('comparisonCompleted', cmpId);
-            document.dispatchEvent(new CustomEvent('refreshComparisons'));
+            pollComparisonPagination(cmpId);
             return;
         }
 

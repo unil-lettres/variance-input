@@ -132,23 +132,23 @@
             font-size: 0.95rem;
         }
         .admin-user-toggle {
-            border: 0;
-            color: #5f564d;
+            border: 1px solid #ced4da;
+            color: #495057;
             display: inline-flex;
             align-items: center;
             padding: 0.35rem 0.65rem;
             font-size: 0.875rem;
             line-height: 1.1;
             text-decoration: none;
-            border-radius: 999px;
-            background: rgba(117, 107, 94, 0.08);
-            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
-            transition: background-color 120ms ease, box-shadow 120ms ease;
+            border-radius: 0.375rem;
+            background: #fff;
+            box-shadow: none;
+            transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
         }
         .admin-user-toggle:hover {
-            background: rgba(117, 107, 94, 0.14);
-            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.2);
-            color: #4f473f;
+            background: #f8f9fa;
+            border-color: #adb5bd;
+            color: #343a40;
         }
         .admin-chrome {
             display: flex;
@@ -162,11 +162,11 @@
         }
         .admin-embedded-title {
             flex: 0 0 auto;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 700;
-            letter-spacing: 0.38em;
+            letter-spacing: 0.22em;
             text-transform: uppercase;
-            color: #6b6258;
+            color: #495057;
             white-space: nowrap;
         }
         .admin-chrome-actions {
@@ -182,10 +182,10 @@
         .admin-brand a {
             display: inline-flex;
             align-items: center;
-            padding: 0.3rem 0.6rem;
-            border-radius: 999px;
-            background: rgba(117, 107, 94, 0.08);
-            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
+            padding: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
             text-decoration: none;
         }
         .admin-brand img {
@@ -202,48 +202,23 @@
             filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28));
         }
         .admin-wordmark {
-            position: relative;
             display: inline-flex;
             align-items: center;
             margin: 0;
-            padding-right: 0.08em;
-            font-family: "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-            font-size: clamp(1.7rem, 2.2vw, 2.4rem);
-            font-weight: 600;
-            font-style: italic;
-            letter-spacing: 0.08em;
-            line-height: 0.9;
-            color: #6a6157;
-            text-shadow:
-                0 0 1px rgba(255, 255, 255, 0.42),
-                0 0 10px rgba(255, 255, 255, 0.1),
-                0 0 20px rgba(177, 168, 151, 0.16);
-        }
-        .admin-wordmark__ghost,
-        .admin-wordmark__core {
-            display: block;
+            font-family: var(--font-serif);
+            font-size: clamp(1.35rem, 1.8vw, 1.8rem);
+            font-weight: 700;
+            font-style: normal;
+            letter-spacing: 0.18em;
+            line-height: 1;
+            color: #495057;
+            text-transform: uppercase;
         }
         .admin-wordmark__ghost {
-            position: absolute;
-            inset: 0;
-            color: rgba(182, 171, 150, 0.28);
-            filter: blur(2px);
-            transform: translate(0.06em, 0.03em) scaleX(1.02);
-            pointer-events: none;
+            display: none;
         }
         .admin-wordmark__core {
-            position: relative;
-        }
-        .admin-wordmark__core::after {
-            content: "";
-            position: absolute;
-            left: 0.16em;
-            right: 0.04em;
-            bottom: 0.11em;
-            height: 1px;
-            background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(160, 149, 128, 0.7), rgba(210, 202, 188, 0.28), rgba(255, 255, 255, 0));
-            filter: blur(0.5px);
-            opacity: 0.95;
+            display: inline;
         }
         .admin-brand-text {
             font-family: var(--font-serif);
@@ -472,8 +447,8 @@
             padding-bottom: 1rem !important;
         }
         .admin-main-page .admin-brand a {
-            background: rgba(117, 107, 94, 0.08);
-            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
+            background: transparent;
+            box-shadow: none;
         }
         .admin-main-page .admin-brand-text {
             font-size: 1.08rem;
@@ -483,20 +458,15 @@
             max-width: min(15rem, 38vw);
         }
         .admin-main-page .admin-wordmark {
-            font-size: clamp(1.45rem, 1.9vw, 2rem);
-        }
-        .admin-main-page .admin-brand-role {
-            background: rgba(255, 255, 255, 0.1);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-            font-size: 0.72rem;
+            font-size: clamp(1.25rem, 1.7vw, 1.6rem);
         }
         .admin-main-page .admin-user-toggle {
-            background: rgba(117, 107, 94, 0.08);
-            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.14);
+            background: #fff;
+            box-shadow: none;
         }
         .admin-main-page .admin-user-toggle:hover {
-            background: rgba(117, 107, 94, 0.14);
-            box-shadow: inset 0 0 0 1px rgba(117, 107, 94, 0.2);
+            background: #f8f9fa;
+            box-shadow: none;
         }
         .admin-main-page main {
             padding-top: 0.15rem;
@@ -555,7 +525,7 @@
         }
         /* Legacy public site skin (toggle with LEGACY_SKIN=false or remove body class). */
         body.legacy-skin {
-            --page-max-width: 1120px;
+            --page-max-width: 1360px;
             --page-gutter: 24px;
             background-color: #f5f2ec;
             background-image:
@@ -611,15 +581,15 @@
         }
         @media (max-width: 767.98px) {
             .admin-brand a {
-                padding: 0.22rem 0.5rem;
+                padding: 0;
             }
             .admin-wordmark {
-                font-size: clamp(1.3rem, 6.8vw, 1.7rem);
-                letter-spacing: 0.05em;
+                font-size: clamp(1.1rem, 6vw, 1.45rem);
+                letter-spacing: 0.14em;
             }
             .admin-embedded-title {
                 font-size: 0.88rem;
-                letter-spacing: 0.24em;
+                letter-spacing: 0.16em;
             }
         }
         @media (max-width: 991.98px) {
@@ -638,7 +608,10 @@
     $bodyClassValue = trim($__env->yieldContent('body-class'));
     $isAdminMainPage = str_contains($bodyClassValue, 'admin-main-page');
     $isLoginPage = str_contains($bodyClassValue, 'login-page');
-    $useEmbeddedChrome = $isLoginPage || request()->routeIs('version.editor') || request()->routeIs('comparison.editor');
+    $useEmbeddedChrome = $isLoginPage
+        || request()->routeIs('version.editor')
+        || request()->routeIs('comparison.editor')
+        || request()->routeIs('admin.users.index');
 @endphp
 <body class="d-flex flex-column min-vh-100 @yield('body-class') {{ $legacySkin ? 'legacy-skin' : '' }}">
     @unless($isAdminMainPage)

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use App\Jobs\InjectComparisonPaginationJob;
 use App\Models\Comparison;
 use App\Models\Version;
 use App\Models\Work;
@@ -285,6 +287,57 @@ class MediteController extends Controller
                     }
                     if ($updates) {
                         Comparison::whereKey($comparisonId)->update($updates);
+                    }
+
+                    $dispatchKey = "medite:auto-pagination:{$comparisonId}:{$taskId}";
+                    if (Cache::add($dispatchKey, true, now()->addMinutes(30))) {
+                        $comparison = Comparison::with(['sourceVersion', 'targetVersion'])->find($comparisonId);
+                        if ($comparison) {
+                            $roles = [
+                                'source' => $comparison->sourceVersion,
+                                'target' => $comparison->targetVersion,
+                            ];
+
+                            $queuedRoles = [];
+                            foreach ($roles as $role => $version) {
+                                if (!$version) {
+                                    continue;
+                                }
+
+                                $sidecar = $this->pageMarkerService->loadPaginationSidecar($version->id);
+                                if (!$sidecar) {
+                                    continue;
+                                }
+
+                                $queuedRoles[$role] = [
+                                    'version_id' => $version->id,
+                                    'total'      => is_array($sidecar['markers'] ?? null)
+                                        ? count($sidecar['markers'])
+                                        : (int) ($sidecar['marker_count'] ?? 0),
+                                ];
+                            }
+
+                            if (!empty($queuedRoles)) {
+                                $this->pageMarkerService->markComparisonQueued($comparison->id, $queuedRoles);
+
+                                if (count($queuedRoles) === 2) {
+                                    InjectComparisonPaginationJob::dispatch(
+                                        comparisonId: (int) $comparison->id,
+                                        clearExisting: true,
+                                        replaceExisting: true,
+                                        role: null
+                                    );
+                                } else {
+                                    $role = array_key_first($queuedRoles);
+                                    InjectComparisonPaginationJob::dispatch(
+                                        comparisonId: (int) $comparison->id,
+                                        clearExisting: true,
+                                        replaceExisting: true,
+                                        role: $role
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
             }

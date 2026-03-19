@@ -28,20 +28,20 @@ class EditorController extends Controller
 
     public function versionEditor(Version $version)
     {
-        $path = $version->getXMLFilePath();
-        if (!file_exists($path)) {
-            abort(404, "Fichier introuvable: {$path}");
+        $defaultReturnTo = admin_path(sprintf(
+            'select/%s/%s#etape-2',
+            $version->work->author->folder,
+            $version->work->folder
+        ));
+        $returnTo = request()->query('return_to', $defaultReturnTo);
+
+        $manifestEntries = $version->collectManifestEntries();
+        $editorPayload = $this->pageMarkerService->buildVersionEditorXml($version, $manifestEntries);
+        $xmlContent = $editorPayload['xml'] ?? null;
+        if (!is_string($xmlContent) || $xmlContent === '') {
+            abort(404, "Fichier introuvable: {$version->getXMLFilePath()}");
         }
-    
-        $xmlContent = file_get_contents($path);
-        $encoding = $this->detectEncoding($xmlContent);
-        if ($encoding !== 'UTF-8') {
-            $xmlContent = mb_convert_encoding($xmlContent, 'UTF-8', $encoding);
-        }
-        $editorPayload = $this->pageMarkerService->buildVersionEditorXml($version);
-        if (is_string($editorPayload['xml'] ?? null) && $editorPayload['xml'] !== '') {
-            $xmlContent = $editorPayload['xml'];
-        }
+
         $editorPath = 'version/' . $version->id . '/editor';
         $ignoredPages = $version->getIgnoredPages();
 
@@ -56,9 +56,10 @@ class EditorController extends Controller
                     'filename' => $filename,
                     'ignored' => $ignoredPages->contains($filename),
                 ];
-            }, $version->collectManifestEntries()),
+            }, $manifestEntries),
             'urlFileSave' => admin_url($editorPath),
             'urlToggleIgnored' => admin_url("versions/{$version->id}/facsimiles/toggle-ignored"),
+            'returnTo' => $returnTo,
         ]);
     }
 

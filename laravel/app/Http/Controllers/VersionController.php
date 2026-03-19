@@ -65,10 +65,27 @@ class VersionController extends Controller
 
     private function buildVersionsList(int $workId): array
     {
-        return Version::with(['work.author', 'paginationDoneBy'])
+        $versions = Version::with(['work.author', 'paginationDoneBy'])
             ->where('work_id', $workId)
-            ->get()
-            ->map(function (Version $version) {
+            ->get();
+
+        $versionIds = $versions->pluck('id')->all();
+        $versionsInUse = empty($versionIds)
+            ? []
+            : Comparison::query()
+                ->whereIn('source_id', $versionIds)
+                ->orWhereIn('target_id', $versionIds)
+                ->get(['source_id', 'target_id'])
+                ->flatMap(fn (Comparison $comparison) => [$comparison->source_id, $comparison->target_id])
+                ->filter()
+                ->unique()
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+        $inUseLookup = array_fill_keys($versionsInUse, true);
+
+        return $versions
+            ->map(function (Version $version) use ($inUseLookup) {
                 $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
                 if ($lignesInfo) {
                     $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
@@ -91,6 +108,7 @@ class VersionController extends Controller
                     'folder'     => $version->folder,
                     'work_id'    => $version->work_id,
                     'is_legacy'  => (bool) $version->is_legacy,
+                    'is_in_use'  => isset($inUseLookup[$version->id]),
                     'pagination_done' => (bool) $version->pagination_done,
                     'pagination_done_at' => $version->pagination_done_at?->getTimestamp(),
                     'pagination_done_by' => $version->pagination_done_by,
@@ -199,8 +217,11 @@ class VersionController extends Controller
                 'versionFile' => 'Le fichier importé ne semble pas être un texte lisible.',
             ]);
         }
+        $teiTitle = $work->title ?: $validated['name'];
+        $teiAuthor = $work->author?->name ?: '';
+
         if ($useLegacyTxt2Tei) {
-            $tei = $this->buildLegacyTxt2TeiXml($utf8, $validated['name'], $nextNumber);
+            $tei = $this->buildLegacyTxt2TeiXml($utf8, $teiTitle, $nextNumber, $teiAuthor, $validated['name']);
         } else {
             if ($options['strip_invisible_chars']) {
                 $utf8 = $this->stripInvisibleCharacters($utf8, $options['preserve_nbsp']);
@@ -230,9 +251,11 @@ class VersionController extends Controller
 
             /* 6. TEI skeleton */
             $xmlId = 'v' . $nextNumber . preg_replace('/[^A-Za-z0-9]/', '', strtolower($shortTitle));
+            $headerXml = $this->buildTeiHeaderXml($teiTitle, $teiAuthor, $validated['name']);
             $tei = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".
                    "<TEI xml:id=\"{$xmlId}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n".
-                   "  <teiHeader>\n    <fileDesc>\n      <titleStmt><title>{$validated['name']}</title></titleStmt>\n      <publicationStmt><p>Imported via Variance</p></publicationStmt>\n      <sourceDesc><p>Generated automatically</p></sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n      <div>\n        <p>\n          {$bodyWithLb}\n        </p>\n      </div>\n    </body>\n  </text>\n</TEI>";
+                   $headerXml .
+                   "  <text>\n    <body>\n      <div>\n        <p>\n          {$bodyWithLb}\n        </p>\n      </div>\n    </body>\n  </text>\n</TEI>";
         }
 
         /* 7. Save .xml */
@@ -371,6 +394,8 @@ class VersionController extends Controller
         $version->loadMissing('work.author');
         $this->setFacsimileCancelMarker($version->id);
         $removed    = $this->purgeFacsimileStorage($version, includePublished: true);
+        Cache::forget("versions:facsimiles:{$version->id}");
+        Cache::forget("versions:index:work:{$version->work_id}");
         $facsimiles = $this->facsimileStatus($version);
 
         return response()->json([
@@ -713,7 +738,7 @@ class VersionController extends Controller
 
         $file     = $request->file('lignes');
         $relative = $this->pageMarkerService->lignesRelativePath($version->id);
-        Storage::disk('local')->putFileAs('private/lignes', $file, $version->id . '.txt');
+        Storage::disk('local')->putFileAs(dirname($relative), $file, basename($relative));
         $this->pageMarkerService->markQueued($version->id);
 
         try {
@@ -811,6 +836,47 @@ class VersionController extends Controller
         }
 
         return response()->json($info + ['version_id' => $version->id], 200);
+    }
+
+    public function clearPageMarkers(Version $version): JsonResponse
+    {
+        $this->assertVersionEditable($version);
+
+        $path = $version->getXMLFilePath();
+        if (!is_file($path)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Fichier XML introuvable pour cette version.',
+            ], 404);
+        }
+
+        $existingContent = file_get_contents($path);
+        $originalEncoding = $this->detectEncoding($existingContent);
+        $utf8Content = $originalEncoding === 'UTF-8'
+            ? $existingContent
+            : mb_convert_encoding($existingContent, 'UTF-8', $originalEncoding);
+
+        $removed = preg_match_all('/<pb\b[^>]*\/>/i', $utf8Content, $matches);
+        $updatedUtf8 = preg_replace('/<pb\b[^>]*\/>\s*/i', '', $utf8Content) ?? $utf8Content;
+        $contentToWrite = $originalEncoding === 'UTF-8'
+            ? $updatedUtf8
+            : mb_convert_encoding($updatedUtf8, $originalEncoding, 'UTF-8');
+
+        file_put_contents($path, $contentToWrite);
+
+        $sync = $this->pageMarkerService->syncSidecarWithPb($version);
+        $pagination = $this->pageMarkerService->getPaginationInfo($version->id);
+        Cache::forget("versions:index:work:{$version->work_id}");
+
+        return response()->json([
+            'status' => 'ok',
+            'message' => $removed > 0
+                ? "{$removed} marqueur(s) de pagination supprimé(s)."
+                : 'Aucun marqueur de pagination à supprimer.',
+            'removed' => (int) $removed,
+            'pagination' => $pagination,
+            'sync' => $sync,
+        ], 200);
     }
 
     /** Build pagination sidecar from <pb> tags present in the version TEI. */
@@ -1066,20 +1132,94 @@ class VersionController extends Controller
         return app()->isLocal();
     }
 
-    private function buildLegacyTxt2TeiXml(string $txt, string $title, int $versionNumber): string
+    private function buildLegacyTxt2TeiXml(
+        string $txt,
+        string $title,
+        int $versionNumber,
+        string $author = '',
+        string $versionName = ''
+    ): string
     {
         $txt = $this->normalizeTxt2TeiCharacters($txt);
         $txt = $this->collapseTxt2TeiSpacesAndTabs($txt);
 
-        $escapedTitle = htmlspecialchars($title, ENT_XML1 | ENT_COMPAT, 'UTF-8');
         $escapedText = htmlspecialchars($txt, ENT_XML1 | ENT_COMPAT, 'UTF-8');
 
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            . "<TEI xml:id=\"v{$versionNumber}\" xmlns=\"http://www.tei-c.org/ns/1.0\">"
-            . "<teiHeader><fileDesc><titleStmt><title>{$escapedTitle}</title></titleStmt>"
-            . "<publicationStmt><date></date></publicationStmt>"
-            . "<sourceDesc><p>Generated by txt2tei.py</p></sourceDesc>"
-            . "</fileDesc></teiHeader><text><body><p>{$escapedText}</p></body></text></TEI>\n";
+            . "<TEI xml:id=\"v{$versionNumber}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n"
+            . $this->buildTeiHeaderXml($title, $author, $versionName)
+            . "  <text>\n"
+            . "    <body>\n"
+            . "      <p>{$escapedText}</p>\n"
+            . "    </body>\n"
+            . "  </text>\n"
+            . "</TEI>\n";
+    }
+
+    private function buildTeiHeaderXml(
+        string $title,
+        string $author = '',
+        string $versionName = '',
+        string $editor = '',
+        string $publisher = '',
+        string $publicationDate = '',
+        string $sourceDate = ''
+    ): string {
+        $escape = static fn (string $value): string => htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+        $lines = [
+            "  <teiHeader>",
+            "    <fileDesc>",
+            "      <titleStmt>",
+        ];
+
+        if ($title !== '') {
+            $lines[] = "        <title>{$escape($title)}</title>";
+        }
+        if ($versionName !== '') {
+            $lines[] = "        <title type=\"version\">{$escape($versionName)}</title>";
+        }
+        if ($author !== '') {
+            $lines[] = "        <author>{$escape($author)}</author>";
+        }
+        if ($editor !== '') {
+            $lines[] = "        <editor>{$escape($editor)}</editor>";
+        }
+        $lines[] = "      </titleStmt>";
+
+        if ($publisher !== '' || $publicationDate !== '') {
+            $lines[] = "      <publicationStmt>";
+            if ($publisher !== '') {
+                $lines[] = "        <publisher>{$escape($publisher)}</publisher>";
+            }
+            if ($publicationDate !== '') {
+                $lines[] = "        <date>{$escape($publicationDate)}</date>";
+            }
+            $lines[] = "      </publicationStmt>";
+        }
+
+        $lines[] = "      <sourceDesc>";
+        $lines[] = "        <bibl>";
+        if ($author !== '') {
+            $lines[] = "          <author>{$escape($author)}</author>";
+        }
+        if ($title !== '') {
+            $lines[] = "          <title>{$escape($title)}</title>";
+        }
+        if ($versionName !== '') {
+            $lines[] = "          <title type=\"version\">{$escape($versionName)}</title>";
+        }
+        if ($publisher !== '') {
+            $lines[] = "          <publisher>{$escape($publisher)}</publisher>";
+        }
+        if ($sourceDate !== '') {
+            $lines[] = "          <date>{$escape($sourceDate)}</date>";
+        }
+        $lines[] = "        </bibl>";
+        $lines[] = "      </sourceDesc>";
+        $lines[] = "    </fileDesc>";
+        $lines[] = "  </teiHeader>";
+
+        return implode("\n", $lines) . "\n";
     }
 
     private function normalizeTxt2TeiCharacters(string $txt): string
@@ -1695,6 +1835,13 @@ class VersionController extends Controller
     private function isThumbnail(string $filename): bool
     {
         return str_contains(strtolower($filename), '_thumb');
+    }
+
+    private function detectEncoding(string $content): string
+    {
+        $detected = mb_detect_encoding($content, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
+
+        return $detected ?: 'UTF-8';
     }
 
     private function assertWorkEditable(Work $work): void

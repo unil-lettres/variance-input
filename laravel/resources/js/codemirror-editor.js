@@ -24,23 +24,6 @@ class InvisibleTagWidget extends WidgetType {
   }
 }
 
-// Widget to replace <br> tags with line breaks
-class LineBreakWidget extends WidgetType {
-  constructor(tag) {
-    super();
-    this.tag = tag;
-  }
-
-  toDOM() {
-    const br = document.createElement("br");
-    return br;
-  }
-
-  ignoreEvent() {
-    return false;
-  }
-}
-
 // Widget to style italic tags
 class ItalicTagWidget extends WidgetType {
   constructor(isOpening, view) {
@@ -114,13 +97,26 @@ class PageNumberWidget extends WidgetType {
   toDOM() {
     const span = document.createElement("span");
     span.className = 'cm-page-number-mark';
-    span.textContent = this.pageNumber;
     span.setAttribute('data-image-name', this.imageName);
     span.style.cursor = 'pointer';
 
+    const lineBefore = document.createElement("span");
+    lineBefore.className = 'cm-page-number-mark-line';
+    lineBefore.setAttribute('aria-hidden', 'true');
+
+    const badge = document.createElement("span");
+    badge.className = 'cm-page-number-mark-badge';
+    badge.textContent = this.pageNumber;
+
     const i = document.createElement("i");
-    i.className = 'bi bi-file-earmark mr-1';
-    span.prepend(i);
+    i.className = 'bi bi-file-earmark';
+    badge.prepend(i);
+
+    const lineAfter = document.createElement("span");
+    lineAfter.className = 'cm-page-number-mark-line';
+    lineAfter.setAttribute('aria-hidden', 'true');
+
+    span.append(lineBefore, badge, lineAfter);
 
     const bootstrapLib = window.bootstrap;
     if (bootstrapLib) {
@@ -263,41 +259,16 @@ const createHideTagsField = () => StateField.define({
              }
         }
 
-        // Handle <br> tags - replace with line break widget
-        if (tag === '<br>' || tag === '<br/>' || tag === '<br />') {
-          // Check if there's a <lb> tag immediately before this <br>
-          const beforeText = text.substring(Math.max(0, from - 7), from);
-          const hasLbBefore = /<lb\s*\/?>/.test(beforeText);
-
-          if (hasLbBefore) {
-            // Ignore the <br> if it follows a <lb>
-            widgets.push(
-              Decoration.replace({
-                widget: new InvisibleTagWidget(match[0]),
-                inclusive: true
-              }).range(from, to)
-            );
-          } else {
-            // Show as line break widget
-            widgets.push(
-              Decoration.replace({
-                widget: new LineBreakWidget(match[0]),
-                inclusive: true
-              }).range(from, to)
-            );
-          }
-        } else {
-          // Handle other tags - make them invisible
-          widgets.push(
-            Decoration.replace({
-              widget: new InvisibleTagWidget(match[0]),
-              inclusive: true
-            }).range(from, to)
-          );
-        }
+        // Handle tags by making them invisible.
+        widgets.push(
+          Decoration.replace({
+            widget: new InvisibleTagWidget(match[0]),
+            inclusive: true
+          }).range(from, to)
+        );
       }
 
-      return Decoration.set(widgets);
+      return Decoration.set(widgets.sort((a, b) => a.from - b.from));
     };
   })
 });
@@ -351,7 +322,7 @@ const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
 });
 
 // ViewPlugin to manage page number widgets
-const createPageNumberPlugin = (getClickedCallback, getCacheFunction) => ViewPlugin.fromClass(class {
+const createPageNumberPlugin = (getClickedCallback, getCacheFunction, hideTagsStateField) => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
     this.getClickedCallback = getClickedCallback;
@@ -360,12 +331,19 @@ const createPageNumberPlugin = (getClickedCallback, getCacheFunction) => ViewPlu
   }
 
   update(update) {
-    if (update.docChanged) {
+    if (
+      update.docChanged ||
+      update.startState.field(hideTagsStateField) !== update.state.field(hideTagsStateField)
+    ) {
       this.decorations = this.buildDecorations(update.view);
     }
   }
 
   buildDecorations(view) {
+    if (!view.state.field(hideTagsStateField)) {
+      return Decoration.none;
+    }
+
     const pageNumbers = parsePageNumbers(view, this.getCacheFunction);
     const widgets = [];
 
@@ -410,6 +388,7 @@ export default function (container, initialXml) {
   let editorReady = false;
   let searchPanelOpen = false;
   let skipCacheUpdate = false;
+  let suppressContentChanged = false;
   let lineNumbersVisible = localStorage.getItem('editor-line-numbers') === 'true';
 
   let markerCache = {
@@ -502,6 +481,7 @@ export default function (container, initialXml) {
       createPageNumberPlugin(
         () => onPageNumberClickedCallback,
         getCache,
+        hideTagsField,
       ),
       keymap.of(standardKeymap),
       EditorView.updateListener.of((update) => {
@@ -526,7 +506,7 @@ export default function (container, initialXml) {
         }
 
         // Track content changes
-        if (update.docChanged && onContentChangedCallback) {
+        if (update.docChanged && onContentChangedCallback && !suppressContentChanged) {
           onContentChangedCallback();
         }
       }),
@@ -568,6 +548,20 @@ export default function (container, initialXml) {
       return view;
     },
 
+    replaceDocument(content, { silent = false } = {}) {
+      suppressContentChanged = !!silent;
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: content
+        },
+        selection: { anchor: 0 }
+      });
+      invalidateCache();
+      suppressContentChanged = false;
+    },
+
     stopEnsureCacheUpdate() {
       ensureCacheUpdated(view);
       skipCacheUpdate = true;
@@ -599,7 +593,8 @@ export default function (container, initialXml) {
     toggleTagVisibility() {
       const currentState = view.state.field(hideTagsField);
       view.dispatch({
-        effects: toggleTagVisibility.of(!currentState)
+        effects: toggleTagVisibility.of(!currentState),
+        selection: { anchor: view.state.selection.main.head }
       });
       return !currentState;
     },
@@ -681,6 +676,26 @@ export default function (container, initialXml) {
         return true;
       }
       return false;
+    },
+
+    removeAllPageMarkers() {
+      ensureCacheUpdated(view);
+      const changes = Array.from(markerCache.markerPositions.values())
+        .map((marker) => ({
+          from: marker.pos,
+          to: marker.pos + marker.tag.length,
+          insert: ''
+        }))
+        .sort((a, b) => b.from - a.from);
+
+      if (changes.length === 0) {
+        return 0;
+      }
+
+      view.dispatch({ changes });
+      invalidateCache();
+      view.focus();
+      return changes.length;
     },
 
     scrollToPageMarker(imageName) {

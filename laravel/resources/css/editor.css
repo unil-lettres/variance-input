@@ -3,6 +3,32 @@
     color: #ffffff !important;
 }
 
+.editor-toolbar {
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    flex: 0 0 auto;
+}
+
+.editor-toolbar-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.editor-toolbar-status {
+    justify-content: flex-end;
+}
+
+.editor-toolbar-label {
+    font-size: 0.68rem;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7a746b;
+    font-weight: 700;
+    padding-left: 0.1rem;
+}
+
 .page-item:not(.active) .page-link.page-fully-inserted {
     color: var(--bs-success);
     border-color: var(--bs-success);
@@ -36,24 +62,85 @@
 #facsimile-preview {
     transition: transform 0.2s ease-out;
     will-change: transform;
+    object-position: top center;
+    height: auto;
+    display: block;
+}
+
+.editor-text-frame,
+.editor-preview-frame {
+    min-height: 0;
+}
+
+.editor-text-frame {
+    max-height: calc(100vh - 240px);
+    overflow: auto;
+}
+
+.editor-preview-column {
+    justify-content: flex-start;
+}
+
+.editor-preview-frame {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    max-height: calc(100vh - 240px);
+    overflow: auto;
+    border: 1px solid #ccc;
+    background: #fff;
+}
+
+.editor-workspace {
+    min-height: 0;
+}
+
+.editor-marker-strip {
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.editor-marker-gallery {
+    min-height: 0;
 }
 
 .cm-page-number-mark {
-    background-color: #59b6aa;
-    color: #ffffff;
-    font-weight: bold;
-    padding: 1px 4px;
-    border-radius: 2px;
-    font-size: 0.85em;
-    font-family: monospace;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    margin: 1.25rem 0 1rem;
+    color: #8fd8cf;
     cursor: pointer;
-    display: inline-block;
-    margin: 0 1px;
 }
 
-.cm-page-number-mark:hover {
-    background-color: #ffffff;
-    color: #59b6aa;
+.cm-page-number-mark-line {
+    flex: 1 1 auto;
+    border-top: 1px solid rgba(143, 216, 207, 0.55);
+}
+
+.cm-page-number-mark-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background-color: rgba(89, 182, 170, 0.15);
+    border: 1px solid rgba(143, 216, 207, 0.65);
+    color: #d9fff9;
+    font-weight: bold;
+    padding: 0.22rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.82em;
+    font-family: monospace;
+    white-space: nowrap;
+}
+
+.cm-page-number-mark:hover .cm-page-number-mark-badge {
+    background-color: rgba(255, 255, 255, 0.92);
+    color: #1a7f75;
+    border-color: rgba(255, 255, 255, 0.92);
+}
+
+.cm-page-number-mark:hover .cm-page-number-mark-line {
+    border-top-color: rgba(255, 255, 255, 0.75);
 }
 
 .cm-italic-tag {
@@ -104,8 +191,20 @@
     color: #f8f8f2;
 }
 
+.editor-text-frame .cm-editor {
+    height: auto;
+    min-height: 100%;
+}
+
 .cm-editor .cm-content {
     color: inherit;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.cm-readonly .cm-line {
+    text-align: justify;
+    text-align-last: left;
 }
 
 .button-item.page-ignored {
