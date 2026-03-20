@@ -1127,8 +1127,14 @@ class VersionController extends Controller
     private function useLegacyTxt2TeiImport(): bool
     {
         $value = env('TXT_IMPORT_MODE');
-        if (is_string($value) && strtolower($value) === 'laravel') {
-            return false;
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+            if ($normalized === 'laravel') {
+                return false;
+            }
+            if ($normalized === 'legacy') {
+                return true;
+            }
         }
 
         return app()->isLocal();
