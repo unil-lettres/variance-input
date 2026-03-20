@@ -10,7 +10,7 @@
             <div class="d-flex align-items-start gap-2 admin-card-heading">
                 <span class="collapse-chevron" aria-hidden="true"></span>
                 <span class="admin-card-heading-text">
-                    <span class="admin-card-title">Versions <span id="versions-title-count">(0)</span></span>
+                    <span class="admin-card-title">Versions</span>
                 </span>
             </div>
         </div>
@@ -2017,7 +2017,7 @@ async function fetchVersions(workId, force = false){
 
         const table = document.createElement('table');
         table.className='table table-bordered table-sm version-table';
-        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Signes</th><th>Dossier</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         versions.forEach(v=>{
@@ -2047,6 +2047,10 @@ async function fetchVersions(workId, force = false){
 
             tr.appendChild(tdName);
 
+            const folderCell = document.createElement('td');
+            folderCell.textContent = shortFolder;
+            tr.appendChild(folderCell);
+
             const tdChars = document.createElement('td');
             tdChars.className = 'text-muted';
             tdChars.dataset.versionId = String(v.id);
@@ -2063,9 +2067,43 @@ async function fetchVersions(workId, force = false){
             }
             tr.appendChild(tdChars);
 
-            const folderCell = document.createElement('td');
-            folderCell.textContent = shortFolder;
-            tr.appendChild(folderCell);
+            const textCell = document.createElement('td');
+            textCell.className = 'text-center align-middle';
+            if (v.text_available && v.text_url) {
+                const textGroup = document.createElement('div');
+                textGroup.className = 'btn-group btn-group-sm versions-action-group';
+                const textLink = document.createElement('a');
+                textLink.href = v.text_url;
+                textLink.className = 'btn btn-outline-secondary versions-icon-btn';
+                textLink.setAttribute('data-bs-toggle', 'tooltip');
+                textLink.setAttribute('title', 'Télécharger le fichier texte');
+                textLink.setAttribute('aria-label', 'Télécharger le fichier texte');
+                textLink.innerHTML = '<i class="bi bi-download"></i>';
+                textGroup.appendChild(textLink);
+                textCell.appendChild(textGroup);
+            } else {
+                textCell.innerHTML = '<span class="text-muted">—</span>';
+            }
+            tr.appendChild(textCell);
+
+            const xmlCell = document.createElement('td');
+            xmlCell.className = 'text-center align-middle';
+            if (v.xml_available && v.xml_url) {
+                const xmlGroup = document.createElement('div');
+                xmlGroup.className = 'btn-group btn-group-sm versions-action-group';
+                const xmlLink = document.createElement('a');
+                xmlLink.href = v.xml_url;
+                xmlLink.className = 'btn btn-outline-secondary versions-icon-btn';
+                xmlLink.setAttribute('data-bs-toggle', 'tooltip');
+                xmlLink.setAttribute('title', 'Télécharger le fichier TEI-XML');
+                xmlLink.setAttribute('aria-label', 'Télécharger le fichier TEI-XML');
+                xmlLink.innerHTML = '<i class="bi bi-download"></i>';
+                xmlGroup.appendChild(xmlLink);
+                xmlCell.appendChild(xmlGroup);
+            } else {
+                xmlCell.innerHTML = '<span class="text-muted">—</span>';
+            }
+            tr.appendChild(xmlCell);
 
             const tdFac = document.createElement('td');
             tdFac.className = 'align-middle';

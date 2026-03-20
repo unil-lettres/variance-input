@@ -1,28 +1,4 @@
 @php /** components/main/medite.blade.php **/ @endphp
-<div class="card medite-launch-card" id="medite-launch-card">
-    <div class="card-header fw-semibold d-flex align-items-start gap-2">
-        <span class="admin-card-heading-text">
-            <span class="admin-card-title">Alignement Medite</span>
-            <span class="admin-card-subtitle">Lancer une nouvelle comparaison entre deux versions</span>
-        </span>
-    </div>
-    <div class="card-body">
-        <div class="medite-launch-shell">
-            <div class="medite-launch-copy">
-                <div class="medite-launch-kicker">Action</div>
-                <h3 class="medite-launch-title">Ouvrir le module d’alignement</h3>
-                <p class="medite-launch-text">
-                    Lancez Medite dans une fenêtre dédiée, puis retrouvez la comparaison produite dans la section
-                    Comparaisons textuelles.
-                </p>
-            </div>
-            <button type="button" class="btn btn-primary" id="open-medite-modal-btn" data-bs-toggle="modal" data-bs-target="#mediteModal">
-                Lancer un alignement
-            </button>
-        </div>
-    </div>
-</div>
-
 <div class="modal fade" id="mediteModal" tabindex="-1" aria-labelledby="mediteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content medite-modal-content">

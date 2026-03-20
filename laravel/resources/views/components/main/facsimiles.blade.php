@@ -10,7 +10,6 @@
             <span class="collapse-chevron" aria-hidden="true"></span>
             <span class="admin-card-heading-text">
                 <span class="admin-card-title">Fac-similés</span>
-                <span class="admin-card-subtitle">Images associées aux versions et aux comparaisons</span>
             </span>
         </div>
     </div>

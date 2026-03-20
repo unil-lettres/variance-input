@@ -1,40 +1,30 @@
 <div class="card">
-    <div class="card-header fw-semibold d-flex justify-content-between align-items-center comparisons-toggle"
-         role="button"
-         data-bs-toggle="collapse"
-         data-bs-target="#comparisonsCollapse"
-         aria-expanded="true"
-         aria-controls="comparisonsCollapse">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-3">
+        <div class="comparisons-toggle d-flex align-items-center flex-grow-1"
+             role="button"
+             data-bs-toggle="collapse"
+             data-bs-target="#comparisonsCollapse"
+             aria-expanded="true"
+             aria-controls="comparisonsCollapse">
         <div class="d-flex align-items-start gap-2 admin-card-heading">
             <span class="collapse-chevron" aria-hidden="true"></span>
             <span class="admin-card-heading-text">
-                <span class="admin-card-title">Comparaisons textuelles <span id="comparisons-title-count">(0)</span></span>
-                <span class="admin-card-subtitle">Résultats produits à partir des versions</span>
+                <span class="admin-card-title">Comparaisons</span>
             </span>
         </div>
+        </div>
+        <button type="button"
+                class="btn btn-sm btn-primary"
+                id="open-medite-modal-btn"
+                data-bs-toggle="modal"
+                data-bs-target="#mediteModal"
+                aria-label="Lancer un alignement">
+            Lancer un alignement
+        </button>
     </div>
 
     <div id="comparisonsCollapse" class="collapse show">
     <div class="card-body">
-        <p class="fst-italic text-muted small mb-2">
-            Retrouvez ici les comparaisons textuelles produites pour l’œuvre sélectionnée.
-        </p>
-        <p class="text-muted small mb-3">
-            En pratique : suivez l’état des traitements, ouvrez les résultats, puis injectez la pagination après préparation des données dans la section Versions textuelles.
-        </p>
-
-        <div class="comparisons-summary-band">
-            <div class="comparisons-summary-text">
-                <div class="comparisons-summary-title" id="comparisons-summary-title">Section en attente de sélection</div>
-                <div class="comparisons-summary-subtitle" id="comparisons-summary-subtitle">Sélectionnez une œuvre pour afficher les comparaisons textuelles disponibles.</div>
-            </div>
-            <div class="comparisons-summary-metrics">
-                <span class="comparisons-summary-pill" id="comparisons-summary-total">0 comparaison</span>
-                <span class="comparisons-summary-pill" id="comparisons-summary-published">0 publiée</span>
-                <span class="comparisons-summary-pill" id="comparisons-summary-draft">0 éditoriale</span>
-            </div>
-        </div>
-
         <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">
             <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -102,52 +92,6 @@
   #comparisonsCollapse.show,
   #comparisonsCollapse.show * {
     visibility: visible !important;
-  }
-  .comparisons-summary-band {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.85rem 1rem;
-    margin-bottom: 1rem;
-    padding: 0.95rem 1.05rem;
-    border: 1px solid #ddd6ca;
-    border-radius: 0.95rem;
-    background: linear-gradient(180deg, #fbfaf7 0%, #f3efe8 100%);
-  }
-  .comparisons-summary-text {
-    min-width: 0;
-    flex: 1 1 20rem;
-  }
-  .comparisons-summary-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #463f38;
-  }
-  .comparisons-summary-subtitle {
-    margin-top: 0.2rem;
-    font-size: 0.88rem;
-    line-height: 1.45;
-    color: #655d53;
-  }
-  .comparisons-summary-metrics {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    justify-content: flex-end;
-  }
-  .comparisons-summary-pill {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2rem;
-    padding: 0.25rem 0.7rem;
-    border: 1px solid #d8d0c4;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.82);
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #5d5449;
-    white-space: nowrap;
   }
   .comparisons-table th {
     font-weight: 600;

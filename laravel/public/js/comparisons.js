@@ -173,9 +173,10 @@ function initComparisonsTable() {
   function updateComparisonCounts(published, total) {
     const pub = normalizeCount(published);
     const tot = normalizeCount(total);
-    if (!comparisonsTitleCount) return;
     const count = (tot === 0 && pub === 0 && (!isValidWorkId(currentWorkId) || !isValidId(currentAuthorId))) ? 0 : tot;
-    comparisonsTitleCount.textContent = `(${count})`;
+    if (comparisonsTitleCount) {
+      comparisonsTitleCount.textContent = `(${count})`;
+    }
     const draft = Math.max(0, count - pub);
     const totalLabel = `${count} comparaison${count === 1 ? '' : 's'}`;
     const publishedLabel = `${pub} publiée${pub === 1 ? '' : 's'}`;
@@ -186,19 +187,15 @@ function initComparisonsTable() {
   }
 
   function updateComparisonSummaryState(state, counts = {}) {
+    if (!comparisonsSummaryTitle || !comparisonsSummarySubtitle || !comparisonsSummaryTotal || !comparisonsSummaryPublished || !comparisonsSummaryDraft) {
+      return;
+    }
     const total = normalizeCount(counts.total);
     const published = normalizeCount(counts.published);
     const draft = Math.max(0, total - published);
-    if (comparisonsSummaryTotal) {
-      comparisonsSummaryTotal.textContent = `${total} comparaison${total === 1 ? '' : 's'}`;
-    }
-    if (comparisonsSummaryPublished) {
-      comparisonsSummaryPublished.textContent = `${published} publiée${published === 1 ? '' : 's'}`;
-    }
-    if (comparisonsSummaryDraft) {
-      comparisonsSummaryDraft.textContent = `${draft} éditoriale${draft === 1 ? '' : 's'}`;
-    }
-    if (!comparisonsSummaryTitle || !comparisonsSummarySubtitle) return;
+    comparisonsSummaryTotal.textContent = `${total} comparaison${total === 1 ? '' : 's'}`;
+    comparisonsSummaryPublished.textContent = `${published} publiée${published === 1 ? '' : 's'}`;
+    comparisonsSummaryDraft.textContent = `${draft} éditoriale${draft === 1 ? '' : 's'}`;
 
     if (state === 'idle') {
       comparisonsSummaryTitle.textContent = 'Section en attente de sélection';

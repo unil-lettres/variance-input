@@ -35,32 +35,16 @@
     </div>
     <div class="work-selector-steps" role="tablist" aria-label="Étapes de l’atelier">
         <button type="button" class="editorial-step-chip is-active" id="editorial-step-chip-0" data-editorial-step-target="0" role="tab" aria-selected="true" aria-controls="editorial-step-0">
-            <span class="editorial-step-chip-number">1</span>
-            <span class="editorial-step-chip-copy">
-                <span class="editorial-step-chip-label">Choisir l’œuvre</span>
-                <span class="editorial-step-chip-detail">Auteur et contexte</span>
-            </span>
+            <span class="editorial-step-chip-label">Choisir l’œuvre</span>
         </button>
         <button type="button" class="editorial-step-chip" id="editorial-step-chip-1" data-editorial-step-target="1" role="tab" aria-selected="false" aria-controls="editorial-step-1">
-            <span class="editorial-step-chip-number">2</span>
-            <span class="editorial-step-chip-copy">
-                <span class="editorial-step-chip-label">Décrire l’œuvre</span>
-                <span class="editorial-step-chip-detail">Présentation et notice</span>
-            </span>
+            <span class="editorial-step-chip-label">Description</span>
         </button>
         <button type="button" class="editorial-step-chip" id="editorial-step-chip-2" data-editorial-step-target="2" role="tab" aria-selected="false" aria-controls="editorial-step-2">
-            <span class="editorial-step-chip-number">3</span>
-            <span class="editorial-step-chip-copy">
-                <span class="editorial-step-chip-label">Préparer les témoins</span>
-                <span class="editorial-step-chip-detail">Versions et fac-similés</span>
-            </span>
+            <span class="editorial-step-chip-label">Versions</span>
         </button>
         <button type="button" class="editorial-step-chip" id="editorial-step-chip-3" data-editorial-step-target="3" role="tab" aria-selected="false" aria-controls="editorial-step-3">
-            <span class="editorial-step-chip-number">4</span>
-            <span class="editorial-step-chip-copy">
-                <span class="editorial-step-chip-label">Comparer et publier</span>
-                <span class="editorial-step-chip-detail">Alignement et résultats</span>
-            </span>
+            <span class="editorial-step-chip-label">Comparaisons</span>
         </button>
     </div>
 </div>
@@ -166,8 +150,8 @@
   #container-work-selector .work-selector-steps {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.8rem;
-    padding: 0 1rem 1rem;
+    gap: 0.6rem;
+    padding: 0 1rem 0.85rem;
     border-top: 1px solid #e9ecef;
   }
   #container-work-selector .admin-chrome {
@@ -210,14 +194,15 @@
   #container-work-selector .editorial-step-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.7rem;
+    justify-content: center;
     width: 100%;
-    padding: 0.8rem 0.95rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
     border: 1px solid #dee2e6;
     border-radius: 0.5rem;
     background: #fff;
     color: #495057;
-    text-align: left;
+    text-align: center;
     transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
   }
   #container-work-selector .editorial-step-chip:hover {
@@ -239,51 +224,12 @@
   #container-work-selector .editorial-step-chip.is-disabled:hover {
     border-color: #e9ecef;
   }
-  #container-work-selector .editorial-step-chip-number {
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 999px;
-    border: 1px solid #ced4da;
-    background: #f8f9fa;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #495057;
-  }
-  #container-work-selector .editorial-step-chip.is-active .editorial-step-chip-number {
-    border-color: #b6d4fe;
-    background: #e7f1ff;
-    color: #0a58ca;
-  }
-  #container-work-selector .editorial-step-chip.is-disabled .editorial-step-chip-number {
-    border-color: #dee2e6;
-    background: #f8f9fa;
-    color: #8b949e;
-  }
   #container-work-selector .editorial-step-chip-label {
     min-width: 0;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     font-weight: 700;
-    line-height: 1.25;
-  }
-  #container-work-selector .editorial-step-chip-copy {
-    display: grid;
-    gap: 0.1rem;
-    min-width: 0;
-  }
-  #container-work-selector .editorial-step-chip-detail {
-    font-size: 0.75rem;
-    line-height: 1.25;
-    color: #6c757d;
     white-space: nowrap;
-  }
-  #container-work-selector .editorial-step-chip.is-active .editorial-step-chip-detail {
-    color: #6c757d;
-  }
-  #container-work-selector .editorial-step-chip.is-disabled .editorial-step-chip-detail {
-    color: #8b949e;
+    line-height: 1.2;
   }
   #container-work-selector .work-selector-grid {
     display: grid;

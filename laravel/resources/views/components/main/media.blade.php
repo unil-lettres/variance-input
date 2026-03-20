@@ -5,7 +5,7 @@
   >
     <div class="d-flex align-items-start gap-2 admin-card-heading">
       <span class="admin-card-heading-text">
-        <span class="admin-card-title">2.2 · Vignette et notice</span>
+        <span class="admin-card-title">Media d'accompagnement</span>
       </span>
     </div>
     <div class="d-flex align-items-center gap-2 admin-card-checks" id="media-status-pills">
