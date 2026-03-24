@@ -485,6 +485,32 @@
             font-size: 0.78rem;
             letter-spacing: 0.03em;
         }
+        .admin-editor-page header {
+            margin-bottom: 0.65rem !important;
+        }
+        .admin-editor-page .admin-banner-shell {
+            border-bottom: none;
+        }
+        .admin-editor-page header .admin-banner {
+            padding-top: 0.45rem !important;
+            padding-bottom: 0.45rem !important;
+            box-shadow: none;
+        }
+        .admin-editor-page .admin-chrome {
+            gap: 0.65rem;
+        }
+        .admin-editor-page .admin-embedded-title {
+            font-size: 0.82rem;
+            letter-spacing: 0.16em;
+        }
+        .admin-editor-page .admin-user-toggle {
+            padding: 0.22rem 0.52rem;
+            font-size: 0.8rem;
+            line-height: 1;
+        }
+        .admin-editor-page main {
+            padding-top: 0.05rem;
+        }
         .admin-loading-overlay {
             position: fixed;
             inset: 0;
@@ -844,6 +870,11 @@
                     });
                 }
             };
+
+            document.addEventListener('publicationCountsChanged', () => {
+                closeSubmenus();
+                loadMenu();
+            });
 
             menu.addEventListener('click', (event) => {
                 const toggle = event.target.closest('[data-public-pair-toggle]');

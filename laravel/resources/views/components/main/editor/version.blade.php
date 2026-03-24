@@ -1,15 +1,20 @@
 @extends('layouts.app')
+@section('body-class', 'admin-editor-page')
 
 @section('content')
-    <div class="border border-top-0 p-3 editor d-flex flex-column">
+    <div class="border border-top-0 p-2 editor d-flex flex-column">
+        <div class="d-flex align-items-center gap-2 mb-2 comparison-editor-topbar">
+            <a
+                href="{{ $returnTo ?? admin_path(sprintf('select/%s/%s#etape-2', $version->work->author->folder, $version->work->folder)) }}"
+                class="btn btn-outline-secondary btn-sm"
+                data-bs-toggle="tooltip"
+                title="Quitter l’éditeur"
+                aria-label="Fermer l’éditeur et revenir aux versions"
+            ><i class="bi bi-x-circle"></i></a>
+            <h1 class="mb-0">Œuvre <b>{{ $version->work->title }}</b> | Auteur <b>{{ $version->work->author->name }}</b> | Version <b>{{ $version->name }}</b></h1>
+        </div>
         <div class="editor-toolbar d-flex flex-wrap align-items-start gap-2">
                 <div class="editor-toolbar-group editor-toolbar-status">
-                    <a
-                        href="{{ $returnTo ?? admin_path(sprintf('select/%s/%s#etape-2', $version->work->author->folder, $version->work->folder)) }}"
-                        class="btn btn-outline-secondary btn-sm"
-                        data-bs-toggle="tooltip"
-                        title="Quitter l’éditeur"
-                    ><i class="bi bi-x-circle"></i></a>
                     <span
                     id="file-status"
                     class="btn btn-success btn-sm"
@@ -20,20 +25,24 @@
                     <button
                     id="save-xml"
                     class="btn btn-success btn-sm d-none"
-                    data-bs-toggle="tooltip"
-                    title="Sauvegarder les modifications"
                     ><i class="bi bi-floppy-fill"></i></button>
                 </div>
 
                 <div class="editor-toolbar-group">
-                    <div class="editor-toolbar-label">Affichage</div>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Editor utility buttons">
+                    <div class="editor-toolbar-label">Edit.</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Editor edit mode button">
                     <button
                         id="toggle-readonly"
                         class="btn btn-outline-primary"
                         data-bs-toggle="tooltip"
                         title="Activer / Désactiver le mode édition"
                     ><i class="bi bi-pencil-square"></i></button>
+                    </div>
+                </div>
+
+                <div class="editor-toolbar-group">
+                    <div class="editor-toolbar-label">Affich.</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Editor display buttons">
                     <button
                         id="toggle-tags"
                         data-bs-toggle="tooltip"
@@ -51,20 +60,12 @@
 
                 <div class="editor-toolbar-group">
                     <div class="editor-toolbar-label">Import</div>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Import tools">
                     <input
                         type="file"
                         id="upload-lignes-input"
                         accept=".txt,text/plain"
                         class="d-none"
                     >
-                    <button
-                        id="upload-lignes-btn"
-                        type="button"
-                        class="btn btn-outline-primary"
-                        data-bs-toggle="tooltip"
-                        title="Importer et appliquer un fichier _lignes"
-                    ><span id="upload-lignes-spinner" class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span><i class="bi bi-upload"></i> <code>_lignes</code></button>
                     <input
                         type="file"
                         id="upload-facsimiles-input"
@@ -74,6 +75,14 @@
                         multiple
                         accept="image/*,.tif,.tiff"
                     >
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Import tools">
+                    <button
+                        id="upload-lignes-btn"
+                        type="button"
+                        class="btn btn-outline-primary"
+                        data-bs-toggle="tooltip"
+                        title="Importer et appliquer un fichier _lignes"
+                    ><span id="upload-lignes-spinner" class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span><i class="bi bi-upload"></i> <code>_lignes</code></button>
                     <button
                         id="upload-facsimiles-btn"
                         type="button"
@@ -109,8 +118,7 @@
                     </div>
                 </div>
 
-                <div class="editor-toolbar-group">
-                    <div class="editor-toolbar-label">Recherche</div>
+                <div class="editor-toolbar-group editor-toolbar-group--button-only">
                     <div class="btn-group btn-group-sm" role="group" aria-label="Search tools">
                         <button
                             id="search-btn"
@@ -120,9 +128,21 @@
                         ><i class="bi bi-search"></i></button>
                     </div>
                 </div>
+
+                <div class="editor-toolbar-group editor-toolbar-group--button-only">
+                    <div class="form-check form-switch editor-toolbar-switch m-0">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="toggle-tooltips"
+                        >
+                        <label class="form-check-label small" for="toggle-tooltips">Info-bulles</label>
+                    </div>
+                </div>
         </div>
 
-        <div class="row g-3 mt-1 editor-workspace align-items-start">
+        <div class="row g-2 mt-0 editor-workspace align-items-start">
         <div class="col-md-6 col-12 order-last order-md-first d-flex flex-column">
             <div
                 id="editor-container"
@@ -303,6 +323,40 @@
 
     @push('styles')
         <style>
+            .editor-toolbar {
+                margin-bottom: 0.3rem;
+                column-gap: 0.65rem;
+                row-gap: 0.4rem;
+            }
+
+            .comparison-editor-topbar h1 {
+                font-size: 1.1rem;
+                line-height: 1.2;
+            }
+
+            .editor-toolbar-group {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                min-height: 2rem;
+            }
+
+            .editor-toolbar-status {
+                align-self: flex-end;
+                margin-bottom: 0.02rem;
+            }
+
+            .editor-toolbar-group--button-only {
+                align-self: flex-end;
+                margin-bottom: 0.02rem;
+            }
+
+            .editor-toolbar-label {
+                margin-bottom: 0;
+                font-size: 0.72rem;
+                line-height: 1;
+            }
+
             .editor-page-tool-btn {
                 display: inline-flex;
                 align-items: center;
@@ -324,9 +378,34 @@
                 align-content: flex-start;
             }
 
+            .editor-toolbar-switch {
+                min-height: 28px;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                padding-top: 0;
+            }
+
+            .editor-toolbar-switch .form-check-input {
+                margin-top: 0;
+            }
+
+            .editor-toolbar-switch .form-check-label {
+                margin-bottom: 0;
+            }
+
             #buttons-container .btn {
                 font-size: 0.78rem;
                 padding: 0.26rem 0.2rem;
+            }
+
+            #editor-container .cm-content {
+                text-align: left !important;
+                text-justify: auto !important;
+            }
+
+            .editor-text-frame {
+                min-height: calc(100vh - 232px);
             }
         </style>
     @endpush

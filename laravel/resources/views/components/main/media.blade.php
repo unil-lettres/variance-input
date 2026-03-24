@@ -3,9 +3,9 @@
   <div
       class="card-header fw-semibold d-flex justify-content-between align-items-center"
   >
-    <div class="d-flex align-items-start gap-2 admin-card-heading">
+        <div class="d-flex align-items-start gap-2 admin-card-heading">
       <span class="admin-card-heading-text">
-        <span class="admin-card-title">Media d'accompagnement</span>
+        <span class="admin-card-title">Vignette et notice d'oeuvre</span>
       </span>
     </div>
     <div class="d-flex align-items-center gap-2 admin-card-checks" id="media-status-pills">
@@ -57,7 +57,7 @@
   :root {
     --media-dropzone-height: 110px;
     --media-preview-max-width: 240px;
-    --media-preview-max-height: 220px;
+    --media-preview-max-height: 250px;
     --media-preview-max-height-pdf: 250px;
   }
   .media-doc-grid {
@@ -69,6 +69,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
+    height: 100%;
     padding: 1rem 1.05rem;
     border: 1px solid #ddd6ca;
     border-radius: 0.95rem;
@@ -137,6 +138,7 @@
   #pdf-btn {
     text-align: center;
     min-height: 2rem;
+    margin-top: auto;
   }
   .preview-box img,
   .preview-box canvas,

@@ -3,6 +3,7 @@ import initEditor from './codemirror-editor-comparison';
 document.addEventListener('DOMContentLoaded', () => {
     const components = window.editorParams?.components ?? [];
     const consistencyUrl = window.editorParams?.consistencyUrl;
+    const returnUrl = window.editorParams?.returnUrl ?? null;
     if (!components.length) {
         return;
     }
@@ -28,6 +29,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const componentMap = {};
     const unsavedChangesTracker = {};
     const initialContentTracker = {};
+    const removeTransformationModalEl = document.getElementById('removeTransformationModal');
+    const confirmRemoveTransformationBtn = document.getElementById('confirm-remove-transformation-btn');
+    const removeTransformationRefIdEl = document.getElementById('remove-transformation-refid');
+    const removeTransformationFileEl = document.getElementById('remove-transformation-file');
+    const removeTransformationLineEl = document.getElementById('remove-transformation-line');
+    const removeTransformationModal = removeTransformationModalEl
+      ? new bootstrapLib.Modal(removeTransformationModalEl)
+      : null;
+    let pendingRemoval = null;
     
     const hasAnyUnsavedChanges = () => {
       return Object.values(unsavedChangesTracker).some(hasChanges => hasChanges);
@@ -39,6 +49,21 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
       }
     });
+
+    const exitButton = document.getElementById('editor-exit-button');
+    if (exitButton && returnUrl) {
+      exitButton.addEventListener('click', () => {
+        if (hasAnyUnsavedChanges()) {
+          const confirmed = window.confirm(
+            'Des modifications non sauvegardées seront perdues. Quitter l’éditeur ?'
+          );
+          if (!confirmed) {
+            return;
+          }
+        }
+        window.location.href = returnUrl;
+      });
+    }
 
     const setStatus = (type, label, statusClass = 'text-bg-secondary') => {
       const statusElement = document.getElementById(`editor-status-${type}`);
@@ -141,6 +166,43 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         console.error('Consistency check failed:', error);
         setConsistencyBadge('error', 'Cohérence: erreur de contrôle');
+      }
+    };
+
+    const removeTransformation = async ({ type, component, refId, removeBtnElement }) => {
+      removeBtnElement.disabled = true;
+      try {
+        const response = await fetch(component.urlRemoveTransformation, {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            type: type,
+            ref_id: refId
+          })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error ?? `Statut HTTP ${response.status}`);
+        }
+
+        const summary = payload?.summary ?? {};
+        alert(
+          `Transformation supprimée (${refId}).\n` +
+          `Liste: ${summary.list_removed ?? 0}, ` +
+          `source: ${summary.source_removed ?? 0}, ` +
+          `target: ${summary.target_removed ?? 0}.`
+        );
+        window.location.reload();
+      } catch (error) {
+        console.error('Error removing transformation:', error);
+        alert(`Suppression impossible: ${error.message}`);
+      } finally {
+        removeBtnElement.disabled = false;
       }
     };
 
@@ -255,47 +317,51 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           const refId = match[2];
-          if (!confirm(`Supprimer la transformation ${refId} dans ${component.filename}, source.xhtml et target.xhtml ?`)) {
+          if (!removeTransformationModal || !confirmRemoveTransformationBtn) {
+            await removeTransformation({ type, component, refId, removeBtnElement });
             return;
           }
 
-          removeBtnElement.disabled = true;
-          try {
-            const response = await fetch(component.urlRemoveTransformation, {
-              method: 'POST',
-              headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify({
-                type: type,
-                ref_id: refId
-              })
-            });
-
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-              throw new Error(payload?.error ?? `Statut HTTP ${response.status}`);
-            }
-
-            const summary = payload?.summary ?? {};
-            alert(
-              `Transformation supprimée (${refId}).\\n` +
-              `Liste: ${summary.list_removed ?? 0}, ` +
-              `source: ${summary.source_removed ?? 0}, ` +
-              `target: ${summary.target_removed ?? 0}.`
-            );
-            window.location.reload();
-          } catch (error) {
-            console.error('Error removing transformation:', error);
-            alert(`Suppression impossible: ${error.message}`);
-          } finally {
-            removeBtnElement.disabled = false;
+          pendingRemoval = { type, component, refId, removeBtnElement, currentLine };
+          if (removeTransformationRefIdEl) {
+            removeTransformationRefIdEl.textContent = refId;
           }
+          if (removeTransformationFileEl) {
+            removeTransformationFileEl.textContent = component.filename;
+          }
+          if (removeTransformationLineEl) {
+            removeTransformationLineEl.textContent = currentLine;
+          }
+          confirmRemoveTransformationBtn.disabled = false;
+          removeTransformationModal.show();
         });
       }
     };
+
+    confirmRemoveTransformationBtn?.addEventListener('click', async () => {
+      if (!pendingRemoval) return;
+      confirmRemoveTransformationBtn.disabled = true;
+      removeTransformationModal?.hide();
+      const payload = pendingRemoval;
+      pendingRemoval = null;
+      await removeTransformation(payload);
+    });
+
+    removeTransformationModalEl?.addEventListener('hidden.bs.modal', () => {
+      pendingRemoval = null;
+      if (removeTransformationRefIdEl) {
+        removeTransformationRefIdEl.textContent = '—';
+      }
+      if (removeTransformationFileEl) {
+        removeTransformationFileEl.textContent = '—';
+      }
+      if (removeTransformationLineEl) {
+        removeTransformationLineEl.textContent = '';
+      }
+      if (confirmRemoveTransformationBtn) {
+        confirmRemoveTransformationBtn.disabled = false;
+      }
+    });
 
     const saveAllBtnElement = document.getElementById('editor-save-all');
     if (saveAllBtnElement) {

@@ -1,6 +1,7 @@
 import initEditor from './codemirror-editor';
 
 document.addEventListener('DOMContentLoaded', () => {
+    const TOOLTIPS_STORAGE_KEY = 'variance:version-editor-tooltips:v1';
     const {
         xmlContent,
         urlFileSave,
@@ -20,15 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrapLib.Tooltip(
-        tooltipTriggerEl,
-        {
-            delay: { "show": 500, "hide": 100 },
-            trigger: 'hover',
-            offset: [0, 6],
-        }
-    ));
-
     // DOM Elements
     const elements = {
         saveBtn: document.getElementById('save-xml'),
@@ -36,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtn: document.getElementById('toggle-readonly'),
         toggleTagsBtn: document.getElementById('toggle-tags'),
         toggleLineNumbersBtn: document.getElementById('toggle-line-numbers'),
+        toggleTooltipsInput: document.getElementById('toggle-tooltips'),
         uploadLignesBtn: document.getElementById('upload-lignes-btn'),
         uploadLignesInput: document.getElementById('upload-lignes-input'),
         uploadLignesSpinner: document.getElementById('upload-lignes-spinner'),
@@ -94,6 +87,89 @@ document.addEventListener('DOMContentLoaded', () => {
     let lignesPoller = null;
     let facsimilesPoller = null;
     let facsimilesUploadInProgress = false;
+    let tooltipsEnabled = localStorage.getItem(TOOLTIPS_STORAGE_KEY) === 'true';
+
+    window.areVersionEditorTooltipsEnabled = () => tooltipsEnabled;
+
+    const staticTooltipTargets = Array.from(tooltipTriggerList);
+
+    const captureTooltipTitle = (element) => {
+        if (!element) return;
+        if (!element.dataset.tooltipTitle && element.getAttribute('title')) {
+            element.dataset.tooltipTitle = element.getAttribute('title');
+        }
+        element.removeAttribute('title');
+    };
+
+    const createStandardTooltip = (element) => new bootstrapLib.Tooltip(
+        element,
+        {
+            title: () => element.dataset.tooltipTitle || '',
+            delay: { "show": 500, "hide": 100 },
+            trigger: 'hover',
+            offset: [0, 6],
+        }
+    );
+
+    const syncStaticTooltip = (element) => {
+        if (!element) return;
+        captureTooltipTitle(element);
+        const instance = bootstrapLib.Tooltip.getInstance(element);
+        const tooltipTitle = element.dataset.tooltipTitle || '';
+
+        if (!tooltipsEnabled || !tooltipTitle) {
+            instance?.dispose();
+            return;
+        }
+
+        if (instance) {
+            return;
+        }
+
+        createStandardTooltip(element);
+    };
+
+    const syncStaticTooltips = () => {
+        staticTooltipTargets.forEach(syncStaticTooltip);
+    };
+
+    const syncInlineWidgetTooltips = () => {
+        document.querySelectorAll('.cm-italic-tag, .cm-page-number-mark').forEach((element) => {
+            const instance = bootstrapLib.Tooltip.getInstance(element);
+
+            if (!tooltipsEnabled) {
+                instance?.dispose();
+                return;
+            }
+
+            if (instance) {
+                return;
+            }
+
+            if (element.classList.contains('cm-italic-tag')) {
+                new bootstrapLib.Tooltip(element, {
+                    title: 'Cliquez pour supprimer',
+                    trigger: 'hover',
+                    offset: [0, 10],
+                });
+                return;
+            }
+
+            const badgeText = element.querySelector('.cm-page-number-mark-badge')?.textContent?.trim() || '';
+            new bootstrapLib.Tooltip(element, {
+                title: badgeText === '?'
+                    ? 'Cliquez pour numéroter la page'
+                    : 'Cliquez pour modifier le numéro de page',
+                trigger: 'hover',
+                offset: [0, 10],
+            });
+        });
+    };
+
+    staticTooltipTargets.forEach(captureTooltipTitle);
+    if (elements.toggleTooltipsInput) {
+        elements.toggleTooltipsInput.checked = tooltipsEnabled;
+    }
 
     const editor = initEditor(document.getElementById('editor-container'), xmlContent);
 
@@ -193,12 +269,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (elements.generatePageNumbersBtn) {
             elements.generatePageNumbersBtn.disabled = !hasFacsimiles;
-            elements.generatePageNumbersBtn.setAttribute(
-                'title',
-                hasFacsimiles
-                    ? 'Générer les numéros de page'
-                    : 'Aucun fac-similé importé pour cette version'
-            );
+            elements.generatePageNumbersBtn.dataset.tooltipTitle = hasFacsimiles
+                ? 'Générer les numéros de page'
+                : 'Aucun fac-similé importé pour cette version';
+            syncStaticTooltip(elements.generatePageNumbersBtn);
         }
 
         if (!hasFacsimiles) {
@@ -273,6 +347,53 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elements.selectNextFacsimileBtn) {
             elements.selectNextFacsimileBtn.disabled = activeIndex === -1 || activeIndex >= buttons.length - 1;
         }
+    };
+
+    const createFacsimileButtonTooltip = (button) => new bootstrapLib.Tooltip(button, {
+        title: () => {
+            const imageName = button.getAttribute('data-tag');
+            const isInserted = editor.isPageMarkerInserted(imageName);
+            const isIgnored = button.getAttribute('data-ignored') === 'true';
+
+            if (isIgnored) {
+                return 'Cette page est ignorée';
+            }
+
+            if (isInserted) {
+                return '';
+            }
+
+            if (activeButton === button) {
+                return 'Cliquez dans le texte pour insérer ce marqueur de page';
+            }
+
+            return 'Cliquez pour sélectionner ce marqueur de page';
+        },
+        trigger: 'hover',
+        delay: { "show": 300, "hide": 0 },
+        offset: [0, 10],
+    });
+
+    const syncFacsimileButtonTooltips = () => {
+        getTagButtons().forEach((button) => {
+            const tooltip = tooltipsMap.get(button);
+
+            if (!tooltipsEnabled) {
+                tooltip?.dispose();
+                tooltipsMap.delete(button);
+                return;
+            }
+
+            if (!tooltip) {
+                tooltipsMap.set(button, createFacsimileButtonTooltip(button));
+            }
+        });
+    };
+
+    const applyTooltipsState = () => {
+        syncStaticTooltips();
+        syncFacsimileButtonTooltips();
+        syncInlineWidgetTooltips();
     };
 
     // Utility functions
@@ -608,12 +729,6 @@ document.addEventListener('DOMContentLoaded', () => {
             activeButton = null;
             elements.editorContainer.classList.remove('insert-page');
 
-            elements.noPreviewText.style.display = 'block';
-            elements.previewImg.parentElement.style.display = 'none';
-            if (elements.imageName) {
-                elements.imageName.style.display = 'none';
-            }
-
             elements.toggleIgnoredPageBtn.setAttribute('disabled', 'true');
             elements.removePageMarkerBtn.setAttribute('disabled', 'true');
             syncFacsimileNavigationButtons();
@@ -772,7 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateTagsButtonUI = (tagsHidden) => {
-        elements.toggleTagsBtn.classList.toggle('active', tagsHidden);
+        elements.toggleTagsBtn.classList.toggle('active', !tagsHidden);
     };
 
     const extractBodyInnerXml = (xml) => {
@@ -845,6 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!editor.getTagVisibility()) {
             editor.toggleTagVisibility();
         }
+        elements.editorContainer?.classList.add('body-preview-mode');
         bodyPreviewActive = true;
         updateTagsButtonUI(true);
     };
@@ -858,10 +974,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         syncHiddenBodyIntoFullXml();
-        editor.replaceDocument(formatXmlForReadonlyDisplay(fullXmlContent), { silent: true });
+        editor.replaceDocument(fullXmlContent, { silent: true });
         if (editor.getTagVisibility()) {
             editor.toggleTagVisibility();
         }
+        elements.editorContainer?.classList.remove('body-preview-mode');
         bodyPreviewActive = false;
         updateTagsButtonUI(false);
     };
@@ -1202,35 +1319,26 @@ document.addEventListener('DOMContentLoaded', () => {
         activateFacsimileButton(buttons[targetIndex]);
     };
 
+    const findInitialFacsimileButton = () => {
+        const buttons = getTagButtons();
+        if (!buttons.length) return null;
+
+        const firstInserted = buttons.find((button) => {
+            const imageName = button.getAttribute('data-tag');
+            return imageName && editor.isPageMarkerInserted(imageName);
+        });
+
+        return firstInserted || buttons[0] || null;
+    };
+
     // Insert buttons
     document.querySelectorAll('.editor [data-tag]').forEach(button => {
         const imgSrc = button.getAttribute('data-img-src');
         const imageName = button.getAttribute('data-tag');
 
-        const tooltip = new bootstrapLib.Tooltip(button, {
-            title: () => {
-                const isInserted = editor.isPageMarkerInserted(imageName);
-                const isIgnored = button.getAttribute('data-ignored') === 'true';
-
-                if (isIgnored) {
-                    return 'Cette page est ignorée';
-                }
-
-                if (isInserted) {
-                    return 'Afficher ce marqueur de page dans l\'éditeur';
-                }
-
-                if (activeButton === button) {
-                    return 'Cliquez dans le texte pour insérer ce marqueur de page';
-                }
-
-                return 'Cliquez pour sélectionner ce marqueur de page';
-            },
-            trigger: 'hover',
-            delay: { "show": 300, "hide": 0 },
-            offset: [0, 10],
-        });
-        tooltipsMap.set(button, tooltip);
+        if (tooltipsEnabled) {
+            tooltipsMap.set(button, createFacsimileButtonTooltip(button));
+        }
 
         button.addEventListener('click', () => {
             activateFacsimileButton(button);
@@ -1285,10 +1393,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const isClickOnRemovePageMarkerBtn = e.target.closest('#remove-page-marker');
             const isClickOnClearAllPageMarkersBtn = e.target.closest('#clear-all-page-markers');
             const isClickOnToggleReadonlyBtn = e.target.closest('#toggle-readonly');
+            const isClickOnPrevFacsimileBtn = e.target.closest('#select-prev-facsimile');
+            const isClickOnNextFacsimileBtn = e.target.closest('#select-next-facsimile');
 
             if (!isClickOnEditor && !isClickOnButton && !isClickOnImageUrl &&
                 !isClickOnToggleIgnored && !isClickOnSearchBtn && !isClickOnSearchPanel && !isClickOnToggleTagsBtn && 
-                !isClickOnRemovePageMarkerBtn && !isClickOnClearAllPageMarkersBtn && !isClickOnToggleReadonlyBtn
+                !isClickOnRemovePageMarkerBtn && !isClickOnClearAllPageMarkersBtn && !isClickOnToggleReadonlyBtn &&
+                !isClickOnPrevFacsimileBtn && !isClickOnNextFacsimileBtn
             ) {
                 deactivateActiveButton();
             }
@@ -1310,12 +1421,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update save status icon and tooltip
         const updateFileStatus = (success, errorMessage = null) => {
             const icon = elements.fileStatus.querySelector('i');
-            const tooltip = bootstrapLib.Tooltip.getInstance(elements.fileStatus);
-            
-            if (tooltip) {
-                tooltip.dispose();
-            }
-            
             let tooltipMessage = '';
             if (success) {
                 tooltipMessage = 'Le fichier a été sauvegardé et est à jour';
@@ -1329,12 +1434,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 icon.className = 'bi bi-x-circle-fill';
                 alert(tooltipMessage);
             }
-            new bootstrapLib.Tooltip(elements.fileStatus, {
-                title: tooltipMessage,
-                delay: { "show": 500, "hide": 100 },
-                trigger: 'hover',
-                offset: [0, 6],
-            });
+            elements.fileStatus.dataset.tooltipTitle = tooltipMessage;
+            syncStaticTooltip(elements.fileStatus);
         };
         
         try {
@@ -1374,12 +1475,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    elements.toggleTooltipsInput?.addEventListener('change', (event) => {
+        tooltipsEnabled = !!event.target.checked;
+        localStorage.setItem(TOOLTIPS_STORAGE_KEY, tooltipsEnabled ? 'true' : 'false');
+        applyTooltipsState();
+    });
+
+    applyTooltipsState();
+
     elements.saveBtn.addEventListener('click', async () => {
         await saveFile();
     });
 
     initPagination();
     refreshButtonStates();
+    const initialFacsimileButton = findInitialFacsimileButton();
+    if (initialFacsimileButton) {
+        activateFacsimileButton(initialFacsimileButton);
+    }
 
     // Initialize line numbers button state from localStorage
     const initialLineNumbersState = localStorage.getItem('editor-line-numbers') === 'true';

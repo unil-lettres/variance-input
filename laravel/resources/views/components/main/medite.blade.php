@@ -1,6 +1,6 @@
 @php /** components/main/medite.blade.php **/ @endphp
 <div class="modal fade" id="mediteModal" tabindex="-1" aria-labelledby="mediteModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content medite-modal-content">
             <div class="modal-header">
                 <div>
@@ -130,7 +130,7 @@
     gap: 1rem;
   }
   .medite-panel {
-    padding: 1rem 1.1rem;
+    padding: 0.85rem 0.95rem;
     border: 1px solid #ddd6ca;
     border-radius: 0.95rem;
     background: linear-gradient(180deg, #fbfaf7 0%, #f4f1eb 100%);
@@ -153,9 +153,9 @@
     color: #433d36;
   }
   .medite-panel-text {
-    margin-bottom: 0.9rem;
-    font-size: 0.88rem;
-    line-height: 1.45;
+    margin-bottom: 0.7rem;
+    font-size: 0.83rem;
+    line-height: 1.35;
     color: #62594f;
   }
   .medite-modal-content .medite-launch-bar {
@@ -164,11 +164,28 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    margin-top: 1rem;
-    padding: 0.95rem 1.05rem;
+    margin-top: 0.8rem;
+    padding: 0.75rem 0.9rem;
     border: 1px solid #e0d9ce;
     border-radius: 0.9rem;
     background: rgba(246, 243, 237, 0.9);
+  }
+  .medite-modal-content .modal-header {
+    padding: 0.85rem 1rem;
+  }
+  .medite-modal-content .modal-body {
+    padding: 0.9rem 1rem 1rem;
+  }
+  .medite-modal-content .form-label,
+  .medite-modal-content .form-check-label {
+    font-size: 0.9rem;
+  }
+  .medite-modal-content .form-text {
+    font-size: 0.76rem;
+    line-height: 1.35;
+  }
+  .medite-modal-content .mb-3 {
+    margin-bottom: 0.8rem !important;
   }
   @media (max-width: 991.98px) {
     .medite-panel-grid {
@@ -237,11 +254,12 @@ if ($useDefaultSep && $sepInput) {
   updateSeparatorControl();
 }
 
-function notifyComparison(eventName, comparisonId) {
+function notifyComparison(eventName, comparisonId, extra = {}) {
     document.dispatchEvent(new CustomEvent(eventName, {
         detail: {
             comparisonId,
             workId: document.getElementById('work_id').value || null,
+            ...extra,
         }
     }));
 }
@@ -304,7 +322,6 @@ function pollComparisonPagination(comparisonId) {
     const timer = setInterval(async () => {
         if (++attempts > max) {
             clearInterval(timer);
-            refreshComparisonsTable();
             renderMeditePhase('Alignement Medite terminé. Le suivi de l’injection de pagination continue en arrière-plan.', 'info');
             return;
         }
@@ -331,7 +348,7 @@ function pollComparisonPagination(comparisonId) {
             }
 
             clearInterval(timer);
-            refreshComparisonsTable();
+            notifyComparison('comparisonReady', comparisonId);
 
             if (summary.state === 'done') {
                 renderMeditePhase(summary.message, 'success');
@@ -494,7 +511,13 @@ $form.addEventListener('submit', async ev => {
 
     const cmpData = await cmpResp.json();
     fillHidden('comparison_id', cmpData.id);
-    notifyComparison('comparisonCreated', cmpData.id);
+    notifyComparison('comparisonCreated', cmpData.id, {
+        folder: `${srcShort}-${tgtShort}`,
+        sourceId: Number($srcSel.value),
+        targetId: Number($tgtSel.value),
+        sourceName: $srcSel.selectedOptions[0]?.textContent || `Version ${$srcSel.value}`,
+        targetName: $tgtSel.selectedOptions[0]?.textContent || `Version ${$tgtSel.value}`,
+    });
 
     const authorSlug = document.getElementById('author_name').value || 'author';
     const workSlug   = document.getElementById('work_name').value   || 'work';
@@ -502,6 +525,11 @@ $form.addEventListener('submit', async ev => {
 
     fillHidden('output_xml',        `${cmpFolder}/${srcShort}-${tgtShort}.xml`);
     fillHidden('xhtml_output_dir',  cmpFolder);
+
+    const modalInstance = window.bootstrap?.Modal.getInstance($mediteModalEl);
+    if (modalInstance) {
+        modalInstance.hide();
+    }
 
     $progress.style.display = 'block';
     $progress.innerHTML = `
@@ -528,10 +556,6 @@ $form.addEventListener('submit', async ev => {
     }
 
     const { task_id } = await run.json();
-    const modalInstance = window.bootstrap?.Modal.getInstance($mediteModalEl);
-    if (modalInstance) {
-        modalInstance.hide();
-    }
     pollTask(task_id, cmpData.id);
 });
 

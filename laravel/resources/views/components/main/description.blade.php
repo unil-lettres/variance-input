@@ -6,7 +6,7 @@
     >
         <div class="d-flex align-items-start gap-2 admin-card-heading">
             <span class="admin-card-heading-text">
-                <span class="admin-card-title">Texte de présentation de l’œuvre</span>
+                <span class="admin-card-title">Texte de présentation</span>
             </span>
         </div>
         <span id="description-status-check" class="admin-card-check media-status-pill d-none" aria-label="Statut présentation"></span>

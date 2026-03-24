@@ -18,26 +18,6 @@ use App\Services\PageMarkerService;
 
 class VersionController extends Controller
 {
-    private const INLINE_TAG_WHITELIST = ['pb'];
-    private const USER_IMPORT_OPTION_KEYS = [
-        'strip_indentation',
-        'collapse_double_spaces',
-        'trim_line_ends',
-        'trim_file_edges',
-        'preserve_nbsp',
-        'legacy_typography',
-    ];
-    private const DEFAULT_IMPORT_OPTIONS = [
-        'strip_indentation'      => true,
-        'collapse_double_spaces' => false,
-        'trim_line_ends'         => true,
-        'trim_file_edges'        => true,
-        'strip_invisible_chars'  => true,
-        'normalize_line_endings' => true,
-        'preserve_nbsp'          => false,
-        'legacy_typography'      => false,
-    ];
-
     public function __construct(private PageMarkerService $pageMarkerService)
     {
     }
@@ -86,22 +66,11 @@ class VersionController extends Controller
 
         return $versions
             ->map(function (Version $version) use ($inUseLookup) {
-                $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
-                if ($lignesInfo) {
-                    $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
-                }
                 $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
                 $pageMarkerProgress = $version->is_legacy
                     ? null
                     : $this->pageMarkerService->getProgressSnapshot($version->id);
                 $textLength = null; // lazy-loaded via /api/versions/{id}/text-length
-                $facsimileCacheKey = "versions:facsimiles:{$version->id}";
-                $facsimileCacheTtl = now()->addSeconds(20);
-                $facsimiles = Cache::remember(
-                    $facsimileCacheKey,
-                    $facsimileCacheTtl,
-                    fn () => $this->facsimileStatus($version)
-                );
                 return [
                     'id'         => $version->id,
                     'name'       => $version->name,
@@ -113,16 +82,14 @@ class VersionController extends Controller
                     'pagination_done_at' => $version->pagination_done_at?->getTimestamp(),
                     'pagination_done_by' => $version->pagination_done_by,
                     'pagination_done_by_name' => $version->paginationDoneBy?->name,
-                    'pb_markers' => $this->pageMarkerService->countPbMarkers($version),
                     'xml_available' => is_file($version->getXMLFilePath()),
                     'xml_url' => admin_url("versions/{$version->id}/download-xml"),
                     'text_available' => is_file(storage_path("app/public/uploads/versions/{$version->folder}.txt")),
                     'text_url' => admin_url("versions/{$version->id}/download"),
                     'text_length' => $textLength,
-                    'facsimiles' => $facsimiles,
-                    'page_markers' => $this->pageMarkerService->countMarkers($version),
+                    'facsimiles' => null, // lazy-loaded via /api/versions/{id}/facsimiles/progress
                     'page_marker_progress' => $pageMarkerProgress,
-                    'lignes' => $lignesInfo,
+                    'lignes' => null, // loaded on-demand by row actions
                     'pagination' => $paginationInfo,
                 ];
             })
@@ -206,13 +173,11 @@ class VersionController extends Controller
         $request->file('versionFile')->storeAs($folderPath, $txtFilename, 'public');
 
         /* 4. Read & normalise */
-        $options = $this->resolveImportOptions($request);
         $fullTxt = storage_path("app/public/{$txtStoragePath}");
-        $useLegacyTxt2Tei = $this->useLegacyTxt2TeiImport();
         $utf8    = $this->readFileAsUtf8(
             $fullTxt,
             $request->input('original_encoding'),
-            $useLegacyTxt2Tei ? false : $options['normalize_line_endings']
+            false
         );
         if (!$this->isLikelyTextContent($utf8)) {
             throw ValidationException::withMessages([
@@ -221,44 +186,7 @@ class VersionController extends Controller
         }
         $teiTitle = $work->title ?: $validated['name'];
         $teiAuthor = $work->author?->name ?: '';
-
-        if ($useLegacyTxt2Tei) {
-            $tei = $this->buildLegacyTxt2TeiXml($utf8, $teiTitle, $nextNumber, $teiAuthor, $validated['name']);
-        } else {
-            if ($options['strip_invisible_chars']) {
-                $utf8 = $this->stripInvisibleCharacters($utf8, $options['preserve_nbsp']);
-            }
-            if ($options['legacy_typography']) {
-                $utf8 = $this->applyLegacyTypographicNormalisation($utf8);
-            }
-            $utf8 = $this->removeTabs($utf8);
-            if ($options['strip_indentation']) {
-                $utf8 = $this->stripLeadingIndentation($utf8);
-            }
-            if ($options['trim_line_ends']) {
-                $utf8 = $this->trimLineEndSpaces($utf8);
-            }
-            if ($options['collapse_double_spaces']) {
-                $utf8 = $this->collapseDoubleSpaces($utf8);
-            }
-            if ($options['trim_file_edges']) {
-                $utf8 = $this->trimFileEdges($utf8);
-            }
-
-            /* 5. Insert line‑break tags */
-            $lines        = preg_split('/\r\n|\r|\n/', $utf8) ?: [''];
-            $escapedLines = array_map(fn($l) => htmlspecialchars($l, ENT_XML1 | ENT_COMPAT, 'UTF-8'), $lines);
-            $bodyWithLb   = implode("\n          <lb/>\n", $escapedLines);
-            $bodyWithLb   = $this->restoreInlineTags($bodyWithLb, self::INLINE_TAG_WHITELIST);
-
-            /* 6. TEI skeleton */
-            $xmlId = 'v' . $nextNumber . preg_replace('/[^A-Za-z0-9]/', '', strtolower($shortTitle));
-            $headerXml = $this->buildTeiHeaderXml($teiTitle, $teiAuthor, $validated['name']);
-            $tei = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n".
-                   "<TEI xml:id=\"{$xmlId}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n".
-                   $headerXml .
-                   "  <text>\n    <body>\n      <div>\n        <p>\n          {$bodyWithLb}\n        </p>\n      </div>\n    </body>\n  </text>\n</TEI>";
-        }
+        $tei = $this->buildLegacyTxt2TeiXml($utf8, $teiTitle, $nextNumber, $teiAuthor, $validated['name']);
 
         /* 7. Save .xml */
         Storage::disk('public')->put("{$folderPath}/{$baseName}.xml", $tei);
@@ -1111,35 +1039,6 @@ class VersionController extends Controller
         return ($controls / max(1, $len)) < 0.02;
     }
 
-    private function resolveImportOptions(Request $request): array
-    {
-        $resolved = self::DEFAULT_IMPORT_OPTIONS;
-
-        foreach (self::USER_IMPORT_OPTION_KEYS as $key) {
-            if ($request->has($key)) {
-                $resolved[$key] = $request->boolean($key);
-            }
-        }
-
-        return $resolved;
-    }
-
-    private function useLegacyTxt2TeiImport(): bool
-    {
-        $value = env('TXT_IMPORT_MODE');
-        if (is_string($value)) {
-            $normalized = strtolower(trim($value));
-            if ($normalized === 'laravel') {
-                return false;
-            }
-            if ($normalized === 'legacy') {
-                return true;
-            }
-        }
-
-        return app()->isLocal();
-    }
-
     private function buildLegacyTxt2TeiXml(
         string $txt,
         string $title,
@@ -1294,100 +1193,6 @@ class VersionController extends Controller
         $txt = str_replace("\t", ' ', $txt);
 
         return preg_replace('/ {2,}/', ' ', $txt) ?? $txt;
-    }
-
-    /** Remove invisible/spacing control characters while preserving text flow. */
-    private function stripInvisibleCharacters(string $txt, bool $preserveNbsp = false): string
-    {
-        $search = [
-            "\u{2002}", "\u{2003}", "\u{2009}",
-            "\u{200B}", "\u{FEFF}",
-        ];
-        $replace = [
-            ' ', ' ', ' ',
-            '', '',
-        ];
-
-        if (!$preserveNbsp) {
-            array_unshift($search, "\u{00A0}", "\u{202F}");
-            array_unshift($replace, ' ', ' ');
-        }
-
-        return str_replace($search, $replace, $txt);
-    }
-
-    /**
-     * Optional typographic normalisation aligned with protocol rules 1–5:
-     * 1) remove spaces before ; : ! ?
-     * 2) normalize suspension points to ellipsis character
-     * 3) normalize apostrophes to typographic apostrophe
-     * 4) normalize only unambiguous dash variants to en dash
-     * 5) normalize guillemets spacing and common quote variants (best effort)
-     */
-    private function applyLegacyTypographicNormalisation(string $txt): string
-    {
-        // 3) Apostrophes
-        $txt = str_replace(
-            ["\u{2018}", "\u{2019}", "\u{02BC}", "\u{02B9}", "\u{00B4}", "\u{02C8}", "'"],
-            "\u{2019}",
-            $txt
-        );
-
-        // 2) Points de suspension: every run of 3 dots becomes one ellipsis char.
-        $txt = preg_replace('/\.{3}/u', "\u{2026}", $txt) ?? $txt;
-
-        // 1) No space before ; : ! ?
-        $txt = preg_replace('/[ \t\x{00A0}\x{202F}]+([;:!?])/u', '$1', $txt) ?? $txt;
-
-        // 4) Conservative dash normalization:
-        // convert only unambiguous long/minus variants to en dash.
-        // Keep hyphen-like codepoints untouched to avoid corrupting compounds/cesurae.
-        $txt = str_replace(
-            ["\u{2014}", "\u{2212}"],
-            "\u{2013}",
-            $txt
-        );
-
-        // 5) Guillemets and spacing around them.
-        $txt = str_replace(["\u{2039}", "\u{203A}"], ["\u{00AB}", "\u{00BB}"], $txt);
-        $txt = preg_replace('/«\s+/u', '«', $txt) ?? $txt;
-        $txt = preg_replace('/\s+»/u', '»', $txt) ?? $txt;
-
-        // Best effort: map paired curly quotes to guillemets.
-        $txt = preg_replace('/“([^”\r\n]+)”/u', '«$1»', $txt) ?? $txt;
-        $txt = preg_replace('/„([^”\r\n]+)”/u', '«$1»', $txt) ?? $txt;
-
-        return $txt;
-    }
-
-    /** Remove tabs globally (editorial policy). */
-    private function removeTabs(string $txt): string
-    {
-        return str_replace("\t", '', $txt);
-    }
-
-    /** Remove tabs/spaces at line starts (paragraph indentation). */
-    private function stripLeadingIndentation(string $txt): string
-    {
-        return preg_replace('/^[ \t]+/m', '', $txt) ?? $txt;
-    }
-
-    /** Remove spaces/tabs before line breaks. */
-    private function trimLineEndSpaces(string $txt): string
-    {
-        return preg_replace('/[ \t]+$/m', '', $txt) ?? $txt;
-    }
-
-    /** Optional compression of inter-word space runs. */
-    private function collapseDoubleSpaces(string $txt): string
-    {
-        return preg_replace('/ {2,}/', ' ', $txt) ?? $txt;
-    }
-
-    /** Remove leading/trailing spaces and blank lines at file edges. */
-    private function trimFileEdges(string $txt): string
-    {
-        return trim($txt);
     }
 
     private function facsimileStatus(Version $version): array
@@ -1566,28 +1371,6 @@ class VersionController extends Controller
     private function queuePrefixFromFolders(string $authorFolder, string $workFolder, string $versionFolder): string
     {
         return trim(sprintf('facsimile_queue/%s/%s/%s', $authorFolder, $workFolder, $versionFolder), '/');
-    }
-
-    /**
-     * Re-introduce whitelisted inline tags (e.g. <pb/>) that were escaped when
-     * generating the TEI body. Keeps the rest of the text entity-encoded to
-     * avoid arbitrary markup from uploads.
-     *
-     * @param  string $text
-     * @param  array<int, string> $allowedTags
-     */
-    private function restoreInlineTags(string $text, array $allowedTags): string
-    {
-        if (empty($allowedTags)) {
-            return $text;
-        }
-
-        $alternation = implode('|', array_map(static fn ($tag) => preg_quote($tag, '/'), $allowedTags));
-        $pattern = '/&lt;\/?(?:' . $alternation . ')(?:\s+.*?)?\/?&gt;/si';
-
-        return preg_replace_callback($pattern, static function ($match) {
-            return html_entity_decode($match[0], ENT_QUOTES | ENT_XML1, 'UTF-8');
-        }, $text);
     }
 
     private function publishManifestsForVersion(Version $version): array

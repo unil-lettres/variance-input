@@ -1637,12 +1637,13 @@ class PageMarkerService
                 if (!preg_match($oneLineRegex, $line ?? '', $match)) {
                     continue;
                 }
-                $entries[] = [
+                $entry = [
                     'image'  => ltrim($match[1], '0') ?: '0',
                     'page'   => trim($match[2]),
                     'phrase' => trim((string) ($match[3] ?? '')),
                     'line'   => $idx + 1,
                 ];
+                $entries[] = $this->withNormalizedLignesPhrase($entry);
             }
 
             return $entries;
@@ -1689,15 +1690,77 @@ class PageMarkerService
                 continue;
             }
 
-            $entries[] = [
+            $entry = [
                 'image'  => ltrim($image, '0') ?: '0',
                 'page'   => $page,
                 'phrase' => $phrase,
                 'line'   => $startLine,
             ];
+            $entries[] = $this->withNormalizedLignesPhrase($entry);
         }
 
         return $entries;
+    }
+
+    private function withNormalizedLignesPhrase(array $entry): array
+    {
+        $phrase = trim((string) ($entry['phrase'] ?? ''));
+        if ($phrase === '') {
+            return $entry;
+        }
+
+        $normalized = $this->normalizeLignesPhraseForMatching($phrase);
+        if ($normalized !== '' && $normalized !== $phrase) {
+            $entry['normalized_phrase'] = $normalized;
+        }
+
+        return $entry;
+    }
+
+    private function normalizeLignesPhraseForMatching(string $txt): string
+    {
+        $txt = $this->stripInvisibleCharactersForMatching($txt);
+        $txt = $this->applyTypographicNormalisationForMatching($txt);
+        $txt = str_replace("\t", '', $txt);
+        $txt = preg_replace('/^[ \t]+/u', '', $txt) ?? $txt;
+        $txt = preg_replace('/[ \t]+$/u', '', $txt) ?? $txt;
+        $txt = preg_replace('/ {2,}/u', ' ', $txt) ?? $txt;
+
+        return trim($txt);
+    }
+
+    private function stripInvisibleCharactersForMatching(string $txt): string
+    {
+        $txt = str_replace(["\u{FEFF}", "\u{200B}", "\u{200C}", "\u{200D}"], '', $txt);
+        $txt = preg_replace('/[\x{2060}\x{00AD}]/u', '', $txt) ?? $txt;
+
+        return $txt;
+    }
+
+    private function applyTypographicNormalisationForMatching(string $txt): string
+    {
+        $txt = str_replace(
+            ["\u{2018}", "\u{2019}", "\u{02BC}", "\u{02B9}", "\u{00B4}", "\u{02C8}", "'"],
+            "\u{2019}",
+            $txt
+        );
+
+        $txt = preg_replace('/\.{3}/u', "\u{2026}", $txt) ?? $txt;
+        $txt = preg_replace('/[ \t\x{00A0}\x{202F}]+([;:!?])/u', '$1', $txt) ?? $txt;
+
+        $txt = str_replace(
+            ["\u{2014}", "\u{2212}"],
+            "\u{2013}",
+            $txt
+        );
+
+        $txt = str_replace(["\u{2039}", "\u{203A}"], ["\u{00AB}", "\u{00BB}"], $txt);
+        $txt = preg_replace('/«\s+/u', '«', $txt) ?? $txt;
+        $txt = preg_replace('/\s+»/u', '»', $txt) ?? $txt;
+        $txt = preg_replace('/“([^”\r\n]+)”/u', '«$1»', $txt) ?? $txt;
+        $txt = preg_replace('/„([^”\r\n]+)”/u', '«$1»', $txt) ?? $txt;
+
+        return $txt;
     }
 
     private function isImageLine(?string $line): bool
@@ -1758,7 +1821,7 @@ class PageMarkerService
         foreach ($entries as $entry) {
             $i++;
             $image = $entry['image'] ?? '';
-            $phrase = trim((string) ($entry['phrase'] ?? ''));
+            $phrase = trim((string) ($entry['normalized_phrase'] ?? $entry['phrase'] ?? ''));
             $imageKey = str_pad((string) $image, 3, '0', STR_PAD_LEFT);
             $matched = false;
             $failureReason = null;
@@ -3040,7 +3103,6 @@ class PageMarkerService
             'path'       => $relative,
             'updated_at' => Storage::disk('local')->lastModified($relative),
             'size'       => Storage::disk('local')->size($relative),
-            'line_count' => $this->countFileLines($relative),
         ];
     }
 
@@ -3138,39 +3200,6 @@ class PageMarkerService
     public function lignesRelativePath(int $versionId): string
     {
         return "lignes/{$versionId}.txt";
-    }
-
-    private function countFileLines(string $relative): int
-    {
-        $disk = Storage::disk('local');
-        $absolute = $disk->path($relative);
-        if (!is_readable($absolute)) {
-            return 0;
-        }
-
-        $handle = @fopen($absolute, 'rb');
-        if ($handle === false) {
-            return 0;
-        }
-
-        $count = 0;
-        try {
-            while (!feof($handle)) {
-                $chunk = fread($handle, 64 * 1024);
-                if ($chunk === false) {
-                    break;
-                }
-                $count += substr_count($chunk, "\n");
-            }
-        } finally {
-            fclose($handle);
-        }
-
-        if ($count === 0 && filesize($absolute) > 0) {
-            return 1;
-        }
-
-        return $count;
     }
 
     public function paginationRelativePath(int $versionId): string

@@ -202,11 +202,6 @@
     line-height: 1.45;
 }
 
-.cm-readonly .cm-line {
-    text-align: justify;
-    text-align-last: left;
-}
-
 .button-item.page-ignored {
     opacity: 0.35;
 }

@@ -729,6 +729,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStepOneList();
     });
 
+    document.addEventListener('recentWorksHistoryChanged', () => {
+        renderStepOneList();
+    });
+
     document.querySelectorAll('#admin-main .modal').forEach((modalEl) => {
         if (modalEl.parentElement !== document.body) {
             document.body.appendChild(modalEl);

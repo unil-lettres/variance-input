@@ -5,6 +5,8 @@ import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { search, openSearchPanel, closeSearchPanel, searchPanelOpen as getSearchPanelState } from "@codemirror/search";
 
+const areVersionEditorTooltipsEnabled = () => window.areVersionEditorTooltipsEnabled?.() === true;
+
 // Widget to replace tags with invisible content
 class InvisibleTagWidget extends WidgetType {
   constructor(tag) {
@@ -37,12 +39,12 @@ class ItalicTagWidget extends WidgetType {
     const span = document.createElement("span");
     span.className = "cm-italic-tag";
     span.textContent = this.isOpening ? "⟨i⟩" : "⟨/i⟩";
-    span.title = `Cliquez pour supprimer`;
     span.style.cursor = 'pointer';
 
     const bootstrapLib = window.bootstrap;
-    if (bootstrapLib) {
+    if (bootstrapLib && areVersionEditorTooltipsEnabled()) {
       this.tooltip = new bootstrapLib.Tooltip(span, {
+        title: 'Cliquez pour supprimer',
         trigger: 'hover',
         offset: [0, 10],
       });
@@ -119,7 +121,7 @@ class PageNumberWidget extends WidgetType {
     span.append(lineBefore, badge, lineAfter);
 
     const bootstrapLib = window.bootstrap;
-    if (bootstrapLib) {
+    if (bootstrapLib && areVersionEditorTooltipsEnabled()) {
       this.tooltip = new bootstrapLib.Tooltip(span, {
         title: () => this.pageNumber === '?' ? 'Cliquez pour numéroter la page' : 'Cliquez pour modifier le numéro de page',
         trigger: 'hover',
@@ -295,23 +297,34 @@ function parsePageNumbers(view, getCacheFunction) {
   return pageNumbers;
 }
 
-// ViewPlugin to decorate italic tags
-const createItalicTagPlugin = () => ViewPlugin.fromClass(class {
+// ViewPlugin to decorate italic tags only when tags are hidden
+const createItalicTagPlugin = (hideTagsStateField) => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
-
     this.italicOpenMatcher = new MatchDecorator({
       regexp: /(<em\s*>|<\/em\s*>)/gi,
       decoration: (match) => Decoration.replace({
         widget: new ItalicTagWidget(match[1].startsWith("<em"), view),
       })
     });
-
-    this.placeholders = this.italicOpenMatcher.createDeco(view)
+    this.placeholders = this.buildDecorations(view);
   }
 
   update(update) {
-    this.placeholders = this.italicOpenMatcher.updateDeco(update, this.placeholders)
+    if (
+      update.docChanged ||
+      update.startState.field(hideTagsStateField) !== update.state.field(hideTagsStateField)
+    ) {
+      this.placeholders = this.buildDecorations(update.view);
+    }
+  }
+
+  buildDecorations(view) {
+    if (!view.state.field(hideTagsStateField)) {
+      return Decoration.none;
+    }
+
+    return this.italicOpenMatcher.createDeco(view);
   }
 
 }, {
@@ -477,7 +490,7 @@ export default function (container, initialXml) {
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField,
-      createItalicTagPlugin(),
+      createItalicTagPlugin(hideTagsField),
       createPageNumberPlugin(
         () => onPageNumberClickedCallback,
         getCache,
@@ -518,7 +531,13 @@ export default function (container, initialXml) {
           color: "#f8f8f2"
         },
         ".cm-content": {
-          color: "inherit"
+          color: "inherit",
+          textAlign: "left",
+          textJustify: "auto"
+        },
+        ".cm-line": {
+          textAlign: "left",
+          textJustify: "auto"
         },
         ".cm-cursor": {
           borderLeftColor: "#d9ff00ff !important",

@@ -88,10 +88,7 @@ class EditorController extends Controller
     {
         $this->assertComparisonOwnership($comparison);
         $sourcePublicationInfo = $this->getPublicationInfo($comparison, 'source');
-        $targetPublicationInfo = $this->getPublicationInfo($comparison, 'target');
-        $canEditComparison = !$sourcePublicationInfo['is_published']
-            && $sourcePublicationInfo['has_json']
-            && $targetPublicationInfo['has_json'];
+        $canEditComparison = !$sourcePublicationInfo['is_published'];
 
         $components = collect(self::COMPARISON_COMPONENTS)
             ->map(function (array $meta, string $type) use ($comparison, $canEditComparison) {
@@ -129,8 +126,6 @@ class EditorController extends Controller
             'components' => $components,
             'isPublished' => $sourcePublicationInfo['is_published'],
             'canEditComparison' => $canEditComparison,
-            'missingSourceManifest' => !$sourcePublicationInfo['has_json'],
-            'missingTargetManifest' => !$targetPublicationInfo['has_json'],
         ]);
     }
     
@@ -143,10 +138,7 @@ class EditorController extends Controller
 
         $type = $request->query('type', 'source');
         $sourcePublicationInfo = $this->getPublicationInfo($comparison, 'source');
-        $targetPublicationInfo = $this->getPublicationInfo($comparison, 'target');
-        $canEditComparison = !$sourcePublicationInfo['is_published']
-            && $sourcePublicationInfo['has_json']
-            && $targetPublicationInfo['has_json'];
+        $canEditComparison = !$sourcePublicationInfo['is_published'];
         
         if (!$canEditComparison) {
             return response()->json(['error' => 'Les modifications ne sont pas autorisées.'], 403);
@@ -183,10 +175,7 @@ class EditorController extends Controller
         ]);
 
         $sourcePublicationInfo = $this->getPublicationInfo($comparison, 'source');
-        $targetPublicationInfo = $this->getPublicationInfo($comparison, 'target');
-        $canEditComparison = !$sourcePublicationInfo['is_published']
-            && $sourcePublicationInfo['has_json']
-            && $targetPublicationInfo['has_json'];
+        $canEditComparison = !$sourcePublicationInfo['is_published'];
         if (!$canEditComparison) {
             return response()->json(['error' => 'Les modifications ne sont pas autorisées.'], 403);
         }
@@ -639,6 +628,10 @@ class EditorController extends Controller
 
     private function detectEncoding(string $content): string
     {
+        if (mb_check_encoding($content, 'UTF-8')) {
+            return 'UTF-8';
+        }
+
         $detected = mb_detect_encoding($content, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
 
         return $detected ?: 'UTF-8';

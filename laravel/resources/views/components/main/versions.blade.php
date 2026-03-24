@@ -14,13 +14,19 @@
                 </span>
             </div>
         </div>
-        <button type="button"
-                class="btn btn-sm btn-primary"
-                id="open-upload-version-modal"
-                disabled
-                aria-label="Téléverser une version">
-            Téléverser une version
-        </button>
+        <div class="d-flex align-items-center gap-3">
+            <div class="form-check form-switch version-details-toggle mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="version-details-toggle">
+                <label class="form-check-label small fw-semibold" for="version-details-toggle">Détails</label>
+            </div>
+            <button type="button"
+                    class="btn btn-sm btn-primary"
+                    id="open-upload-version-modal"
+                    disabled
+                    aria-label="Téléverser une version">
+                Téléverser une version
+            </button>
+        </div>
     </div>
     <div id="versionsCollapse" class="collapse show">
     <div class="card-body">
@@ -43,6 +49,10 @@
         .card-header > .btn#open-upload-version-modal {
             width: 100%;
         }
+    }
+    .version-details-toggle .form-check-input,
+    .version-details-toggle .form-check-label {
+        cursor: pointer;
     }
 </style>
 @endpush
@@ -127,59 +137,6 @@
                                    required>
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <label class="col-sm-3 col-form-label">Normalisations :</label>
-                        <div class="col-sm-9">
-                            <div class="form-text text-muted mb-3">
-                                Par défaut, l'import convertit les retours de ligne au format standard, supprime les caractères invisibles, remplace les espaces insécables (<code>NBSP</code>, <code>NNBSP</code>) par des espaces normaux, enlève les tabulations, les alinéas, les doubles espaces, les espaces en fin de ligne, les blancs en début/fin de fichier, et applique les normalisations typographiques.
-                            </div>
-                            <div class="form-check mb-1">
-                                <input class="form-check-input" type="checkbox" id="strip_indentation" name="strip_indentation" checked>
-                                <label class="form-check-label" for="strip_indentation">
-                                    Éliminer les alinéas
-                                </label>
-                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Supprime les tabulations et les espaces en début de ligne.">
-                                    <i class="bi bi-info-circle"></i>
-                                </button>
-                            </div>
-                            <div class="form-check mb-1">
-                                <input class="form-check-input" type="checkbox" id="collapse_double_spaces" name="collapse_double_spaces" checked>
-                                <label class="form-check-label" for="collapse_double_spaces">
-                                    Éliminer les doubles espaces
-                                </label>
-                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Remplace toute suite de 2 espaces ou plus entre mots par un seul espace.">
-                                    <i class="bi bi-info-circle"></i>
-                                </button>
-                            </div>
-                            <div class="form-check mb-1">
-                                <input class="form-check-input" type="checkbox" id="trim_line_ends" name="trim_line_ends" checked>
-                                <label class="form-check-label" for="trim_line_ends">
-                                    Éliminer les espaces en fin de ligne
-                                </label>
-                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Supprime les espaces juste avant chaque retour de ligne.">
-                                    <i class="bi bi-info-circle"></i>
-                                </button>
-                            </div>
-                            <div class="form-check mb-1">
-                                <input class="form-check-input" type="checkbox" id="trim_file_edges" name="trim_file_edges" checked>
-                                <label class="form-check-label" for="trim_file_edges">
-                                    Éliminer les blancs en début/fin de fichier
-                                </label>
-                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Supprime espaces, tabulations et lignes vides au tout début et à la toute fin du fichier.">
-                                    <i class="bi bi-info-circle"></i>
-                                </button>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="legacy_typography" name="legacy_typography" checked>
-                                <label class="form-check-label" for="legacy_typography">
-                                    Appliquer les normalisations typographiques
-                                </label>
-                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline text-decoration-none" data-upload-normalization-tooltip data-bs-toggle="tooltip" data-bs-placement="right" title="Applique une normalisation prudente: espaces avant ;:!? supprimés, ... -> …, apostrophes uniformisées, guillemets harmonisés, et conversion limitée des tirets (—, − -> –). Les traits d’union et les coupures de fin de ligne ne sont pas modifiés automatiquement.">
-                                    <i class="bi bi-info-circle"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -257,7 +214,14 @@
 <style>
     /* Keep table headers visually consistent with card header */
     .version-table th { font-weight: normal; font-size: 1rem; color: #333; }
+    .version-table th:nth-child(7) { text-align: center; }
     .version-table td { vertical-align: middle; }
+    .version-table.compact-details th:nth-child(1),
+    .version-table.compact-details td:nth-child(1),
+    .version-table.compact-details th:nth-child(3),
+    .version-table.compact-details td:nth-child(3) {
+      display: none;
+    }
     .version-table .download-btn {
       line-height: 1;
       padding-top: 0.25rem;
@@ -405,6 +369,7 @@ let facUploadCancelRequested = false;
 let facCurrentUploadVersionId = null;
 let selectedAuthorLabel = '';
 let selectedWorkLabel   = '';
+let showVersionDetails  = false;
 const UPLOAD_MODAL_BASE_TITLE = 'Téléverser une version textuelle';
 /*********************  GLOBAL STATE  *********************/
 /*********************  UTIL HELPERS  *********************/
@@ -514,6 +479,11 @@ function getVersionsForWork(workId, { force = false } = {}) {
     return fetchPromise;
 }
 window.varianceGetVersionsForWork = getVersionsForWork;
+function applyVersionDetailsMode() {
+    const table = document.querySelector('#versions-list .version-table');
+    if (!table) return;
+    table.classList.toggle('compact-details', !showVersionDetails);
+}
 function detectEncodingBOM(file){
     return new Promise(resolve=>{
         const r = new FileReader();
@@ -933,6 +903,14 @@ window.addEventListener('DOMContentLoaded',()=>{
         }
     };
     refreshUploadModalTitle();
+    const detailsToggle = document.getElementById('version-details-toggle');
+    if (detailsToggle) {
+        detailsToggle.checked = showVersionDetails;
+        detailsToggle.addEventListener('change', () => {
+            showVersionDetails = !!detailsToggle.checked;
+            applyVersionDetailsMode();
+        });
+    }
 
     facModalEl     = document.getElementById('facsimileUploadModal');
     facModalTitle  = document.getElementById('facsimileUploadModalLabel');
@@ -948,18 +926,6 @@ window.addEventListener('DOMContentLoaded',()=>{
 
     const $fileInput = document.getElementById('versionFile');
     const $fileInfo  = document.getElementById('file-info');
-    const uploadNormalizationTooltips = [];
-
-    const initUploadNormalizationTooltips = () => {
-        uploadNormalizationTooltips.forEach(t => t.dispose());
-        uploadNormalizationTooltips.length = 0;
-
-        document.querySelectorAll('[data-upload-normalization-tooltip]').forEach((el) => {
-            const instance = new bootstrap.Tooltip(el);
-            uploadNormalizationTooltips.push(instance);
-        });
-    };
-    initUploadNormalizationTooltips();
 
     updateVersionsCount(null);
 
@@ -1238,8 +1204,9 @@ window.addEventListener('DOMContentLoaded',()=>{
                 if (Number.isFinite(selectedWorkId)) {
                     await fetchVersions(selectedWorkId, true);
                 }
+                revealFacsimilesForVersion(uploadVersionId, facVersionName);
                 document.dispatchEvent(new CustomEvent('facsimilesUploaded', {
-                    detail: { versionId: uploadVersionId }
+                    detail: { versionId: uploadVersionId, versionName: facVersionName || '' }
                 }));
                 if (facModalInstance) facModalInstance.hide();
                 return;
@@ -1382,16 +1349,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         fd.append('name',editionName);
         fd.append('original_encoding',detectedEncoding);
         if(shortTitle) fd.append('short_title',shortTitle);
-        [
-            'strip_indentation',
-            'collapse_double_spaces',
-            'trim_line_ends',
-            'trim_file_edges',
-            'legacy_typography',
-        ].forEach((key) => {
-            const input = document.getElementById(key);
-            fd.append(key, input && input.checked ? '1' : '0');
-        });
 
         try{
             const res = await fetch(withBasePath('/api/versions'),{
@@ -1473,6 +1430,25 @@ function openFacsimileUploadModal(version) {
 
     facModalInstance = facModalInstance || new bootstrap.Modal(facModalEl, { backdrop: 'static', keyboard: false });
     facModalInstance.show();
+}
+
+function revealFacsimilesForVersion(versionId, versionName = '') {
+    const numericVersionId = Number(versionId);
+    if (!Number.isFinite(numericVersionId) || numericVersionId <= 0) return;
+
+    if (typeof window.openEditorialStep === 'function') {
+        window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
+    }
+
+    document.dispatchEvent(new CustomEvent('facsimiles:select', {
+        detail: { versionId: numericVersionId, versionName: versionName || '' }
+    }));
+
+    const collapseEl = document.getElementById('facsimilesCollapse');
+    if (collapseEl && !collapseEl.classList.contains('show') && window.bootstrap?.Collapse) {
+        const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
+        collapse.show();
+    }
 }
 
 function collectSelectedImages() {
@@ -2017,14 +1993,13 @@ async function fetchVersions(workId, force = false){
 
         const table = document.createElement('table');
         table.className='table table-bordered table-sm version-table';
+        table.classList.toggle('compact-details', !showVersionDetails);
         table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         versions.forEach(v=>{
             const tr = document.createElement('tr');
             const shortFolder = (v.folder || '').split('/').pop();
-            // Used for pagination actions (merge from <pb> markers), but we no longer display the pb badge in the name column.
-            const pbCount = Number(v.pb_markers ?? 0);
 
             const tdId = document.createElement('td');
             tdId.textContent = v.id;
@@ -2146,10 +2121,6 @@ async function fetchVersions(workId, force = false){
                     const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
                     collapse.show();
                 }
-                window.setTimeout(() => {
-                    const facCard = document.getElementById('facsimiles-card');
-                    facCard?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-                }, 180);
             });
             facButtons.appendChild(btnFacView);
 
@@ -2313,6 +2284,7 @@ async function fetchVersions(workId, force = false){
                 });
             } else {
                 renderFacsimileStatus(v.id, { loading: true });
+                requestFacsimileProgress(v.id);
             }
 
             if (facsimileData && queueCount > 0) {

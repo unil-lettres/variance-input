@@ -89,9 +89,17 @@ document.addEventListener("DOMContentLoaded", () => {
   function writeHistory(items) {
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+      document.dispatchEvent(new CustomEvent('recentWorksHistoryChanged'));
     } catch (err) {
       // Ignore storage failures (private mode, quotas…)
     }
+  }
+
+  function removeWorkFromHistory(workId) {
+    const normalizedWorkId = String(workId ?? '').trim();
+    if (!normalizedWorkId) return;
+    const nextItems = readHistory().filter((entry) => String(entry?.workId ?? '').trim() !== normalizedWorkId);
+    writeHistory(nextItems);
   }
 
   function pushHistory(entry) {
@@ -151,6 +159,18 @@ document.addEventListener("DOMContentLoaded", () => {
         workSlug: selection.workSlug ? String(selection.workSlug).trim() : '',
         updatedAt: Date.now(),
       }));
+    } catch (err) {
+      // Ignore storage failures (private mode, quotas…)
+    }
+  }
+
+  function clearLastSelectionForWork(workId) {
+    const normalizedWorkId = String(workId ?? '').trim();
+    if (!normalizedWorkId) return;
+    const lastSelection = readLastSelection();
+    if (String(lastSelection?.workId ?? '').trim() !== normalizedWorkId) return;
+    try {
+      localStorage.removeItem(LAST_SELECTION_KEY);
     } catch (err) {
       // Ignore storage failures (private mode, quotas…)
     }
@@ -607,6 +627,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const authorId = authorSelector.value || null;
+      removeWorkFromHistory(id);
+      clearLastSelectionForWork(id);
       loadWorks(authorId);
       // 🔔 clear description + other blades
       dispatchWorkSelected(null, authorId);

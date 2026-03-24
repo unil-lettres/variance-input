@@ -1,5 +1,7 @@
 function initComparisonsTable() {
   const tbody          = document.querySelector('#comparisons-table tbody');
+  const comparisonsTable = document.getElementById('comparisons-table');
+  const detailsToggle  = document.getElementById('comparison-details-toggle');
   const loading        = document.getElementById('comparisons-loading');
   const noComparisons  = document.getElementById('no-comparisons');
   const comparisonsTitleCount = document.getElementById('comparisons-title-count');
@@ -39,6 +41,7 @@ function initComparisonsTable() {
   const currentUserIsAdmin = adminMain?.dataset?.userIsAdmin === '1';
   const ownershipNote = 'Action réservée au propriétaire de la comparaison.';
   const publishedNote = 'Dépubliez cette comparaison avant de modifier ses composants.';
+  let showComparisonDetails = false;
   const isComparisonPublished = (comp) => {
     const scope = comp?.publication_scope || ((comp?.is_legacy) ? 'prod' : null);
     return !!(scope || comp?.published === true);
@@ -91,6 +94,14 @@ function initComparisonsTable() {
     });
     return formatted.replace(',', '').trim();
   };
+  const applyComparisonDetailsMode = () => {
+    if (!comparisonsTable) return;
+    comparisonsTable.classList.toggle('compact-details', !showComparisonDetails);
+  };
+  if (detailsToggle) {
+    detailsToggle.checked = false;
+  }
+  applyComparisonDetailsMode();
   const formatDuration = ms => {
     const value = Number(ms);
     if (!Number.isFinite(value) || value <= 0) return null;
@@ -240,6 +251,23 @@ function initComparisonsTable() {
     }
     comparisonRows.set(id, newRow);
     refreshComparisonCounts();
+  }
+
+  function renderPublishStatusHtml(comp, { detailsLoaded = false, isLegacy = false, isPublished = false, isPublishedProd = false } = {}) {
+    const pending = comp?.publication_pending;
+    if (pending && typeof pending === 'object') {
+      const pendingLabel = String(pending.label || 'Mise à jour…');
+      return `<span class="comparison-publish-status"><span class="comparison-running-spinner" aria-hidden="true"></span><span class="badge text-bg-warning text-dark comparison-publish-pill">${pendingLabel}</span></span>`;
+    }
+
+    const publishStatusLabel = !detailsLoaded && !isLegacy
+      ? '…'
+      : (isPublished ? (isPublishedProd ? 'Publié sur prod' : 'Publié sur /dev') : 'Non publié');
+    const publishStatusClass = isPublished
+      ? (isPublishedProd ? 'comparison-publish-pill--prod' : 'comparison-publish-pill--dev')
+      : 'comparison-publish-pill--draft';
+
+    return `<span class="badge ${publishStatusClass} comparison-publish-pill">${publishStatusLabel}</span>`;
   }
 
   function createBadge({ text, className = '', href = null, title = '' }) {
@@ -596,6 +624,7 @@ function initComparisonsTable() {
     };
 
     const badges = document.createElement('div');
+    badges.className = 'comparison-role-details';
     const markersBadge = createBadge({
       text: `${formatNumber(data.markers ?? 0)} tags`,
       className: 'bg-secondary'
@@ -738,7 +767,7 @@ function initComparisonsTable() {
 
     if (data.lignes && (data.lignes.updated_at || data.lignes.size)) {
       const hint = document.createElement('div');
-      hint.className = 'text-muted small';
+      hint.className = 'text-muted small comparison-role-details';
       const updated = data.lignes.updated_at ? formatTimestamp(data.lignes.updated_at) : '—';
       const size = data.lignes.size ? formatBytes(data.lignes.size) : '0 o';
       hint.textContent = `Fichier _lignes : ${updated} · ${size}`;
@@ -746,11 +775,11 @@ function initComparisonsTable() {
     }
 
     const feedback = document.createElement('div');
-    feedback.className = 'small text-muted';
+    feedback.className = 'small text-muted comparison-role-details';
     container.appendChild(feedback);
 
     const btnGroup = document.createElement('div');
-    btnGroup.className = 'd-flex gap-2 mt-2 flex-wrap';
+    btnGroup.className = 'd-flex gap-2 mt-2 flex-wrap d-none';
     container.appendChild(btnGroup);
 
     const lignesInputId = `cmp-${comp.id}-${role}-lignes`;
@@ -872,20 +901,14 @@ function initComparisonsTable() {
     };
   }
 
-  function renderMediteParams(comp, { isRunning = false } = {}) {
+  function renderMediteParams(comp) {
     if (comp?.is_legacy) {
       return '<span class="text-muted">n/a</span>';
     }
     const chips = [];
-    const progress = comp?.comparison_progress || null;
 
     const pushChip = (html, variant) => {
       let variantClass = 'comparison-param-chip--input';
-      if (variant === 'output') {
-        variantClass = 'comparison-param-chip--output';
-      } else if (variant === 'running') {
-        variantClass = 'comparison-param-chip--running';
-      }
       chips.push(`<span class="comparison-param-chip ${variantClass}">${html}</span>`);
     };
 
@@ -912,44 +935,6 @@ function initComparisonsTable() {
       pushChip(`<strong>${label}</strong> <span class="${stateClass} px-2 rounded-pill">${active ? 'oui' : 'non'}</span>`, 'input');
     };
 
-    const addDuration = (label, rawMs) => {
-      const formatted = formatDuration(rawMs);
-      if (!formatted) return;
-      pushChip(`<strong>${label}</strong> ${formatted}`, 'output');
-    };
-
-    const addMemory = (label, rawKb) => {
-      const kb = Number(rawKb);
-      if (!Number.isFinite(kb) || kb <= 0) return;
-      pushChip(`<strong>${label}</strong> ${formatBytes(kb * 1024)}`, 'output');
-    };
-
-    const addCount = (raw, singular, plural) => {
-      if (raw === null || raw === undefined) return;
-      const num = Number(raw);
-      if (!Number.isFinite(num)) return;
-      const label = num === 1 ? singular : plural;
-      pushChip(`<strong>${formatNumber(num)}</strong> ${label}`, 'output');
-    };
-
-    const addPaginationMarkers = (label, raw, roleName = null) => {
-      const num = Number(raw);
-      const hasRawCount = Number.isFinite(num) && num >= 0;
-      const roleProgress = roleName ? progress?.roles?.[roleName] : null;
-      const inserted = Number(roleProgress?.inserted);
-      const missed = Number(roleProgress?.missed);
-      const hasDetailedProgress = Number.isFinite(inserted) && inserted >= 0
-        && Number.isFinite(missed) && missed >= 0;
-
-      if (hasDetailedProgress) {
-        pushChip(`<strong>${label}</strong> ${formatNumber(inserted)} ins. · ${formatNumber(missed)} manq.`, 'output');
-        return;
-      }
-
-      if (!hasRawCount) return;
-      pushChip(`<strong>${label}</strong> ${formatNumber(num)} pb`, 'output');
-    };
-
     const addSeparators = (rawSep) => {
       const trimmed = rawSep === null || rawSep === undefined ? '' : String(rawSep).trim();
       if (!trimmed) {
@@ -959,61 +944,150 @@ function initComparisonsTable() {
       pushChip(`<strong>Séparateurs</strong> ${escapeHtml(trimmed)}`, 'input');
     };
 
-    const addPaginationPhase = () => {
-      if (!progress || typeof progress !== 'object') return;
-      const roles = Object.values(progress.roles || {});
-      const statuses = roles
-        .map(role => normalizeStatus(role?.status ?? ''))
-        .filter(Boolean);
-      if (!statuses.length) return;
-
-      const hasRunning = statuses.some(status => status === 'queued' || status === 'running');
-      const hasFailed = statuses.some(status => status === 'failed');
-      const allDone = statuses.every(status => ['done', 'ok'].includes(status));
-
-      if (hasRunning) {
-        pushChip('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Pagination</strong> injection en cours', 'running');
-        return;
-      }
-      if (hasFailed) {
-        pushChip('<strong>Pagination</strong> injection en échec', 'output');
-        return;
-      }
-      if (allDone) {
-        pushChip('<strong>Pagination</strong> injectée', 'output');
-      }
-    };
-
     addNumeric('Pivot', comp.lg_pivot);
     addNumeric('Ratio', comp.ratio);
     addNumeric('Seuil', comp.seuil);
     addBoolean('Sensibilité casse', comp.case_sensitive);
     addSeparators(comp.sep);
-    if (isRunning) {
-      pushChip('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Alignement</strong> Medite en cours', 'running');
-      const elapsed = formatElapsedSince(comp.created_at);
-      if (elapsed) {
-        pushChip(`<strong>Temps écoulé</strong> ${elapsed}`, 'running');
-      }
-    }
-    addPaginationPhase();
-    addDuration('Durée', comp.medite_runtime_ms);
-    addMemory('Pic mémoire', comp.medite_peak_rss_kb);
-    const counts = comp.medite_component_counts || comp.component_counts || {};
-    addCount(counts.d ?? counts['d.xhtml'], 'déplacement', 'déplacements');
-    addCount(counts.i ?? counts['i.xhtml'], 'insertion', 'insertions');
-    addCount(counts.r ?? counts['r.xhtml'], 'remplacement', 'remplacements');
-    addCount(counts.s ?? counts['s.xhtml'], 'suppression', 'suppressions');
-    if (comp?.pagination && typeof comp.pagination === 'object') {
-      addPaginationMarkers('PB source', comp.pagination?.source?.markers, 'source');
-      addPaginationMarkers('PB cible', comp.pagination?.target?.markers, 'target');
-    }
 
     if (!chips.length) {
       return '<span class="text-muted">n/a</span>';
     }
 
     return `<div class="comparison-params">${chips.join('')}</div>`;
+  }
+
+  function getMediteComponentCounts(comp) {
+    const counts = comp?.medite_component_counts || comp?.component_counts || {};
+    return {
+      s: counts.s ?? counts['s.xhtml'] ?? null,
+      i: counts.i ?? counts['i.xhtml'] ?? null,
+      r: counts.r ?? counts['r.xhtml'] ?? null,
+      d: counts.d ?? counts['d.xhtml'] ?? null,
+    };
+  }
+
+  function renderMetricCell(raw) {
+    const num = Number(raw);
+    if (!Number.isFinite(num)) {
+      return '<span class="text-muted">–</span>';
+    }
+    return `<span class="comparison-metric-cell">${formatNumber(num)}</span>`;
+  }
+
+  function renderResultsSummary(comp, { isRunning = false, detailsLoaded = false } = {}) {
+    if (comp?.is_legacy) {
+      return '';
+    }
+
+    const progress = comp?.comparison_progress || null;
+    const missing = Array.isArray(comp?.publish_missing) ? comp.publish_missing : [];
+    const lines = [];
+
+    const pushLine = (html, variant = '') => {
+      const cls = variant ? ` comparison-results-line--${variant}` : '';
+      lines.push(`<div class="comparison-results-line${cls}">${html}</div>`);
+    };
+
+    if (!detailsLoaded) {
+      pushLine('Chargement…', 'muted');
+    }
+
+    if (missing.length > 0) {
+      pushLine('<span class="badge text-bg-warning text-dark">Composants manquants</span>');
+    }
+
+    if (isRunning) {
+      pushLine('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Alignement Medite en cours</strong>', 'running');
+      const elapsed = formatElapsedSince(comp.created_at);
+      if (elapsed) {
+        pushLine(`<strong>Temps écoulé</strong> ${elapsed}`, 'running');
+      }
+    }
+
+    if (progress && typeof progress === 'object') {
+      const roles = Object.values(progress.roles || {});
+      const statuses = roles
+        .map(role => normalizeStatus(role?.status ?? ''))
+        .filter(Boolean);
+
+      if (statuses.length) {
+        const hasRunning = statuses.some(status => status === 'queued' || status === 'running');
+        const hasFailed = statuses.some(status => status === 'failed');
+        const allDone = statuses.every(status => ['done', 'ok'].includes(status));
+
+        if (hasRunning) {
+          pushLine('<span class="comparison-running-spinner" aria-hidden="true"></span><strong>Pagination en cours</strong>', 'running');
+        } else if (hasFailed) {
+          pushLine('<strong>Pagination</strong> échec');
+        } else if (allDone) {
+          pushLine('<strong>Pagination</strong> injectée');
+        }
+      }
+    }
+
+    const runtime = formatDuration(comp.medite_runtime_ms);
+    if (runtime) {
+      pushLine(`<strong>Durée</strong> ${runtime}`);
+    }
+
+    const peakKb = Number(comp.medite_peak_rss_kb);
+    if (Number.isFinite(peakKb) && peakKb > 0) {
+      pushLine(`<strong>Pic mémoire</strong> ${formatBytes(peakKb * 1024)}`);
+    }
+
+    const addPaginationMarkerLine = (label, raw, roleName = null) => {
+      const num = Number(raw);
+      const hasRawCount = Number.isFinite(num) && num >= 0;
+      const roleProgress = roleName ? progress?.roles?.[roleName] : null;
+      const inserted = Number(roleProgress?.inserted);
+      const missed = Number(roleProgress?.missed);
+      const hasDetailedProgress = Number.isFinite(inserted) && inserted >= 0
+        && Number.isFinite(missed) && missed >= 0;
+
+      if (hasDetailedProgress) {
+        pushLine(`<strong>${label}</strong> ${formatNumber(inserted)} ins. · ${formatNumber(missed)} manq.`);
+        return;
+      }
+
+      if (!hasRawCount) return;
+      pushLine(`<strong>${label}</strong> ${formatNumber(num)} pb`);
+    };
+
+    if (comp?.pagination && typeof comp.pagination === 'object') {
+      addPaginationMarkerLine('PB source', comp.pagination?.source?.markers, 'source');
+      addPaginationMarkerLine('PB cible', comp.pagination?.target?.markers, 'target');
+    }
+
+    if (!lines.length) {
+      return '<span class="text-muted">–</span>';
+    }
+
+    return `<div class="comparison-results comparison-results-details">${lines.join('')}</div>`;
+  }
+
+  function renderCompactProcessStatus(comp, { isRunning = false } = {}) {
+    if (comp?.is_legacy) {
+      return '';
+    }
+
+    const progress = comp?.comparison_progress || null;
+    const statuses = Object.values(progress?.roles || {})
+      .map(role => normalizeStatus(role?.status ?? ''))
+      .filter(Boolean);
+
+    if (isRunning) {
+      return '<div class="comparison-results-compact"><span class="comparison-running-spinner" aria-hidden="true"></span><strong>Alignement…</strong></div>';
+    }
+
+    if (statuses.length) {
+      const hasRunning = statuses.some(status => status === 'queued' || status === 'running');
+      if (hasRunning) {
+        return '<div class="comparison-results-compact"><span class="comparison-running-spinner" aria-hidden="true"></span><strong>Pagination…</strong></div>';
+      }
+    }
+
+    return '';
   }
 
   async function triggerComparisonPagination(comp, { role = null, clearExisting, replaceExisting, button, feedback, statusRefs }) {
@@ -1367,6 +1441,7 @@ function initComparisonsTable() {
     const missing = Array.isArray(comp.publish_missing) ? comp.publish_missing : [];
     const ready = detailsLoaded ? (comp.components_ready && missing.length === 0) : false;
     const isLegacy = !!comp.is_legacy;
+    tr.dataset.legacy = isLegacy ? '1' : '0';
     const ownershipBlocked = !currentUserIsAdmin && !!currentUserId
       && Number(comp?.created_by) !== Number(currentUserId);
     comp._ownershipBlocked = ownershipBlocked;
@@ -1378,18 +1453,10 @@ function initComparisonsTable() {
     const isPublished = !!inferredScope;
     const isPublishedProd = inferredScope === 'prod';
     const isPublishedDev = inferredScope === 'dev';
+    const isPublicationPending = !!(comp?.publication_pending && typeof comp.publication_pending === 'object');
     tr.dataset.published = isPublished ? '1' : '0';
     tr.dataset.publishDest = comp.publish_dest || '';
     const isRunning = runningComparisons.has(Number(comp.id));
-    const missingTitle = missing.length > 0
-      ? `Composants manquants :\n- ${missing.join('\n- ')}`
-      : '';
-    const missingPill = (detailsLoaded && missing.length > 0)
-      ? `<span class="badge text-bg-warning text-dark" title="${missingTitle.replace(/"/g, '&quot;')}">Composants manquants</span>`
-      : '';
-    const loadingPill = (!detailsLoaded && !isLegacy)
-      ? '<span class="badge text-bg-light text-muted">Chargement…</span>'
-      : '';
 
     const xmlUrl     = withBasePath(`/storage/uploads/comparisons/${comp.id}.xml`);
     const exportUrl  = typeof withBasePath === 'function'
@@ -1412,60 +1479,54 @@ function initComparisonsTable() {
 
     const sourceName = comp.source_version?.name ?? `Version ${comp.source_id}`;
     const targetName = comp.target_version?.name ?? `Version ${comp.target_id}`;
-    const createdAt = formatComparisonDate(comp.created_at);
+    const counts = getMediteComponentCounts(comp);
+    const runningPlaceholder = '<span class="text-muted">-</span>';
     const folderText = comp.folder || '';
-    const folderDateSuffix = createdAt ? ` (${createdAt})` : '';
     const folderHtml = folderText
-      ? `<strong>${folderText}</strong>${folderDateSuffix}`
-      : (createdAt ? `(${createdAt})` : '');
+      ? `<strong>${folderText}</strong>`
+      : '<span class="text-muted">—</span>';
 
     comparisonData.set(comp.id, comp);
-    const mediteParamsHtml = renderMediteParams(comp, { isRunning });
+    const mediteParamsHtml = renderMediteParams(comp);
+    const resultsHtml = renderResultsSummary(comp, { isRunning, detailsLoaded });
+    const compactStatusHtml = renderCompactProcessStatus(comp, { isRunning });
     const scopeName = `publish-scope-${comp.id}`;
     const defaultScope = scope || (isLegacy ? 'prod' : 'dev');
-    const publishDisabled = !detailsLoaded || !comp.publish_source || isLegacy || ownershipBlocked;
-    const scopeDisabled = !detailsLoaded || isLegacy || ownershipBlocked;
-    const editAllowed = detailsLoaded && !isRunning && ready && !isPublishedProd && !isLegacy;
+    const publishDisabled = isPublicationPending || !detailsLoaded || !comp.publish_source || isLegacy || ownershipBlocked;
+    const scopeDisabled = isPublicationPending || !detailsLoaded || isLegacy || ownershipBlocked;
+    const editAllowed = detailsLoaded && !isRunning && ready && !isPublished && !isLegacy;
     const editDisabled = editAllowed && ownershipBlocked;
     const deleteDisabled = isLegacy || ownershipBlocked;
 
     const xmlAvailable = comp.xml_available === true;
     const xmlUnknown = comp.xml_available === null || comp.xml_available === undefined;
     const xmlActionHtml = xmlAvailable
-      ? `<a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary" target="_blank"><i class="bi bi-filetype-xml"></i></a>`
+      ? `<a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary comparison-action-btn" target="_blank"><i class="bi bi-filetype-xml"></i></a>`
       : (xmlUnknown
-        ? `<span class="d-inline-block" data-bs-toggle="tooltip" title="Chargement du fichier XML"><span class="btn btn-outline-secondary disabled" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`
-        : `<span class="d-inline-block" data-bs-toggle="tooltip" title="Pas de fichier XML disponible pour cette comparaison"><span class="btn btn-outline-secondary disabled" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`);
+        ? `<span class="d-inline-block" data-bs-toggle="tooltip" title="Chargement du fichier XML"><span class="btn btn-outline-secondary disabled comparison-action-btn" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`
+        : `<span class="d-inline-block" data-bs-toggle="tooltip" title="Pas de fichier XML disponible pour cette comparaison"><span class="btn btn-outline-secondary disabled comparison-action-btn" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`);
 
-    const publishStatusLabel = !detailsLoaded && !isLegacy
-      ? '…'
-      : (isPublished ? (isPublishedProd ? 'prod' : 'dev') : 'non publié');
-    const publishStatusClass = isPublished
-      ? (isPublishedProd ? 'text-bg-success' : 'text-bg-info')
-      : 'text-bg-secondary';
-
-    tr.innerHTML = `
-      <td>${comp.id}</td>
-      <td>${folderHtml}</td>
-      <td class="align-top source-cell">
-        <div><strong>${sourceName}</strong></div>
-        <div class="role-wrapper"></div>
-      </td>
-      <td class="align-top target-cell">
-        <div><strong>${targetName}</strong></div>
-        <div class="role-wrapper"></div>
-      </td>
-      <td class="align-top">${mediteParamsHtml}</td>
-      <td class="text-center">
-        <div class="publish-control d-flex flex-column align-items-center gap-1">
-          <span class="badge ${publishStatusClass} comparison-publish-pill">${publishStatusLabel}</span>
-          <input type="checkbox" class="form-check-input publish-toggle ${publishDisabled ? 'legacy-disabled' : ''}"
-                 data-id="${comp.id}"
-                 data-missing='${JSON.stringify(comp.publish_missing ?? [])}'
-                 data-source='${comp.publish_source ?? ''}'
-                 data-scope="${scope || ''}"
-                 ${isPublished ? 'checked' : ''}
-                 ${publishDisabled ? 'disabled' : ''}>
+    const publishStatusHtml = isRunning
+      ? runningPlaceholder
+      : renderPublishStatusHtml(comp, {
+          detailsLoaded,
+          isLegacy,
+          isPublished,
+          isPublishedProd,
+        });
+    const publishControlsHtml = isRunning
+      ? runningPlaceholder
+      : `<div class="publish-control">
+          <button type="button"
+                  class="btn btn-sm ${isPublished ? 'btn-outline-secondary' : 'btn-primary'} publish-action-btn ${publishDisabled ? 'legacy-disabled' : ''}"
+                  data-id="${comp.id}"
+                  data-published="${isPublished ? '1' : '0'}"
+                  data-missing='${JSON.stringify(comp.publish_missing ?? [])}'
+                  data-source='${comp.publish_source ?? ''}'
+                  data-scope="${scope || ''}"
+                  ${publishDisabled ? 'disabled aria-disabled="true"' : ''}>
+            ${isPublished ? 'Dépublier' : 'Publier'}
+          </button>
           <div class="btn-group btn-group-sm publish-scope" role="group" aria-label="Destination de publication">
             <input type="radio" class="btn-check publish-scope-toggle"
                    name="${scopeName}" id="${scopeName}-prod" value="prod"
@@ -1478,30 +1539,52 @@ function initComparisonsTable() {
                    ${scopeDisabled ? 'disabled' : ''}>
             <label class="btn btn-outline-secondary" for="${scopeName}-dev" title="Publier sur /dev">/dev</label>
           </div>
-        </div>
-      </td>
-      <td class="text-center">
-        <div class="d-flex flex-column align-items-center gap-1">
-          ${loadingPill}
-          ${missingPill}
-          <div class="btn-group-vertical" role="group" aria-label="Action buttons">
-          ${(legacyUrl && (isPublishedProd || isLegacy)) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
-          ${(devUrl && isPublishedDev && !isLegacy) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
+        </div>`;
+    const actionBarHtml = isRunning
+      ? ''
+      : `<div class="comparison-action-bar" role="group" aria-label="Action buttons">
+          ${(legacyUrl && (isPublishedProd || isLegacy)) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success comparison-action-btn" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
+          ${(devUrl && isPublishedDev && !isLegacy) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info comparison-action-btn" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
           ${editAllowed
             ? (editDisabled
-              ? `<span data-bs-toggle="tooltip" title="${manageDisabledNote}" class="btn btn-outline-secondary legacy-disabled" aria-disabled="true"><i class="bi bi-pencil-square"></i></span>`
-              : `<a href="${editorUrl}" target="_blank" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>`)
+              ? `<span data-bs-toggle="tooltip" title="${manageDisabledNote}" class="btn btn-outline-secondary comparison-action-btn legacy-disabled" aria-disabled="true"><i class="bi bi-pencil-square"></i></span>`
+              : `<a href="${editorUrl}" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary comparison-action-btn"><i class="bi bi-pencil-square"></i></a>`)
             : ''}
           ${xmlActionHtml}
-          <a href="${exportUrl}" data-bs-toggle="tooltip" title="Exporter le pack legacy" class="btn btn-outline-secondary" target="_blank"><i class="bi bi-download"></i></a>
-          <button data-bs-toggle="tooltip"
-                  title="${deleteDisabled ? manageDisabledNote : 'Supprimer la comparaison'}"
-                  class="btn btn-outline-danger delete-comparison-btn ${deleteDisabled ? 'legacy-disabled' : ''}"
+          <a href="${exportUrl}" data-bs-toggle="tooltip" title="Exporter le pack legacy" class="btn btn-outline-secondary comparison-action-btn" target="_blank"><i class="bi bi-download"></i></a>
+          <button class="btn btn-outline-danger comparison-action-btn delete-comparison-btn ${deleteDisabled ? 'legacy-disabled' : ''}"
                   data-id="${comp.id}"
                   ${deleteDisabled ? 'disabled aria-disabled="true"' : ''}>
             <i class="bi bi-trash3"></i>
           </button>
-          </div>
+        </div>`;
+
+    tr.innerHTML = `
+      <td>${folderHtml}</td>
+      <td class="source-cell">
+        <div><strong>${sourceName}</strong></div>
+        <div class="role-wrapper"></div>
+      </td>
+      <td class="target-cell">
+        <div><strong>${targetName}</strong></div>
+        <div class="role-wrapper"></div>
+      </td>
+      <td class="align-top">${mediteParamsHtml}</td>
+      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.s)}</td>
+      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.i)}</td>
+      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.r)}</td>
+      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.d)}</td>
+      <td class="text-center">
+        ${publishStatusHtml}
+      </td>
+      <td class="text-center">
+        ${publishControlsHtml}
+      </td>
+      <td class="text-center comparison-action-cell">
+        <div class="d-flex flex-column align-items-center gap-1">
+          ${compactStatusHtml}
+          <div class="comparison-results-slot">${resultsHtml}</div>
+          ${actionBarHtml}
         </div>
       </td>
     `;
@@ -1644,9 +1727,21 @@ function initComparisonsTable() {
       if (!runningComparisons.has(numericId)) return;
       const row = comparisonRows.get(numericId);
       if (!row) return;
-      const paramsCell = row.children[4];
-      if (!paramsCell) return;
-      paramsCell.innerHTML = renderMediteParams(comp, { isRunning: true });
+      const paramsCell = row.children[3];
+      const resultsCell = row.children[10];
+      if (paramsCell) {
+        paramsCell.innerHTML = renderMediteParams(comp);
+      }
+      if (resultsCell) {
+        const compactStatus = resultsCell.querySelector('.comparison-results-compact');
+        if (compactStatus) {
+          compactStatus.outerHTML = renderCompactProcessStatus(comp, { isRunning: true }) || '<div class="comparison-results-compact"></div>';
+        }
+        const slot = resultsCell.querySelector('.comparison-results-slot');
+        if (slot) {
+          slot.innerHTML = renderResultsSummary(comp, { isRunning: true, detailsLoaded: !!comp.details_loaded });
+        }
+      }
     });
   }
 
@@ -1657,10 +1752,53 @@ function initComparisonsTable() {
   });
 
   document.addEventListener('comparisonCreated', e => {
-    if (e.detail?.comparisonId) {
-      runningComparisons.add(Number(e.detail.comparisonId));
+    const comparisonId = Number(e.detail?.comparisonId);
+    if (!Number.isFinite(comparisonId)) return;
+    runningComparisons.add(comparisonId);
+
+    if (e.detail?.workId && String(e.detail.workId) !== String(currentWorkId)) {
+      return;
     }
-    loadComparisons(e.detail?.workId);
+
+    if (comparisonRows.has(comparisonId)) {
+      const existing = comparisonData.get(comparisonId) || {};
+      const updated = { ...existing };
+      comparisonData.set(comparisonId, updated);
+      const row = buildComparisonRow(updated);
+      const oldRow = comparisonRows.get(comparisonId);
+      if (oldRow && oldRow.parentNode) {
+        oldRow.parentNode.replaceChild(row, oldRow);
+      }
+      comparisonRows.set(comparisonId, row);
+      return;
+    }
+
+    const placeholderComp = {
+      id: comparisonId,
+      folder: e.detail?.folder || '',
+      source_id: e.detail?.sourceId ?? null,
+      target_id: e.detail?.targetId ?? null,
+      source_version: { name: e.detail?.sourceName || `Version ${e.detail?.sourceId ?? ''}`.trim() },
+      target_version: { name: e.detail?.targetName || `Version ${e.detail?.targetId ?? ''}`.trim() },
+      details_loaded: false,
+      components_ready: false,
+      publish_missing: [],
+      pagination: { source: {}, target: {} },
+      medite_component_counts: {},
+      comparison_progress: null,
+      published: false,
+      publication_scope: null,
+      publish_source: null,
+      xml_available: null,
+      created_by: currentUserId,
+    };
+
+    const row = buildComparisonRow(placeholderComp);
+    noComparisons.style.display = 'none';
+    tbody.prepend(row);
+    comparisonRows.set(comparisonId, row);
+    comparisonData.set(comparisonId, placeholderComp);
+    refreshComparisonCounts();
   });
 
   document.addEventListener('comparisonReady', e => {
@@ -1671,10 +1809,7 @@ function initComparisonsTable() {
   });
 
   document.addEventListener('comparisonCompleted', e => {
-    if (e.detail?.comparisonId) {
-      runningComparisons.delete(Number(e.detail.comparisonId));
-    }
-    loadComparisons(e.detail?.workId);
+    // Wait for the final refresh triggered after pagination polling completes.
   });
 
   document.addEventListener('comparisonFailed', e => {
@@ -1768,37 +1903,36 @@ function initComparisonsTable() {
     if (input) input.checked = true;
   };
 
-  document.addEventListener('change', async event => {
-    const toggle = event.target.closest('.publish-toggle');
-    if (!toggle) return;
+  document.addEventListener('click', async event => {
+    const actionBtn = event.target.closest('.publish-action-btn');
+    if (!actionBtn) return;
+    if (actionBtn.disabled || actionBtn.getAttribute('aria-disabled') === 'true') return;
 
-    const comparisonId = toggle.dataset.id;
+    const comparisonId = actionBtn.dataset.id;
     if (!comparisonId) return;
 
-    const row = toggle.closest('tr');
-    const shouldPublish = toggle.checked;
-    toggle.disabled = true;
+    const row = actionBtn.closest('tr');
+    const shouldPublish = actionBtn.dataset.published !== '1';
+    actionBtn.disabled = true;
 
-    const sourceDir = toggle.dataset.source || '';
+    const sourceDir = actionBtn.dataset.source || '';
     const scope = getSelectedScope(row);
     let knownMissing = [];
     try {
-      knownMissing = JSON.parse(toggle.dataset.missing || '[]');
+      knownMissing = JSON.parse(actionBtn.dataset.missing || '[]');
     } catch {
       knownMissing = [];
     }
 
     if (shouldPublish && !scope) {
       alert('Choisissez une destination de publication (/ ou /dev) avant de publier.');
-      toggle.checked = false;
-      toggle.disabled = false;
+      actionBtn.disabled = false;
       return;
     }
 
     if (shouldPublish && !sourceDir) {
       alert('Les fichiers Medite ne sont pas encore disponibles pour cette comparaison. Exécutez Medite avant de publier.');
-      toggle.checked = false;
-      toggle.disabled = false;
+      actionBtn.disabled = false;
       return;
     }
 
@@ -1814,8 +1948,7 @@ function initComparisonsTable() {
         } else if (choice === 'continue') {
           insertDefaultMarker = false;
         } else {
-          toggle.checked = false;
-          toggle.disabled = false;
+          actionBtn.disabled = false;
           return;
         }
       }
@@ -1828,14 +1961,16 @@ function initComparisonsTable() {
         '\n\nVoulez-vous publier malgré tout ?'
       );
       if (!proceed) {
-        toggle.checked = false;
-        toggle.disabled = false;
+        actionBtn.disabled = false;
         return;
       }
     }
 
     try {
       if (shouldPublish) {
+        updateComparisonRow(comparisonId, {
+          publication_pending: { label: `Publication ${scope}…` },
+        });
         const res = await fetch(withBasePath('/api/publish_xhtml'), {
           method: 'POST',
           headers: {
@@ -1874,11 +2009,15 @@ function initComparisonsTable() {
         updateComparisonRow(comparisonId, {
           publication_scope: scope,
           published: true,
+          publication_pending: null,
           publish_missing: Array.isArray(data.missing_files) ? data.missing_files : (comparisonData.get(Number(comparisonId))?.publish_missing ?? []),
           components_ready: Array.isArray(data.missing_files) ? data.missing_files.length === 0 : (comparisonData.get(Number(comparisonId))?.components_ready ?? null),
         });
 
       } else {
+        updateComparisonRow(comparisonId, {
+          publication_pending: { label: 'Dépublication…' },
+        });
         const res = await fetch(withBasePath(`/api/publish_xhtml/${comparisonId}`), {
           method: 'DELETE',
           headers: { 'Accept': 'application/json' }
@@ -1894,6 +2033,7 @@ function initComparisonsTable() {
         updateComparisonRow(comparisonId, {
           publication_scope: null,
           published: false,
+          publication_pending: null,
           publish_dest: null,
         });
       }
@@ -1902,25 +2042,31 @@ function initComparisonsTable() {
 
     } catch (err) {
       console.error(err);
+      updateComparisonRow(comparisonId, { publication_pending: null });
       alert((err && err.message) ? err.message : 'Erreur lors de la mise à jour de la publication');
-      toggle.checked = !shouldPublish;
     } finally {
-      toggle.disabled = false;
+      actionBtn.disabled = false;
     }
   });
 
   document.addEventListener('change', async event => {
+    if (event.target === detailsToggle) {
+      showComparisonDetails = !!detailsToggle.checked;
+      applyComparisonDetailsMode();
+      return;
+    }
+
     const scopeToggle = event.target.closest('.publish-scope-toggle');
     if (!scopeToggle) return;
 
     const row = scopeToggle.closest('tr');
-    const publishToggle = row?.querySelector('.publish-toggle');
-    if (!publishToggle || !publishToggle.checked) {
+    const publishAction = row?.querySelector('.publish-action-btn');
+    if (!publishAction || publishAction.dataset.published !== '1') {
       return;
     }
 
-    const comparisonId = publishToggle.dataset.id;
-    const previousScope = publishToggle.dataset.scope || '';
+    const comparisonId = publishAction.dataset.id;
+    const previousScope = publishAction.dataset.scope || '';
     const nextScope = scopeToggle.value;
     if (!comparisonId || nextScope === previousScope) {
       return;
@@ -1932,9 +2078,12 @@ function initComparisonsTable() {
       return;
     }
 
-    publishToggle.disabled = true;
+    publishAction.disabled = true;
 
     try {
+      updateComparisonRow(comparisonId, {
+        publication_pending: { label: `Publication ${nextScope}…` },
+      });
       const res = await fetch(withBasePath('/api/publish_xhtml'), {
         method: 'POST',
         headers: {
@@ -1955,16 +2104,18 @@ function initComparisonsTable() {
       updateComparisonRow(comparisonId, {
         publication_scope: nextScope,
         published: true,
+        publication_pending: null,
         publish_missing: Array.isArray(data.missing_files) ? data.missing_files : (comparisonData.get(Number(comparisonId))?.publish_missing ?? []),
         components_ready: Array.isArray(data.missing_files) ? data.missing_files.length === 0 : (comparisonData.get(Number(comparisonId))?.components_ready ?? null),
       });
       document.dispatchEvent(new CustomEvent('publicationCountsChanged'));
     } catch (err) {
       console.error(err);
+      updateComparisonRow(comparisonId, { publication_pending: null });
       alert((err && err.message) ? err.message : 'Erreur lors de la mise à jour de la publication');
       setSelectedScope(row, previousScope || 'prod');
     } finally {
-      publishToggle.disabled = false;
+      publishAction.disabled = false;
     }
   });
 
@@ -2004,6 +2155,12 @@ function initComparisonsTable() {
       updateComparisonCounts(publishedLeft, rows.length);
       updateComparisonSummaryState(rows.length ? 'ready' : 'empty', { total: rows.length, published: publishedLeft });
       if (!rows.length) noComparisons.style.display = 'block';
+      document.dispatchEvent(new CustomEvent('comparisonDeleted', {
+        detail: {
+          comparisonId: Number(comparisonId),
+          workId: currentWorkId,
+        }
+      }));
 
     } catch (err) {
       console.error('Erreur lors de la suppression de la comparaison:', err);

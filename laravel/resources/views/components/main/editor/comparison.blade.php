@@ -1,15 +1,23 @@
 @extends('layouts.app')
+@section('body-class', 'admin-editor-page')
 
 @section('content')
-    <div class="m-3">
-        <a href="{{ admin_path(sprintf('select/%s/%s', $work->author->folder, $work->folder)) }}" class="btn btn-outline-secondary btn-sm mb-3 d-inline-flex align-items-center gap-2">
-            <i class="bi bi-arrow-left-circle"></i>
-            <span>Retour à l’accueil</span>
-        </a>
+    <div class="m-2 comparison-editor-shell">
+        <div class="d-flex align-items-center gap-2 mb-2 comparison-editor-topbar">
+            <button
+                type="button"
+                id="editor-exit-button"
+                class="btn btn-outline-secondary btn-sm"
+                data-bs-toggle="tooltip"
+                title="Fermer l’éditeur"
+                aria-label="Fermer l’éditeur et revenir aux comparaisons"
+            >
+                <i class="bi bi-x-lg"></i>
+            </button>
+            <h1 class="mb-0">Œuvre <b>{{ $work->title }}</b> | Auteur <b>{{ $work->author->name }}</b> | Comparaison <b>#{{ $comparison->id }}</b></h1>
+        </div>
 
-        <h1>Œuvre <b>{{ $work->title }}</b> | Auteur <b>{{ $work->author->name }}</b> | Comparaison <b>#{{ $comparison->id }}</b></h1>
-
-        <div class="d-flex flex-wrap align-items-center gap-2 mt-3 mb-2">
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2 mb-1 comparison-editor-summary">
             <span class="badge text-bg-secondary">Composants: {{ count($components) }}</span>
             @if ($canEditComparison)
                 <span class="badge text-bg-success">Édition autorisée</span>
@@ -37,11 +45,6 @@
                 <strong><i class="bi bi-exclamation-triangle-fill"></i> Attention :</strong> Les modifications ne sont pas autorisées.
                 @if ($isPublished)
                     Cette comparaison est actuellement publiée.
-                @else
-                    @if ($missingSourceManifest || $missingTargetManifest)
-                        Les manifestes facsimilés requis ne sont pas disponibles
-                        (source: {{ $missingSourceManifest ? 'manquant' : 'ok' }}, cible: {{ $missingTargetManifest ? 'manquant' : 'ok' }}).
-                    @endif
                 @endif
             </div>
         @endif
@@ -54,7 +57,7 @@
             <ul class="mb-0 mt-2" id="consistency-issues-list"></ul>
         </div>
 
-        <ul class="nav nav-tabs mt-2" id="comparison-editor-tabs" role="tablist">
+        <ul class="nav nav-tabs mt-1 comparison-editor-tabs" id="comparison-editor-tabs" role="tablist">
             @foreach ($components as $component)
                 <li class="nav-item" role="presentation">
                     <button
@@ -73,7 +76,7 @@
             @endforeach
         </ul>
 
-        <div class="tab-content border border-top-0 rounded-bottom p-2" id="comparison-editor-tab-content">
+        <div class="tab-content border border-top-0 rounded-bottom p-1 comparison-editor-tab-content" id="comparison-editor-tab-content">
             @foreach ($components as $component)
                 <div
                     class="tab-pane fade @if ($loop->first) show active @endif"
@@ -83,7 +86,7 @@
                     tabindex="0"
                 >
                     <div class="d-flex flex-column gap-2">
-                        <div class="d-flex gap-2 align-items-center">
+                        <div class="d-flex gap-2 align-items-center comparison-editor-pane-header">
                             <div>
                                 <strong>{{ $component['label'] }}</strong>
                                 <span class="text-muted">({{ $component['filename'] }})</span>
@@ -114,7 +117,7 @@
                                         title="Supprimer la transformation ciblée (ligne courante)"
                                     >
                                         <i class="bi bi-trash3"></i>
-                                        <span class="ms-1">Supprimer transfo</span>
+                                        <span class="ms-1">Supprimer la transformation</span>
                                     </button>
                                 @endif
                             @endif
@@ -129,7 +132,7 @@
 
                         <div
                             id="editor-container-{{ $component['type'] }}"
-                            style="height: calc(100vh - 360px); border:1px solid #ccc;"
+                            style="height: calc(100vh - 308px); border:1px solid #ccc;"
                             class="overflow-auto"
                         ></div>
                     </div>
@@ -137,11 +140,67 @@
             @endforeach
         </div>
     </div>
+    <div class="modal fade" id="removeTransformationModal" tabindex="-1" aria-labelledby="removeTransformationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="removeTransformationModalLabel">Confirmer la suppression</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">
+                        Supprimer la transformation <strong id="remove-transformation-refid">—</strong>
+                        dans <strong id="remove-transformation-file">—</strong>,
+                        ainsi que ses références dans <code>source.xhtml</code> et <code>target.xhtml</code> ?
+                    </p>
+                    <div class="small text-muted mb-1">Ligne ciblée :</div>
+                    <pre id="remove-transformation-line" class="mb-0 p-2 border rounded bg-light small" style="white-space: pre-wrap;"></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-danger" id="confirm-remove-transformation-btn">
+                        Supprimer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @push('styles')
+        <style>
+            .comparison-editor-topbar {
+                min-height: 2rem;
+            }
+
+            .comparison-editor-topbar h1 {
+                font-size: 1.1rem;
+                line-height: 1.2;
+            }
+
+            .comparison-editor-summary {
+                min-height: 1.9rem;
+            }
+
+            .comparison-editor-tabs .nav-link {
+                padding: 0.32rem 0.6rem;
+                font-size: 0.84rem;
+                line-height: 1.1;
+            }
+
+            .comparison-editor-tab-content {
+                padding-top: 0.45rem !important;
+            }
+
+            .comparison-editor-pane-header {
+                min-height: 1.9rem;
+            }
+        </style>
+    @endpush
     @push('scripts')
         <script>
             window.editorParams = {
                 components: @json($components),
                 consistencyUrl: @json(admin_url('comparison/' . $comparison->id . '/editor/consistency')),
+                returnUrl: @json(admin_path(sprintf('select/%s/%s#etape-3', $work->author->folder, $work->folder))),
             };
         </script>
         @vite('resources/js/editor-comparison.js')

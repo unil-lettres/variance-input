@@ -13,14 +13,20 @@
             </span>
         </div>
         </div>
-        <button type="button"
-                class="btn btn-sm btn-primary"
-                id="open-medite-modal-btn"
-                data-bs-toggle="modal"
-                data-bs-target="#mediteModal"
-                aria-label="Lancer un alignement">
-            Lancer un alignement
-        </button>
+        <div class="d-flex align-items-center gap-3">
+            <div class="form-check form-switch comparison-details-toggle mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="comparison-details-toggle">
+                <label class="form-check-label small fw-semibold" for="comparison-details-toggle">Détails</label>
+            </div>
+            <button type="button"
+                    class="btn btn-sm btn-primary"
+                    id="open-medite-modal-btn"
+                    data-bs-toggle="modal"
+                    data-bs-target="#mediteModal"
+                    aria-label="Lancer un alignement">
+                Lancer un alignement
+            </button>
+        </div>
     </div>
 
     <div id="comparisonsCollapse" class="collapse show">
@@ -35,21 +41,25 @@
         <table class="table table-sm table-bordered comparisons-table" id="comparisons-table">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Dossier</th>
+                    <th>Désignation</th>
                     <th>Source</th>
                     <th>Cible</th>
                     <th>Paramètres Medite</th>
-                    <th>Publier</th>
-                    <th>Résultats</th>
+                    <th>Suppr.</th>
+                    <th>Insert.</th>
+                    <th>Rempl.</th>
+                    <th>Dépl.</th>
+                    <th>Publication</th>
+                    <th>Gérer</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody></tbody>
         </table>
 
         <!-- Empty state -->
-        <div id="no-comparisons" style="display:none;" class="text-muted">
-            Aucune comparaison trouvée pour cette œuvre.
+        <div id="no-comparisons" style="display:none;" class="text-muted text-center">
+            Aucune comparaison n'a encore été établie pour cette œuvre.
         </div>
     </div>
     </div>
@@ -100,18 +110,130 @@
     letter-spacing: 0.02em;
     color: #444;
     background-color: #f8f9fa;
+    text-align: center;
   }
   .comparisons-table td {
-    vertical-align: top;
+    vertical-align: middle;
     font-size: 0.92rem;
-  }
-  .comparisons-table td:nth-child(1),
-  .comparisons-table td:nth-child(8) {
     text-align: center;
+  }
+  .comparisons-table td.comparison-action-cell {
+    vertical-align: middle;
+  }
+  .comparison-details-toggle .form-check-input {
+    cursor: pointer;
+  }
+  .comparison-details-toggle .form-check-label {
+    cursor: pointer;
+  }
+  .comparisons-table.compact-details th:nth-child(1),
+  .comparisons-table.compact-details td:nth-child(1),
+  .comparisons-table.compact-details th:nth-child(4),
+  .comparisons-table.compact-details td:nth-child(4) {
+    display: none;
+  }
+  .comparisons-table.compact-details .comparison-role-details,
+  .comparisons-table.compact-details .comparison-results-details {
+    display: none !important;
+  }
+  .comparisons-table.compact-details .source-cell .role-wrapper,
+  .comparisons-table.compact-details .target-cell .role-wrapper {
+    display: none !important;
+  }
+  .comparisons-table:not(.compact-details) .comparison-results-compact {
+    display: none !important;
+  }
+  .comparisons-table td:nth-child(5),
+  .comparisons-table td:nth-child(6),
+  .comparisons-table td:nth-child(7),
+  .comparisons-table td:nth-child(8),
+  .comparisons-table td:nth-child(9),
+  .comparisons-table td:nth-child(10),
+  .comparisons-table td:nth-child(11) {
+    text-align: center;
+  }
+  .comparisons-table th:nth-child(5),
+  .comparisons-table th:nth-child(6),
+  .comparisons-table th:nth-child(7),
+  .comparisons-table th:nth-child(8),
+  .comparisons-table td:nth-child(5),
+  .comparisons-table td:nth-child(6),
+  .comparisons-table td:nth-child(7),
+  .comparisons-table td:nth-child(8) {
+    width: 5.5rem;
+    min-width: 5.5rem;
+  }
+  .comparison-metric-cell {
+    display: inline-block;
+    width: 100%;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .comparison-results {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+  }
+  .comparison-results-line {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    width: 100%;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    color: #44566c;
+    white-space: nowrap;
+  }
+  .comparison-results-line strong {
+    color: #1d2340;
+  }
+  .comparison-results-line--running {
+    color: #7a5512;
+  }
+  .comparison-results-line--muted {
+    color: #6c757d;
+  }
+  .comparison-results-compact {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #7a5512;
+    white-space: nowrap;
+  }
+  .comparison-results-compact .comparison-running-spinner {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+  .comparison-results-compact:empty {
+    display: none !important;
+  }
+  .comparison-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+  .comparison-action-btn {
+    width: 1.95rem;
+    height: 1.95rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 0.72rem;
+    line-height: 1;
   }
   .comparison-params {
     display: inline-flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 0.35rem;
   }
   .comparison-param-chip {
@@ -170,15 +292,63 @@
   .target-cell .role-wrapper {
     margin-top: 0.5rem;
   }
+  .source-cell,
+  .target-cell,
+  .source-cell .role-wrapper,
+  .target-cell .role-wrapper,
+  .comparison-role-details,
+  .comparison-results-slot {
+    text-align: center;
+  }
+  .comparisons-table tr[data-legacy="1"] .source-cell,
+  .comparisons-table tr[data-legacy="1"] .target-cell {
+    vertical-align: middle !important;
+  }
   .publish-control {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
+    justify-content: center;
     gap: 0.35rem;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+  .publish-action-btn {
+    min-width: 5.7rem;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.76rem;
+    white-space: nowrap;
+  }
+  .comparison-publish-pill {
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .comparison-publish-pill--draft {
+    background: #e9ecef;
+    color: #495057;
+    border-color: #d0d7de;
+  }
+  .comparison-publish-pill--dev {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+  }
+  .comparison-publish-pill--prod {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #bbf7d0;
+  }
+  .comparison-publish-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    white-space: nowrap;
   }
   .publish-scope .btn {
     font-size: 0.7rem;
     padding: 0.15rem 0.45rem;
+    white-space: nowrap;
   }
 </style>
 @endpush

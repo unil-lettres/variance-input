@@ -37,6 +37,8 @@ ops2xhtml: Dict[str, dict] = {
     "bc":           dict(href="#bc", id="ac", file="bc"),
 }
 
+_LIST_NEWLINE_MARKER = "¶"
+
 # For generating the *final* XHTML IDs, we want these exact prefixes:
 #
 #   operation → desired XHTML‐ID prefix
@@ -129,9 +131,9 @@ def add_list_xhtml(
         href = "#ar_src,#ar_tgt"   id = "lbr_src"
     • All others keep the same prefix for href and id.
     """
-    # 1) slice raw text, strip stray tags / newlines -------------------
+    # 1) slice raw text, normalize structural tags, keep line breaks visible
     txt = op.extract(z.rchanges, start, end)
-    for a, b in (("\n", ""), ("<p/>", "\n"), ("<p>", ""), ("</p>", "\n"), ("</div>", "")):
+    for a, b in (("<p/>", "\n"), ("<p>", ""), ("</p>", "\n"), ("</div>", "")):
         txt = txt.replace(a, b)
 
     # 2) build href / id / label using legacy numbering ----------------
@@ -151,7 +153,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"#ar_{num}"
         lid = f"lbr_{num}"
-        link_text = label
+        link_text = label.replace("\n", _LIST_NEWLINE_MARKER).strip()
 
     elif name == "transpose" and isinstance(id_suffix, tuple):
         src_id, tgt_id, _label = id_suffix
@@ -159,7 +161,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"#ad_{num}"
         lid = f"lbd_{num}"
-        link_text = txt.strip()
+        link_text = txt.replace("\n", _LIST_NEWLINE_MARKER).strip()
 
     else:
         tei_id: str
@@ -171,7 +173,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"{o['href']}_{num}"
         lid = f"{o['id']}_{num}"
-        link_text = txt.strip()
+        link_text = txt.replace("\n", _LIST_NEWLINE_MARKER).strip()
 
     xhtml_lists[name].append(
         f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
