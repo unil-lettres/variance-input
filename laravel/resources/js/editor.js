@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const TOOLTIPS_STORAGE_KEY = 'variance:version-editor-tooltips:v1';
     const {
         xmlContent,
+        lazyLoadEnabled,
+        urlDocumentLoad,
         urlFileSave,
         urlToggleIgnored,
         versionId,
@@ -80,14 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let tagsWereHiddenBeforeEdit = true;
     let hasUnsavedChanges = false;
     let isEditMode = false;
-    let initialXmlContent = xmlContent;
-    let fullXmlContent = xmlContent;
+    let documentLoaded = typeof xmlContent === 'string' && xmlContent.length > 0;
+    let initialXmlContent = documentLoaded ? xmlContent : '';
+    let fullXmlContent = documentLoaded ? xmlContent : '';
     let bodyPreviewActive = false;
     let refreshButtonStatesTimeout = null;
     let lignesPoller = null;
     let facsimilesPoller = null;
     let facsimilesUploadInProgress = false;
     let tooltipsEnabled = localStorage.getItem(TOOLTIPS_STORAGE_KEY) === 'true';
+    let initialReadonlyViewApplied = false;
 
     window.areVersionEditorTooltipsEnabled = () => tooltipsEnabled;
 
@@ -171,7 +175,28 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.toggleTooltipsInput.checked = tooltipsEnabled;
     }
 
-    const editor = initEditor(document.getElementById('editor-container'), xmlContent);
+    const editor = initEditor(document.getElementById('editor-container'), documentLoaded ? xmlContent : '');
+
+    const setDocumentLoadingState = (isLoading, message = 'Chargement du document…') => {
+        elements.editorContainer?.classList.toggle('is-loading', !!isLoading);
+        elements.editorContainer?.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+        if (elements.editorContainer) {
+            elements.editorContainer.dataset.loadingMessage = isLoading ? message : '';
+        }
+        if (elements.noPreviewText && isLoading) {
+            elements.noPreviewText.style.display = 'none';
+        }
+    };
+
+    const buildInlineFallbackUrl = () => {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('editor_mode', 'inline');
+        return nextUrl.toString();
+    };
+
+    const fallbackToInlineMode = () => {
+        window.location.assign(buildInlineFallbackUrl());
+    };
 
     // Track changes in the editor
     editor.onContentChanged(() => {
@@ -983,6 +1008,60 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTagsButtonUI(false);
     };
 
+    const applyInitialReadonlyView = () => {
+        if (initialReadonlyViewApplied || !documentLoaded) {
+            return;
+        }
+        initialReadonlyViewApplied = true;
+        applyTagsHiddenView();
+        setDocumentLoadingState(false);
+    };
+
+    const hydrateEditorDocument = (content) => {
+        initialXmlContent = content;
+        fullXmlContent = content;
+        documentLoaded = true;
+        editor.replaceDocument(content, { silent: true });
+        refreshButtonStates();
+        const initialFacsimileButton = findInitialFacsimileButton();
+        if (initialFacsimileButton) {
+            activateFacsimileButton(initialFacsimileButton);
+        }
+        requestAnimationFrame(() => {
+            applyInitialReadonlyView();
+        });
+    };
+
+    const loadEditorDocument = async () => {
+        if (!lazyLoadEnabled || documentLoaded || !urlDocumentLoad) {
+            return;
+        }
+
+        setDocumentLoadingState(true);
+
+        try {
+            const response = await fetch(`${urlDocumentLoad}${urlDocumentLoad.includes('?') ? '&' : '?'}ts=${Date.now()}`, {
+                headers: {
+                    Accept: 'application/xml,text/plain;q=0.9,*/*;q=0.8',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const content = await response.text();
+            if (!content) {
+                throw new Error('Empty editor document');
+            }
+
+            hydrateEditorDocument(content);
+        } catch (error) {
+            console.error('Impossible de charger le document de l’éditeur en mode différé.', error);
+            fallbackToInlineMode();
+        }
+    };
+
     const updateSaveButtonUI = (isEditMode) => {
         // Show manual save button only in edit mode
         if (isEditMode) {
@@ -1489,9 +1568,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initPagination();
     refreshButtonStates();
-    const initialFacsimileButton = findInitialFacsimileButton();
-    if (initialFacsimileButton) {
-        activateFacsimileButton(initialFacsimileButton);
+    if (documentLoaded) {
+        const initialFacsimileButton = findInitialFacsimileButton();
+        if (initialFacsimileButton) {
+            activateFacsimileButton(initialFacsimileButton);
+        }
+    } else if (lazyLoadEnabled) {
+        setDocumentLoadingState(true);
     }
 
     // Initialize line numbers button state from localStorage
@@ -1502,6 +1585,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Use CodeMirror's ready event to hide tags after initial render
     // This fixes Firefox's slow rendering when tags are hidden from the start
     editor.onEditorReady(() => {
-        applyTagsHiddenView();
+        applyInitialReadonlyView();
     });
+
+    loadEditorDocument();
 });

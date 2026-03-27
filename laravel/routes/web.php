@@ -150,9 +150,19 @@ Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->na
 Route::get('/comparisons/{comparison}/export', [ComparisonController::class, 'exportPublishedLegacy'])
     ->middleware('auth')
     ->name('comparisons.export');
+Route::post('/comparisons/{comparison}/export', [ComparisonController::class, 'queueLegacyExport'])
+    ->middleware('auth')
+    ->name('comparisons.export.queue');
+Route::get('/comparisons/{comparison}/export/status', [ComparisonController::class, 'exportStatus'])
+    ->middleware('auth')
+    ->name('comparisons.export.status');
+Route::get('/comparisons/{comparison}/export/download', [ComparisonController::class, 'downloadLegacyExport'])
+    ->middleware('auth')
+    ->name('comparisons.export.download');
 
 // Editor
 Route::get('/version/{version}/editor', [EditorController::class, 'versionEditor'])->middleware('auth')->name('version.editor');
+Route::get('/api/versions/{version}/editor-document', [EditorController::class, 'versionEditorDocument'])->middleware('auth')->name('version.editor.document');
 Route::put('/version/{version}/editor', [EditorController::class, 'versionUpdate'])->middleware('auth')->name('version.editor.update');
 Route::get('/comparison/{comparison}/editor', [EditorController::class, 'comparisonEditor'])->middleware('auth')->name('comparison.editor');
 Route::put('/comparison/{comparison}/editor', [EditorController::class, 'comparisonUpdate'])->middleware('auth')->name('comparison.editor.update');

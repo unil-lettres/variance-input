@@ -9,17 +9,21 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cache;
-use ZipArchive;
 use App\Models\Comparison;
 use App\Models\Version;
 use App\Models\User;
 use App\Http\Controllers\PublishController;
 use App\Services\PageMarkerService;
 use App\Jobs\InjectComparisonPaginationJob;
+use App\Jobs\GenerateLegacyExportJob;
+use App\Services\LegacyExportService;
 
 class ComparisonController extends Controller
 {
-    public function __construct(private PageMarkerService $pageMarkerService)
+    public function __construct(
+        private PageMarkerService $pageMarkerService,
+        private LegacyExportService $legacyExportService
+    )
     {
     }
 
@@ -79,6 +83,7 @@ class ComparisonController extends Controller
                     $cmp->pagination = null;
                     $cmp->manifests  = null;
                     $cmp->comparison_progress = null;
+                    $cmp->export_bundle = $this->exportBundlePayload($cmp);
                     $cmp->details_loaded = false;
                     return $cmp;
                 }
@@ -211,6 +216,7 @@ class ComparisonController extends Controller
         $cmp->manifests  = $this->manifestStatusForComparison($cmp, $authorFolder, $workFolder);
         $minUpdatedAt = $cmp->created_at ? $cmp->created_at->getTimestamp() : null;
         $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id, $minUpdatedAt);
+        $cmp->export_bundle = $this->exportBundlePayload($cmp);
         $cmp->details_loaded = true;
 
         return $cmp;
@@ -444,6 +450,7 @@ class ComparisonController extends Controller
 
         // Remove stale comparison progress snapshot and DB record
         $this->pageMarkerService->clearComparisonProgress($comparison->id);
+        $this->legacyExportService->deleteExportArtifacts($comparison->id);
         $comparison->delete();
 
         return response()->json(['message' => 'Comparison deleted']);
@@ -451,63 +458,53 @@ class ComparisonController extends Controller
 
     public function exportPublishedLegacy(Comparison $comparison)
     {
-        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
         $this->assertComparisonOwnership($comparison);
 
-        if (function_exists('set_time_limit')) {
-            @set_time_limit(0);
+        $snapshot = $this->legacyExportService->getSnapshot($comparison->id);
+        $absolutePath = $this->legacyExportService->absolutePathFromSnapshot($snapshot);
+
+        if (($snapshot['status'] ?? null) !== 'ready' || !$absolutePath || !is_file($absolutePath)) {
+            abort(404, 'Aucune archive prête. Lancez d’abord la préparation de l’export.');
         }
 
-        $work = $comparison->sourceVersion?->work ?? $comparison->targetVersion?->work;
-        $author = $work?->author;
+        $downloadName = $snapshot['file_name'] ?: (($comparison->folder ?: 'comparison_' . $comparison->id) . '_legacy.zip');
+        return response()->download($absolutePath, $downloadName);
+    }
 
-        if (!$work || !$author) {
-            abort(404, 'Impossible de déterminer le dossier legacy à exporter.');
+    public function queueLegacyExport(Comparison $comparison)
+    {
+        $this->assertComparisonOwnership($comparison);
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+
+        $snapshot = $this->legacyExportService->getSnapshot($comparison->id);
+        if (in_array($snapshot['status'] ?? 'idle', ['queued', 'running', 'ready'], true)) {
+            return response()->json($this->exportBundlePayload($comparison), ($snapshot['status'] ?? null) === 'ready' ? 200 : 202);
         }
 
-        $disk = Storage::disk('public');
+        $this->legacyExportService->markQueued($comparison);
+        GenerateLegacyExportJob::dispatch($comparison->id)->onQueue('exports');
 
-        $sourceFolder = $this->resolvePublishedVersionFolder($comparison->sourceVersion);
-        $targetFolder = $this->resolvePublishedVersionFolder($comparison->targetVersion);
-        $comparisonFolder = $this->resolvePublishedComparisonFolder($comparison);
+        return response()->json($this->exportBundlePayload($comparison), 202);
+    }
 
-        $zipName = ($comparison->folder ?: 'comparison_' . $comparison->id) . '_legacy.zip';
-        $tmpDir  = storage_path('app/tmp');
-        File::ensureDirectoryExists($tmpDir);
-        $tmpPath = tempnam($tmpDir, 'legacy_');
+    public function exportStatus(Comparison $comparison)
+    {
+        $this->assertComparisonOwnership($comparison);
+        return response()->json($this->exportBundlePayload($comparison));
+    }
 
-        $zip = new ZipArchive();
-        if ($zip->open($tmpPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            return response()->json([
-                'message' => 'Impossible de créer l’archive d’export.',
-            ], 500);
+    public function downloadLegacyExport(Comparison $comparison)
+    {
+        $this->assertComparisonOwnership($comparison);
+
+        $snapshot = $this->legacyExportService->getSnapshot($comparison->id);
+        $absolutePath = $this->legacyExportService->absolutePathFromSnapshot($snapshot);
+        if (($snapshot['status'] ?? null) !== 'ready' || !$absolutePath || !is_file($absolutePath)) {
+            abort(404, 'Aucune archive prête au téléchargement.');
         }
 
-        $filesAdded = 0;
-
-        if ($sourceFolder) {
-            $filesAdded += $this->addManifestedFacsimilesToZip($zip, $comparison, $comparison->sourceVersion, 'source');
-        }
-        if ($targetFolder) {
-            $filesAdded += $this->addManifestedFacsimilesToZip($zip, $comparison, $comparison->targetVersion, 'target');
-        }
-
-        if ($comparisonFolder) {
-            $absolute = $disk->path($comparisonFolder);
-            $zipPath = $comparison->folder ?: basename($comparisonFolder);
-            $filesAdded += $this->addDirectoryToZip($zip, $absolute, $zipPath);
-        }
-
-        $zip->close();
-
-        if ($filesAdded === 0) {
-            File::delete($tmpPath);
-            return response()->json([
-                'message' => 'Les dossiers publiés sont vides pour cette comparaison.',
-            ], 404);
-        }
-
-        return response()->download($tmpPath, $zipName)->deleteFileAfterSend(true);
+        $downloadName = $snapshot['file_name'] ?: (($comparison->folder ?: 'comparison_' . $comparison->id) . '_legacy.zip');
+        return response()->download($absolutePath, $downloadName);
     }
 
     public function applyPageMarkers(Request $request, Comparison $comparison)
@@ -796,148 +793,20 @@ class ComparisonController extends Controller
         ];
     }
 
-    private function resolvePublishedVersionFolder(?Version $version): ?string
+    private function exportBundlePayload(Comparison $comparison): array
     {
-        if (!$version) {
-            return null;
-        }
+        $snapshot = $this->legacyExportService->getSnapshot($comparison->id);
+        $status = $snapshot['status'] ?? 'idle';
 
-        $version->loadMissing('work.author', 'work');
-        $authorFolder = $version->work->author->folder ?? null;
-        $workFolder   = $version->work->folder ?? null;
-        $versionFolder = $version->folder ?? null;
-
-        if (!$authorFolder || !$workFolder || !$versionFolder) {
-            return null;
-        }
-
-        $relative = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
-
-        return Storage::disk('public')->exists($relative) ? $relative : null;
-    }
-
-    private function resolvePublishedComparisonFolder(Comparison $comparison): ?string
-    {
-        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
-
-        $work = $comparison->sourceVersion?->work ?? $comparison->targetVersion?->work;
-        $author = $work?->author;
-
-        if (!$work || !$author || !$comparison->folder) {
-            return null;
-        }
-
-        $relative = "uploads/{$author->folder}/{$work->folder}/{$comparison->folder}";
-
-        return Storage::disk('public')->exists($relative) ? $relative : null;
-    }
-
-    private function addManifestedFacsimilesToZip(ZipArchive $zip, Comparison $comparison, ?Version $version, string $role): int
-    {
-        if (!$version) {
-            return 0;
-        }
-
-        $version->loadMissing('work.author', 'work');
-
-        $authorFolder  = $version->work->author->folder ?? null;
-        $workFolder    = $version->work->folder ?? null;
-        $versionFolder = $version->folder ?? null;
-        $comparisonFolder = $comparison->folder;
-
-        if (!$authorFolder || !$workFolder || !$versionFolder || !$comparisonFolder) {
-            return 0;
-        }
-
-        $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
-        $baseName    = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparisonFolder));
-        $manifestRelative = "{$relativeDir}/images_{$role}_{$baseName}.json";
-
-        $disk = Storage::disk('public');
-        if (!$disk->exists($manifestRelative)) {
-            return 0;
-        }
-
-        $entries = json_decode($disk->get($manifestRelative), true);
-        if (!is_array($entries)) {
-            $entries = [];
-        }
-
-        $files = [];
-        foreach ($entries as $entry) {
-            if (!is_array($entry)) {
-                continue;
-            }
-            foreach (['big', 'small'] as $key) {
-                $value = $entry[$key] ?? null;
-                if (!is_string($value) || $value === '') {
-                    continue;
-                }
-                $normalized = ltrim($value, '/');
-                if (strpos($normalized, 'uploads/') !== 0) {
-                    $normalized = $relativeDir . '/' . ltrim($normalized, '/');
-                }
-                $files[$normalized] = true;
-            }
-        }
-
-        $zipRoot = $versionFolder;
-        $added = 0;
-
-        $manifestAbsolute = $disk->path($manifestRelative);
-        if (is_file($manifestAbsolute)) {
-            $zip->addFile($manifestAbsolute, $zipRoot . '/' . basename($manifestRelative));
-            $added++;
-        }
-
-        foreach (array_keys($files) as $fileRelative) {
-            if (!$disk->exists($fileRelative)) {
-                continue;
-            }
-            $absolute = $disk->path($fileRelative);
-            $relativeInsideVersion = ltrim(str_replace($relativeDir, '', $fileRelative), '/');
-            if ($relativeInsideVersion === '') {
-                $relativeInsideVersion = basename($fileRelative);
-            }
-            $zip->addFile($absolute, $zipRoot . '/' . $relativeInsideVersion);
-            $added++;
-        }
-
-        return $added;
-    }
-
-    private function addDirectoryToZip(ZipArchive $zip, string $absolutePath, string $zipRoot): int
-    {
-        if (!is_dir($absolutePath)) {
-            return 0;
-        }
-
-        $zipRoot = trim($zipRoot, '/\\');
-        if ($zipRoot === '') {
-            $zipRoot = basename($absolutePath);
-        }
-
-        $zip->addEmptyDir($zipRoot);
-        $added = 0;
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($absolutePath, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
-        );
-
-        foreach ($iterator as $file) {
-            $relative = ltrim(str_replace($absolutePath, '', $file->getPathname()), DIRECTORY_SEPARATOR);
-            $entryName = $zipRoot . '/' . str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-
-            if ($file->isDir()) {
-                $zip->addEmptyDir($entryName);
-            } else {
-                $zip->addFile($file->getPathname(), $entryName);
-                $added++;
-            }
-        }
-
-        return $added;
+        return [
+            ...$snapshot,
+            'status' => $status,
+            'download_url' => $status === 'ready'
+                ? admin_url("comparisons/{$comparison->id}/export/download")
+                : null,
+            'status_url' => admin_url("comparisons/{$comparison->id}/export/status"),
+            'queue_url' => admin_url("comparisons/{$comparison->id}/export"),
+        ];
     }
 
     private function manifestStatusForComparison(Comparison $comparison, ?string $authorFolder, ?string $workFolder): array

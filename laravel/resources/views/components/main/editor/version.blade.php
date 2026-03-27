@@ -309,6 +309,8 @@
         <script>
             window.editorParams = {
                 xmlContent: @json($xmlContent),
+                lazyLoadEnabled: @json($lazyLoadEnabled),
+                urlDocumentLoad: @json($urlDocumentLoad),
                 urlFileSave: @json($urlFileSave),
                 urlToggleIgnored: @json($urlToggleIgnored),
                 versionId: @json($version->id),
@@ -332,6 +334,37 @@
             .comparison-editor-topbar h1 {
                 font-size: 1.1rem;
                 line-height: 1.2;
+            }
+
+            .editor-text-frame.is-loading {
+                pointer-events: none;
+                position: relative;
+                background: #f6f3ed;
+                border: 1px solid #d9d3c7 !important;
+                border-radius: 0.25rem;
+                overflow: hidden;
+            }
+
+            .editor-text-frame.is-loading .cm-editor,
+            .editor-text-frame.is-loading .cm-scroller,
+            .editor-text-frame.is-loading .cm-gutters {
+                visibility: hidden;
+            }
+
+            .editor-text-frame.is-loading::after {
+                content: attr(data-loading-message);
+                position: absolute;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 1.5rem;
+                color: #6b6256;
+                font-size: 1rem;
+                letter-spacing: 0.01em;
+                text-align: center;
+                background: #f6f3ed;
+                z-index: 5;
             }
 
             .editor-toolbar-group {

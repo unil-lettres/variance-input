@@ -19,12 +19,11 @@
 
         <div class="d-flex flex-wrap align-items-center gap-2 mt-2 mb-1 comparison-editor-summary">
             <span class="badge text-bg-secondary">Composants: {{ count($components) }}</span>
-            @if ($canEditComparison)
-                <span class="badge text-bg-success">Édition autorisée</span>
-            @else
+            @if (!$canEditComparison)
                 <span class="badge text-bg-warning">Édition restreinte</span>
             @endif
             <span id="consistency-status-badge" class="badge text-bg-secondary">Cohérence: vérification…</span>
+            <span id="comparison-save-feedback" class="comparison-save-feedback" aria-live="polite"></span>
             <div class="ms-auto d-flex gap-2">
                 @if ($canEditComparison)
                     <button
@@ -192,6 +191,28 @@
 
             .comparison-editor-pane-header {
                 min-height: 1.9rem;
+            }
+
+            .comparison-save-feedback {
+                min-height: 1.5rem;
+                font-size: 0.86rem;
+                color: #6c757d;
+                opacity: 0;
+                transform: translateY(-2px);
+                transition: opacity 0.18s ease, transform 0.18s ease;
+            }
+
+            .comparison-save-feedback.is-visible {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            .comparison-save-feedback.is-success {
+                color: #146c43;
+            }
+
+            .comparison-save-feedback.is-error {
+                color: #b02a37;
             }
         </style>
     @endpush

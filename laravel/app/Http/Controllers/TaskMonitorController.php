@@ -8,7 +8,7 @@ class TaskMonitorController extends Controller
 {
     public function index()
     {
-        $queues = ['default', 'facsimiles', 'page-markers'];
+        $queues = ['default', 'facsimiles', 'page-markers', 'exports'];
         $queueStats = [];
 
         $queueDriver = config('queue.default');

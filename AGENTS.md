@@ -36,9 +36,10 @@ Reference: `descr/workflow.md`, `descr/facsimiles.md`.
 ## Queues & jobs
 - `page-markers`: `ApplyLignesJob`, `InjectComparisonPaginationJob`
 - `facsimiles`: `ProcessFacsimileImage`
+- `exports`: `GenerateLegacyExportJob`
 
 Worker container runs `laravel/scripts/run-queue-workers.sh` which spawns
-multiple `queue:work` processes for `facsimiles,page-markers`. A heartbeat
+multiple `queue:work` processes for `facsimiles,page-markers,exports`. A heartbeat
 is written to `storage/app/private/queue_workers.json`.
 See `descr/queues_jobs.md`.
 
@@ -117,7 +118,7 @@ docker compose exec laravel bash
 docker compose exec laravel php artisan migrate
 
 # Queue worker (if not using laravel-queue container)
-docker compose exec laravel php artisan queue:work --queue=facsimiles,page-markers
+docker compose exec laravel php artisan queue:work --queue=facsimiles,page-markers,exports
 
 # Logs
 docker compose logs -f laravel laravel-queue medite

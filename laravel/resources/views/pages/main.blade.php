@@ -144,12 +144,18 @@
         gap: 24px;
     }
     .editorial-welcome {
-        padding: 0.25rem 0.2rem 0;
-        font-size: 1.1rem;
-        font-style: italic;
+        width: min(72%, 52rem);
+        margin: 0 auto;
+        padding: 0.9rem 1.2rem;
+        font-size: 1.14rem;
+        font-weight: 700;
         line-height: 1.6;
-        color: #495057;
+        color: #1f2933;
         text-align: center;
+        background: linear-gradient(180deg, #f8f9fa 0%, #eef2f5 100%);
+        border: 1px solid #dbe3ea;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.45);
     }
     .editorial-welcome span {
         display: block;
@@ -257,6 +263,7 @@
         font-size: 0.95rem;
         color: #6c757d;
         font-style: italic;
+        text-align: center;
     }
     .editorial-history-meta {
         display: flex;

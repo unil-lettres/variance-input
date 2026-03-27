@@ -155,7 +155,7 @@ class HealthController extends Controller
             if (class_exists('Redis') || class_exists('Predis\\Client')) {
                 try {
                     $redis = Redis::connection();
-                    foreach (['default', 'facsimiles', 'page-markers'] as $queue) {
+                    foreach (['default', 'facsimiles', 'page-markers', 'exports'] as $queue) {
                         $stats = [
                             'queue' => $queue,
                             'pending' => (int) $redis->llen("queues:{$queue}"),
@@ -194,7 +194,7 @@ class HealthController extends Controller
             }
         } elseif ($dbOk) {
             $now = now()->timestamp;
-            foreach (['default', 'facsimiles', 'page-markers'] as $queue) {
+            foreach (['default', 'facsimiles', 'page-markers', 'exports'] as $queue) {
                 $pending = DB::table('jobs')
                     ->where('queue', $queue)
                     ->whereNull('reserved_at')

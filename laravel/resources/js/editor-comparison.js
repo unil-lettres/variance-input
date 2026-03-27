@@ -37,10 +37,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const removeTransformationModal = removeTransformationModalEl
       ? new bootstrapLib.Modal(removeTransformationModalEl)
       : null;
+    const saveFeedbackElement = document.getElementById('comparison-save-feedback');
+    const tabsElement = document.getElementById('comparison-editor-tabs');
     let pendingRemoval = null;
+    let saveFeedbackTimeout = null;
+    const activeTabStorageKey = `variance:comparison-editor:active-tab:${window.location.pathname}`;
     
     const hasAnyUnsavedChanges = () => {
       return Object.values(unsavedChangesTracker).some(hasChanges => hasChanges);
+    };
+
+    const rememberActiveTab = (tabId) => {
+      if (!tabId) {
+        return;
+      }
+      try {
+        window.sessionStorage.setItem(activeTabStorageKey, tabId);
+      } catch (error) {
+        console.warn('Unable to persist active comparison editor tab.', error);
+      }
+    };
+
+    const getRememberedActiveTab = () => {
+      try {
+        return window.sessionStorage.getItem(activeTabStorageKey);
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const getCurrentActiveTabId = () => {
+      const activeButton = tabsElement?.querySelector('.nav-link.active');
+      return activeButton?.id ?? null;
     };
 
     // Warn user before leaving page if there are unsaved changes
@@ -72,6 +100,46 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       statusElement.className = `badge ${statusClass}`;
       statusElement.textContent = label;
+    };
+
+    const formatSavedAt = () => new Date().toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const showSaveFeedback = (message, tone = 'success') => {
+      if (!saveFeedbackElement) {
+        return;
+      }
+
+      if (saveFeedbackTimeout) {
+        window.clearTimeout(saveFeedbackTimeout);
+      }
+
+      saveFeedbackElement.textContent = message;
+      saveFeedbackElement.classList.remove('is-success', 'is-error');
+      saveFeedbackElement.classList.add('is-visible', tone === 'error' ? 'is-error' : 'is-success');
+
+      saveFeedbackTimeout = window.setTimeout(() => {
+        saveFeedbackElement.classList.remove('is-visible');
+      }, 2600);
+    };
+
+    const pulseSavedButton = (buttonElement) => {
+      if (!buttonElement) {
+        return;
+      }
+      buttonElement.classList.remove('btn-danger', 'btn-outline-primary');
+      buttonElement.classList.add('btn-success');
+      buttonElement.animate([
+        { transform: 'scale(1)' },
+        { transform: 'scale(1.08)' },
+        { transform: 'scale(1)' },
+      ], {
+        duration: 220,
+        easing: 'ease-out',
+      });
     };
 
     const setConsistencyBadge = (status, labelOverride = null) => {
@@ -190,13 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error(payload?.error ?? `Statut HTTP ${response.status}`);
         }
 
-        const summary = payload?.summary ?? {};
-        alert(
-          `Transformation supprimée (${refId}).\n` +
-          `Liste: ${summary.list_removed ?? 0}, ` +
-          `source: ${summary.source_removed ?? 0}, ` +
-          `target: ${summary.target_removed ?? 0}.`
-        );
+        showSaveFeedback(`Transformation ${refId} supprimée.`, 'success');
+        rememberActiveTab(getCurrentActiveTabId());
         window.location.reload();
       } catch (error) {
         console.error('Error removing transformation:', error);
@@ -245,15 +308,16 @@ document.addEventListener('DOMContentLoaded', () => {
         initialContentTracker[type] = updatedXml;
         unsavedChangesTracker[type] = false;
         if (saveBtnElement) {
-          saveBtnElement.classList.remove('btn-danger');
-          saveBtnElement.classList.add('btn-success');
+          pulseSavedButton(saveBtnElement);
         }
         setStatus(type, 'Sauvegardé', 'text-bg-success');
+        showSaveFeedback(`${component.filename} sauvegardé à ${formatSavedAt()}.`);
         await refreshConsistency();
         return true;
       } catch (error) {
         console.error(`Error saving component ${type}:`, error);
         setStatus(type, 'Erreur', 'text-bg-danger');
+        showSaveFeedback(`Échec de sauvegarde pour ${component.filename}.`, 'error');
         alert(`Sauvegarde impossible pour ${component.filename}: ${error.message}`);
         return false;
       }
@@ -386,13 +450,31 @@ document.addEventListener('DOMContentLoaded', () => {
         saveAllBtnElement.classList.remove('saving');
 
         if (!failed.length) {
-          alert('Tous les fichiers modifiés ont été sauvegardés.');
+          pulseSavedButton(saveAllBtnElement);
+          showSaveFeedback(`Tous les fichiers modifiés ont été sauvegardés à ${formatSavedAt()}.`);
         } else {
+          showSaveFeedback(`Certains fichiers n'ont pas pu être sauvegardés.`, 'error');
           alert(`Certains fichiers n'ont pas pu être sauvegardés: ${failed.join(', ')}`);
         }
 
         await refreshConsistency();
       });
+    }
+
+    tabsElement?.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabButton) => {
+      tabButton.addEventListener('shown.bs.tab', (event) => {
+        rememberActiveTab(event.target?.id ?? null);
+      });
+    });
+
+    const rememberedTabId = getRememberedActiveTab();
+    if (rememberedTabId) {
+      const rememberedTabButton = document.getElementById(rememberedTabId);
+      if (rememberedTabButton && bootstrapLib.Tab) {
+        bootstrapLib.Tab.getOrCreateInstance(rememberedTabButton).show();
+      }
+    } else {
+      rememberActiveTab(getCurrentActiveTabId());
     }
 
     components.forEach((component) => initializeEditor(component));

@@ -59,7 +59,7 @@
 
         <!-- Empty state -->
         <div id="no-comparisons" style="display:none;" class="text-muted text-center">
-            Aucune comparaison n'a encore été établie pour cette œuvre.
+            Aucune comparaison n'a encore été établie pour cette œuvre. Cliquez sur "Lancer un alignement" pour lancer une comparaison Medite.
         </div>
     </div>
     </div>

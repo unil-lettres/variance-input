@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\PublishController;
 use App\Models\Version;
 use App\Services\PageMarkerService;
+use Symfony\Component\HttpFoundation\Response;
 
 class EditorController extends Controller
 {
@@ -26,7 +27,7 @@ class EditorController extends Controller
         's' => ['filename' => 's.xhtml', 'label' => 'Suppressions'],
     ];
 
-    public function versionEditor(Version $version)
+    public function versionEditor(Request $request, Version $version)
     {
         $defaultReturnTo = admin_path(sprintf(
             'select/%s/%s#etape-2',
@@ -34,13 +35,10 @@ class EditorController extends Controller
             $version->work->folder
         ));
         $returnTo = request()->query('return_to', $defaultReturnTo);
+        $lazyLoadEnabled = $this->shouldLazyLoadVersionEditor($request);
 
         $manifestEntries = $version->collectManifestEntries();
-        $editorPayload = $this->pageMarkerService->buildVersionEditorXml($version, $manifestEntries);
-        $xmlContent = $editorPayload['xml'] ?? null;
-        if (!is_string($xmlContent) || $xmlContent === '') {
-            abort(404, "Fichier introuvable: {$version->getXMLFilePath()}");
-        }
+        $xmlContent = $lazyLoadEnabled ? null : $this->loadVersionEditorXml($version, $manifestEntries);
 
         $editorPath = 'version/' . $version->id . '/editor';
         $ignoredPages = $version->getIgnoredPages();
@@ -48,6 +46,8 @@ class EditorController extends Controller
         return view('components.main.editor.version', [
             'version' => $version,
             'xmlContent' => $xmlContent,
+            'lazyLoadEnabled' => $lazyLoadEnabled,
+            'urlDocumentLoad' => admin_url("api/versions/{$version->id}/editor-document"),
             'imagesData' => array_map(function ($item) use ($ignoredPages) {
                 $filename = basename($item['big']);
                 return [
@@ -60,6 +60,16 @@ class EditorController extends Controller
             'urlFileSave' => admin_url($editorPath),
             'urlToggleIgnored' => admin_url("versions/{$version->id}/facsimiles/toggle-ignored"),
             'returnTo' => $returnTo,
+        ]);
+    }
+
+    public function versionEditorDocument(Version $version): Response
+    {
+        $xmlContent = $this->loadVersionEditorXml($version);
+
+        return response($xmlContent, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Cache-Control' => 'no-store, private',
         ]);
     }
 
@@ -127,6 +137,30 @@ class EditorController extends Controller
             'isPublished' => $sourcePublicationInfo['is_published'],
             'canEditComparison' => $canEditComparison,
         ]);
+    }
+
+    private function shouldLazyLoadVersionEditor(Request $request): bool
+    {
+        $mode = strtolower(trim((string) $request->query('editor_mode', '')));
+        if ($mode === 'inline') {
+            return false;
+        }
+        if ($mode === 'lazy') {
+            return true;
+        }
+
+        return (bool) config('variance.version_editor_lazy_load', true);
+    }
+
+    private function loadVersionEditorXml(Version $version, ?array $manifestEntries = null): string
+    {
+        $editorPayload = $this->pageMarkerService->buildVersionEditorXml($version, $manifestEntries);
+        $xmlContent = $editorPayload['xml'] ?? null;
+        if (!is_string($xmlContent) || $xmlContent === '') {
+            abort(404, "Fichier introuvable: {$version->getXMLFilePath()}");
+        }
+
+        return $xmlContent;
     }
     
     public function comparisonUpdate(Comparison $comparison, Request $request)

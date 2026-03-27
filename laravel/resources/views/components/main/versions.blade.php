@@ -62,13 +62,13 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="editVersionModalLabel">Éditer le nom d'édition</h5>
+                <h5 class="modal-title" id="editVersionModalLabel">Modifier le nom d'édition</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="edit-version-id">
                 <div class="mb-3">
-                    <label for="edit-version-name" class="form-label">Éditeur / année</label>
+                    <label for="edit-version-name" class="form-label">Forme conseillée: "Editeur (année)"</label>
                     <input type="text" id="edit-version-name" class="form-control" required>
                 </div>
             </div>
@@ -110,7 +110,7 @@
             </div>
             <div class="modal-body">
                 <p class="text-muted small mb-3">
-                    Choisissez un fichier au format texte à téléverser (formats autorisés: <code>.txt</code>, <code>.text</code>, texte brut sans extension; encodages <code>UTF-8</code>, <code>Windows-1252</code>, <code>ISO-8859-1</code>, <code>Mac Roman</code>), et indiquez la désignation éditoriale telle qu’elle apparaîtra dans la partie publique.
+                    Format recommandé: <code>UTF-8</code>. Les formats <code>Windows-1252</code>, <code>ISO-8859-1</code>, <code>Mac Roman</code> sont acceptés et seront convertis.
                 </p>
                 <form id="upload-version-form" enctype="multipart/form-data">
                     @csrf
@@ -1983,7 +1983,7 @@ async function fetchVersions(workId, force = false){
         facsimileRowState.clear();
         if(versions.length===0) {
             updateVersionsCount(0);
-            list.innerHTML='<div class="text-muted p-2">Aucune version textuelle n’est encore associée à cette œuvre. Cliquez sur « Téléverser une version » pour en ajouter une.</div>';
+            list.innerHTML='<div class="text-muted p-2 text-center">Aucune version textuelle n’est encore associée à cette œuvre. Cliquez sur « Téléverser une version » pour en ajouter une.</div>';
             facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
             lignesPollers.forEach((_, id) => stopLignesPolling(id));
             return;

@@ -26,7 +26,7 @@ if [[ -n "${QUEUE_WORKER_ARGS:-}" ]]; then
   # shellcheck disable=SC2206 # intentional splitting to preserve custom flags
   ARGS=(${QUEUE_WORKER_ARGS})
 else
-  ARGS=(--queue=facsimiles,page-markers --sleep=2 --timeout=600 --tries=1)
+  ARGS=(--queue=facsimiles,page-markers,exports --sleep=2 --timeout=600 --tries=1)
 fi
 
 # Append a --memory flag unless the caller already provided one.

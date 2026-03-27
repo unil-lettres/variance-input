@@ -121,13 +121,27 @@ markers into comparison outputs.
 
 ## 6. Downloading the Legacy Bundle
 
-The comparisons table exposes an “Exporter” button. Clicking it calls
-`GET /comparisons/{comparison}/export`, which bundles:
+The comparisons table exposes an “Exporter le pack legacy” button. Clicking it
+does not open a blocking download tab anymore. Instead, the UI calls
+`POST /comparisons/{comparison}/export` and Laravel queues a background job on
+the `exports` queue.
+
+While the zip is being prepared, the comparison row shows a spinner state and
+polls `GET /comparisons/{comparison}/export/status`. Once the snapshot reaches
+`ready`, the export action turns into a direct download link pointing to
+`GET /comparisons/{comparison}/export/download`.
+
+The prepared archive bundles:
 
 - The published comparison directory (`public/uploads/{author}/{work}/{comparison_folder}`).
 - For each role, only the facsimile images referenced in the active manifest JSON, plus the manifest file itself.
 
-This produces a zip matching the legacy Variance folder layout without shipping unused images.
+For `dev` publications, the exporter uses the comparison draft directory
+(`storage/app/public/uploads/{author}/{work}/comparisons/{id}`) while still
+packaging it with the published comparison folder name inside the zip.
+
+This produces a zip matching the legacy Variance folder layout without shipping
+unused images.
 
 ## 7. Publication (prod/dev)
 
@@ -153,10 +167,12 @@ On publish, Laravel also:
 
 - All pagination work (`ApplyLignesJob`, `InjectComparisonPaginationJob`) runs on
   the `page-markers` queue.  
+- Legacy bundle preparation (`GenerateLegacyExportJob`) runs on the `exports`
+  queue.
 - The default Docker setup includes a `laravel-queue` service that runs  
-  `php artisan queue:work --queue=facsimiles,page-markers`.  
+  `php artisan queue:work --queue=facsimiles,page-markers,exports`.  
 - Developers can also run `docker compose exec laravel php artisan queue:work
-  --queue=page-markers` to process jobs manually.
+  --queue=page-markers,exports` to process jobs manually.
 - Facsimile uploads trigger `ProcessFacsimileImage` jobs on the `facsimiles` queue; keep the worker running to see gallery updates.
 
 ---
@@ -175,7 +191,8 @@ On publish, Laravel also:
 | Comparison XHTML/TEI            | `storage/app/public/uploads/{author}/{work}/comparisons/{id}`     |
 | Published comparison (prod)     | `storage/app/public/uploads/{author}/{work}/{comparison_folder}` + mirror in `variance/uploads/...` |
 | Published comparison (dev)      | `storage/app/public/uploads/{author}/{work}/comparisons/{id}` + mirror in `variance/uploads/.../comparisons/{id}` |
-| Exported legacy zip             | Delivered via `/comparisons/{comparison}/export`                  |
+| Export status snapshot          | `storage/app/private/exports/comparisons/{comparison_id}.json`    |
+| Exported legacy zip             | `storage/app/private/exports/comparisons/{comparison_id}/{comparison_folder}_legacy.zip` |
 
 This flow keeps the canonical TEI untouched, stores pagination metadata as a
 sidecar, and applies markers to comparisons on demand so every run stays

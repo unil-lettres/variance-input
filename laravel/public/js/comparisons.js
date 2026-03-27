@@ -15,6 +15,10 @@ function initComparisonsTable() {
       window.setBladeLoading('comparisonsCollapse', state);
     }
   };
+  const setComparisonsTableVisible = (visible) => {
+    if (!comparisonsTable) return;
+    comparisonsTable.style.display = visible ? '' : 'none';
+  };
 
   const JSON_HEADERS = { 'Accept': 'application/json' };
   let currentWorkId = null;
@@ -29,6 +33,7 @@ function initComparisonsTable() {
   const comparisonData = new Map();
   const comparisonRows = new Map();
   const comparisonDetailsRequests = new Map();
+  const exportStatusPollers = new Map();
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   let latestComparisonsRequest = 0;
   let activeComparisonsRequest = 0;
@@ -253,6 +258,84 @@ function initComparisonsTable() {
     refreshComparisonCounts();
   }
 
+  function normalizeExportBundle(comp) {
+    const bundle = comp?.export_bundle;
+    return bundle && typeof bundle === 'object' ? bundle : { status: 'idle' };
+  }
+
+  function stopExportStatusPolling(comparisonId) {
+    const id = Number(comparisonId);
+    if (!Number.isFinite(id)) return;
+    const timerId = exportStatusPollers.get(id);
+    if (timerId) {
+      window.clearInterval(timerId);
+      exportStatusPollers.delete(id);
+    }
+  }
+
+  async function refreshExportStatus(comparisonId) {
+    const id = Number(comparisonId);
+    if (!Number.isFinite(id)) return;
+    const comp = comparisonData.get(id);
+    const statusUrl = comp?.export_bundle?.status_url;
+    if (!statusUrl) {
+      updateComparisonRow(id, { export_bundle: { status: 'idle' } });
+      stopExportStatusPolling(id);
+      return;
+    }
+
+    try {
+      const response = await fetch(statusUrl, { headers: JSON_HEADERS });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const bundle = await response.json();
+      if (!bundle || typeof bundle !== 'object') {
+        throw new Error('Réponse vide');
+      }
+      updateComparisonRow(id, { export_bundle: bundle });
+      if (!['queued', 'running'].includes(bundle?.status || 'idle')) {
+        stopExportStatusPolling(id);
+      }
+    } catch (error) {
+      console.error('Erreur lors du suivi de l’export legacy:', error);
+      updateComparisonRow(id, {
+        export_bundle: {
+          ...(comparisonData.get(id)?.export_bundle || {}),
+          status: 'idle',
+          message: null,
+        }
+      });
+      stopExportStatusPolling(id);
+    }
+  }
+
+  function ensureExportStatusPolling(comparisonId) {
+    const id = Number(comparisonId);
+    if (!Number.isFinite(id) || exportStatusPollers.has(id)) return;
+    refreshExportStatus(id);
+    const timerId = window.setInterval(() => refreshExportStatus(id), 2000);
+    exportStatusPollers.set(id, timerId);
+  }
+
+  function renderExportAction(comp) {
+    const exportBundle = normalizeExportBundle(comp);
+    const status = exportBundle.status || 'idle';
+    const queueUrl = exportBundle.queue_url || (typeof withBasePath === 'function'
+      ? withBasePath(`/comparisons/${comp.id}/export`)
+      : `/comparisons/${comp.id}/export`);
+    const downloadUrl = exportBundle.download_url || '';
+    const message = exportBundle.message || '';
+
+    if (status === 'ready' && downloadUrl) {
+      return `<a href="${downloadUrl}" class="btn btn-outline-success comparison-action-btn"><i class="bi bi-download"></i></a>`;
+    }
+
+    if (status === 'queued' || status === 'running') {
+      return `<span class="btn btn-outline-secondary comparison-action-btn" aria-disabled="true"><span class="comparison-running-spinner" aria-hidden="true"></span></span>`;
+    }
+
+    return `<button type="button" data-export-queue-url="${queueUrl}" data-comparison-id="${comp.id}" class="btn btn-outline-secondary comparison-action-btn comparison-export-btn"><i class="bi bi-download"></i></button>`;
+  }
+
   function renderPublishStatusHtml(comp, { detailsLoaded = false, isLegacy = false, isPublished = false, isPublishedProd = false } = {}) {
     const pending = comp?.publication_pending;
     if (pending && typeof pending === 'object') {
@@ -279,9 +362,6 @@ function initComparisonsTable() {
     }
     el.className = classes.join(' ');
     el.textContent = text;
-    if (title) {
-      el.title = title;
-    }
     if (href) {
       el.href = href;
       el.target = '_blank';
@@ -291,15 +371,7 @@ function initComparisonsTable() {
   }
 
   function registerTooltip(element, options = {}) {
-    if (!element || !window.bootstrap || !bootstrap.Tooltip) return null;
-    const tooltip = new bootstrap.Tooltip(element, {
-      trigger: 'hover',
-      delay: { show: 300, hide: 0 },
-      placement: 'left',
-      ...options
-    });
-    initComparisonsTable.initializedTooltips.push(tooltip);
-    return tooltip;
+    return null;
   }
 
   function pendingStatusKey(comparisonId, role) {
@@ -585,42 +657,36 @@ function initComparisonsTable() {
       btn.classList.add('legacy-disabled');
       btn.setAttribute('aria-disabled', 'true');
       btn.setAttribute('data-legacy-disabled', '1');
-      btn.title = legacyNote;
       registerTooltip(btn);
     };
     const applyLegacyDisabledState = (ctrl) => {
       if (!ctrl) return;
       ctrl.disabled = true;
       ctrl.setAttribute('aria-disabled', 'true');
-      ctrl.title = legacyNote;
     };
     const applyOwnershipButtonState = (btn) => {
       if (!btn) return;
       btn.classList.add('legacy-disabled');
       btn.setAttribute('aria-disabled', 'true');
       btn.setAttribute('data-ownership-disabled', '1');
-      btn.title = ownershipNote;
       registerTooltip(btn);
     };
     const applyOwnershipDisabledState = (ctrl) => {
       if (!ctrl) return;
       ctrl.disabled = true;
       ctrl.setAttribute('aria-disabled', 'true');
-      ctrl.title = ownershipNote;
     };
     const applyPublishedButtonState = (btn) => {
       if (!btn) return;
       btn.classList.add('legacy-disabled');
       btn.setAttribute('aria-disabled', 'true');
       btn.setAttribute('data-published-disabled', '1');
-      btn.title = publishedNote;
       registerTooltip(btn);
     };
     const applyPublishedDisabledState = (ctrl) => {
       if (!ctrl) return;
       ctrl.disabled = true;
       ctrl.setAttribute('aria-disabled', 'true');
-      ctrl.title = publishedNote;
     };
 
     const badges = document.createElement('div');
@@ -734,7 +800,6 @@ function initComparisonsTable() {
         } else {
           manifestBadge.classList.add('legacy-disabled');
           manifestBadge.setAttribute('aria-disabled', 'true');
-          manifestBadge.title = isLegacy ? legacyNote : ownershipNote;
         }
         manifestBadgeWrapper.appendChild(manifestBadge);
       } else {
@@ -1412,7 +1477,10 @@ function initComparisonsTable() {
   function resetUI() {
     loading.style.display = 'none';
     noComparisons.style.display = 'none';
+    setComparisonsTableVisible(false);
     tbody.innerHTML = '';
+    exportStatusPollers.forEach((timerId) => window.clearInterval(timerId));
+    exportStatusPollers.clear();
     comparisonRoleComponents.clear();
     comparisonData.clear();
     comparisonRows.clear();
@@ -1459,9 +1527,6 @@ function initComparisonsTable() {
     const isRunning = runningComparisons.has(Number(comp.id));
 
     const xmlUrl     = withBasePath(`/storage/uploads/comparisons/${comp.id}.xml`);
-    const exportUrl  = typeof withBasePath === 'function'
-      ? withBasePath(`/comparisons/${comp.id}/export`)
-      : `/comparisons/${comp.id}/export`;
     const legacyUrl = (function() {
       if (!currentAuthorFolder || !currentWorkFolder || !comp.folder) return null;
       const origin = window.location.origin;
@@ -1501,10 +1566,10 @@ function initComparisonsTable() {
     const xmlAvailable = comp.xml_available === true;
     const xmlUnknown = comp.xml_available === null || comp.xml_available === undefined;
     const xmlActionHtml = xmlAvailable
-      ? `<a href="${xmlUrl}" data-bs-toggle="tooltip" title="Voir le fichier XML" class="btn btn-outline-primary comparison-action-btn" target="_blank"><i class="bi bi-filetype-xml"></i></a>`
+      ? `<a href="${xmlUrl}" class="btn btn-outline-primary comparison-action-btn" target="_blank"><i class="bi bi-filetype-xml"></i></a>`
       : (xmlUnknown
-        ? `<span class="d-inline-block" data-bs-toggle="tooltip" title="Chargement du fichier XML"><span class="btn btn-outline-secondary disabled comparison-action-btn" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`
-        : `<span class="d-inline-block" data-bs-toggle="tooltip" title="Pas de fichier XML disponible pour cette comparaison"><span class="btn btn-outline-secondary disabled comparison-action-btn" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span></span>`);
+        ? `<span class="btn btn-outline-secondary disabled comparison-action-btn" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span>`
+        : `<span class="btn btn-outline-secondary disabled comparison-action-btn" tabindex="-1" aria-disabled="true"><i class="bi bi-filetype-xml"></i></span>`);
 
     const publishStatusHtml = isRunning
       ? runningPlaceholder
@@ -1532,26 +1597,26 @@ function initComparisonsTable() {
                    name="${scopeName}" id="${scopeName}-prod" value="prod"
                    data-id="${comp.id}" ${defaultScope === 'prod' ? 'checked' : ''}
                    ${scopeDisabled ? 'disabled' : ''}>
-            <label class="btn btn-outline-secondary" for="${scopeName}-prod" title="Publier sur /">prod</label>
+            <label class="btn btn-outline-secondary" for="${scopeName}-prod">prod</label>
             <input type="radio" class="btn-check publish-scope-toggle"
                    name="${scopeName}" id="${scopeName}-dev" value="dev"
                    data-id="${comp.id}" ${defaultScope === 'dev' ? 'checked' : ''}
                    ${scopeDisabled ? 'disabled' : ''}>
-            <label class="btn btn-outline-secondary" for="${scopeName}-dev" title="Publier sur /dev">/dev</label>
+            <label class="btn btn-outline-secondary" for="${scopeName}-dev">/dev</label>
           </div>
         </div>`;
     const actionBarHtml = isRunning
       ? ''
       : `<div class="comparison-action-bar" role="group" aria-label="Action buttons">
-          ${(legacyUrl && (isPublishedProd || isLegacy)) ? `<a href="${legacyUrl}" data-bs-toggle="tooltip" class="btn btn-outline-success comparison-action-btn" target="_blank" title="Voir sur le site public"><i class="bi bi-eye"></i></a>` : ''}
-          ${(devUrl && isPublishedDev && !isLegacy) ? `<a href="${devUrl}" data-bs-toggle="tooltip" class="btn btn-outline-info comparison-action-btn" target="_blank" title="Voir sur /dev"><i class="bi bi-eye"></i></a>` : ''}
+          ${(legacyUrl && (isPublishedProd || isLegacy)) ? `<a href="${legacyUrl}" class="btn btn-outline-success comparison-action-btn" target="_blank"><i class="bi bi-eye"></i></a>` : ''}
+          ${(devUrl && isPublishedDev && !isLegacy) ? `<a href="${devUrl}" class="btn btn-outline-info comparison-action-btn" target="_blank"><i class="bi bi-eye"></i></a>` : ''}
           ${editAllowed
             ? (editDisabled
-              ? `<span data-bs-toggle="tooltip" title="${manageDisabledNote}" class="btn btn-outline-secondary comparison-action-btn legacy-disabled" aria-disabled="true"><i class="bi bi-pencil-square"></i></span>`
-              : `<a href="${editorUrl}" data-bs-toggle="tooltip" title="Éditer la comparaison" class="btn btn-outline-primary comparison-action-btn"><i class="bi bi-pencil-square"></i></a>`)
+              ? `<span class="btn btn-outline-secondary comparison-action-btn legacy-disabled" aria-disabled="true"><i class="bi bi-pencil-square"></i></span>`
+              : `<a href="${editorUrl}" class="btn btn-outline-primary comparison-action-btn"><i class="bi bi-pencil-square"></i></a>`)
             : ''}
           ${xmlActionHtml}
-          <a href="${exportUrl}" data-bs-toggle="tooltip" title="Exporter le pack legacy" class="btn btn-outline-secondary comparison-action-btn" target="_blank"><i class="bi bi-download"></i></a>
+          ${renderExportAction(comp)}
           <button class="btn btn-outline-danger comparison-action-btn delete-comparison-btn ${deleteDisabled ? 'legacy-disabled' : ''}"
                   data-id="${comp.id}"
                   ${deleteDisabled ? 'disabled aria-disabled="true"' : ''}>
@@ -1589,17 +1654,6 @@ function initComparisonsTable() {
       </td>
     `;
 
-    const tooltipTriggerList = tr.querySelectorAll('[data-bs-toggle="tooltip"]');
-    initComparisonsTable.initializedTooltips.push(...Array.from(tooltipTriggerList).map(tooltipTriggerEl => {
-      return new bootstrap.Tooltip(
-        tooltipTriggerEl,
-        {
-          trigger: 'hover',
-          delay: { show: 300, hide: 0 },
-          placement: 'left',
-        });
-    }));
-
     const sourceWrapper = tr.querySelector('.source-cell .role-wrapper');
     if (sourceWrapper) {
       const roleComponent = renderComparisonRole(comp, 'source', sourceName);
@@ -1617,6 +1671,13 @@ function initComparisonsTable() {
         comp,
         component: roleComponent,
       });
+    }
+
+    const exportStatus = normalizeExportBundle(comp).status || 'idle';
+    if (['queued', 'running'].includes(exportStatus)) {
+      ensureExportStatusPolling(comp.id);
+    } else {
+      stopExportStatusPolling(comp.id);
     }
 
     return tr;
@@ -1665,6 +1726,7 @@ function initComparisonsTable() {
     updateComparisonSummaryState('loading', { total: 0, published: 0 });
     loading.style.display = 'block';
     tbody.innerHTML = '';
+    setComparisonsTableVisible(false);
     comparisonRoleComponents.clear();
     comparisonData.clear();
     comparisonRows.clear();
@@ -1693,11 +1755,13 @@ function initComparisonsTable() {
         updateComparisonCounts(publishedCount, totalCount);
         updateComparisonSummaryState('empty', { total: totalCount, published: publishedCount });
         noComparisons.style.display = 'block';
+        setComparisonsTableVisible(false);
         return;
       }
 
       updateComparisonCounts(publishedCount, totalCount);
       updateComparisonSummaryState('ready', { total: totalCount, published: publishedCount });
+      setComparisonsTableVisible(true);
 
       comparisons.forEach(comp => {
         const row = buildComparisonRow(comp);
@@ -1713,6 +1777,7 @@ function initComparisonsTable() {
       updateComparisonCounts(0, 0);
       updateComparisonSummaryState('empty', { total: 0, published: 0 });
       noComparisons.style.display = 'block';
+      setComparisonsTableVisible(false);
     } finally {
       if (requestToken === activeComparisonsRequest) {
         loading.style.display = 'none';
@@ -1790,11 +1855,13 @@ function initComparisonsTable() {
       publication_scope: null,
       publish_source: null,
       xml_available: null,
+      export_bundle: { status: 'idle' },
       created_by: currentUserId,
     };
 
     const row = buildComparisonRow(placeholderComp);
     noComparisons.style.display = 'none';
+    setComparisonsTableVisible(true);
     tbody.prepend(row);
     comparisonRows.set(comparisonId, row);
     comparisonData.set(comparisonId, placeholderComp);
@@ -2116,6 +2183,56 @@ function initComparisonsTable() {
       setSelectedScope(row, previousScope || 'prod');
     } finally {
       publishAction.disabled = false;
+    }
+  });
+
+  document.addEventListener('click', async event => {
+    const btn = event.target.closest('.comparison-export-btn');
+    if (!btn) return;
+    if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
+
+    const comparisonId = Number(btn.dataset.comparisonId);
+    const queueUrl = btn.dataset.exportQueueUrl || '';
+    if (!Number.isFinite(comparisonId) || !queueUrl) return;
+
+    btn.disabled = true;
+    updateComparisonRow(comparisonId, {
+      export_bundle: {
+        ...(comparisonData.get(comparisonId)?.export_bundle || {}),
+        status: 'queued',
+        message: 'Préparation de l’archive en attente.',
+      }
+    });
+
+    try {
+      const response = await fetch(queueUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': CSRF_TOKEN,
+          'Accept': 'application/json',
+        }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || `HTTP ${response.status}`);
+      }
+
+      updateComparisonRow(comparisonId, { export_bundle: payload });
+      if (['queued', 'running'].includes(payload?.status || 'idle')) {
+        ensureExportStatusPolling(comparisonId);
+      }
+    } catch (error) {
+      console.error('Erreur lors du lancement de l’export legacy:', error);
+      updateComparisonRow(comparisonId, {
+        export_bundle: {
+          ...(comparisonData.get(comparisonId)?.export_bundle || {}),
+          status: 'failed',
+          message: error?.message || 'Impossible de lancer la préparation du pack legacy.',
+        }
+      });
+      alert(error?.message || 'Impossible de lancer la préparation du pack legacy.');
+    } finally {
+      btn.disabled = false;
     }
   });
 

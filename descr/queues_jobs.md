@@ -8,10 +8,11 @@ This document lists the main Laravel jobs and how they are triggered.
 
 - `page-markers` – pagination sidecar generation & injection.
 - `facsimiles` – image batch processing.
+- `exports` – legacy zip preparation for comparison downloads.
 
 The `laravel-queue` container runs:
 ```
-php artisan queue:work --queue=facsimiles,page-markers
+php artisan queue:work --queue=facsimiles,page-markers,exports
 ```
 
 ---
@@ -43,6 +44,21 @@ Publication runs synchronously during comparison publish (`PublishController::pu
 
 ---
 
+## Export Jobs
+
+### `GenerateLegacyExportJob`
+- **Queue**: `exports`
+- **Triggered by**: Legacy export request from the comparisons table (`POST /comparisons/{comparison}/export`).
+- **Task**: Build a zip under `storage/app/private/exports/comparisons/{comparison_id}/` containing:
+  - the published comparison folder for `prod`, or the draft comparison folder for `dev`
+  - the source and target manifest JSON files
+  - only the facsimile images referenced by those manifests
+- **Status file**: `storage/app/private/exports/comparisons/{comparison_id}.json`
+
+The front-end polls `GET /comparisons/{comparison}/export/status` until the snapshot reaches `ready`, then replaces the export button with a direct download link.
+
+---
+
 ## Operational Reminders
 
 - **Keep the worker alive** – without `laravel-queue`, uploads and pagination requests stall.
@@ -52,6 +68,6 @@ Publication runs synchronously during comparison publish (`PublishController::pu
   ```
 - **Manual run** –
   ```bash
-  docker compose exec laravel php artisan queue:work --queue=page-markers --stop-when-empty
+  docker compose exec laravel php artisan queue:work --queue=page-markers,exports --stop-when-empty
   ```
 - **Failed jobs** – Use `php artisan queue:failed` / `queue:retry` to inspect and re-run.
