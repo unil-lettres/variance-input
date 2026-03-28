@@ -37,7 +37,9 @@ php artisan config:clear
 php artisan config:cache
 php artisan route:clear
 php artisan view:clear
-php artisan key:generate --ansi --force
+if ! grep -Eq '^APP_KEY=.+$' /var/www/html/.env; then
+  php artisan key:generate --ansi --force
+fi
 php artisan migrate --force
 
 # 3) Start the Laravel development server

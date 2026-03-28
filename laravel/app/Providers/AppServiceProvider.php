@@ -30,12 +30,13 @@ class AppServiceProvider extends ServiceProvider
                 $forcedRoot .= ':' . $parsed['port'];
             }
             URL::forceRootUrl($forcedRoot);
+            URL::forceScheme($parsed['scheme']);
         } elseif (! empty($appUrl)) {
             URL::forceRootUrl($appUrl);
         }
 
         $basePath = admin_base_prefix();
-        $appBaseUrl = rtrim(admin_url(), '/');
+        $appBaseUrl = rtrim($appUrl, '/') . admin_path();
 
         if ($appBaseUrl !== '') {
             config(['app.asset_url' => $appBaseUrl]);
