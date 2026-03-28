@@ -42,7 +42,7 @@ Key endpoints exposed by the Laravel admin app. Routes are defined in `laravel/r
 | PATCH | `/users/{user}` | Update a user (admin only). |
 | DELETE | `/users/{user}` | Delete a user (admin only). |
 | GET | `/tasks` | Queue/task monitor (admin only). |
-| GET | `/health` | JSON health report. Includes `checks.app.git_sha`, `git_sha_short`, and severity status: `ok` (green), `degraded` (orange warning), `fail` (red critical). |
+| GET | `/health` | JSON health report. Includes `checks.app.git_sha`, `git_sha_short`, scheduler/worker status, and severity status: `ok` (green), `degraded` (orange warning), `fail` (red critical). In the current staging proxy this URL is exposed publicly and routed to Laravel. |
 | GET | `/health/report` | HTML health report (admin only), including the same severity and git SHA information. |
 
 ## Versions

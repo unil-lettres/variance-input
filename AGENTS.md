@@ -3,9 +3,10 @@
 This file summarizes how the Variance stack is organized, where data lives, and how to operate the system. Source material comes from `descr/`.
 
 ## Architecture (containers)
-- **variance-proxy (nginx)**: front door (dev: `localhost:8080`). Routes `/admin` to Laravel, `/` to legacy PHP.
+- **variance-proxy (nginx)**: front door (dev: `localhost:8080`). Routes `/admin` and `/health` to Laravel, `/` to legacy PHP.
 - **laravel**: admin UI + API (versions, pagination, facsimiles, comparisons, publish).
-- **laravel-queue**: background jobs (`facsimiles`, `page-markers`).
+- **laravel-queue**: background jobs (`facsimiles`, `page-markers`, `exports`).
+- **laravel-scheduler**: scheduled commands / health heartbeat (`schedule:run` loop).
 - **medite**: Flask + Celery diff engine (`/run_diff2`, `/task_status/{id}`).
 - **variance-web**: legacy PHP public site (read‑only, consumes uploaded assets).
 - **mariadb / redis**: persistence and queues.
@@ -41,6 +42,8 @@ Reference: `descr/workflow.md`, `descr/facsimiles.md`.
 Worker container runs `laravel/scripts/run-queue-workers.sh` which spawns
 multiple `queue:work` processes for `facsimiles,page-markers,exports`. A heartbeat
 is written to `storage/app/private/queue_workers.json`.
+Scheduler container runs `php artisan schedule:run` every minute and writes
+`storage/app/private/scheduler_heartbeat.json` through `health:scheduler-heartbeat`.
 See `descr/queues_jobs.md`.
 
 ## Publication model (prod/dev)
@@ -91,16 +94,17 @@ Common staging commands (run on VM):
 ```
 cd /var/www/variance-input
 docker compose -f docker-compose.vm.yml pull laravel laravel-queue medite
-docker compose -f docker-compose.vm.yml up -d --force-recreate laravel laravel-queue medite
+docker compose -f docker-compose.vm.yml up -d --force-recreate laravel laravel-queue laravel-scheduler medite variance-proxy
 docker compose -f docker-compose.vm.yml exec -T laravel sh -lc "php artisan route:clear"
 docker compose -f docker-compose.vm.yml ps
-docker compose -f docker-compose.vm.yml logs -f laravel laravel-queue
+docker compose -f docker-compose.vm.yml logs -f laravel laravel-queue laravel-scheduler variance-proxy
 ```
 
 Quick health checks (VM):
 ```
 curl -I http://127.0.0.1:8081/
 curl -I http://127.0.0.1:8081/admin/
+curl http://127.0.0.1:8081/health
 ```
 
 ## Local file inventory for legacy import

@@ -12,13 +12,16 @@ Guidance for running the Variance stack outside the default development setup.
 
 ## Environment
 
-- Copy `laravel/example.env` to `laravel/.env` and set:
+- Local development uses `laravel/.env` (copied from `laravel/example.env`).
+- The staging VM uses a repo-root `laravel.env` file mounted into `/var/www/html/.env`; start from `laravel.env.example`.
+- Set:
   * `APP_ENV=production`
   * `APP_URL` to your external URL.
+  * Quote values with spaces, e.g. `APP_NAME="Variance Admin"`.
   * `APP_GIT_SHA` to the deployed commit SHA so `/admin/health` can report the running revision.
   * `ADMIN_BASE_PATH=admin` if the app is mounted under `/admin`.
   * Database credentials matching your MariaDB deployment.
-  * `QUEUE_CONNECTION=redis` (default) and ensure Redis is reachable.
+  * `QUEUE_CONNECTION=database` for the current staging/VM setup, unless you explicitly move Laravel queues to Redis.
   * Update mail settings if emailing is required.
   * Optional health thresholds:
     - `HEALTHCHECK_DISK_WARN_GB` (warning floor, default `10`)
@@ -32,6 +35,7 @@ Guidance for running the Variance stack outside the default development setup.
 
 - In production, terminate TLS either in `variance-proxy` or via an upstream load balancer.
 - Update `nginx/default.conf` to match your hostnames, SSL certificates, and desired routes.
+- If you expect the public app health endpoint to work externally, keep `/health` routed to Laravel in `nginx/default.conf`.
 - Optionally expose Medite on a separate hostname or keep it internal-only.
 - If TLS is terminated upstream (e.g. Apache), forward `X-Forwarded-Proto` so Laravel
   generates HTTPS URLs correctly (or you will see http:// redirects from `/admin`).
@@ -49,6 +53,7 @@ Guidance for running the Variance stack outside the default development setup.
 - Track queue length (Laravel Horizon or custom metrics) and Celery task times.
 - Monitor disk usage for upload directories.
 - Keep an eye on Laravel logs (`docker compose logs -f laravel`) and queue logs.
+- Keep the scheduler heartbeat green via the dedicated `laravel-scheduler` service or a cron-driven `php artisan schedule:run`.
 - Health severity model:
   - `ok` => green
   - `degraded` => orange warning (service still usable)
@@ -65,6 +70,21 @@ Guidance for running the Variance stack outside the default development setup.
 - Protect `variance-proxy` with appropriate auth/IP restrictions if exposed.
 - Rotate application keys and database credentials regularly.
 - Disable or restrict direct container shell access on production hosts.
+
+## Staging VM compose notes
+
+- `docker-compose.vm.yml` is the canonical VM compose file and includes:
+  - `laravel`
+  - `laravel-queue`
+  - `laravel-scheduler`
+  - `medite`
+  - `variance-web`
+  - `variance-proxy`
+- The VM compose mounts the following host-managed files into the Laravel containers:
+  - `./laravel.env:/var/www/html/.env`
+  - `./laravel/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro`
+  - `./laravel/app/Providers/AppServiceProvider.php:/var/www/html/app/Providers/AppServiceProvider.php:ro`
+- Those mounts keep staging URL/proxy fixes and startup behavior aligned with the checked-out repo without rebuilding the image.
 
 ## Legacy (PHP) setup checklist
 

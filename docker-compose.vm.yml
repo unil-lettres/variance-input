@@ -59,6 +59,29 @@ services:
       - mariadb
       - redis
 
+  laravel-scheduler:
+    image: unillett/variance-input:laravel-stage-latest
+    restart: unless-stopped
+    command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
+    env_file:
+      - ./laravel.env
+    environment:
+      - PHP_MEMORY_LIMIT=512M
+    volumes:
+      - ./laravel.env:/var/www/html/.env
+      - ./laravel/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
+      - ./laravel/app/Providers/AppServiceProvider.php:/var/www/html/app/Providers/AppServiceProvider.php:ro
+      - ./var/laravel_storage:/var/www/html/storage
+      - ./var/variance_data:/var/www/html/storage/app/private/variance_data
+      - ./var/uploads:/var/www/html/public/uploads
+      - ./var/uploads_images:/var/www/html/public/uploads_images
+      - ./var/uploads:/var/www/variance/uploads
+      - ./var/uploads_images:/var/www/variance/uploads_images
+      - ./var/uploads_pdf:/var/www/variance/uploads/pdf
+    depends_on:
+      - mariadb
+      - redis
+
   medite:
     image: unillett/variance-input:medite-stage-latest
     restart: unless-stopped

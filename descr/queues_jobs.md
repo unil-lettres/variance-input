@@ -15,6 +15,12 @@ The `laravel-queue` container runs:
 php artisan queue:work --queue=facsimiles,page-markers,exports
 ```
 
+The `laravel-scheduler` container runs:
+```
+php artisan schedule:run
+```
+once per minute in a loop. This is required for scheduler-driven health checks and any future scheduled commands.
+
 ---
 
 ## Pagination Jobs
@@ -62,12 +68,17 @@ The front-end polls `GET /comparisons/{comparison}/export/status` until the snap
 ## Operational Reminders
 
 - **Keep the worker alive** – without `laravel-queue`, uploads and pagination requests stall.
+- **Keep the scheduler alive** – without `laravel-scheduler`, `/health` will report a missing scheduler heartbeat.
 - **Monitor logs** –
   ```bash
-  docker compose logs -f laravel-queue
+  docker compose logs -f laravel-queue laravel-scheduler
   ```
 - **Manual run** –
   ```bash
   docker compose exec laravel php artisan queue:work --queue=page-markers,exports --stop-when-empty
+  ```
+- **Manual scheduler tick** –
+  ```bash
+  docker compose exec laravel php artisan schedule:run
   ```
 - **Failed jobs** – Use `php artisan queue:failed` / `queue:retry` to inspect and re-run.
