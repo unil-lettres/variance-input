@@ -268,6 +268,21 @@ function refreshComparisonsTable() {
     document.dispatchEvent(new CustomEvent('refreshComparisons'));
 }
 
+async function cleanupFailedComparison(comparisonId) {
+    if (!comparisonId) return;
+    try {
+        await fetch(withBasePath(`/comparisons/${comparisonId}`), {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': CSRF,
+                'Accept': 'application/json'
+            }
+        });
+    } catch (_error) {
+        // Best-effort cleanup only. The table refresh still clears UI state.
+    }
+}
+
 function normalizePaginationStatus(status) {
     return String(status || '').toLowerCase();
 }
@@ -512,7 +527,7 @@ $form.addEventListener('submit', async ev => {
     const cmpData = await cmpResp.json();
     fillHidden('comparison_id', cmpData.id);
     notifyComparison('comparisonCreated', cmpData.id, {
-        folder: `${srcShort}-${tgtShort}`,
+        folder: cmpData.folder || `${srcShort}-${tgtShort}`,
         sourceId: Number($srcSel.value),
         targetId: Number($tgtSel.value),
         sourceName: $srcSel.selectedOptions[0]?.textContent || `Version ${$srcSel.value}`,
@@ -539,18 +554,29 @@ $form.addEventListener('submit', async ev => {
 
     const fd  = new FormData($form);
 
-    const run = await fetch(withBasePath('/api/run_medite'), {
-        method : 'POST',
-        body   : fd,
-        headers: {
-            'X-CSRF-TOKEN': CSRF,
-            'Accept'      : 'application/json'
-        }
-    });
+    let run;
+    try {
+        run = await fetch(withBasePath('/api/run_medite'), {
+            method : 'POST',
+            body   : fd,
+            headers: {
+                'X-CSRF-TOKEN': CSRF,
+                'Accept'      : 'application/json'
+            }
+        });
+    } catch (error) {
+        console.error('run_medite network error', error);
+        await cleanupFailedComparison(cmpData.id);
+        notifyComparison('comparisonFailed', cmpData.id);
+        $progress.innerHTML = '<div class="alert alert-danger">Launch failed</div>';
+        return;
+    }
 
     if (!run.ok) {
         const err = await run.clone().json().catch(() => run.text());
         console.error('run_medite error', run.status, err);
+        await cleanupFailedComparison(cmpData.id);
+        notifyComparison('comparisonFailed', cmpData.id);
         $progress.innerHTML = '<div class="alert alert-danger">Launch failed</div>';
         return;
     }
