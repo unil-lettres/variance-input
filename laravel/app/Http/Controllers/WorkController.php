@@ -78,7 +78,7 @@ class WorkController extends Controller
         //]);
 
         $work = Work::findOrFail($workId);
-        if ($forbidden = $this->forbidIfCannotEdit($work)) {
+        if ($forbidden = $this->forbidIfCannotEditStepOne($work)) {
             return $forbidden;
         }
         $work->desc = $request->desc;
@@ -181,6 +181,17 @@ class WorkController extends Controller
         if (!auth()->check() || !auth()->user()->can('edit', $work)) {
             return response()->json([
                 'error' => 'Vous n’avez pas la permission de modifier cette œuvre.',
+            ], 403);
+        }
+
+        return null;
+    }
+
+    private function forbidIfCannotEditStepOne(Work $work)
+    {
+        if (!auth()->check()) {
+            return response()->json([
+                'error' => 'Vous devez être connecté pour modifier cette œuvre.',
             ], 403);
         }
 
