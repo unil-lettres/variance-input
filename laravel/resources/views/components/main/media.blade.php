@@ -190,6 +190,7 @@
   'use strict';
   let currentWorkId = null;
   let currentShortTitle = null;
+  const mediaCache = new Map();
   const setMediaLoading = (state) => {
     if (typeof window.setBladeLoading === 'function') {
       window.setBladeLoading('mediaCollapse', state);
@@ -253,7 +254,7 @@
     });
   }
 
-  function renderMedia(type, fileUrl) {
+  function renderMedia(type, fileUrl, mediaMeta = null) {
     const preview = document.getElementById(`${type}-preview`);
     const btnHolder = document.getElementById(`${type}-btn`);
     preview.innerHTML = '';
@@ -308,14 +309,14 @@
       meta.className = 'small text-muted text-center mb-1';
       meta.textContent = 'Image';
       btnHolder.appendChild(meta);
-      updateVignetteMeta(meta, fileUrl);
+      updateVignetteMeta(meta, fileUrl, mediaMeta);
     }
     if (type === 'pdf') {
       const meta = document.createElement('div');
       meta.className = 'small text-muted text-center mb-1';
       meta.textContent = 'PDF';
       btnHolder.appendChild(meta);
-      updatePdfMeta(meta, fileUrl);
+      updatePdfMeta(meta, fileUrl, mediaMeta);
     }
 
     const del = document.createElement('button');
@@ -386,8 +387,14 @@
     return extMatch[1].toUpperCase();
   };
 
-  async function updateVignetteMeta(metaEl, fileUrl) {
+  async function updateVignetteMeta(metaEl, fileUrl, mediaMeta = null) {
     if (!metaEl) return;
+    if (mediaMeta) {
+      const format = detectImageFormat(mediaMeta.mime, fileUrl);
+      const sizeLabel = formatBytes(mediaMeta.size);
+      metaEl.textContent = sizeLabel ? `${format} · ${sizeLabel}` : format;
+      return;
+    }
     try {
       const res = await fetch(fileUrl, { method: 'HEAD' });
       if (!res.ok) {
@@ -403,8 +410,13 @@
     }
   }
 
-  async function updatePdfMeta(metaEl, fileUrl) {
+  async function updatePdfMeta(metaEl, fileUrl, mediaMeta = null) {
     if (!metaEl) return;
+    if (mediaMeta) {
+      const sizeLabel = formatBytes(mediaMeta.size);
+      metaEl.textContent = sizeLabel ? `PDF · ${sizeLabel}` : 'PDF';
+      return;
+    }
     try {
       const res = await fetch(fileUrl, { method: 'HEAD' });
       if (!res.ok) {
@@ -515,7 +527,10 @@
       method:'POST', headers:{ 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content }, credentials:'same-origin', body:fd
     })
     .then(res=>{ if(!res.ok) throw new Error(); return res.json(); })
-    .then(()=>reload()).catch(()=>alert('Échec de l\'upload'));
+    .then(()=>{
+      mediaCache.delete(String(currentWorkId));
+      reload({ force: true });
+    }).catch(()=>alert('Échec de l\'upload'));
   }
 
   function deleteMedia(type) {
@@ -524,10 +539,40 @@
       method:'DELETE', headers:{ 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content }, credentials:'same-origin'
     })
     .then(res=>{ if(!res.ok) throw new Error(); return res.json(); })
-    .then(()=>reload()).catch(()=>alert('Suppression impossible'));
+    .then(()=>{
+      mediaCache.delete(String(currentWorkId));
+      reload({ force: true });
+    }).catch(()=>alert('Suppression impossible'));
   }
 
-  function reload() {
+  function fetchMedia(workId, { force = false } = {}) {
+    const key = String(workId ?? '').trim();
+    if (!key) return Promise.resolve(null);
+    if (!force && mediaCache.has(key)) {
+      return Promise.resolve(mediaCache.get(key));
+    }
+    return fetch(withBasePath(`/works/${key}/media`), { credentials:'same-origin' })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        mediaCache.set(key, data);
+        return data;
+      });
+  }
+
+  function renderMediaPayload(data) {
+    renderMedia('vignette', data?.image_url, {
+      size: data?.image_size,
+      mime: data?.image_mime
+    });
+    renderMedia('pdf', data?.pdf_url, {
+      size: data?.pdf_size
+    });
+  }
+
+  function reload(options = {}) {
     if(!currentWorkId) {
       clearMedia();
       updateMediaStatus('vignette', false, true);
@@ -535,10 +580,13 @@
       setMediaLoading(false);
       return;
     }
+    const workId = currentWorkId;
     setMediaLoading(true);
-    fetch(withBasePath(`/works/${currentWorkId}/media`),{ credentials:'same-origin' })
-      .then(res=>res.json())
-      .then(d=>{ renderMedia('vignette', d.image_url); renderMedia('pdf', d.pdf_url); })
+    fetchMedia(workId, options)
+      .then(data => {
+        if (String(currentWorkId) !== String(workId)) return;
+        renderMediaPayload(data || {});
+      })
       .catch(console.error)
       .finally(()=>{ setMediaLoading(false); });
   }

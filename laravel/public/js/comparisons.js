@@ -711,19 +711,17 @@ function initComparisonsTable() {
       originLabel = 'sidecar (pb TEI)';
       originClass = 'bg-info text-dark ms-1';
       originTitle = 'Sidecar généré depuis les balises <pb> du TEI';
+    } else if (origin === 'lignes') {
+      originLabel = 'pagination JSON';
+      originClass = 'bg-info text-dark ms-1';
+      originTitle = 'Sidecar de pagination généré depuis un fichier _lignes';
     } else if (origin) {
       originLabel = origin;
       originClass = 'bg-info text-dark ms-1';
     }
 
-    const hasLignesFile = data.lignes_available ?? false;
-    if (originLabel) {
-      badges.appendChild(createBadge({
-        text: originLabel,
-        className: originClass,
-        title: originTitle || 'Sidecar présent'
-      }));
-    } else if (hasLignesFile) {
+    const hasLignesFile = data.has_lignes_file ?? !!data.lignes;
+    if (hasLignesFile) {
       badges.appendChild(createBadge({
         text: '_lignes',
         className: 'bg-success ms-1',
@@ -734,6 +732,26 @@ function initComparisonsTable() {
         text: '_lignes manquant',
         className: 'bg-warning text-dark ms-1',
         title: 'Associez un fichier _lignes ou générez un sidecar'
+      }));
+    }
+
+    if (originLabel) {
+      badges.appendChild(createBadge({
+        text: originLabel,
+        className: originClass,
+        title: originTitle || 'Sidecar présent'
+      }));
+    } else if (sidecarAvailable) {
+      badges.appendChild(createBadge({
+        text: 'sidecar',
+        className: 'bg-info text-dark ms-1',
+        title: 'Sidecar de pagination présent'
+      }));
+    } else {
+      badges.appendChild(createBadge({
+        text: 'sidecar absent',
+        className: 'bg-light text-muted ms-1',
+        title: 'Aucun sidecar de pagination détecté'
       }));
     }
 
@@ -829,15 +847,6 @@ function initComparisonsTable() {
 
     updateManifest(currentManifestInfo);
     container.appendChild(badges);
-
-    if (data.lignes && (data.lignes.updated_at || data.lignes.size)) {
-      const hint = document.createElement('div');
-      hint.className = 'text-muted small comparison-role-details';
-      const updated = data.lignes.updated_at ? formatTimestamp(data.lignes.updated_at) : '—';
-      const size = data.lignes.size ? formatBytes(data.lignes.size) : '0 o';
-      hint.textContent = `Fichier _lignes : ${updated} · ${size}`;
-      container.appendChild(hint);
-    }
 
     const feedback = document.createElement('div');
     feedback.className = 'small text-muted comparison-role-details';
@@ -950,9 +959,6 @@ function initComparisonsTable() {
     } else if (publishedLocked) {
       applyPublishedDisabledState(lignesInput);
       [uploadLignesBtn, buildSidecarBtn].forEach(applyPublishedButtonState);
-      if (feedback) {
-        feedback.textContent = publishedNote;
-      }
     } else if (ownershipBlocked) {
       applyOwnershipDisabledState(lignesInput);
       [uploadLignesBtn, buildSidecarBtn].forEach(applyOwnershipButtonState);
@@ -1040,11 +1046,106 @@ function initComparisonsTable() {
     return `<span class="comparison-metric-cell">${formatNumber(num)}</span>`;
   }
 
-  function renderResultsSummary(comp, { isRunning = false, detailsLoaded = false } = {}) {
-    if (comp?.is_legacy) {
-      return '';
+  function describePaginationState(data = {}) {
+    const hasLignesFile = data.has_lignes_file ?? !!data.lignes;
+    const sidecar = data.sidecar && typeof data.sidecar === 'object' ? data.sidecar : null;
+    const origin = String(sidecar?.details?.origin || sidecar?.origin || '').toLowerCase();
+
+    if (hasLignesFile && sidecar) {
+      if (origin === 'pb-xhtml') return '_lignes + sidecar XHTML';
+      if (origin === 'pb-tei') return '_lignes + sidecar TEI';
+      return '_lignes + sidecar';
+    }
+    if (hasLignesFile) {
+      return '_lignes';
+    }
+    if (sidecar) {
+      if (origin === 'pb-xhtml') return 'sidecar XHTML';
+      if (origin === 'pb-tei') return 'sidecar TEI';
+      return 'sidecar';
+    }
+    return 'absent';
+  }
+
+  function describeLignesFile(data = {}) {
+    const lignes = data?.lignes && typeof data.lignes === 'object' ? data.lignes : null;
+    if (!lignes || (!lignes.updated_at && !lignes.size)) {
+      return null;
+    }
+    const updated = lignes.updated_at ? formatTimestamp(lignes.updated_at) : '—';
+    const size = lignes.size ? formatBytes(lignes.size) : '0 o';
+    return `${updated} · ${size}`;
+  }
+
+  function describeExportStatus(comp) {
+    const bundle = normalizeExportBundle(comp);
+    const status = normalizeStatus(bundle.status || 'idle');
+    if (status === 'ready') return 'prêt';
+    if (status === 'queued') return 'en file';
+    if (status === 'running') return 'en cours';
+    if (status === 'failed') return 'échec';
+    return 'absent';
+  }
+
+  function renderComparisonDataSummary(comp, { detailsLoaded = false } = {}) {
+    const lines = [];
+
+    const pushLine = (html, variant = '') => {
+      const cls = variant ? ` comparison-results-line--${variant}` : '';
+      lines.push(`<div class="comparison-results-line${cls}">${html}</div>`);
+    };
+
+    if (!detailsLoaded) {
+      pushLine('Chargement…', 'muted');
     }
 
+    const creatorName = comp?.creator_name || comp?.creator?.name || null;
+    const createdAt = comp?.created_at ? formatTimestamp(comp.created_at) : null;
+    const identityBits = [`<strong>ID</strong> ${comp.id}`];
+    if (createdAt) {
+      identityBits.push(`<strong>Créée</strong> ${createdAt}`);
+    }
+    if (creatorName) {
+      identityBits.push(`<strong>Par</strong> ${creatorName}`);
+    }
+    pushLine(identityBits.join(' · '));
+
+    pushLine(
+      `<strong>Versions</strong> source #${formatNumber(Number(comp?.source_id ?? 0))} · cible #${formatNumber(Number(comp?.target_id ?? 0))}`
+    );
+
+    if (comp?.pagination && typeof comp.pagination === 'object') {
+      const sourceState = describePaginationState(comp.pagination?.source || {});
+      const targetState = describePaginationState(comp.pagination?.target || {});
+      pushLine(`<strong>Pagination</strong> source ${sourceState} · cible ${targetState}`);
+
+      const sourceLignesFile = describeLignesFile(comp.pagination?.source || {});
+      const targetLignesFile = describeLignesFile(comp.pagination?.target || {});
+      if (sourceLignesFile || targetLignesFile) {
+        const parts = [];
+        if (sourceLignesFile) parts.push(`<strong>_lignes source</strong> ${sourceLignesFile}`);
+        if (targetLignesFile) parts.push(`<strong>_lignes cible</strong> ${targetLignesFile}`);
+        pushLine(parts.join(' · '));
+      }
+    }
+
+    const runtime = formatDuration(comp.medite_runtime_ms);
+    if (runtime) {
+      pushLine(`<strong>Durée Medite</strong> ${runtime}`);
+    }
+
+    pushLine(`<strong>Export legacy</strong> ${describeExportStatus(comp)}`);
+
+    if (detailsLoaded) {
+      const missing = Array.isArray(comp?.publish_missing) ? comp.publish_missing : [];
+      const availableComponents = Math.max(0, 6 - missing.length);
+      pushLine(`<strong>Fichiers XHTML</strong> ${formatNumber(availableComponents)}/6`);
+    }
+
+    return `<div class="comparison-results comparison-data-col">${lines.join('')}</div>`;
+  }
+
+  function renderResultsSummary(comp, { isRunning = false, detailsLoaded = false } = {}) {
     const progress = comp?.comparison_progress || null;
     const missing = Array.isArray(comp?.publish_missing) ? comp.publish_missing : [];
     const lines = [];
@@ -1089,11 +1190,6 @@ function initComparisonsTable() {
           pushLine('<strong>Pagination</strong> injectée');
         }
       }
-    }
-
-    const runtime = formatDuration(comp.medite_runtime_ms);
-    if (runtime) {
-      pushLine(`<strong>Durée</strong> ${runtime}`);
     }
 
     const peakKb = Number(comp.medite_peak_rss_kb);
@@ -1553,6 +1649,7 @@ function initComparisonsTable() {
 
     comparisonData.set(comp.id, comp);
     const mediteParamsHtml = renderMediteParams(comp);
+    const dataSummaryHtml = renderComparisonDataSummary(comp, { detailsLoaded });
     const resultsHtml = renderResultsSummary(comp, { isRunning, detailsLoaded });
     const compactStatusHtml = renderCompactProcessStatus(comp, { isRunning });
     const scopeName = `publish-scope-${comp.id}`;
@@ -1635,6 +1732,7 @@ function initComparisonsTable() {
         <div class="role-wrapper"></div>
       </td>
       <td class="align-top">${mediteParamsHtml}</td>
+      <td class="align-top comparison-data-col">${dataSummaryHtml}</td>
       <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.s)}</td>
       <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.i)}</td>
       <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.r)}</td>

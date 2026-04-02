@@ -3117,6 +3117,9 @@ class PageMarkerService
         try {
             $contents = Storage::disk('local')->get($relative);
             $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+            if (!is_array($decoded) || !$this->isPaginationSidecarValid($versionId, $decoded)) {
+                return null;
+            }
             $markers = is_array($decoded['markers'] ?? null) ? $decoded['markers'] : [];
             $markerCount = (int) ($decoded['marker_count'] ?? count($markers));
             $fromLignes = 0;
@@ -3185,7 +3188,49 @@ class PageMarkerService
 
     public function hasPaginationSidecar(int $versionId): bool
     {
-        return Storage::disk('local')->exists($this->paginationRelativePath($versionId));
+        return $this->getPaginationInfo($versionId) !== null;
+    }
+
+    private function isPaginationSidecarValid(int $versionId, array $decoded): bool
+    {
+        $version = Version::query()
+            ->select(['id', 'work_id', 'folder'])
+            ->find($versionId);
+
+        if (!$version) {
+            return false;
+        }
+
+        if (array_key_exists('version_id', $decoded) && (int) $decoded['version_id'] !== (int) $version->id) {
+            Log::warning('Ignoring stale pagination sidecar with mismatched version_id.', [
+                'requested_version_id' => $versionId,
+                'sidecar_version_id' => $decoded['version_id'],
+                'sidecar_path' => $this->paginationRelativePath($versionId),
+            ]);
+            return false;
+        }
+
+        if (array_key_exists('work_id', $decoded) && (int) $decoded['work_id'] !== (int) $version->work_id) {
+            Log::warning('Ignoring stale pagination sidecar with mismatched work_id.', [
+                'requested_version_id' => $versionId,
+                'expected_work_id' => $version->work_id,
+                'sidecar_work_id' => $decoded['work_id'],
+                'sidecar_path' => $this->paginationRelativePath($versionId),
+            ]);
+            return false;
+        }
+
+        if (array_key_exists('version_folder', $decoded) && (string) $decoded['version_folder'] !== (string) $version->folder) {
+            Log::warning('Ignoring stale pagination sidecar with mismatched version_folder.', [
+                'requested_version_id' => $versionId,
+                'expected_version_folder' => $version->folder,
+                'sidecar_version_folder' => $decoded['version_folder'],
+                'sidecar_path' => $this->paginationRelativePath($versionId),
+            ]);
+            return false;
+        }
+
+        return true;
     }
 
     public function getStoredLignesAbsolutePath(int $versionId): ?string
@@ -3213,12 +3258,14 @@ class PageMarkerService
 
         $result = [
             'source' => [
+                'has_lignes_file'  => false,
                 'markers'          => 0,
                 'lignes_available' => false,
                 'lignes'           => null,
                 'progress'         => null,
             ],
             'target' => [
+                'has_lignes_file'  => false,
                 'markers'          => 0,
                 'lignes_available' => false,
                 'lignes'           => null,
@@ -3236,7 +3283,8 @@ class PageMarkerService
                 $comparison,
                 'source'
             );
-            $result['source']['lignes_available'] = $this->hasLignesFile($sourceVersion->id) || $this->hasPaginationSidecar($sourceVersion->id);
+            $result['source']['has_lignes_file'] = $this->hasLignesFile($sourceVersion->id);
+            $result['source']['lignes_available'] = $result['source']['has_lignes_file'] || $this->hasPaginationSidecar($sourceVersion->id);
             $result['source']['lignes']           = $this->getLignesInfo($sourceVersion->id);
             $result['source']['sidecar']          = $this->getPaginationInfo($sourceVersion->id);
             $result['source']['progress']         = $this->getProgressSnapshot($sourceVersion->id);
@@ -3249,7 +3297,8 @@ class PageMarkerService
                 $comparison,
                 'target'
             );
-            $result['target']['lignes_available'] = $this->hasLignesFile($targetVersion->id) || $this->hasPaginationSidecar($targetVersion->id);
+            $result['target']['has_lignes_file'] = $this->hasLignesFile($targetVersion->id);
+            $result['target']['lignes_available'] = $result['target']['has_lignes_file'] || $this->hasPaginationSidecar($targetVersion->id);
             $result['target']['lignes']           = $this->getLignesInfo($targetVersion->id);
             $result['target']['sidecar']          = $this->getPaginationInfo($targetVersion->id);
             $result['target']['progress']         = $this->getProgressSnapshot($targetVersion->id);

@@ -58,7 +58,7 @@ class ComparisonController extends Controller
 
         $user = $request->user();
 
-        $comparisonsQuery = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author'])
+        $comparisonsQuery = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author', 'creator'])
             ->where(function ($query) use ($versionIds) {
                 $query->whereIn('source_id', $versionIds)
                     ->orWhereIn('target_id', $versionIds);
@@ -96,7 +96,7 @@ class ComparisonController extends Controller
 
     public function details(Comparison $comparison)
     {
-        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
+        $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author', 'creator');
         $this->assertComparisonOwnership($comparison);
 
         $work = $comparison->sourceVersion?->work ?? $comparison->targetVersion?->work;
@@ -119,6 +119,8 @@ class ComparisonController extends Controller
         ?string $workFolder,
         array $required
     ): Comparison {
+        $cmp->loadMissing('creator');
+
         // Do not inject default pagination markers anymore; rely on real facsimiles/_lignes only
 
         $cmp->published = false;
@@ -217,6 +219,7 @@ class ComparisonController extends Controller
         $minUpdatedAt = $cmp->created_at ? $cmp->created_at->getTimestamp() : null;
         $cmp->comparison_progress = $this->pageMarkerService->getComparisonProgressSnapshot($cmp->id, $minUpdatedAt);
         $cmp->export_bundle = $this->exportBundlePayload($cmp);
+        $cmp->creator_name = $cmp->creator?->name;
         $cmp->details_loaded = true;
 
         return $cmp;

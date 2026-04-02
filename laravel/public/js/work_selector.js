@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const addWorkBtn      = document.getElementById("add-work-btn");
   const editWorkBtn     = document.getElementById("edit-work-btn");
   const deleteWorkBtn   = document.getElementById("delete-work-btn");
+  const clearSelectionBtn = document.getElementById("clear-selection-btn");
   const selectorContextTitle = document.getElementById("work-selector-context-title");
   const selectorContextText = document.getElementById("work-selector-context-text");
   const workSelectorPanel = document.getElementById("work-selector-panel");
@@ -176,7 +177,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function dispatchWorkSelected(workId, authorId, shortTitle = null) {
+  function dispatchWorkSelected(workId, authorId, shortTitle = null, options = {}) {
     const authorOption = authorId
       ? authorSelector.querySelector(`option[value="${authorId}"]`)
       : null;
@@ -188,6 +189,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const workFolder   = workOption?.dataset.folder || null;
     const authorLabel  = authorOption?.textContent?.trim() || null;
     const workLabel    = workOption?.textContent?.trim() || null;
+    const workCreatorName = workOption?.dataset.creatorName || null;
+    const workCreatedAt = workOption?.dataset.createdAt || null;
+    const workUpdatedAt = workOption?.dataset.updatedAt || null;
 
     if (workId && authorId) {
       writeLastSelection({
@@ -211,10 +215,14 @@ document.addEventListener("DOMContentLoaded", () => {
         workId,
         authorId,
         short_title: shortTitle,
+        restored: options.restored === true,
         author_folder: authorFolder,
         work_folder: workFolder,
         author_label: authorLabel,
         work_label: workLabel,
+        work_creator_name: workCreatorName,
+        work_created_at: workCreatedAt,
+        work_updated_at: workUpdatedAt,
       }
     }));
   }
@@ -269,10 +277,16 @@ document.addEventListener("DOMContentLoaded", () => {
     authorSelector.value = '';
     resetWorksUI(null, null);
     toggleAuthorButtons();
+    toggleClearSelectionButton();
     updateSelectionContext();
     if (dispatch) {
       dispatchWorkSelected(null, null);
     }
+  }
+
+  function toggleClearSelectionButton() {
+    if (!clearSelectionBtn) return;
+    clearSelectionBtn.disabled = !(authorSelector.value || workSelector.value);
   }
 
   // ============
@@ -310,6 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ——— AUTHOR CHANGE ———
   authorSelector.addEventListener("change", () => {
     toggleAuthorButtons();
+    toggleClearSelectionButton();
     updateSelectionContext();
 
     const authorId = authorSelector.value || null;
@@ -332,6 +347,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ——— WORK CHANGE ———
   workSelector.addEventListener("change", () => {
     toggleWorkButtons();
+    toggleClearSelectionButton();
     updateSelectionContext();
 
     const workId   = workSelector.value || null;
@@ -364,6 +380,12 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("new-author-name").value = "";
     document.getElementById("author-exists-msg").style.display = "none";
     new bootstrap.Modal(document.getElementById("addAuthorModal")).show();
+  });
+
+  clearSelectionBtn?.addEventListener("click", () => {
+    initialReset({ dispatch: true });
+    reflectSelectionInUrl();
+    toggleClearSelectionButton();
   });
 
   saveAuthorBtn.addEventListener("click", () => {
@@ -684,6 +706,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         toggleAuthorButtons();
+        toggleClearSelectionButton();
         updateSelectionContext();
 
         if (targetAuthorId) {
@@ -736,6 +759,9 @@ document.addEventListener("DOMContentLoaded", () => {
           opt.setAttribute('data-short-title', work.short_title || '');
           opt.dataset.folder = work.folder || '';
           opt.dataset.isLegacy = work.is_legacy ? '1' : '0';
+          opt.dataset.creatorName = work.creator_name || '';
+          opt.dataset.createdAt = work.created_at || '';
+          opt.dataset.updatedAt = work.updated_at || '';
           workSelector.appendChild(opt);
         });
 
@@ -764,7 +790,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const shortTitle = workSelector.options[workSelector.selectedIndex]
                                ?.getAttribute('data-short-title') || null;
 
-          dispatchWorkSelected(targetWorkId, authorId, shortTitle);
+          dispatchWorkSelected(targetWorkId, authorId, shortTitle, { restored: readyForDispatch });
           readyForDispatch = false;
         } else if (readyForDispatch && works.length > 0) {
           const first = works[0];
@@ -772,13 +798,14 @@ document.addEventListener("DOMContentLoaded", () => {
           if (option) {
             workSelector.value = first.id;
             const shortTitle = option.getAttribute('data-short-title') || null;
-            dispatchWorkSelected(first.id, authorId, shortTitle);
+            dispatchWorkSelected(first.id, authorId, shortTitle, { restored: true });
             readyForDispatch = false;
           }
         }
 
         // keep edit / delete buttons in sync
         toggleWorkButtons();
+        toggleClearSelectionButton();
         updateSelectionContext();
         reflectSelectionInUrl();
       })

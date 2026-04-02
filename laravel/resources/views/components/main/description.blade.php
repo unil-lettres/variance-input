@@ -22,6 +22,10 @@
 
             <div class="description-editor-frame">
                 <textarea id="desc-editor" rows="10"></textarea>
+                <div class="description-editor-loading" id="description-editor-loading" aria-hidden="true">
+                    <div class="spinner-border spinner-border-sm" role="status" aria-label="Chargement"></div>
+                    <span>Chargement du texte…</span>
+                </div>
             </div>
 
             <div class="description-action-bar" id="desc-controls">
@@ -71,7 +75,28 @@
     white-space: nowrap;
   }
   .description-editor-frame {
+    position: relative;
     padding: 0;
+  }
+  .description-editor-frame.is-loading .ck-editor__editable {
+    pointer-events: none;
+    opacity: 0.2;
+  }
+  .description-editor-loading {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    background: linear-gradient(180deg, rgba(248, 249, 250, 0.94) 0%, rgba(238, 242, 245, 0.96) 100%);
+    color: #5f5a52;
+    font-size: 0.92rem;
+    font-weight: 600;
+    z-index: 2;
+  }
+  .description-editor-frame.is-loading .description-editor-loading {
+    display: flex;
   }
   .description-action-bar {
     display: flex;
@@ -119,9 +144,19 @@ let dirtyIndicatorVisible = false;
 let statusCheck = null;
 let stateSubtitleEl = null;
 let editorShellEl = null;
+let editorFrameEl = null;
+let editorLoadingEl = null;
+let isDescriptionLoading = false;
 const setDescriptionLoading = (state) => {
+    isDescriptionLoading = !!state;
     if (typeof window.setBladeLoading === 'function') {
         window.setBladeLoading('descriptionCollapse', state);
+    }
+    if (editorFrameEl) {
+        editorFrameEl.classList.toggle('is-loading', !!state);
+    }
+    if (editorLoadingEl) {
+        editorLoadingEl.setAttribute('aria-hidden', state ? 'false' : 'true');
     }
 };
 
@@ -134,6 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
     statusCheck = document.getElementById('description-status-check');
     stateSubtitleEl = document.getElementById('description-state-subtitle');
     editorShellEl = document.getElementById('description-editor-shell');
+    editorFrameEl = document.querySelector('.description-editor-frame');
+    editorLoadingEl = document.getElementById('description-editor-loading');
     updateStatusCheck(false, true);
     updateEditorStateSummary('empty');
 
@@ -208,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function enterEditMode() {
-    if (!ckeditorInstance || !currentWorkId || isEditing) return;
+    if (!ckeditorInstance || !currentWorkId || isEditing || isDescriptionLoading) return;
     isEditing = true;
     ckeditorInstance.disableReadOnlyMode('initialLoad');
     if (saveBtn)   saveBtn.style.display   = 'inline-block';
@@ -283,6 +320,7 @@ function fetchDescription(workId) {
     if (!ckeditorInstance || !workId) return;
     setStatus('Chargement…');
     setDescriptionLoading(true);
+    ckeditorInstance.enableReadOnlyMode('initialLoad');
 
     fetch(withBasePath(`/works/${workId}/description`))
         .then(res => res.json())

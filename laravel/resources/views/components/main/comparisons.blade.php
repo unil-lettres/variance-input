@@ -38,24 +38,27 @@
         </div>
 
         <!-- Table -->
-        <table class="table table-sm table-bordered comparisons-table" id="comparisons-table">
-            <thead>
-                <tr>
-                    <th>Désignation</th>
-                    <th>Source</th>
-                    <th>Cible</th>
-                    <th>Paramètres Medite</th>
-                    <th>Suppr.</th>
-                    <th>Insert.</th>
-                    <th>Rempl.</th>
-                    <th>Dépl.</th>
-                    <th>Publication</th>
-                    <th>Gérer</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+        <div class="table-responsive comparisons-table-wrap">
+            <table class="table table-sm table-bordered comparisons-table" id="comparisons-table">
+                <thead>
+                    <tr>
+                        <th>Désignation</th>
+                        <th>Source</th>
+                        <th>Cible</th>
+                        <th>Paramètres Medite</th>
+                        <th class="comparison-data-col">Données</th>
+                        <th>Suppr.</th>
+                        <th>Insert.</th>
+                        <th>Rempl.</th>
+                        <th>Dépl.</th>
+                        <th>Publication</th>
+                        <th>Gérer</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
 
         <!-- Empty state -->
         <div id="no-comparisons" style="display:none;" class="text-muted text-center">
@@ -133,35 +136,56 @@
     display: none;
   }
   .comparisons-table.compact-details .comparison-role-details,
-  .comparisons-table.compact-details .comparison-results-details {
+  .comparisons-table.compact-details .comparison-results-details,
+  .comparisons-table.compact-details .comparison-data-col {
     display: none !important;
   }
   .comparisons-table.compact-details .source-cell .role-wrapper,
   .comparisons-table.compact-details .target-cell .role-wrapper {
     display: none !important;
   }
+  .comparisons-table-wrap {
+    overflow-x: auto;
+  }
+  .comparisons-table:not(.compact-details) {
+    table-layout: fixed;
+    width: 100%;
+  }
   .comparisons-table:not(.compact-details) .comparison-results-compact {
     display: none !important;
   }
-  .comparisons-table td:nth-child(5),
+  .comparisons-table:not(.compact-details) th:nth-child(10),
+  .comparisons-table:not(.compact-details) td:nth-child(10),
+  .comparisons-table:not(.compact-details) th:nth-child(11),
+  .comparisons-table:not(.compact-details) td:nth-child(11),
+  .comparisons-table:not(.compact-details) th:nth-child(12),
+  .comparisons-table:not(.compact-details) td:nth-child(12) {
+    width: 9rem;
+    min-width: 9rem;
+  }
   .comparisons-table td:nth-child(6),
   .comparisons-table td:nth-child(7),
   .comparisons-table td:nth-child(8),
   .comparisons-table td:nth-child(9),
   .comparisons-table td:nth-child(10),
-  .comparisons-table td:nth-child(11) {
+  .comparisons-table td:nth-child(11),
+  .comparisons-table td:nth-child(12) {
     text-align: center;
   }
-  .comparisons-table th:nth-child(5),
   .comparisons-table th:nth-child(6),
   .comparisons-table th:nth-child(7),
   .comparisons-table th:nth-child(8),
-  .comparisons-table td:nth-child(5),
+  .comparisons-table th:nth-child(9),
   .comparisons-table td:nth-child(6),
   .comparisons-table td:nth-child(7),
-  .comparisons-table td:nth-child(8) {
+  .comparisons-table td:nth-child(8),
+  .comparisons-table td:nth-child(9) {
     width: 5.5rem;
     min-width: 5.5rem;
+  }
+  .comparisons-table .comparison-data-col {
+    min-width: 10rem;
+    width: 10rem;
   }
   .comparison-metric-cell {
     display: inline-block;
@@ -186,6 +210,14 @@
     line-height: 1.2;
     color: #44566c;
     white-space: nowrap;
+  }
+  .comparison-data-col .comparison-results {
+    align-items: stretch;
+  }
+  .comparison-data-col .comparison-results-line {
+    justify-content: flex-start;
+    text-align: left;
+    white-space: normal;
   }
   .comparison-results-line strong {
     color: #1d2340;
@@ -213,6 +245,24 @@
   }
   .comparison-results-compact:empty {
     display: none !important;
+  }
+  .comparisons-table:not(.compact-details) .comparison-results-slot .comparison-results {
+    align-items: stretch;
+  }
+  .comparisons-table:not(.compact-details) .comparison-results-slot .comparison-results-line {
+    justify-content: flex-start;
+    text-align: left;
+    white-space: normal;
+  }
+  .comparison-role-details {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .comparison-role-details .badge {
+    margin: 0 !important;
   }
   .comparison-action-bar {
     display: flex;
@@ -290,7 +340,7 @@
   }
   .source-cell .role-wrapper,
   .target-cell .role-wrapper {
-    margin-top: 0.5rem;
+    margin-top: 0.35rem;
   }
   .source-cell,
   .target-cell,
@@ -312,6 +362,19 @@
     gap: 0.35rem;
     flex-wrap: nowrap;
     white-space: nowrap;
+  }
+  .comparisons-table:not(.compact-details) .publish-control {
+    flex-direction: column;
+    gap: 0.25rem;
+    white-space: normal;
+  }
+  .comparisons-table:not(.compact-details) .comparison-publish-status {
+    white-space: normal;
+  }
+  .comparisons-table:not(.compact-details) .publish-scope {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
   }
   .publish-action-btn {
     min-width: 5.7rem;

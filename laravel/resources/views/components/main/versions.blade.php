@@ -2311,8 +2311,8 @@ async function fetchVersions(workId, force = false){
                 const btnEditor = document.createElement('a');
                 btnEditor.href = editorUrl;
                 btnEditor.setAttribute('data-bs-toggle', 'tooltip');
-                btnEditor.className = 'btn btn-outline-primary versions-icon-btn';
-                btnEditor.innerHTML = '<i class="bi bi-pencil-square"></i>';
+                btnEditor.className = 'btn btn-outline-primary';
+                btnEditor.textContent = 'Edition';
                 const tooltipEditor = new bootstrap.Tooltip(
                     btnEditor,
                     {
@@ -2329,10 +2329,10 @@ async function fetchVersions(workId, force = false){
                 wrapper.setAttribute('data-bs-toggle', 'tooltip');
                 wrapper.setAttribute('title', 'Fichier texte non disponible pour cette version.');
                 const disabledBtn = document.createElement('span');
-                disabledBtn.className = 'btn btn-outline-secondary versions-icon-btn disabled';
+                disabledBtn.className = 'btn btn-outline-secondary disabled';
                 disabledBtn.setAttribute('tabindex', '-1');
                 disabledBtn.setAttribute('aria-disabled', 'true');
-                disabledBtn.innerHTML = '<i class="bi bi-pencil-square"></i>';
+                disabledBtn.textContent = 'Edition';
                 wrapper.appendChild(disabledBtn);
                 const tooltipEditor = new bootstrap.Tooltip(
                     wrapper,

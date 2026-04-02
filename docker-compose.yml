@@ -51,6 +51,31 @@ services:
     networks:
       - variance
 
+  laravel-scheduler:
+    build:
+      context: ./laravel
+    container_name: laravel-scheduler
+    volumes:
+      - ./laravel:/var/www/html
+      - ./laravel/storage/app/public:/var/www/html/storage/app/public
+      - uploads:/var/www/html/public/uploads
+      - uploads_images:/var/www/html/public/uploads_images
+      - ./variance/uploads_images:/var/www/variance/uploads_images
+      - ./variance/uploads/pdf:/var/www/variance/uploads/pdf
+      - ./variance/uploads:/var/www/variance/uploads
+      - ./variance_data:/var/www/html/storage/app/private/variance_data
+    working_dir: /var/www/html
+    environment:
+      - PHP_MEMORY_LIMIT=512M
+      - APP_GIT_SHA=${APP_GIT_SHA:-}
+    command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
+    depends_on:
+      - mariadb
+      - redis
+    restart: unless-stopped
+    networks:
+      - variance
+
   mariadb:
     image: mariadb:11.5.2
     container_name: mariadb

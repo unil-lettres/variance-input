@@ -23,15 +23,25 @@
         @include('components.main.work_selector')
     </div>
 
+    <div class="editorial-current-work" id="editorial-current-work" aria-live="polite" hidden>
+        <span class="editorial-current-work-label">Oeuvre sélectionnée</span>
+        <span class="editorial-current-work-value" id="editorial-current-work-value"></span>
+        <div class="editorial-current-work-meta" id="editorial-current-work-meta" hidden></div>
+    </div>
+
     <section class="editorial-journey" id="editorial-journey" aria-labelledby="editorial-journey-title">
         <div class="editorial-carousel">
             <div class="editorial-carousel-viewport" id="editorial-carousel-viewport">
                 <div class="editorial-carousel-track" id="editorial-carousel-track">
                     <section class="editorial-step-panel is-active" id="editorial-step-0" data-editorial-step="0" role="tabpanel" aria-labelledby="editorial-step-chip-0">
                         <div class="editorial-step-content">
-                            <div class="editorial-welcome">
+                            <div class="editorial-welcome" id="editorial-welcome-message">
                                 <span>Bienvenue dans l'interface de publication Variance.</span>
                                 <span>Sélectionnez une oeuvre pour démarrer le processus éditorial.</span>
+                            </div>
+                            <div class="editorial-step-zero-actions" id="editorial-step-zero-actions" aria-label="Actions rapides">
+                                <button type="button" class="btn btn-outline-success" id="editorial-add-author-shortcut">Ajouter un auteur</button>
+                                <button type="button" class="btn btn-outline-success" id="editorial-add-work-shortcut">Ajouter une œuvre</button>
                             </div>
                             <div class="editorial-history" aria-labelledby="editorial-history-title">
                                 <div class="editorial-history-title" id="editorial-history-title">Oeuvres récemment ouvertes en édition</div>
@@ -112,6 +122,45 @@
         display: grid;
         gap: 0.9rem;
     }
+    .editorial-current-work {
+        width: min(50rem, calc(100% - 1rem));
+        margin: -0.1rem auto 0;
+        padding: 0.55rem 1rem 0.6rem;
+        display: grid;
+        gap: 0.08rem;
+        text-align: center;
+        background: linear-gradient(180deg, #fbfcfd 0%, #f1f4f7 100%);
+        border: 1px solid #d8e0e7;
+        border-radius: 0.8rem;
+        box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.55);
+    }
+    .editorial-current-work-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #6b7280;
+    }
+    .editorial-current-work-value {
+        font-size: 1.18rem;
+        font-weight: 700;
+        line-height: 1.35;
+        color: #223044;
+    }
+    .editorial-current-work-meta {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.8rem;
+        margin-top: 0.1rem;
+        font-size: 0.8rem;
+        line-height: 1.35;
+        color: #5b6574;
+    }
+    .editorial-current-work-meta-item strong {
+        color: #3a4758;
+        font-weight: 700;
+    }
     .editorial-carousel {
         display: grid;
         gap: 1rem;
@@ -164,6 +213,16 @@
         width: min(60%, 44rem);
         margin: 0 auto;
         padding: 0 0.2rem;
+    }
+    .editorial-step-zero-actions {
+        display: flex;
+        justify-content: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .editorial-step-zero-actions .btn {
+        min-width: 11.5rem;
+        font-weight: 600;
     }
     .editorial-history-title {
         margin-bottom: 0.55rem;
@@ -549,6 +608,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return authorSelector.options[authorSelector.selectedIndex] || null;
     };
 
+    const selectedWorkOption = () => {
+        const workSelector = document.getElementById('work-selector');
+        if (!workSelector || !workSelector.value) return null;
+        return workSelector.options[workSelector.selectedIndex] || null;
+    };
+
     const buildSelectUrlFromSlugs = (authorSlug, workSlug, stepHash = '') => {
         const normalizedAuthorSlug = String(authorSlug ?? '').trim();
         const normalizedWorkSlug = String(workSlug ?? '').trim();
@@ -562,6 +627,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentAuthorSlug = null;
     let currentAuthorLabel = null;
     let currentWorkId = null;
+    let currentWorkLabel = null;
+    let currentWorkCreatorName = null;
+    let currentWorkCreatedAt = null;
+    let currentWorkUpdatedAt = null;
     let authorOverviewRequest = 0;
 
     const resolveCurrentAuthorLabel = () => {
@@ -588,13 +657,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderRecentHistory = () => {
         if (!historyList) return;
+        const historySection = historyList.closest('.editorial-history');
         if (historyTitle) {
             historyTitle.textContent = 'Oeuvres récemment ouvertes en édition';
         }
         const items = readHistory().filter(Boolean);
         if (items.length === 0) {
-            historyList.innerHTML = '<li class="editorial-history-empty">Aucun historique</li>';
+            if (historySection) {
+                historySection.hidden = true;
+            }
+            historyList.innerHTML = '';
             return;
+        }
+
+        if (historySection) {
+            historySection.hidden = false;
         }
 
         historyList.innerHTML = items.slice(0, 5).map((entry) => {
@@ -631,6 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderAuthorOverview = async () => {
         if (!historyList) return;
+        const historySection = historyList.closest('.editorial-history');
         if (!currentAuthorId || currentWorkId) {
             renderRecentHistory();
             return;
@@ -642,6 +720,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (historyTitle) {
             historyTitle.textContent = `Oeuvres et comparaisons de ${authorLabel}`;
+        }
+        if (historySection) {
+            historySection.hidden = false;
         }
         historyList.innerHTML = '<li class="editorial-history-empty">Chargement…</li>';
 
@@ -740,6 +821,13 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStepOneList();
     });
 
+    document.getElementById('editorial-add-author-shortcut')?.addEventListener('click', () => {
+        document.getElementById('add-author-btn')?.click();
+    });
+    document.getElementById('editorial-add-work-shortcut')?.addEventListener('click', () => {
+        document.getElementById('add-work-btn')?.click();
+    });
+
     document.querySelectorAll('#admin-main .modal').forEach((modalEl) => {
         if (modalEl.parentElement !== document.body) {
             document.body.appendChild(modalEl);
@@ -760,6 +848,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminMain = document.getElementById('admin-main');
     const viewport = document.getElementById('editorial-carousel-viewport');
     const track = document.getElementById('editorial-carousel-track');
+    const currentWorkTitle = document.getElementById('editorial-current-work');
+    const currentWorkTitleValue = document.getElementById('editorial-current-work-value');
+    const currentWorkMeta = document.getElementById('editorial-current-work-meta');
+    const welcomeMessage = document.getElementById('editorial-welcome-message');
+    const stepZeroActions = document.getElementById('editorial-step-zero-actions');
     const stepPanels = Array.from(document.querySelectorAll('[data-editorial-step]'));
     const stepButtons = Array.from(document.querySelectorAll('[data-editorial-step-target]'));
     const prevButton = document.getElementById('editorial-step-prev');
@@ -771,6 +864,10 @@ document.addEventListener('DOMContentLoaded', () => {
     currentAuthorId = (adminMain?.dataset?.initialAuthorId || '').trim() || null;
     currentAuthorSlug = (adminMain?.dataset?.initialAuthorSlug || '').trim() || null;
     currentWorkId = (adminMain?.dataset?.initialWorkId || '').trim() || null;
+    currentWorkLabel = selectedWorkOption()?.textContent?.trim() || null;
+    currentWorkCreatorName = selectedWorkOption()?.dataset?.creatorName || null;
+    currentWorkCreatedAt = selectedWorkOption()?.dataset?.createdAt || null;
+    currentWorkUpdatedAt = selectedWorkOption()?.dataset?.updatedAt || null;
     let currentStep = currentWorkId ? 1 : 0;
     if (currentWorkId) {
         window.setAllBladesLoading(true);
@@ -849,6 +946,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const activePanel = stepPanels.find((panel) => Number(panel.dataset.editorialStep) === currentStep) || stepPanels[0];
         if (!activePanel) return;
         viewport.style.height = `${Math.ceil(activePanel.offsetHeight)}px`;
+    };
+
+    const updateCurrentWorkTitle = () => {
+        if (!currentWorkTitle || !currentWorkTitleValue || !currentWorkMeta) return;
+        const normalizedLabel = String(currentWorkLabel ?? '').trim();
+        if (!normalizedLabel) {
+            currentWorkTitleValue.textContent = '';
+            currentWorkMeta.innerHTML = '';
+            currentWorkMeta.hidden = true;
+            currentWorkTitle.hidden = true;
+            return;
+        }
+        currentWorkTitleValue.textContent = normalizedLabel;
+        const metaParts = [];
+        const creatorName = String(currentWorkCreatorName ?? '').trim();
+        const createdAt = formatOpenedAt(currentWorkCreatedAt);
+        const updatedAt = formatOpenedAt(currentWorkUpdatedAt);
+        if (creatorName) {
+            metaParts.push(`<span class="editorial-current-work-meta-item"><strong>Créée par</strong> ${escapeHtml(creatorName)}</span>`);
+        }
+        if (createdAt) {
+            metaParts.push(`<span class="editorial-current-work-meta-item"><strong>Créée le</strong> ${escapeHtml(createdAt)}</span>`);
+        }
+        if (updatedAt) {
+            metaParts.push(`<span class="editorial-current-work-meta-item"><strong>Mise à jour</strong> ${escapeHtml(updatedAt)}</span>`);
+        }
+        currentWorkMeta.innerHTML = metaParts.join('');
+        currentWorkMeta.hidden = metaParts.length === 0;
+        currentWorkTitle.hidden = false;
+    };
+
+    const updateStepZeroActions = () => {
+        if (!stepZeroActions) return;
+        stepZeroActions.hidden = !!currentWorkId;
+    };
+
+    const updateWelcomeMessage = () => {
+        if (!welcomeMessage) return;
+        welcomeMessage.hidden = !!currentWorkId;
     };
 
     const updateStepUi = () => {
@@ -938,10 +1074,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentAuthorSlug = (event?.detail?.author_folder ?? '').toString().trim() || null;
         currentAuthorLabel = (event?.detail?.author_label ?? '').toString().trim() || null;
         currentWorkId = (event?.detail?.workId ?? '').toString().trim() || null;
+        currentWorkLabel = (event?.detail?.work_label ?? '').toString().trim() || null;
+        currentWorkCreatorName = (event?.detail?.work_creator_name ?? '').toString().trim() || null;
+        currentWorkCreatedAt = (event?.detail?.work_created_at ?? '').toString().trim() || null;
+        currentWorkUpdatedAt = (event?.detail?.work_updated_at ?? '').toString().trim() || null;
+        const restoredSelection = event?.detail?.restored === true;
         toggleBladesDisabled(!currentWorkId);
         if (currentWorkId) {
             window.setBladeLoading('facsimilesCollapse', false);
-            if (currentStep === 0) {
+            if (currentStep === 0 && !restoredSelection) {
                 openEditorialStep(1, { focusPanel: false });
             }
         } else {
@@ -950,12 +1091,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         applyStateForWork(currentWorkId);
         updateStepUi();
+        updateCurrentWorkTitle();
+        updateWelcomeMessage();
+        updateStepZeroActions();
         renderStepOneList();
         updateViewportHeight();
     });
 
     toggleBladesDisabled(!currentWorkId);
     applyStateForWork(currentWorkId);
+    updateCurrentWorkTitle();
+    updateWelcomeMessage();
+    updateStepZeroActions();
     renderStepOneList();
     updateStepUi();
     requestAnimationFrame(() => {

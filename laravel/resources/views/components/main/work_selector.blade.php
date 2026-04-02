@@ -8,6 +8,9 @@
         <div class="work-selector-grid">
             <section class="work-selector-panel" id="author-selector-panel">
                 <div class="work-selector-panel-row">
+                    <button id="clear-selection-btn" class="btn btn-outline-secondary work-selector-clear-btn" type="button" title="Réinitialiser la sélection" aria-label="Réinitialiser la sélection" disabled>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                     <select id="author-selector" class="form-select flex-grow-1">
                         <option value="" disabled selected>Sélectionner un auteur</option>
                     </select>
@@ -257,6 +260,16 @@
     flex-wrap: nowrap;
     align-items: center;
     gap: 0.75rem;
+  }
+  #container-work-selector .work-selector-clear-btn {
+    width: 2.35rem;
+    min-width: 2.35rem;
+    height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex: 0 0 auto;
   }
   #container-work-selector .legacy-disabled {
     opacity: 0.6;

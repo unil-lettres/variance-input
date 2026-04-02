@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Author;
 use App\Models\Work;
 use App\Models\Permission;
+use Illuminate\Support\Facades\DB;
 
 class AuthorController extends Controller
 {
@@ -28,7 +29,28 @@ class AuthorController extends Controller
 
     public function getWorksByAuthor($authorId)
     {
-        $works = Work::where('author_id', $authorId)->get(['id', 'title', 'short_title', 'folder', 'is_legacy']);
+        $firstPermissionPerWork = Permission::query()
+            ->select('work_id', DB::raw('MIN(id) as first_permission_id'))
+            ->whereNotNull('work_id')
+            ->groupBy('work_id');
+
+        $works = Work::query()
+            ->leftJoinSub($firstPermissionPerWork, 'first_work_permissions', function ($join) {
+                $join->on('first_work_permissions.work_id', '=', 'works.id');
+            })
+            ->leftJoin('permissions as creator_permissions', 'creator_permissions.id', '=', 'first_work_permissions.first_permission_id')
+            ->leftJoin('users as creator_users', 'creator_users.id', '=', 'creator_permissions.user_id')
+            ->where('works.author_id', $authorId)
+            ->get([
+                'works.id',
+                'works.title',
+                'works.short_title',
+                'works.folder',
+                'works.is_legacy',
+                'works.created_at',
+                'works.updated_at',
+                DB::raw('creator_users.name as creator_name'),
+            ]);
         return response()->json($works);
     }    
 

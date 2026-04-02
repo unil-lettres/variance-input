@@ -13,13 +13,19 @@ class MediaController extends Controller
      */
     public function index(Work $work)
     {
+        $imagePath = $work->image_url;
+        $pdfPath = $work->pdf_url ? 'pdf/' . $work->pdf_url : null;
+
         return response()->json([
-            'image_url' => $work->image_url
-                ? '/uploads_images/' . $work->image_url
+            'image_url' => $imagePath
+                ? '/uploads_images/' . $imagePath
                 : null,
+            'image_size' => $imagePath ? $this->safeDiskSize('uploads_images', $imagePath) : null,
+            'image_mime' => $imagePath ? $this->safeDiskMimeType('uploads_images', $imagePath) : null,
             'pdf_url'   => $work->pdf_url
                 ? '/uploads/pdf/' . $work->pdf_url
                 : null,
+            'pdf_size' => $pdfPath ? $this->safeDiskSize('uploads', $pdfPath) : null,
         ]);
     }
 
@@ -194,6 +200,24 @@ class MediaController extends Controller
         $legacyPath = base_path('../variance/uploads/pdf/' . $fileName);
         if (is_file($legacyPath)) {
             @unlink($legacyPath);
+        }
+    }
+
+    private function safeDiskSize(string $disk, string $path): ?int
+    {
+        try {
+            return (int) Storage::disk($disk)->size($path);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function safeDiskMimeType(string $disk, string $path): ?string
+    {
+        try {
+            return Storage::disk($disk)->mimeType($path);
+        } catch (\Throwable $e) {
+            return null;
         }
     }
 }
