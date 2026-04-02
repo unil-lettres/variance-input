@@ -641,16 +641,7 @@ class PublishController extends Controller
 
     private function assertComparisonEditable(Comparison $comparison): void
     {
-        $comparison->loadMissing('sourceVersion.work', 'targetVersion.work');
-
-        $sourceVersion = $comparison->sourceVersion;
-        $targetVersion = $comparison->targetVersion;
-
-        if ($comparison->is_legacy
-            || $sourceVersion?->is_legacy
-            || $targetVersion?->is_legacy
-            || $sourceVersion?->work?->is_legacy
-            || $targetVersion?->work?->is_legacy) {
+        if ($comparison->is_legacy) {
             abort(403, 'Cette comparaison est en lecture seule.');
         }
     }
