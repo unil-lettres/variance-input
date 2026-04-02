@@ -120,9 +120,6 @@ class MediteController extends Controller
         $sourceVersion = Version::with('work.author')->findOrFail((int) $validated['source_version']);
         $targetVersion = Version::with('work.author')->findOrFail((int) $validated['target_version']);
 
-        $this->pageMarkerService->materializeCanonicalVersionXml($sourceVersion);
-        $this->pageMarkerService->materializeCanonicalVersionXml($targetVersion);
-
         /* ───── Short names for versions ───── */
         $sourceShort = $sourceVersion->folder;
         $targetShort = $targetVersion->folder;
