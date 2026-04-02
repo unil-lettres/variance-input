@@ -441,17 +441,23 @@ class MediteController extends Controller
             ->get();
 
         foreach ($versions as $version) {
-            if ($version->is_legacy || $version->work?->is_legacy) {
-                abort(403, 'Les comparaisons legacy sont en lecture seule.');
+            if (($version->is_legacy || $version->work?->is_legacy) && !$this->hasMediteXmlInput($version->folder)) {
+                abort(422, 'Impossible de lancer Medite pour une version legacy sans fichier TEI-XML.');
             }
         }
 
         if ($workId !== null) {
             $work = Work::find($workId);
-            if ($work?->is_legacy) {
-                abort(403, 'Les comparaisons legacy sont en lecture seule.');
+            if ($work?->is_legacy && $versions->contains(fn (Version $version) => !$this->hasMediteXmlInput($version->folder))) {
+                abort(422, 'Impossible de lancer Medite pour une œuvre legacy dont une version ne dispose pas de fichier TEI-XML.');
             }
         }
+    }
+
+    private function hasMediteXmlInput(string $short): bool
+    {
+        return file_exists(storage_path("app/public/uploads/versions/{$short}.xml"))
+            || file_exists(public_path("uploads/versions/{$short}.xml"));
     }
 
     private function resolveCreatorId(): ?int
