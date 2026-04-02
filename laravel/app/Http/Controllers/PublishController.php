@@ -42,13 +42,6 @@ class PublishController extends Controller
         $this->assertComparisonEditable($comparison);
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
 
-        if ($comparison->sourceVersion instanceof Version) {
-            $this->pageMarkerService->materializeCanonicalVersionXml($comparison->sourceVersion);
-        }
-        if ($comparison->targetVersion instanceof Version) {
-            $this->pageMarkerService->materializeCanonicalVersionXml($comparison->targetVersion);
-        }
-
         // 2. Récupérer l’œuvre via la version source ------------------------
         try {
             $paths = $this->resolvePaths($comparison);
