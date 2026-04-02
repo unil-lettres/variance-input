@@ -1,13 +1,7 @@
 <div class="card">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-3">
-        <div class="comparisons-toggle d-flex align-items-center flex-grow-1"
-             role="button"
-             data-bs-toggle="collapse"
-             data-bs-target="#comparisonsCollapse"
-             aria-expanded="true"
-             aria-controls="comparisonsCollapse">
+        <div class="d-flex align-items-center flex-grow-1">
         <div class="d-flex align-items-start gap-2 admin-card-heading">
-            <span class="collapse-chevron" aria-hidden="true"></span>
             <span class="admin-card-heading-text">
                 <span class="admin-card-title">Comparaisons</span>
             </span>
@@ -29,7 +23,7 @@
         </div>
     </div>
 
-    <div id="comparisonsCollapse" class="collapse show">
+    <div id="comparisonsCollapse" class="show">
     <div class="card-body">
         <!-- Spinner while loading -->
         <div id="comparisons-loading" class="mb-3" style="display:none;">
@@ -92,14 +86,6 @@
 
 @push('styles')
 <style>
-  .comparisons-toggle .collapse-chevron::before {
-    content: "\25BC";
-    display: inline-block;
-    transition: transform .2s ease;
-  }
-  .comparisons-toggle[aria-expanded="false"] .collapse-chevron::before {
-    transform: rotate(-90deg);
-  }
   #comparisonsCollapse,
   #comparisonsCollapse *,
   #comparisonsCollapse.show,

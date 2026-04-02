@@ -839,8 +839,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const PERSISTED_COLLAPSES = [
         'descriptionCollapse',
         'mediaCollapse',
-        'versionsCollapse',
-        'comparisonsCollapse',
         'facsimilesCollapse',
     ];
     const STORAGE_PREFIX = 'variance:collapse-state:';

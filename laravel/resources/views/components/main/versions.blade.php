@@ -1,14 +1,8 @@
 @php /**  components/main/versions.blade.php  **/ @endphp
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center gap-3 fw-semibold">
-        <div class="versions-toggle d-flex align-items-center flex-grow-1"
-             role="button"
-             data-bs-toggle="collapse"
-             data-bs-target="#versionsCollapse"
-             aria-expanded="true"
-             aria-controls="versionsCollapse">
+        <div class="d-flex align-items-center flex-grow-1">
             <div class="d-flex align-items-start gap-2 admin-card-heading">
-                <span class="collapse-chevron" aria-hidden="true"></span>
                 <span class="admin-card-heading-text">
                     <span class="admin-card-title">Versions</span>
                 </span>
@@ -28,7 +22,7 @@
             </button>
         </div>
     </div>
-    <div id="versionsCollapse" class="collapse show">
+    <div id="versionsCollapse" class="show">
     <div class="card-body">
         <!-- ────────────── Versions list  ────────────── -->
         <ul id="versions-list" class="list-group versions-list-shell">
@@ -189,14 +183,6 @@
 
 @push('styles')
 <style>
-  .versions-toggle .collapse-chevron::before {
-    content: "\25BC";
-    display: inline-block;
-    transition: transform .2s ease;
-  }
-  .versions-toggle[aria-expanded="false"] .collapse-chevron::before {
-    transform: rotate(-90deg);
-  }
   #versionsCollapse,
   #versionsCollapse *,
   #versionsCollapse.show,
