@@ -35,6 +35,7 @@ class AuthorController extends Controller
             ->groupBy('work_id');
 
         $works = Work::query()
+            ->withCount('versions')
             ->leftJoinSub($firstPermissionPerWork, 'first_work_permissions', function ($join) {
                 $join->on('first_work_permissions.work_id', '=', 'works.id');
             })
@@ -49,6 +50,7 @@ class AuthorController extends Controller
                 'works.is_legacy',
                 'works.created_at',
                 'works.updated_at',
+                'works.versions_count',
                 DB::raw('creator_users.name as creator_name'),
             ]);
         return response()->json($works);

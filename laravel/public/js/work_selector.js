@@ -14,6 +14,10 @@ document.addEventListener("DOMContentLoaded", () => {
     return path;
   };
 
+  const stripWorkYears = (value) => String(value ?? '')
+    .replace(/\s*\(\d{4}(?:-\d{4})?\)\s*$/u, '')
+    .trim();
+
   // Grab elements
   const authorSelector  = document.getElementById("author-selector");
   const workSelector    = document.getElementById("work-selector");
@@ -188,7 +192,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const authorFolder = authorOption?.dataset.folder || null;
     const workFolder   = workOption?.dataset.folder || null;
     const authorLabel  = authorOption?.textContent?.trim() || null;
-    const workLabel    = workOption?.textContent?.trim() || null;
+    const workLabel    = workOption?.dataset.fullTitle?.trim() || workOption?.textContent?.trim() || null;
+    const workDisplayLabel = workOption?.textContent?.trim() || null;
     const workCreatorName = workOption?.dataset.creatorName || null;
     const workCreatedAt = workOption?.dataset.createdAt || null;
     const workUpdatedAt = workOption?.dataset.updatedAt || null;
@@ -206,7 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
         authorSlug: authorFolder,
         workSlug: workFolder,
         authorLabel,
-        workLabel,
+        workLabel: workDisplayLabel,
       });
     }
 
@@ -220,6 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
         work_folder: workFolder,
         author_label: authorLabel,
         work_label: workLabel,
+        work_display_label: workDisplayLabel,
         work_creator_name: workCreatorName,
         work_created_at: workCreatedAt,
         work_updated_at: workUpdatedAt,
@@ -752,11 +758,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         sortedWorks.forEach(work => {
           const opt = document.createElement('option');
+          const displayTitle = stripWorkYears(work.title);
           opt.value = work.id;
           opt.textContent = work.short_title
-            ? `${work.title} [${work.short_title}]`
-            : work.title;
+            ? `${displayTitle} [${work.short_title}]`
+            : displayTitle;
           opt.setAttribute('data-short-title', work.short_title || '');
+          opt.dataset.fullTitle = work.title || '';
           opt.dataset.folder = work.folder || '';
           opt.dataset.isLegacy = work.is_legacy ? '1' : '0';
           opt.dataset.creatorName = work.creator_name || '';

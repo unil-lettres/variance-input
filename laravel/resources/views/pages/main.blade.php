@@ -602,6 +602,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const stripWorkYears = (value) => String(value ?? '')
+        .replace(/\s*\(\d{4}(?:-\d{4})?\)(?=(\s*\[[^\]]+\])?$)/u, '')
+        .trim();
+
     const selectedAuthorOption = () => {
         const authorSelector = document.getElementById('author-selector');
         if (!authorSelector || !authorSelector.value) return null;
@@ -676,7 +680,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         historyList.innerHTML = items.slice(0, 5).map((entry) => {
             const href = buildSelectUrl(entry) || (typeof window.withBasePath === 'function' ? window.withBasePath('/') : '/');
-            const workLabel = entry?.workLabel || 'Œuvre';
+            const workLabel = stripWorkYears(entry?.workLabel || 'Œuvre');
             const authorLabel = entry?.authorLabel || 'Auteur';
             const openedAt = formatOpenedAt(entry?.updatedAt);
             const authorId = String(entry?.authorId ?? '').trim();
@@ -761,26 +765,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             historyList.innerHTML = entries.map(({ work, comparisons, failed }) => {
                 const count = comparisons.length;
+                const versionCount = Number(work?.versions_count ?? 0);
                 const workHref = buildSelectUrlFromSlugs(authorSlug, work?.folder)
                     || (typeof window.withBasePath === 'function' ? window.withBasePath('/') : '/');
-                const comparisonsMarkup = failed
-                    ? '<div class="editorial-history-comparison-empty">Comparaisons indisponibles pour le moment.</div>'
-                    : count > 0
-                        ? `<div class="editorial-history-comparisons">${comparisons.map((comparison) => `<span class="editorial-history-comparison" title="${escapeHtml(buildComparisonLabel(comparison))}">${escapeHtml(buildComparisonLabel(comparison))}</span>`).join('')}</div>`
-                        : '<div class="editorial-history-comparison-empty">Aucune comparaison pour cette oeuvre.</div>';
+                const countsLabel = failed
+                    ? `${versionCount} version${versionCount > 1 ? 's' : ''} · comparaisons indisponibles`
+                    : `${versionCount} version${versionCount > 1 ? 's' : ''} · ${count} comparaison${count > 1 ? 's' : ''}`;
 
                 return `
                     <li class="editorial-history-item">
-                        <div class="editorial-history-entry">
-                            <a href="${escapeHtml(workHref)}">
-                                <span class="editorial-history-work">${escapeHtml(work?.title || 'Œuvre')}</span>
-                            </a>
-                            <div class="editorial-history-meta">
+                        <a href="${escapeHtml(workHref)}">
+                            <span class="editorial-history-work">${escapeHtml(stripWorkYears(work?.title || 'Œuvre'))}</span>
+                            <span class="editorial-history-author">
                                 <span>${escapeHtml(authorLabel)}</span>
-                                <span class="editorial-history-count">${count} comparaison${count > 1 ? 's' : ''}</span>
-                            </div>
-                            ${comparisonsMarkup}
-                        </div>
+                                <span class="editorial-history-count">${escapeHtml(countsLabel)}</span>
+                            </span>
+                        </a>
                     </li>
                 `;
             }).join('');
@@ -825,6 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('add-author-btn')?.click();
     });
     document.getElementById('editorial-add-work-shortcut')?.addEventListener('click', () => {
+        if (!currentAuthorId) return;
         document.getElementById('add-work-btn')?.click();
     });
 
@@ -853,6 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentWorkMeta = document.getElementById('editorial-current-work-meta');
     const welcomeMessage = document.getElementById('editorial-welcome-message');
     const stepZeroActions = document.getElementById('editorial-step-zero-actions');
+    const stepZeroAddWorkButton = document.getElementById('editorial-add-work-shortcut');
     const stepPanels = Array.from(document.querySelectorAll('[data-editorial-step]'));
     const stepButtons = Array.from(document.querySelectorAll('[data-editorial-step-target]'));
     const prevButton = document.getElementById('editorial-step-prev');
@@ -864,7 +866,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentAuthorId = (adminMain?.dataset?.initialAuthorId || '').trim() || null;
     currentAuthorSlug = (adminMain?.dataset?.initialAuthorSlug || '').trim() || null;
     currentWorkId = (adminMain?.dataset?.initialWorkId || '').trim() || null;
-    currentWorkLabel = selectedWorkOption()?.textContent?.trim() || null;
+    currentWorkLabel = selectedWorkOption()?.dataset?.fullTitle?.trim() || selectedWorkOption()?.textContent?.trim() || null;
     currentWorkCreatorName = selectedWorkOption()?.dataset?.creatorName || null;
     currentWorkCreatedAt = selectedWorkOption()?.dataset?.createdAt || null;
     currentWorkUpdatedAt = selectedWorkOption()?.dataset?.updatedAt || null;
@@ -980,6 +982,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateStepZeroActions = () => {
         if (!stepZeroActions) return;
         stepZeroActions.hidden = !!currentWorkId;
+        if (stepZeroAddWorkButton) {
+            stepZeroAddWorkButton.disabled = !currentAuthorId;
+            stepZeroAddWorkButton.title = currentAuthorId
+                ? 'Ajouter une œuvre pour l’auteur sélectionné'
+                : 'Sélectionnez d’abord un auteur';
+        }
     };
 
     const updateWelcomeMessage = () => {
