@@ -67,7 +67,9 @@ class ComparisonController extends Controller
         $this->scopeComparisonsToUser($comparisonsQuery, $user);
 
         $comparisons = $comparisonsQuery
-            ->orderByDesc('created_at')
+            ->orderByRaw('CASE WHEN number IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('number')
+            ->orderBy('id')
             ->get()
             ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder, $light) {
                 if ($light) {
@@ -394,6 +396,73 @@ class ComparisonController extends Controller
      * Delete comparison DB row **and** its generated HTML / XML files.
      * Files are stored in `uploads/comparisons/{comparison_id}.xml|html`.
      */
+    public function reorder(Request $request, Comparison $comparison)
+    {
+        $this->assertComparisonOwnership($comparison);
+
+        $direction = $request->validate([
+            'direction' => 'required|in:up,down',
+        ])['direction'];
+
+        $comparison->loadMissing('sourceVersion.work', 'targetVersion.work');
+        $workId = $comparison->sourceVersion?->work_id ?? $comparison->targetVersion?->work_id;
+        if (!$workId) {
+            return response()->json(['message' => 'Œuvre introuvable pour cette comparaison.'], 422);
+        }
+
+        $moved = DB::transaction(function () use ($comparison, $workId, $direction) {
+            $ordered = Comparison::query()
+                ->where(function ($query) use ($workId) {
+                    $query->whereHas('sourceVersion', fn ($q) => $q->where('work_id', $workId))
+                        ->orWhereHas('targetVersion', fn ($q) => $q->where('work_id', $workId));
+                })
+                ->orderByRaw('CASE WHEN number IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('number')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($ordered->isEmpty()) {
+                return false;
+            }
+
+            foreach ($ordered->values() as $index => $item) {
+                $expected = $index + 1;
+                if ((int) round((float) ($item->number ?? 0)) !== $expected) {
+                    $item->number = $expected;
+                    $item->save();
+                }
+            }
+
+            $ordered = $ordered->values();
+            $currentIndex = $ordered->search(fn ($item) => (int) $item->id === (int) $comparison->id);
+            if ($currentIndex === false) {
+                return false;
+            }
+
+            $swapIndex = $direction === 'up' ? $currentIndex - 1 : $currentIndex + 1;
+            if ($swapIndex < 0 || $swapIndex >= $ordered->count()) {
+                return false;
+            }
+
+            $current = $ordered[$currentIndex];
+            $other = $ordered[$swapIndex];
+            $currentNumber = $current->number;
+            $otherNumber = $other->number;
+            $current->number = $otherNumber;
+            $other->number = $currentNumber;
+            $current->save();
+            $other->save();
+
+            return true;
+        });
+
+        return response()->json([
+            'status' => $moved ? 'ok' : 'noop',
+            'comparison_id' => $comparison->id,
+        ]);
+    }
+
     public function destroy(int $id)
     {
         $comparison = Comparison::with([

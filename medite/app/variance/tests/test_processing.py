@@ -6,7 +6,6 @@ import pathlib
 from pathlib import Path
 from collections import namedtuple
 from variance.medite import medite as md
-from variance.processing import create_tei_xml, xml2txt
 from variance.medite import utils as ut
 import functools
 import tempfile
@@ -25,7 +24,7 @@ TEST_DATA_DIR = Path("tests/data")
 )
 def test_xml2txt(directory_name, filename, id):
     p_xml = (TEST_DATA_DIR / directory_name / filename).with_suffix(".xml")
-    z = p.xml2txt(filepath=p_xml)
+    z = p.xml2txt(p_xml)
     assert z.id == id
 
 
@@ -60,11 +59,13 @@ def test_post_processing(directory_name, filename_1, filename_2):
     )
 
     output_filepath = test_dir / f"{filename_1}_{filename_2}.output.xml"
+    xhtml_output_dir = test_dir / f"{filename_1}_{filename_2}.xhtml"
     p.process(
         source_filepath=p1_xml,
         target_filepath=p2_xml,
         parameters=parameters,
         output_filepath=output_filepath,
+        xhtml_output_dir=xhtml_output_dir,
     )
 
 
@@ -184,12 +185,14 @@ def test_synthetic(v1, v2, check_function, expected_exception):
     )
     test_dir = f1.parent
     output_filepath = test_dir / f"{v1}_{v2}.output.xml"
+    xhtml_output_dir = test_dir / "xhtml"
     func = functools.partial(
         p.process,
         source_filepath=f1,
         target_filepath=f2,
         parameters=parameters,
         output_filepath=output_filepath,
+        xhtml_output_dir=xhtml_output_dir,
     )
     # Check if an exception is expected
     if expected_exception:

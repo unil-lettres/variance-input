@@ -202,10 +202,10 @@
     .version-table th { font-weight: normal; font-size: 1rem; color: #333; }
     .version-table th:nth-child(7) { text-align: center; }
     .version-table td { vertical-align: middle; }
-    .version-table.compact-details th:nth-child(1),
-    .version-table.compact-details td:nth-child(1),
-    .version-table.compact-details th:nth-child(3),
-    .version-table.compact-details td:nth-child(3) {
+    .version-table.compact-details th:nth-child(2),
+    .version-table.compact-details td:nth-child(2),
+    .version-table.compact-details th:nth-child(4),
+    .version-table.compact-details td:nth-child(4) {
       display: none;
     }
     .version-table .download-btn {
@@ -308,6 +308,49 @@
       border-width: 0.11rem;
       color: #0d6efd;
     }
+    .version-table .version-viewer-col {
+      width: 3.2rem;
+      min-width: 3.2rem;
+      text-align: center;
+    }
+    .version-table .version-viewer-btn {
+      width: 2.35rem;
+      min-width: 2.35rem;
+      height: 2.35rem;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+    .version-table .version-viewer-btn .bi-eye {
+      font-size: 1.15rem;
+    }
+    .version-table .version-viewer-state {
+      display: none;
+      margin-top: 0.2rem;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #0d6efd;
+      line-height: 1.1;
+    }
+    .version-table tr.version-row-selected > td {
+      background-color: rgba(13, 110, 253, 0.11);
+    }
+    .version-table tr.version-row-selected td:first-child {
+      box-shadow: inset 4px 0 0 #0d6efd;
+    }
+    .version-table tr.version-row-selected .version-viewer-btn {
+      background-color: #0d6efd;
+      border-color: #0d6efd;
+      color: #fff;
+      box-shadow: 0 0 0 0.18rem rgba(13, 110, 253, 0.18);
+    }
+    .version-table tr.version-row-selected .version-viewer-state {
+      display: block;
+    }
 </style>
 
 <script>
@@ -353,6 +396,7 @@ let facUploadInProgress = false;
 let facUploadAbortController = null;
 let facUploadCancelRequested = false;
 let facCurrentUploadVersionId = null;
+let currentViewerVersionId = null;
 let selectedAuthorLabel = '';
 let selectedWorkLabel   = '';
 let showVersionDetails  = false;
@@ -1290,6 +1334,7 @@ window.addEventListener('DOMContentLoaded',()=>{
             openUploadBtn.disabled = !selectedWorkId;
         }
         if (!selectedWorkId) {
+            currentViewerVersionId = null;
             if (uploadModalInstance) {
                 uploadModalInstance.hide();
             }
@@ -1303,7 +1348,15 @@ window.addEventListener('DOMContentLoaded',()=>{
             if ($fileInfo) { $fileInfo.textContent = ''; }
             refreshUploadModalTitle();
         }
-        fetchVersions(selectedWorkId);
+        if (!selectedWorkId) {
+            fetchVersions(null);
+        }
+    });
+    document.addEventListener('editorialStepChanged', e => {
+        const step = Number(e.detail?.step);
+        if (step !== 2) return;
+        const workId = e.detail?.workId ?? selectedWorkId;
+        fetchVersions(workId);
     });
     document.addEventListener('versionsUpdated', e=>{
         if(e.detail.workId){
@@ -1317,6 +1370,11 @@ window.addEventListener('DOMContentLoaded',()=>{
             selectedWorkId = workId;
             fetchVersions(workId, true);
         }
+    });
+    document.addEventListener('facsimiles:select', e => {
+        const versionId = Number(e.detail?.versionId);
+        currentViewerVersionId = Number.isFinite(versionId) && versionId > 0 ? versionId : null;
+        updateViewerRowSelection();
     });
 
     /* ——— Upload submit ——— */
@@ -1421,6 +1479,8 @@ function openFacsimileUploadModal(version) {
 function revealFacsimilesForVersion(versionId, versionName = '') {
     const numericVersionId = Number(versionId);
     if (!Number.isFinite(numericVersionId) || numericVersionId <= 0) return;
+    currentViewerVersionId = numericVersionId;
+    updateViewerRowSelection();
 
     if (typeof window.openEditorialStep === 'function') {
         window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
@@ -1435,6 +1495,19 @@ function revealFacsimilesForVersion(versionId, versionName = '') {
         const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
         collapse.show();
     }
+}
+
+function updateViewerRowSelection() {
+    const rows = document.querySelectorAll('#versions-list .version-table tbody tr[data-version-id]');
+    rows.forEach((row) => {
+        const isSelected = String(row.dataset.versionId || '') === String(currentViewerVersionId || '');
+        row.classList.toggle('version-row-selected', isSelected);
+        const button = row.querySelector('.version-viewer-btn');
+        if (button) {
+            button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+            button.setAttribute('title', isSelected ? 'Version actuellement affichée dans le lecteur' : 'Ouvrir le viewer');
+        }
+    });
 }
 
 function collectSelectedImages() {
@@ -1980,12 +2053,34 @@ async function fetchVersions(workId, force = false){
         const table = document.createElement('table');
         table.className='table table-bordered table-sm version-table';
         table.classList.toggle('compact-details', !showVersionDetails);
-        table.innerHTML=`<thead class="table-light"><tr><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th class="version-viewer-col"></th><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         versions.forEach(v=>{
             const tr = document.createElement('tr');
+            tr.dataset.versionId = String(v.id);
+            const facsimileData = v.facsimiles && typeof v.facsimiles === 'object' ? v.facsimiles : null;
+            const sourceCount = Number(facsimileData?.source_count ?? 0);
             const shortFolder = (v.folder || '').split('/').pop();
+
+            const tdViewer = document.createElement('td');
+            tdViewer.className = 'version-viewer-col align-middle';
+            const viewerBtn = document.createElement('button');
+            viewerBtn.type = 'button';
+            viewerBtn.className = 'btn btn-outline-secondary version-viewer-btn';
+            viewerBtn.title = sourceCount > 0
+                ? 'Ouvrir le lecteur fac-similé synchronisé'
+                : 'Ouvrir le panneau fac-similés pour cette version';
+            viewerBtn.setAttribute('aria-label', 'Ouvrir le viewer');
+            viewerBtn.dataset.viewerVersionId = String(v.id);
+            viewerBtn.dataset.viewerVersionName = v.name || '';
+            viewerBtn.innerHTML = '<i class="bi bi-eye"></i>';
+            tdViewer.appendChild(viewerBtn);
+            const viewerState = document.createElement('div');
+            viewerState.className = 'version-viewer-state';
+            viewerState.textContent = 'Affichée';
+            tdViewer.appendChild(viewerState);
+            tr.appendChild(tdViewer);
 
             const tdId = document.createElement('td');
             tdId.textContent = v.id;
@@ -2068,8 +2163,6 @@ async function fetchVersions(workId, force = false){
 
             const tdFac = document.createElement('td');
             tdFac.className = 'align-middle';
-            const facsimileData = v.facsimiles && typeof v.facsimiles === 'object' ? v.facsimiles : null;
-            const sourceCount = Number(facsimileData?.source_count ?? 0);
             const publishedCount = Number(facsimileData?.published_count ?? 0);
             const queueCount = Number(facsimileData?.queue_count ?? 0);
             const totalExpected = Number(facsimileData?.total_expected ?? (sourceCount + queueCount));
@@ -2096,17 +2189,7 @@ async function fetchVersions(workId, force = false){
                 if (btnFacView.dataset.facsimileLoading === '1') {
                     requestFacsimileProgress(v.id);
                 }
-                if (typeof window.openEditorialStep === 'function') {
-                    window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
-                }
-                document.dispatchEvent(new CustomEvent('facsimiles:select', {
-                    detail: { versionId: v.id, versionName: v.name }
-                }));
-                const collapseEl = document.getElementById('facsimilesCollapse');
-                if (collapseEl && !collapseEl.classList.contains('show')) {
-                    const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
-                    collapse.show();
-                }
+                revealFacsimilesForVersion(v.id, v.name);
             });
             facButtons.appendChild(btnFacView);
 
@@ -2373,7 +2456,13 @@ async function fetchVersions(workId, force = false){
             tr.appendChild(tdActions);
             tbody.appendChild(tr);
         });
+        tbody.addEventListener('click', (event) => {
+            const button = event.target.closest('.version-viewer-btn');
+            if (!button) return;
+            revealFacsimilesForVersion(button.dataset.viewerVersionId, button.dataset.viewerVersionName || '');
+        });
         list.appendChild(table);
+        updateViewerRowSelection();
         facsimilePollers.forEach((_, id) => {
             if (!activeFacsimileIds.has(id)) {
                 stopFacsimilePolling(id);

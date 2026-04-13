@@ -84,6 +84,21 @@
     </div>
 </div>
 
+<div class="modal fade" id="mediteErrorModal" tabindex="-1" aria-labelledby="mediteErrorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5 mb-0" id="mediteErrorModalLabel">Erreur Medite</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2" id="medite-error-summary">Une erreur est survenue lors du lancement de Medite.</p>
+                <pre class="mb-0" id="medite-error-details" style="white-space: pre-wrap;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
 @push('styles')
 <style>
   .medite-launch-shell {
@@ -206,10 +221,13 @@ const $results = document.getElementById('results');
 const $sepInput = document.getElementById('sep');
 const $useDefaultSep = document.getElementById('use_default_sep');
 const $mediteModalEl = document.getElementById('mediteModal');
+const $mediteErrorModalEl = document.getElementById('mediteErrorModal');
 const $mediteLaunchCard = document.getElementById('medite-launch-card');
 const CSRF     = document.querySelector('meta[name="csrf-token"]').content;
 const DEFAULT_SEP_VALUE = ($sepInput && $sepInput.dataset.defaultExample) ? $sepInput.dataset.defaultExample : ',.;?!';
 let cachedCustomSep = $sepInput ? $sepInput.value : DEFAULT_SEP_VALUE;
+let currentMediteWorkId = null;
+let mediteErrorModal = null;
 const setMediteLoading = (state) => {
   if ($mediteLaunchCard) {
     $mediteLaunchCard.classList.toggle('blade-loading', !!state);
@@ -266,6 +284,57 @@ function notifyComparison(eventName, comparisonId, extra = {}) {
 
 function refreshComparisonsTable() {
     document.dispatchEvent(new CustomEvent('refreshComparisons'));
+}
+
+function ensureMediteErrorModal() {
+    if (!mediteErrorModal && $mediteErrorModalEl && window.bootstrap?.Modal) {
+        mediteErrorModal = new bootstrap.Modal($mediteErrorModalEl, {
+            backdrop: true,
+            keyboard: true,
+        });
+    }
+    return mediteErrorModal;
+}
+
+function stringifyMediteError(payload) {
+    if (!payload) return '';
+    if (typeof payload === 'string') return payload.trim();
+    if (typeof payload !== 'object') return String(payload);
+
+    const parts = [];
+    const pushValue = (value) => {
+        if (value === null || value === undefined) return;
+        const text = typeof value === 'string'
+            ? value.trim()
+            : JSON.stringify(value, null, 2);
+        if (text) parts.push(text);
+    };
+
+    pushValue(payload.message);
+    pushValue(payload.error);
+    pushValue(payload.errors);
+    pushValue(payload.traceback);
+    pushValue(payload.stderr);
+    pushValue(payload.stdout);
+    pushValue(payload.detail);
+
+    return parts.join('\n\n').trim();
+}
+
+function showMediteError(summary, details = '') {
+    const summaryEl = document.getElementById('medite-error-summary');
+    const detailsEl = document.getElementById('medite-error-details');
+    if (summaryEl) summaryEl.textContent = summary || 'Une erreur est survenue lors du lancement de Medite.';
+    if (detailsEl) {
+        detailsEl.textContent = details || '';
+        detailsEl.style.display = details ? 'block' : 'none';
+    }
+    const modal = ensureMediteErrorModal();
+    if (modal) {
+        modal.show();
+        return;
+    }
+    alert([summary, details].filter(Boolean).join('\n\n'));
 }
 
 async function cleanupFailedComparison(comparisonId) {
@@ -449,15 +518,22 @@ async function refreshVersions(workId, { force = false } = {}){
 
 document.addEventListener('workSelected', e=>{
     const {workId, authorId, author_folder, work_folder} = e.detail;
+    currentMediteWorkId = workId || null;
     fillHidden('work_id', workId);
     fillHidden('author_id', authorId||'');
     fillHidden('author_name', author_folder || '');
     fillHidden('work_name', work_folder || '');
-    refreshVersions(workId);
+    $srcSel.innerHTML = '';
+    $tgtSel.innerHTML = '';
+    $srcSel.disabled = true;
+    $tgtSel.disabled = true;
+    updateSubmitState();
 });
 
 document.addEventListener('versionsUpdated', e=>{
-    if(e.detail.workId) refreshVersions(e.detail.workId, { force: true });
+    if (e.detail.workId && $mediteModalEl?.classList.contains('show')) {
+        refreshVersions(e.detail.workId, { force: true });
+    }
 });
 
 if ($srcSel) {
@@ -477,6 +553,9 @@ if ($mediteModalEl) {
       $results.style.display = 'none';
       $results.innerHTML = '';
     }
+    if (currentMediteWorkId) {
+      refreshVersions(currentMediteWorkId);
+    }
     $srcSel?.focus();
   });
 }
@@ -485,7 +564,7 @@ $form.addEventListener('submit', async ev => {
     ev.preventDefault();
 
     if (!$srcSel.value || !$tgtSel.value) {
-        alert('Veuillez sélectionner une version source et une version cible.');
+        showMediteError('Veuillez sélectionner une version source et une version cible.');
         return;
     }
 
@@ -520,7 +599,10 @@ $form.addEventListener('submit', async ev => {
     if (!cmpResp.ok) {
         const err = await cmpResp.clone().json().catch(() => cmpResp.text());
         console.error('Create-comparison error', cmpResp.status, err);
-        alert(`Create comparison failed (${cmpResp.status}). Check console.`);
+        showMediteError(
+            `Création de la comparaison impossible (${cmpResp.status}).`,
+            stringifyMediteError(err)
+        );
         return;
     }
 
@@ -569,6 +651,7 @@ $form.addEventListener('submit', async ev => {
         await cleanupFailedComparison(cmpData.id);
         notifyComparison('comparisonFailed', cmpData.id);
         $progress.innerHTML = '<div class="alert alert-danger">Launch failed</div>';
+        showMediteError('Lancement de Medite impossible.', stringifyMediteError(error?.message || error));
         return;
     }
 
@@ -578,6 +661,10 @@ $form.addEventListener('submit', async ev => {
         await cleanupFailedComparison(cmpData.id);
         notifyComparison('comparisonFailed', cmpData.id);
         $progress.innerHTML = '<div class="alert alert-danger">Launch failed</div>';
+        showMediteError(
+            `Medite a renvoyé une erreur (${run.status}).`,
+            stringifyMediteError(err)
+        );
         return;
     }
 
@@ -664,7 +751,10 @@ function pollTask(taskId, cmpId){
                 $results.style.display = 'block';
                 $results.innerHTML = '';
                 $results.appendChild(alert);
-                notifyComparison('comparisonDeleted', cmpId);
+                const failureText = extra.join('\n\n') || 'Medite n’a produit aucun fichier XML.';
+                await cleanupFailedComparison(cmpId);
+                notifyComparison('comparisonFailed', cmpId);
+                showMediteError('Le traitement Medite a échoué.', failureText);
                 return;
             }
 
@@ -690,7 +780,9 @@ function pollTask(taskId, cmpId){
         $progress.innerHTML = '<div class="alert alert-danger mb-0">Échec du traitement.</div>';
         $results.style.display = 'block';
         $results.innerHTML = `<div class="alert alert-danger mb-0"><pre class="mb-0">${failureText}</pre></div>`;
-        notifyComparison('comparisonDeleted', cmpId);
+        await cleanupFailedComparison(cmpId);
+        notifyComparison('comparisonFailed', cmpId);
+        showMediteError('Le traitement Medite a échoué.', failureText);
     }, intervalMs);
 }
 </script>

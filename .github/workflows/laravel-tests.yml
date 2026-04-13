@@ -1,0 +1,42 @@
+name: Laravel tests
+
+on:
+  push:
+    paths:
+      - "laravel/**"
+      - ".github/workflows/laravel-tests.yml"
+  pull_request:
+    paths:
+      - "laravel/**"
+      - ".github/workflows/laravel-tests.yml"
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: laravel
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, sqlite3, pdo_sqlite, dom, fileinfo
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Prepare environment file
+        run: php -r "file_exists('.env') || copy('example.env', '.env');"
+
+      - name: Prepare app key
+        run: php artisan key:generate --ansi
+
+      - name: Run PHPUnit
+        run: composer test

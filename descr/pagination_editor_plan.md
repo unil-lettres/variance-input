@@ -52,6 +52,14 @@ This note captures the work needed to align the in-app CodeMirror editor with th
 
 Each checkbox can become a ticket/task for the upcoming sprint. The biggest lift is the CodeMirror refactor plus UX messaging; backend pieces mostly stay as-is thanks to the recent `<pb>` whitelist update.
 
+## Backlog complementaire (editeur de versions)
+
+- [ ] Ajouter un outil d'italique dans l'editeur de versions (application/retrait via balisage TEI/UI dediee, sans symbole de substitution dans le TXT source).
+- [ ] Ajouter un outil d'exposant dans l'editeur de versions (rendu et persistance editoriales, sans convention `^...^` dans le TXT source).
+- [ ] Ajouter un outil d'insertion d'image in-texte dans l'editeur de versions (ancrage explicite au fil du texte, sans convention `[Image]` dans le TXT source).
+- [ ] Ajouter un outil de gestion des appels de notes dans l'editeur de versions (insertion/edition des appels et contenu associe, sans convention manuelle `^1^` dans le TXT source).
+- [ ] Executer un test d'import de version couvrant toutes les nouvelles options de nettoyage (alineas, doubles espaces, fins de ligne, bords de fichier, caracteres invisibles, fins de ligne, normalisation legacy) et documenter le resultat.
+
 1. **Editor update**
    - Change `insertPageMarker` in `resources/js/codemirror-editor.js` to emit `<pb …/>` tags, probably with attributes `facs` (image code) and `pagination` (page label). Optionally infer orientation so editors know which suffix (e.g. `S‑1r`) to type.
    - Adapt helper routines (marker cache, highlighting, search) to match `<pb …/>` patterns instead of `<span class="page-marker">…`. Most logic only needs regex tweaks.

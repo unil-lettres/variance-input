@@ -19,7 +19,6 @@ build/
 # Poetry virtual environments
 .env
 .venv
-poetry.lock
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
@@ -78,4 +77,3 @@ dmypy.json.5
 *.swo
 *~
 tests/data/samples/post_processing/outputs
-

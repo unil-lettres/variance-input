@@ -381,21 +381,40 @@ class MediteController extends Controller
             $slug = 'comparison';
         }
 
-        $query = Comparison::where('source_id', $sourceId)
-                            ->where('target_id', $targetId);
+        $pairQuery = Comparison::where('source_id', $sourceId)
+            ->where('target_id', $targetId);
 
         if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
+            $pairQuery->where('id', '!=', $excludeId);
         }
 
-        $maxExisting = (int) $query->max('number');
-        if ($maxExisting <= 0) {
-            $maxExisting = (int) $query->count();
+        $pairSequence = (int) $pairQuery->max('number');
+        if ($pairSequence <= 0) {
+            $pairSequence = (int) $pairQuery->count();
+        }
+        $pairSequence += 1;
+
+        $workId = Version::where('id', $sourceId)->value('work_id');
+
+        $orderQuery = Comparison::query();
+        if ($workId) {
+            $orderQuery->whereHas('sourceVersion', fn ($q) => $q->where('work_id', $workId));
+        } else {
+            $orderQuery->where('source_id', $sourceId)
+                ->where('target_id', $targetId);
         }
 
-        $number = $maxExisting + 1;
+        if ($excludeId) {
+            $orderQuery->where('id', '!=', $excludeId);
+        }
 
-        $suffix = "run{$number}";
+        $number = (int) $orderQuery->max('number');
+        if ($number <= 0) {
+            $number = (int) $orderQuery->count();
+        }
+        $number += 1;
+
+        $suffix = "run{$pairSequence}";
         $separator = '-';
         $maxBaseLength = 45 - strlen($suffix) - strlen($separator);
 
@@ -408,16 +427,14 @@ class MediteController extends Controller
                 : Str::limit($suffix, 45, '');
         }
 
-        // Ensure uniqueness if numbers in DB are inconsistent
         while (
-            Comparison::where('source_id', $sourceId)
-                ->where('target_id', $targetId)
+            Comparison::query()
                 ->where('folder', $folder)
                 ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
                 ->exists()
         ) {
-            $number += 1;
-            $suffix = "run{$number}";
+            $pairSequence += 1;
+            $suffix = "run{$pairSequence}";
             if ($maxBaseLength < 1) {
                 $folder = Str::limit($suffix, 45, '');
             } else {

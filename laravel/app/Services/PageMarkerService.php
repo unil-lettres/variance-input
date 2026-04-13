@@ -1537,7 +1537,76 @@ class PageMarkerService
             $offset = $pos + strlen($tag);
         }
 
+        $spanPattern = '/<span\b[^>]*class=(["\'])[^"\']*\bpage-marker\b[^"\']*\1[^>]*>/i';
+        $offset = 0;
+
+        while (preg_match($spanPattern, $contents, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            $tag = $match[0][0];
+            $pos = $match[0][1];
+
+            $mapIndex = 0;
+            while ($mapIndex < $mapCount && $map[$mapIndex] < $pos) {
+                $mapIndex++;
+            }
+            if ($mapIndex >= $mapCount) {
+                $mapIndex = $mapCount > 0 ? $mapCount - 1 : 0;
+            }
+
+            $entry = ['char_index' => $mapIndex];
+            $anchorPhrase = $this->buildMarkerAnchorPhrase($shadow, $mapIndex);
+            if ($anchorPhrase !== null) {
+                $entry['phrase'] = $anchorPhrase;
+            }
+
+            if (preg_match('/\bdata-image-name\s*=\s*["\']([^"\']+)["\']/i', $tag, $m)) {
+                $entry['image'] = $m[1];
+            }
+
+            $tail = substr($contents, $pos, 500);
+            if (preg_match('/<span\b[^>]*class=(["\'])[^"\']*\bpage-number\b[^"\']*\1[^>]*>\s*([^<]+?)\s*<\/span>/i', $tail, $m)) {
+                $entry['page'] = trim($m[2]);
+            }
+
+            if (empty($entry['image'] ?? null)) {
+                $candidate = (string) ($entry['page'] ?? '');
+                if (preg_match('/^\d{1,4}$/', $candidate)) {
+                    $entry['image'] = $candidate;
+                } else {
+                    $entry['image'] = (string) (count($markers) + 1);
+                }
+            }
+
+            $markers[] = $entry;
+            $offset = $pos + strlen($tag);
+        }
+
+        if (count($markers) <= 1) {
+            return $markers;
+        }
+
+        $unique = [];
+        foreach ($markers as $marker) {
+            $key = $this->markerKey($marker);
+            if ($key === '' || !isset($unique[$key])) {
+                $unique[$key] = $marker;
+            }
+        }
+
+        $markers = array_values($unique);
+        usort($markers, static fn (array $a, array $b) => ((int) ($a['char_index'] ?? 0)) <=> ((int) ($b['char_index'] ?? 0)));
+
         return $markers;
+    }
+
+    /**
+     * Public wrapper for reader/runtime use when a version falls back to
+     * comparison XHTML instead of a native version TXT + sidecar pair.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function extractRuntimeMarkersFromComparisonHtml(string $contents): array
+    {
+        return $this->extractPbMarkersFromHtml($contents);
     }
 
     /**
@@ -2169,6 +2238,31 @@ class PageMarkerService
         }
 
         return $hint;
+    }
+
+    private function refineResolvedMarkerIndex(array $marker, string $fold, int $resolved): int
+    {
+        $phrase = trim((string) ($marker['phrase'] ?? ''));
+        if ($phrase === '') {
+            return $resolved;
+        }
+
+        $windowStart = max(0, $resolved - 160);
+        $windowEnd = min(mb_strlen($fold, 'UTF-8'), $resolved + 48);
+
+        foreach ($this->phraseVariants($phrase) as $variant) {
+            $needle = $this->foldString($variant);
+            if ($needle === '') {
+                continue;
+            }
+
+            $candidate = mb_strpos($fold, $needle, $windowStart, 'UTF-8');
+            if ($candidate !== false && $candidate <= $windowEnd) {
+                return (int) $candidate;
+            }
+        }
+
+        return $resolved;
     }
 
     private function advanceToTextBoundary(string $html, int $offset): int
@@ -3108,18 +3202,14 @@ class PageMarkerService
 
     public function getPaginationInfo(int $versionId): ?array
     {
+        $decoded = $this->getPaginationSidecar($versionId);
         $relative = $this->paginationRelativePath($versionId);
-        if (!Storage::disk('local')->exists($relative)) {
+        if (!$decoded) {
             return null;
         }
 
         $details = null;
         try {
-            $contents = Storage::disk('local')->get($relative);
-            $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
-            if (!is_array($decoded) || !$this->isPaginationSidecarValid($versionId, $decoded)) {
-                return null;
-            }
             $markers = is_array($decoded['markers'] ?? null) ? $decoded['markers'] : [];
             $markerCount = (int) ($decoded['marker_count'] ?? count($markers));
             $fromLignes = 0;
@@ -3155,6 +3245,56 @@ class PageMarkerService
             'size'        => Storage::disk('local')->size($relative),
             'details'     => $details,
         ];
+    }
+
+    public function getPaginationSidecar(int $versionId): ?array
+    {
+        $relative = $this->paginationRelativePath($versionId);
+        if (!Storage::disk('local')->exists($relative)) {
+            return null;
+        }
+
+        try {
+            $contents = Storage::disk('local')->get($relative);
+            $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+            if (!is_array($decoded) || !$this->isPaginationSidecarValid($versionId, $decoded)) {
+                return null;
+            }
+
+            return $decoded;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Re-anchor sidecar markers against a plain text string so client readers
+     * can slice the same visible text the user sees rather than the full TEI
+     * shadow text used during insertion.
+     *
+     * @param  array<int,array<string,mixed>>  $markers
+     * @return array<int,array<string,mixed>>
+     */
+    public function resolveMarkersForPlainText(string $text, array $markers): array
+    {
+        if ($text === '' || empty($markers)) {
+            return $markers;
+        }
+
+        [$shadow, $map, $fold] = $this->buildIndexedPlaintext($text);
+        if (empty($map)) {
+            return $markers;
+        }
+
+        return array_map(function (array $marker) use ($shadow, $map, $fold) {
+            $hint = (int) ($marker['char_index'] ?? 0);
+            $resolved = $this->resolveMarkerIndex($marker, $shadow, $fold, $map, $hint);
+            if ($resolved !== null) {
+                $marker['resolved_char_index'] = $this->refineResolvedMarkerIndex($marker, $fold, $resolved);
+            }
+
+            return $marker;
+        }, $markers);
     }
 
     public function deleteLignesArtifacts(int $versionId): array

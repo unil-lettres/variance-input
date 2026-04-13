@@ -9,18 +9,33 @@ fi
 
 # Create and permission storage directories
 mkdir -p /var/www/html/storage/app \
+         /var/www/html/storage/framework \
+         /var/www/html/storage/framework/cache \
          /var/www/html/storage/framework/cache/data \
          /var/www/html/storage/framework/sessions \
          /var/www/html/storage/framework/views \
          /var/www/html/storage/logs \
          /var/www/html/bootstrap/cache
-chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-chmod -R 775      /var/www/html/storage /var/www/html/bootstrap/cache
+
+for path in \
+  /var/www/html/storage \
+  /var/www/html/storage/app \
+  /var/www/html/storage/framework \
+  /var/www/html/storage/framework/cache \
+  /var/www/html/storage/framework/cache/data \
+  /var/www/html/storage/framework/sessions \
+  /var/www/html/storage/framework/views \
+  /var/www/html/storage/logs \
+  /var/www/html/bootstrap/cache
+do
+  chown www-data:www-data "$path"
+  chmod 775 "$path"
+done
 
 # Ensure uploads directory exists and set permissions
 mkdir -p /var/www/html/public/uploads
-chown -R www-data:www-data /var/www/html/public/uploads
-chmod -R 775      /var/www/html/public/uploads
+chown www-data:www-data /var/www/html/public/uploads
+chmod 775 /var/www/html/public/uploads
 
 # Configure PHP upload limits (useful when running artisan serve)
 cat <<'PHPINI' > /usr/local/etc/php/conf.d/uploads.ini
@@ -32,15 +47,16 @@ PHPINI
 
 # 2) Install PHP dependencies and run artisan tasks
 cd /var/www/html
-composer install --no-dev --optimize-autoloader
-php artisan config:clear
-php artisan config:cache
-php artisan route:clear
-php artisan view:clear
+if [ ! -f "/var/www/html/vendor/autoload.php" ]; then
+  composer install --no-dev --optimize-autoloader
+fi
 if ! grep -Eq '^APP_KEY=.+$' /var/www/html/.env; then
   php artisan key:generate --ansi --force
 fi
-php artisan migrate --force
+
+if [ "${LARAVEL_RUN_MIGRATIONS_ON_BOOT:-false}" = "true" ]; then
+  php artisan migrate --force
+fi
 
 # 3) Start the Laravel development server
 exec "$@"

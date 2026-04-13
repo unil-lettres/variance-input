@@ -1,18 +1,22 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        // Align DB column with UI/back-end validation (was VARCHAR(45))
-        DB::statement('ALTER TABLE versions MODIFY name VARCHAR(100)');
+        Schema::table('versions', function (Blueprint $table) {
+            $table->string('name', 100)->change();
+        });
     }
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE versions MODIFY name VARCHAR(45)');
+        Schema::table('versions', function (Blueprint $table) {
+            $table->string('name', 45)->change();
+        });
     }
 };

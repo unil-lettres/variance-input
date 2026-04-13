@@ -1,15 +1,15 @@
 ############################################################
-#  Laravel PHP-FPM + Node 18 image, ready for MariaDB
+#  Laravel PHP-FPM + Node 22 image, ready for MariaDB
 ############################################################
-FROM php:8.2-fpm
+FROM php:8.3-fpm
 
 # 1) System packages + Node + PHP extensions
 RUN apt-get update && apt-get install -y \
       git unzip curl mariadb-client \
       libzip-dev libjpeg-dev libpng-dev libfreetype6-dev \
       libmagickwand-dev imagemagick \
-  # Node 18.x
-  && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+  # Node 22.x
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y nodejs \
   # PHP GD + Zip + MySQL drivers
   && docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -50,6 +50,6 @@ RUN npm run build
 RUN php artisan storage:link
 
 # 10) Serve application
-EXPOSE 8000
+EXPOSE 9000
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+CMD ["php-fpm", "-F"]

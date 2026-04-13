@@ -146,6 +146,9 @@ Route::post('/api/comparisons/{comparison}/pagination/from-xhtml', [ComparisonCo
 // Comparisons
 Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
 Route::get('/comparisons/{comparison}/details', [ComparisonController::class, 'details']);
+Route::post('/comparisons/{comparison}/reorder', [ComparisonController::class, 'reorder'])
+    ->middleware('auth')
+    ->name('comparisons.reorder');
 Route::delete('/comparisons/{id}', [ComparisonController::class, 'destroy'])->name('comparisons.destroy');
 Route::get('/comparisons/{comparison}/export', [ComparisonController::class, 'exportPublishedLegacy'])
     ->middleware('auth')

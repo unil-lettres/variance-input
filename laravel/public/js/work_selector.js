@@ -21,6 +21,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Grab elements
   const authorSelector  = document.getElementById("author-selector");
   const workSelector    = document.getElementById("work-selector");
+  const authorSelectorToggle = document.getElementById("author-selector-toggle");
+  const workSelectorToggle = document.getElementById("work-selector-toggle");
+  const authorSelectorMenu = document.getElementById("author-selector-menu");
+  const workSelectorMenu = document.getElementById("work-selector-menu");
 
   const addAuthorBtn    = document.getElementById("add-author-btn");
   const editAuthorBtn   = document.getElementById("edit-author-btn");
@@ -233,6 +237,59 @@ document.addEventListener("DOMContentLoaded", () => {
     }));
   }
 
+  function syncDropdownButton(toggleEl, selectEl, placeholder) {
+    if (!toggleEl || !selectEl) return;
+    const selected = selectEl.value ? selectEl.options[selectEl.selectedIndex] : null;
+    toggleEl.textContent = selected?.textContent?.trim() || placeholder;
+    toggleEl.disabled = !!selectEl.disabled;
+    toggleEl.classList.toggle('text-muted', !selected);
+  }
+
+  function rebuildDropdownMenu(selectEl, menuEl, toggleEl, placeholder) {
+    if (!selectEl || !menuEl) return;
+
+    menuEl.innerHTML = '';
+    const options = Array.from(selectEl.options).filter(option => option.value);
+
+    if (!options.length) {
+      const empty = document.createElement('li');
+      empty.innerHTML = '<span class="dropdown-item-text work-selector-dropdown-empty">Aucun élément disponible</span>';
+      menuEl.appendChild(empty);
+      syncDropdownButton(toggleEl, selectEl, placeholder);
+      return;
+    }
+
+    options.forEach(option => {
+      const item = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dropdown-item';
+      button.textContent = option.textContent;
+      button.dataset.value = option.value;
+      if (selectEl.value && String(selectEl.value) === String(option.value)) {
+        button.classList.add('active');
+      }
+      button.addEventListener('click', () => {
+        if (selectEl.disabled) return;
+        selectEl.value = option.value;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        bootstrap.Dropdown.getOrCreateInstance(toggleEl)?.hide();
+      });
+      item.appendChild(button);
+      menuEl.appendChild(item);
+    });
+
+    syncDropdownButton(toggleEl, selectEl, placeholder);
+  }
+
+  function syncAuthorDropdown() {
+    rebuildDropdownMenu(authorSelector, authorSelectorMenu, authorSelectorToggle, 'Sélectionner un auteur');
+  }
+
+  function syncWorkDropdown() {
+    rebuildDropdownMenu(workSelector, workSelectorMenu, workSelectorToggle, 'Sélectionner une œuvre');
+  }
+
   function updateSelectionContext() {
     const authorOption = authorSelector.value
       ? authorSelector.options[authorSelector.selectedIndex]
@@ -274,6 +331,7 @@ document.addEventListener("DOMContentLoaded", () => {
     workSelector.innerHTML = '<option value="" disabled selected>Sélectionner une œuvre</option>';
     workSelector.value     = '';
     workSelector.disabled  = !authorId;
+    syncWorkDropdown();
     toggleWorkButtons();
     updateSelectionContext();
   }
@@ -282,9 +340,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // No author/work yet: disable things and optionally tell blades to clear themselves
     authorSelector.value = '';
     resetWorksUI(null, null);
+    syncAddWorkButtonState();
     toggleAuthorButtons();
     toggleClearSelectionButton();
     updateSelectionContext();
+    syncAuthorDropdown();
+    syncWorkDropdown();
     if (dispatch) {
       dispatchWorkSelected(null, null);
     }
@@ -293,6 +354,26 @@ document.addEventListener("DOMContentLoaded", () => {
   function toggleClearSelectionButton() {
     if (!clearSelectionBtn) return;
     clearSelectionBtn.disabled = !(authorSelector.value || workSelector.value);
+  }
+
+  function hasSelectedAuthor() {
+    if (!authorSelector) return false;
+    const selectedIndex = authorSelector.selectedIndex;
+    if (selectedIndex < 0) return false;
+    const selectedOption = authorSelector.options[selectedIndex];
+    if (!selectedOption) return false;
+    return String(selectedOption.value || '').trim() !== '';
+  }
+
+  function syncAddWorkButtonState() {
+    if (!addWorkBtn) return;
+    const enabled = hasSelectedAuthor();
+    addWorkBtn.disabled = !enabled;
+    addWorkBtn.toggleAttribute('disabled', !enabled);
+    addWorkBtn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    addWorkBtn.title = enabled
+      ? 'Ajouter une œuvre pour l’auteur sélectionné'
+      : 'Sélectionnez d’abord un auteur';
   }
 
   // ============
@@ -317,7 +398,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!authorSelector || !workSelector) return false;
 
     authorSelector.value = a;
+    syncAuthorDropdown();
+    syncAddWorkButtonState();
     toggleAuthorButtons();
+    toggleClearSelectionButton();
+    updateSelectionContext();
     resetWorksUI(a);
     dispatchWorkSelected(null, a);
     reflectSelectionInUrl();
@@ -329,6 +414,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ——— AUTHOR CHANGE ———
   authorSelector.addEventListener("change", () => {
+    syncAuthorDropdown();
+    syncAddWorkButtonState();
     toggleAuthorButtons();
     toggleClearSelectionButton();
     updateSelectionContext();
@@ -352,6 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ——— WORK CHANGE ———
   workSelector.addEventListener("change", () => {
+    syncWorkDropdown();
     toggleWorkButtons();
     toggleClearSelectionButton();
     updateSelectionContext();
@@ -515,6 +603,7 @@ document.addEventListener("DOMContentLoaded", () => {
   //  ADD WORK
   // ==============
   addWorkBtn.addEventListener("click", () => {
+    if (!authorSelector.value || addWorkBtn.disabled) return;
     document.getElementById("new-work-title").value = "";
     document.getElementById("new-work-short").value = "";
     document.getElementById("work-exists-msg").style.display = "none";
@@ -712,8 +801,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         toggleAuthorButtons();
+        syncAddWorkButtonState();
         toggleClearSelectionButton();
         updateSelectionContext();
+        syncAuthorDropdown();
 
         if (targetAuthorId) {
           // 🔔 clear dependent blades only when we're not restoring an initial selection
@@ -774,7 +865,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         workSelector.disabled = false;
-        addWorkBtn.disabled   = !authorId;
+        syncAddWorkButtonState();
 
         let targetWorkId = null;
         if (selectedWorkId) {
@@ -815,6 +906,7 @@ document.addEventListener("DOMContentLoaded", () => {
         toggleWorkButtons();
         toggleClearSelectionButton();
         updateSelectionContext();
+        syncWorkDropdown();
         reflectSelectionInUrl();
       })
       .catch(console.error);

@@ -43,6 +43,28 @@ log() {
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*"
 }
 
+wait_for_dependencies() {
+  local timeout="${QUEUE_BOOTSTRAP_TIMEOUT:-120}"
+  local interval="${QUEUE_BOOTSTRAP_RETRY_INTERVAL:-2}"
+  local elapsed=0
+
+  log "Waiting for Laravel database/cache dependencies..."
+  while true; do
+    if "${PHP_BIN}" "${PHP_INI_ARGS[@]}" artisan tinker --execute='DB::connection()->getPdo(); cache()->many(["illuminate:queue:restart"]);' >/dev/null 2>&1; then
+      log "Laravel database/cache dependencies are ready."
+      return 0
+    fi
+
+    if [ "${elapsed}" -ge "${timeout}" ]; then
+      log "Timed out after ${timeout}s waiting for Laravel database/cache dependencies."
+      return 1
+    fi
+
+    sleep "${interval}"
+    elapsed=$((elapsed + interval))
+  done
+}
+
 write_heartbeat() {
   local ts
   ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -104,6 +126,7 @@ start_worker() {
 }
 
 echo "Starting ${WORKER_COUNT} queue worker(s)..." >&2
+wait_for_dependencies
 for i in $(seq 1 "${WORKER_COUNT}"); do
   worker_name="laravel-queue-${i}"
   echo " -> ${worker_name}" >&2

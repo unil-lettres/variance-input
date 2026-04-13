@@ -768,6 +768,104 @@ class VersionController extends Controller
         return response()->json($info + ['version_id' => $version->id], 200);
     }
 
+    public function readerData(Request $request, Version $version): JsonResponse
+    {
+        $requestedEncoding = $this->normalizeSourceEncodingHint($request->query('encoding'));
+        $dataset = $this->readerDataset($version, $requestedEncoding);
+        $pagePlans = is_array($dataset['page_plans'] ?? null)
+            ? $dataset['page_plans']
+            : $this->readerPagePlans($dataset['text'] ?? null, $dataset['markers'] ?? [], $dataset['facsimiles'] ?? []);
+        $pageSummaries = array_map(function (array $page) {
+            return [
+                'label' => $page['label'] ?? null,
+                'image' => $page['image'] ?? null,
+                'line' => $page['line'] ?? null,
+                'imageCode' => $page['imageCode'] ?? null,
+                'anchorOffset' => $page['anchorOffset'] ?? null,
+                'anchorPhrase' => $page['anchorPhrase'] ?? null,
+                'guessed' => $page['guessed'] ?? false,
+            ];
+        }, $pagePlans);
+        $currentPage = isset($pagePlans[0]) ? $this->materializeReaderPage($pagePlans[0], $dataset['text'] ?? null) : null;
+
+        return response()->json([
+            'version_id' => $version->id,
+            'version_name' => $version->name,
+            'version_folder' => $version->folder,
+            'text_available' => $dataset['text_available'],
+            'text_length' => $dataset['text_length'],
+            'text_encoding' => $dataset['text_encoding'],
+            'text_source' => $dataset['text_source'],
+            'text_source_label' => $dataset['text_source_label'],
+            'facsimiles' => $dataset['facsimiles'],
+            'pages' => $pageSummaries,
+            'page_count' => count($pageSummaries),
+            'current_page_index' => $currentPage ? 0 : null,
+            'current_page' => $currentPage,
+            'pagination' => $dataset['pagination'],
+        ], 200);
+    }
+
+    public function readerPage(Request $request, Version $version): JsonResponse
+    {
+        $requestedEncoding = $this->normalizeSourceEncodingHint($request->query('encoding'));
+        $index = max(0, (int) $request->query('index', 0));
+        $dataset = $this->readerDataset($version, $requestedEncoding);
+        $pagePlans = is_array($dataset['page_plans'] ?? null)
+            ? $dataset['page_plans']
+            : $this->readerPagePlans($dataset['text'] ?? null, $dataset['markers'] ?? [], $dataset['facsimiles'] ?? []);
+        $pagePlan = $pagePlans[$index] ?? null;
+
+        if (!$pagePlan) {
+            return response()->json([
+                'status' => 'missing',
+                'message' => 'Page du lecteur introuvable.',
+                'index' => $index,
+                'page_count' => count($pagePlans),
+            ], 404);
+        }
+
+        return response()->json([
+            'version_id' => $version->id,
+            'page_index' => $index,
+            'page_count' => count($pagePlans),
+            'text_encoding' => $dataset['text_encoding'],
+            'page' => $this->materializeReaderPage($pagePlan, $dataset['text'] ?? null),
+        ], 200);
+    }
+
+    public function convertTextToUtf8(Request $request, Version $version): JsonResponse
+    {
+        $this->assertVersionTextNormalizationAllowed($version);
+
+        $validated = $request->validate([
+            'encoding' => 'required|string|in:UTF-8,Windows-1252,ISO-8859-1,Mac Roman',
+        ]);
+
+        $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
+        if (!is_file($textPath)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Fichier texte introuvable pour cette version.',
+            ], 404);
+        }
+
+        $normalizedHint = $this->normalizeSourceEncodingHint($validated['encoding']);
+        $utf8Text = $this->readFileAsUtf8($textPath, $normalizedHint);
+        File::put($textPath, $utf8Text);
+
+        clearstatcache(true, $textPath);
+        $this->clearReaderDatasetCache($version->id);
+
+        return response()->json([
+            'status' => 'ok',
+            'message' => "Fichier texte converti en UTF-8 depuis {$validated['encoding']}.",
+            'version_id' => $version->id,
+            'encoding' => 'UTF-8',
+            'text_length' => mb_strlen($utf8Text, 'UTF-8'),
+        ], 200);
+    }
+
     public function clearPageMarkers(Version $version): JsonResponse
     {
         $this->assertVersionEditable($version);
@@ -797,6 +895,7 @@ class VersionController extends Controller
         $sync = $this->pageMarkerService->syncSidecarWithPb($version);
         $pagination = $this->pageMarkerService->getPaginationInfo($version->id);
         Cache::forget("versions:index:work:{$version->work_id}");
+        $this->clearReaderDatasetCache($version->id);
 
         return response()->json([
             'status' => 'ok',
@@ -814,6 +913,7 @@ class VersionController extends Controller
     {
         $this->assertVersionEditable($version);
         $result = $this->pageMarkerService->createSidecarFromPb($version);
+        $this->clearReaderDatasetCache($version->id);
 
         if ($result['count'] === 0) {
             return response()->json([
@@ -1245,6 +1345,668 @@ class VersionController extends Controller
         ];
     }
 
+    private function readerFacsimiles(Version $version): array
+    {
+        return $this->collectReaderFacsimiles($version, false);
+    }
+
+    private function readerFacsimilesDetailed(Version $version): array
+    {
+        return $this->collectReaderFacsimiles($version, true);
+    }
+
+    private function collectReaderFacsimiles(Version $version, bool $includeDimensions): array
+    {
+        $version->loadMissing('work.author');
+        $authorFolder = $version->work?->author?->folder;
+        $workFolder = $version->work?->folder;
+        if (!$authorFolder || !$workFolder) {
+            return [];
+        }
+
+        $dirRel = "uploads/{$authorFolder}/{$workFolder}/{$version->folder}";
+        $disk = Storage::disk('public');
+        $legacyDir = base_path('../variance/' . $dirRel);
+        $useLegacy = false;
+
+        if ($disk->exists($dirRel)) {
+            $all = collect($disk->files($dirRel))
+                ->map(fn ($path) => [
+                    'name' => basename($path),
+                    'path' => $path,
+                    'absolute' => $disk->path($path),
+                ]);
+        } elseif (File::isDirectory($legacyDir)) {
+            $useLegacy = true;
+            $all = collect(File::files($legacyDir))
+                ->map(fn ($file) => [
+                    'name' => $file->getFilename(),
+                    'path' => $file->getFilename(),
+                    'absolute' => $file->getPathname(),
+                ]);
+        } else {
+            return [];
+        }
+
+        return $all
+            ->filter(fn ($entry) => preg_match('/\.(jpe?g|png)$/i', $entry['name']) && !str_contains($entry['name'], '_thumb'))
+            ->map(function (array $entry) use ($disk, $dirRel, $legacyDir, $useLegacy, $includeDimensions) {
+                $thumbName = preg_replace('/(\.\w+)$/', '_thumb$1', $entry['name']);
+                $thumbPath = $useLegacy ? $legacyDir . '/' . $thumbName : $dirRel . '/' . $thumbName;
+                $thumbExists = $useLegacy ? is_file($thumbPath) : $disk->exists($thumbPath);
+
+                $width = null;
+                $height = null;
+                $sizeBytes = null;
+                $sizeHuman = null;
+                if ($includeDimensions && is_file($entry['absolute'])) {
+                    $sizeBytes = filesize($entry['absolute']) ?: 0;
+                    $sizeHuman = $this->humanReadableSize((int) $sizeBytes);
+                    $info = @getimagesize($entry['absolute']);
+                    if (is_array($info)) {
+                        $width = $info[0] ?? null;
+                        $height = $info[1] ?? null;
+                    }
+                }
+
+                $bigUrl = $useLegacy
+                    ? legacy_url($dirRel . '/' . $entry['name'])
+                    : admin_url('storage/' . ltrim($entry['path'], '/'));
+                $thumbUrl = null;
+                if ($thumbExists) {
+                    $thumbUrl = $useLegacy
+                        ? legacy_url($dirRel . '/' . $thumbName)
+                        : admin_url('storage/' . ltrim($thumbPath, '/'));
+                }
+
+                return [
+                    'name' => $entry['name'],
+                    'image_code' => $this->readerImageCode($entry['name']),
+                    'big' => $bigUrl,
+                    'thumb' => $thumbUrl,
+                    'hasThumb' => $thumbExists,
+                    'size_bytes' => $sizeBytes,
+                    'size_human' => $sizeHuman,
+                    'width' => $width,
+                    'height' => $height,
+                ];
+            })
+            ->sortBy(fn (array $entry) => $entry['image_code'] ?: $entry['name'], SORT_NATURAL)
+            ->values()
+            ->all();
+    }
+
+    private function readerDataset(Version $version, ?string $requestedEncoding): array
+    {
+        $version->loadMissing('work.author');
+        $fingerprint = $this->readerDatasetFingerprint($version);
+        $nonce = (int) Cache::get($this->readerDatasetNonceKey($version->id), 0);
+        $cacheKey = $this->readerDatasetCacheKey($version->id, $requestedEncoding, $fingerprint, $nonce);
+
+        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($version, $requestedEncoding, $fingerprint) {
+            $artifact = $this->loadReaderDatasetArtifact($version, $requestedEncoding, $fingerprint);
+            if (is_array($artifact)) {
+                return $artifact;
+            }
+
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(0);
+            }
+
+            $dataset = $this->buildReaderDataset($version, $requestedEncoding);
+            $dataset['page_plans'] = $this->readerPagePlans($dataset['text'] ?? null, $dataset['markers'] ?? [], $dataset['facsimiles'] ?? []);
+            $this->storeReaderDatasetArtifact($version, $requestedEncoding, $fingerprint, $dataset);
+
+            return $dataset;
+        });
+    }
+
+    private function buildReaderDataset(Version $version, ?string $requestedEncoding): array
+    {
+        $version->loadMissing('work.author');
+
+        $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
+        $text = null;
+        $fallback = null;
+        $textSource = 'version-txt';
+        $textSourceLabel = 'TXT de version';
+        if (is_file($textPath)) {
+            try {
+                $text = $this->readFileAsUtf8($textPath, $requestedEncoding);
+            } catch (\Throwable $e) {
+                Log::warning('Could not load version text for reader.', [
+                    'version_id' => $version->id,
+                    'folder' => $version->folder,
+                    'encoding' => $requestedEncoding,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if (!is_string($text) || $text === '') {
+            $fallback = $this->readerTextFromComparisonXhtml($version);
+            if (is_array($fallback) && is_string($fallback['text'] ?? null) && $fallback['text'] !== '') {
+                $text = $fallback['text'];
+                $textSource = (string) ($fallback['source'] ?? 'comparison-xhtml');
+                $textSourceLabel = (string) ($fallback['label'] ?? 'XHTML de comparaison');
+            }
+        }
+
+        $sidecar = $this->pageMarkerService->getPaginationSidecar($version->id);
+        $paginationOrigin = $sidecar['origin'] ?? null;
+        $markers = collect(is_array($sidecar['markers'] ?? null) ? $sidecar['markers'] : [])
+            ->filter(fn ($marker) => is_array($marker))
+            ->map(function (array $marker) {
+                return [
+                    'char_index' => max(0, (int) ($marker['char_index'] ?? 0)),
+                    'image_code' => $marker['image_code'] ?? $marker['image'] ?? null,
+                    'page' => $marker['page'] ?? null,
+                    'line' => isset($marker['line']) && is_numeric($marker['line']) ? (int) $marker['line'] : null,
+                    'phrase' => $marker['match'] ?? $marker['phrase'] ?? null,
+                ];
+            })
+            ->sortBy('char_index')
+            ->values()
+            ->all();
+
+        if (empty($markers) && is_array($fallback) && !empty($fallback['markers']) && is_array($fallback['markers'])) {
+            $paginationOrigin = (string) ($fallback['origin'] ?? 'pb-xhtml');
+            $markers = collect($fallback['markers'])
+                ->filter(fn ($marker) => is_array($marker))
+                ->map(function (array $marker) {
+                    return [
+                        'char_index' => max(0, (int) ($marker['char_index'] ?? 0)),
+                        'image_code' => $marker['image_code'] ?? $marker['image'] ?? null,
+                        'page' => $marker['page'] ?? null,
+                        'line' => isset($marker['line']) && is_numeric($marker['line']) ? (int) $marker['line'] : null,
+                        'phrase' => $marker['match'] ?? $marker['phrase'] ?? null,
+                    ];
+                })
+                ->sortBy('char_index')
+                ->values()
+                ->all();
+        }
+
+        if (is_string($text) && $text !== '' && !empty($markers)) {
+            $markers = $this->pageMarkerService->resolveMarkersForPlainText($text, $markers);
+        }
+
+        $facsimiles = $this->readerFacsimiles($version);
+        $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
+
+        return [
+            'text' => is_string($text) ? $text : null,
+            'text_available' => is_string($text),
+            'text_length' => is_string($text) ? mb_strlen($text, 'UTF-8') : null,
+            'text_encoding' => $requestedEncoding ?: 'AUTO',
+            'text_source' => is_string($text) ? $textSource : null,
+            'text_source_label' => is_string($text) ? $textSourceLabel : null,
+            'facsimiles' => $facsimiles,
+            'markers' => $markers,
+            'pagination' => [
+                'available' => !empty($markers),
+                'origin' => $paginationOrigin,
+                'marker_count' => count($markers),
+                'updated_at' => $paginationInfo['updated_at'] ?? null,
+            ],
+        ];
+    }
+
+    private function readerDatasetCacheKey(int $versionId, ?string $requestedEncoding, array $fingerprint = [], int $nonce = 0): string
+    {
+        $encoding = $requestedEncoding ?: 'AUTO';
+        $fingerprintHash = md5(json_encode($fingerprint, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]');
+        return "versions:reader-dataset:{$versionId}:{$nonce}:" . md5($encoding) . ":{$fingerprintHash}";
+    }
+
+    private function readerDatasetNonceKey(int $versionId): string
+    {
+        return "versions:reader-dataset:nonce:{$versionId}";
+    }
+
+    private function clearReaderDatasetCache(int $versionId): void
+    {
+        $this->removeReaderDatasetArtifacts($versionId);
+        Cache::increment($this->readerDatasetNonceKey($versionId));
+    }
+
+    private function readerDatasetArtifactRelativePath(int $versionId, ?string $requestedEncoding): string
+    {
+        $encoding = $requestedEncoding ?: 'AUTO';
+        return 'reader_cache/' . $versionId . '/' . md5($encoding) . '.json';
+    }
+
+    private function loadReaderDatasetArtifact(Version $version, ?string $requestedEncoding, array $fingerprint): ?array
+    {
+        $relative = $this->readerDatasetArtifactRelativePath($version->id, $requestedEncoding);
+        $disk = Storage::disk('local');
+        if (!$disk->exists($relative)) {
+            return null;
+        }
+
+        try {
+            $decoded = json_decode((string) $disk->get($relative), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable $e) {
+            Log::warning('Could not decode persisted reader dataset artifact.', [
+                'version_id' => $version->id,
+                'path' => $relative,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        $storedFingerprint = is_array($decoded['fingerprint'] ?? null) ? $decoded['fingerprint'] : null;
+        $dataset = is_array($decoded['dataset'] ?? null) ? $decoded['dataset'] : null;
+        if (!$storedFingerprint || !$dataset) {
+            return null;
+        }
+
+        if (($decoded['version_id'] ?? null) !== $version->id || $storedFingerprint !== $fingerprint) {
+            return null;
+        }
+
+        return $dataset;
+    }
+
+    private function storeReaderDatasetArtifact(Version $version, ?string $requestedEncoding, array $fingerprint, array $dataset): void
+    {
+        $relative = $this->readerDatasetArtifactRelativePath($version->id, $requestedEncoding);
+        $disk = Storage::disk('local');
+        $disk->makeDirectory(dirname($relative));
+        $payload = [
+            'version_id' => $version->id,
+            'encoding' => $requestedEncoding ?: 'AUTO',
+            'generated_at' => time(),
+            'fingerprint' => $fingerprint,
+            'dataset' => $dataset,
+        ];
+
+        $disk->put($relative, json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+
+    private function removeReaderDatasetArtifacts(int $versionId): void
+    {
+        $dir = 'reader_cache/' . $versionId;
+        $disk = Storage::disk('local');
+        if ($disk->exists($dir)) {
+            $disk->deleteDirectory($dir);
+        }
+    }
+
+    private function readerDatasetFingerprint(Version $version): array
+    {
+        $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
+        $sidecarRelative = $this->pageMarkerService->paginationRelativePath($version->id);
+        $sidecarPath = Storage::disk('local')->exists($sidecarRelative)
+            ? Storage::disk('local')->path($sidecarRelative)
+            : null;
+        $fallbackCandidate = $this->readerFirstComparisonXhtmlCandidate($version);
+        $facsimiles = $this->readerFacsimiles($version);
+
+        return [
+            'text' => [
+                'path' => is_file($textPath) ? $textPath : null,
+                'mtime' => is_file($textPath) ? ((int) @filemtime($textPath)) : null,
+                'size' => is_file($textPath) ? ((int) @filesize($textPath)) : null,
+            ],
+            'sidecar' => [
+                'path' => $sidecarPath,
+                'mtime' => $sidecarPath && is_file($sidecarPath) ? ((int) @filemtime($sidecarPath)) : null,
+                'size' => $sidecarPath && is_file($sidecarPath) ? ((int) @filesize($sidecarPath)) : null,
+            ],
+            'fallback' => [
+                'comparison_id' => $fallbackCandidate['comparison_id'] ?? null,
+                'role' => $fallbackCandidate['role'] ?? null,
+                'path' => $fallbackCandidate['path'] ?? null,
+                'mtime' => isset($fallbackCandidate['path']) && is_file($fallbackCandidate['path']) ? ((int) @filemtime($fallbackCandidate['path'])) : null,
+                'size' => isset($fallbackCandidate['path']) && is_file($fallbackCandidate['path']) ? ((int) @filesize($fallbackCandidate['path'])) : null,
+            ],
+            'facsimiles' => [
+                'count' => count($facsimiles),
+                'names' => array_values(array_map(
+                    static fn (array $entry) => (string) ($entry['name'] ?? ''),
+                    $facsimiles
+                )),
+            ],
+        ];
+    }
+
+    private function readerTextFromComparisonXhtml(Version $version): ?array
+    {
+        foreach ($this->readerComparisonXhtmlCandidates($version) as $candidate) {
+            $path = $candidate['path'];
+            $fileName = $candidate['file_name'];
+            $comparisonId = $candidate['comparison_id'];
+            $role = $candidate['role'];
+
+            try {
+                $contents = File::get($path);
+                $text = $this->extractReaderTextFromComparisonXhtml($path);
+                if ($text === '') {
+                    continue;
+                }
+
+                return [
+                    'text' => $text,
+                    'source' => 'comparison-xhtml',
+                    'label' => "Texte reconstruit depuis {$fileName} (#{$comparisonId})",
+                    'origin' => 'pb-xhtml',
+                    'markers' => $this->pageMarkerService->extractRuntimeMarkersFromComparisonHtml($contents),
+                ];
+            } catch (\Throwable $e) {
+                Log::warning('Could not reconstruct reader text from comparison XHTML.', [
+                    'version_id' => $version->id,
+                    'comparison_id' => $comparisonId,
+                    'role' => $role,
+                    'path' => $path,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    private function readerFirstComparisonXhtmlCandidate(Version $version): ?array
+    {
+        $candidates = $this->readerComparisonXhtmlCandidates($version);
+        return $candidates[0] ?? null;
+    }
+
+    private function readerComparisonXhtmlCandidates(Version $version): array
+    {
+        $version->loadMissing('work.author');
+
+        $authorFolder = $version->work?->author?->folder;
+        $workFolder = $version->work?->folder;
+        if (!$authorFolder || !$workFolder) {
+            return [];
+        }
+
+        $comparisons = Comparison::query()
+            ->where(function ($query) use ($version) {
+                $query->where('source_id', $version->id)
+                    ->orWhere('target_id', $version->id);
+            })
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get(['id', 'source_id', 'target_id', 'folder']);
+
+        $candidates = [];
+        foreach ($comparisons as $comparison) {
+            $role = (int) $comparison->source_id === (int) $version->id ? 'source' : 'target';
+            $fileName = $role === 'source' ? 'source.xhtml' : 'target.xhtml';
+            $candidatePaths = [
+                storage_path("app/public/uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}/{$fileName}"),
+                storage_path("app/public/uploads/{$authorFolder}/{$workFolder}/{$comparison->folder}/{$fileName}"),
+                base_path("../variance/uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}/{$fileName}"),
+                base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$comparison->folder}/{$fileName}"),
+            ];
+
+            foreach ($candidatePaths as $path) {
+                if (!is_file($path)) {
+                    continue;
+                }
+
+                $candidates[] = [
+                    'comparison_id' => (int) $comparison->id,
+                    'role' => $role,
+                    'file_name' => $fileName,
+                    'path' => $path,
+                ];
+                break;
+            }
+        }
+
+        return $candidates;
+    }
+
+    private function extractReaderTextFromComparisonXhtml(string $path): string
+    {
+        $contents = File::get($path);
+        if ($contents === '') {
+            return '';
+        }
+
+        $normalized = str_replace(["\r\n", "\r"], "\n", $contents);
+        $normalized = preg_replace('~<span\b[^>]*class="page-marker"[^>]*>.*?</span>~is', '', $normalized) ?? $normalized;
+        $normalized = preg_replace('~<pb\b[^>]*/?>~i', '', $normalized) ?? $normalized;
+        $normalized = preg_replace('~<br\s*/?>~i', "\n", $normalized) ?? $normalized;
+        $normalized = preg_replace('~</(p|div|li|section|article|h[1-6]|tr)>~i', "\n", $normalized) ?? $normalized;
+        $normalized = preg_replace('~<(script|style)\b[^>]*>.*?</\1>~is', '', $normalized) ?? $normalized;
+        $normalized = strip_tags($normalized);
+        $normalized = html_entity_decode($normalized, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $normalized = preg_replace("/\n{3,}/", "\n\n", $normalized) ?? $normalized;
+        $normalized = preg_replace("/[ \t]+\n/", "\n", $normalized) ?? $normalized;
+        $normalized = preg_replace("/\n[ \t]+/", "\n", $normalized) ?? $normalized;
+
+        return trim($normalized);
+    }
+
+    private function readerPagePlans(?string $text, array $markers, array $facsimiles): array
+    {
+        $text = is_string($text) ? $text : '';
+        if ($text === '') {
+            return [];
+        }
+
+        if (empty($markers)) {
+            return $this->readerGuessedPagePlans($text, $facsimiles);
+        }
+
+        $textLength = mb_strlen($text, 'UTF-8');
+        $imagesByCode = [];
+        foreach ($facsimiles as $facsimile) {
+            $code = $this->readerImageCode($facsimile['image_code'] ?? $facsimile['name'] ?? null);
+            if ($code && !array_key_exists($code, $imagesByCode)) {
+                $imagesByCode[$code] = $facsimile;
+            }
+        }
+
+        $normalizedMarkers = array_values(array_map(function (array $marker) {
+            $marker['resolved_char_index'] = max(0, (int) ($marker['resolved_char_index'] ?? $marker['char_index'] ?? 0));
+            $marker['image_code'] = $this->readerImageCode($marker['image_code'] ?? $marker['page'] ?? null);
+            return $marker;
+        }, $markers));
+
+        usort($normalizedMarkers, static fn (array $a, array $b) => ((int) ($a['resolved_char_index'] ?? 0)) <=> ((int) ($b['resolved_char_index'] ?? 0)));
+
+        $pages = [];
+        $firstMarker = $normalizedMarkers[0] ?? null;
+        if ($firstMarker) {
+            $firstStart = min(max(0, (int) ($firstMarker['resolved_char_index'] ?? 0)), $textLength);
+            $firstCode = $this->readerImageCode($firstMarker['image_code'] ?? null);
+            if ($firstStart > 0 && $firstCode) {
+                $leadingImage = null;
+                foreach ($imagesByCode as $code => $image) {
+                    if ($code < $firstCode) {
+                        $leadingImage = $image;
+                    }
+                }
+
+            if ($leadingImage) {
+                if ($firstStart > 0) {
+                    $pages[] = [
+                        'label' => 'Avant ' . (($firstMarker['page'] ?? $firstCode) ?: 'le premier repère'),
+                        'image' => $leadingImage,
+                        'start' => 0,
+                        'end' => $firstStart,
+                        'line' => null,
+                        'imageCode' => $this->readerImageCode($leadingImage['image_code'] ?? $leadingImage['name'] ?? null),
+                        'anchorOffset' => null,
+                        'anchorPhrase' => null,
+                    ];
+                }
+            }
+        }
+        }
+
+        $count = count($normalizedMarkers);
+        for ($index = 0; $index < $count; $index++) {
+            $marker = $normalizedMarkers[$index];
+            $start = min(max(0, (int) ($marker['resolved_char_index'] ?? 0)), $textLength);
+            $nextMarker = $normalizedMarkers[$index + 1] ?? null;
+            $end = $nextMarker
+                ? min(max($start, (int) ($nextMarker['resolved_char_index'] ?? 0)), $textLength)
+                : $textLength;
+
+            $imageCode = $this->readerImageCode($marker['image_code'] ?? null);
+            $image = $imageCode && array_key_exists($imageCode, $imagesByCode)
+                ? $imagesByCode[$imageCode]
+                : null;
+            $label = trim((string) ($marker['page'] ?? '')) ?: ($imageCode ? 'p. ' . $imageCode : 'Repère ' . ($index + 1));
+            $excerptStart = $start;
+            $excerptEnd = $end;
+            $anchorPhrase = trim((string) ($marker['phrase'] ?? ''));
+
+            $pages[] = [
+                'label' => $label,
+                'image' => $image,
+                'start' => $excerptStart,
+                'end' => $excerptEnd,
+                'line' => isset($marker['line']) ? (int) $marker['line'] : null,
+                'imageCode' => $imageCode,
+                'anchorOffset' => max(0, $start - $excerptStart),
+                'anchorPhrase' => $anchorPhrase !== '' ? $anchorPhrase : null,
+            ];
+        }
+
+        return $pages;
+    }
+
+    private function materializeReaderPage(array $pagePlan, ?string $text): array
+    {
+        $page = $pagePlan;
+        $sourceText = is_string($text) ? $text : '';
+        if ($sourceText === '') {
+            $page['text'] = '';
+            return $page;
+        }
+
+        $start = max(0, (int) ($pagePlan['start'] ?? 0));
+        $end = max($start, (int) ($pagePlan['end'] ?? $start));
+        $segment = mb_substr($sourceText, $start, max(0, $end - $start), 'UTF-8');
+        if (($pagePlan['guessed'] ?? false) === true) {
+            $trimmed = trim($segment);
+            $page['text'] = $trimmed !== '' ? $trimmed : $segment;
+            return $page;
+        }
+
+        $page['text'] = $segment;
+        return $page;
+    }
+
+    private function readerGuessedPagePlans(string $text, array $facsimiles): array
+    {
+        $count = count($facsimiles);
+        if ($count === 0) {
+            return [];
+        }
+
+        $length = mb_strlen($text, 'UTF-8');
+        if ($length === 0) {
+            return [];
+        }
+
+        $pages = [];
+        $start = 0;
+
+        for ($index = 0; $index < $count; $index++) {
+            $image = $facsimiles[$index] ?? null;
+            $imageCode = $this->readerImageCode($image['image_code'] ?? $image['name'] ?? null);
+
+            if ($index === $count - 1) {
+                $end = $length;
+            } else {
+                $targetEnd = (int) round((($index + 1) * $length) / $count);
+                $end = $this->readerNextBoundary($text, $targetEnd);
+                if ($end <= $start) {
+                    $end = min($length, max($start + 1, $targetEnd));
+                }
+            }
+
+            $label = $imageCode ? 'p. ' . $imageCode : 'Page ' . ($index + 1);
+
+            $pages[] = [
+                'label' => $label,
+                'image' => $image,
+                'start' => $start,
+                'end' => $end,
+                'line' => null,
+                'imageCode' => $imageCode,
+                'anchorOffset' => null,
+                'anchorPhrase' => null,
+                'guessed' => true,
+            ];
+
+            $start = $end;
+        }
+
+        return $pages;
+    }
+
+    private function readerNextBoundary(string $text, int $position): int
+    {
+        $length = mb_strlen($text, 'UTF-8');
+        $position = max(0, min($position, $length));
+        if ($position >= $length) {
+            return $length;
+        }
+
+        $after = mb_substr($text, $position, null, 'UTF-8');
+        $doubleBreak = mb_strpos($after, "\n\n", 0, 'UTF-8');
+        if ($doubleBreak !== false && $doubleBreak <= 600) {
+            return min($length, $position + (int) $doubleBreak + 2);
+        }
+
+        $singleBreak = mb_strpos($after, "\n", 0, 'UTF-8');
+        if ($singleBreak !== false && $singleBreak <= 300) {
+            return min($length, $position + (int) $singleBreak + 1);
+        }
+
+        return $position;
+    }
+
+    private function readerImageCode(?string $value): ?string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        if (preg_match('/_(\d+)(?:_thumb)?\.(?:jpe?g|png)$/i', $raw, $m)) {
+            return str_pad((string) ((int) $m[1]), 3, '0', STR_PAD_LEFT);
+        }
+
+        if (preg_match('/(\d+)/', $raw, $m)) {
+            return str_pad((string) ((int) $m[1]), 3, '0', STR_PAD_LEFT);
+        }
+
+        return null;
+    }
+
+    private function humanReadableSize(int $bytes): string
+    {
+        if ($bytes <= 0) {
+            return '0 o';
+        }
+
+        $units = ['o', 'Ko', 'Mo', 'Go', 'To'];
+        $index = 0;
+        $value = (float) $bytes;
+
+        while ($value >= 1024 && $index < count($units) - 1) {
+            $value /= 1024;
+            $index++;
+        }
+
+        return number_format($value, $index === 0 ? 0 : 1, '.', ' ') . ' ' . $units[$index];
+    }
+
     public function facsimilesProgress(Version $version): JsonResponse
     {
         $version->loadMissing('work.author');
@@ -1648,6 +2410,13 @@ class VersionController extends Controller
 
         if ($version->is_legacy || $version->work?->is_legacy) {
             abort(403, 'Cette version est en lecture seule.');
+        }
+    }
+
+    private function assertVersionTextNormalizationAllowed(Version $version): void
+    {
+        if (!auth()->check()) {
+            abort(403, 'Authentification requise.');
         }
     }
 

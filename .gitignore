@@ -42,6 +42,11 @@ assets/
 **/venv/
 **/.venv/
 **/assets/nltk_data/
+!medite/app/variance/assets/
+!medite/app/variance/assets/nltk_data/
+!medite/app/variance/assets/nltk_data/tokenizers/
+!medite/app/variance/assets/nltk_data/tokenizers/punkt_tab/
+!medite/app/variance/assets/nltk_data/tokenizers/punkt_tab/**
 
 ############################################
 #  Node / front-end                        #

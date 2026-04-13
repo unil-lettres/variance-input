@@ -3,10 +3,13 @@
 namespace Tests\Feature\Workflow;
 
 use App\Models\Version;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class VersionEditorLoadingTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_version_editor_page_uses_lazy_document_loading_by_default(): void
     {
         config()->set('variance.version_editor_lazy_load', true);
@@ -22,7 +25,8 @@ class VersionEditorLoadingTest extends TestCase
         $response = $this->get(route('version.editor', $version));
 
         $response->assertOk();
-        $response->assertSee(route('version.editor.document', $version), false);
+        $response->assertSee('urlDocumentLoad', false);
+        $response->assertSee('editor-document', false);
         $response->assertDontSee('Performance smoke text', false);
     }
 

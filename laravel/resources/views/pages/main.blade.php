@@ -22,27 +22,12 @@
     <div class="admin-main-work-selector">
         @include('components.main.work_selector')
     </div>
-
-    <div class="editorial-current-work" id="editorial-current-work" aria-live="polite" hidden>
-        <span class="editorial-current-work-label">Oeuvre sélectionnée</span>
-        <span class="editorial-current-work-value" id="editorial-current-work-value"></span>
-        <div class="editorial-current-work-meta" id="editorial-current-work-meta" hidden></div>
-    </div>
-
     <section class="editorial-journey" id="editorial-journey" aria-labelledby="editorial-journey-title">
         <div class="editorial-carousel">
             <div class="editorial-carousel-viewport" id="editorial-carousel-viewport">
                 <div class="editorial-carousel-track" id="editorial-carousel-track">
                     <section class="editorial-step-panel is-active" id="editorial-step-0" data-editorial-step="0" role="tabpanel" aria-labelledby="editorial-step-chip-0">
                         <div class="editorial-step-content">
-                            <div class="editorial-welcome" id="editorial-welcome-message">
-                                <span>Bienvenue dans l'interface de publication Variance.</span>
-                                <span>Sélectionnez une oeuvre pour démarrer le processus éditorial.</span>
-                            </div>
-                            <div class="editorial-step-zero-actions" id="editorial-step-zero-actions" aria-label="Actions rapides">
-                                <button type="button" class="btn btn-outline-success" id="editorial-add-author-shortcut">Ajouter un auteur</button>
-                                <button type="button" class="btn btn-outline-success" id="editorial-add-work-shortcut">Ajouter une œuvre</button>
-                            </div>
                             <div class="editorial-history" aria-labelledby="editorial-history-title">
                                 <div class="editorial-history-title" id="editorial-history-title">Oeuvres récemment ouvertes en édition</div>
                                 <ul class="editorial-history-list" id="editorial-history-list">
@@ -121,47 +106,7 @@
     .editorial-journey {
         display: grid;
         gap: 0.9rem;
-    }
-    .editorial-current-work {
-        width: min(50rem, calc(100% - 1rem));
-        margin: -0.1rem auto 0;
-        padding: 0.55rem 1rem 0.6rem;
-        display: grid;
-        gap: 0.08rem;
-        text-align: center;
-        background: linear-gradient(180deg, #fbfcfd 0%, #f1f4f7 100%);
-        border: 1px solid #d8e0e7;
-        border-radius: 0.8rem;
-        box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.55);
-    }
-    .editorial-current-work-label {
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #6b7280;
-    }
-    .editorial-current-work-value {
-        font-size: 1.18rem;
-        font-weight: 700;
-        line-height: 1.35;
-        color: #223044;
-    }
-    .editorial-current-work-meta {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 0.45rem 0.8rem;
-        margin-top: 0.1rem;
-        font-size: 0.8rem;
-        line-height: 1.35;
-        color: #5b6574;
-    }
-    .editorial-current-work-meta-item strong {
-        color: #3a4758;
-        font-weight: 700;
-    }
-    .editorial-carousel {
+    }    .editorial-carousel {
         display: grid;
         gap: 1rem;
     }
@@ -191,40 +136,7 @@
     .editorial-step-content {
         display: grid;
         gap: 24px;
-    }
-    .editorial-welcome {
-        width: min(72%, 52rem);
-        margin: 0 auto;
-        padding: 0.9rem 1.2rem;
-        font-size: 1.14rem;
-        font-weight: 700;
-        line-height: 1.6;
-        color: #1f2933;
-        text-align: center;
-        background: linear-gradient(180deg, #f8f9fa 0%, #eef2f5 100%);
-        border: 1px solid #dbe3ea;
-        border-radius: 0.75rem;
-        box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.45);
-    }
-    .editorial-welcome span {
-        display: block;
-    }
-    .editorial-history {
-        width: min(60%, 44rem);
-        margin: 0 auto;
-        padding: 0 0.2rem;
-    }
-    .editorial-step-zero-actions {
-        display: flex;
-        justify-content: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }
-    .editorial-step-zero-actions .btn {
-        min-width: 11.5rem;
-        font-weight: 600;
-    }
-    .editorial-history-title {
+    }    .editorial-history-title {
         margin-bottom: 0.55rem;
         font-size: 0.82rem;
         font-weight: 700;
@@ -653,6 +565,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return currentAuthorSlug || null;
     };
 
+    const authorHeadingPreposition = (label) => {
+        const normalized = String(label ?? '').trim();
+        if (!normalized) return 'de ';
+        return /^[aeiouyhàâäéèêëîïôöùûüÿæœ]/iu.test(normalized) ? 'd’' : 'de ';
+    };
+
     const buildComparisonLabel = (comparison) => {
         const sourceName = comparison?.source_version?.name ?? `Version ${comparison?.source_id ?? '?'}`;
         const targetName = comparison?.target_version?.name ?? `Version ${comparison?.target_id ?? '?'}`;
@@ -688,6 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <li class="editorial-history-item">
                     <a href="${escapeHtml(href)}"
+                       data-history-select
                        data-history-author-id="${escapeHtml(authorId)}"
                        data-history-work-id="${escapeHtml(workId)}">
                         <span class="editorial-history-work">${escapeHtml(workLabel)}</span>
@@ -723,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const authorSlug = resolveCurrentAuthorSlug();
 
         if (historyTitle) {
-            historyTitle.textContent = `Oeuvres et comparaisons de ${authorLabel}`;
+            historyTitle.textContent = `Oeuvres et comparaisons ${authorHeadingPreposition(authorLabel)}${authorLabel}`;
         }
         if (historySection) {
             historySection.hidden = false;
@@ -774,7 +693,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 return `
                     <li class="editorial-history-item">
-                        <a href="${escapeHtml(workHref)}">
+                        <a href="${escapeHtml(workHref)}"
+                           data-history-select
+                           data-history-author-id="${escapeHtml(currentAuthorId)}"
+                           data-history-work-id="${escapeHtml(work?.id ?? '')}">
                             <span class="editorial-history-work">${escapeHtml(stripWorkYears(work?.title || 'Œuvre'))}</span>
                             <span class="editorial-history-author">
                                 <span>${escapeHtml(authorLabel)}</span>
@@ -817,6 +739,19 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStepOneList();
     });
 
+    historyList?.addEventListener('click', (event) => {
+        const selectLink = event.target.closest('a[data-history-select]');
+        if (!selectLink) return;
+
+        const authorId = String(selectLink.getAttribute('data-history-author-id') ?? '').trim();
+        const workId = String(selectLink.getAttribute('data-history-work-id') ?? '').trim();
+        if (!authorId || !workId) return;
+
+        if (typeof window.varianceSelectWork === 'function' && window.varianceSelectWork(authorId, workId)) {
+            event.preventDefault();
+        }
+    });
+
     document.addEventListener('recentWorksHistoryChanged', () => {
         renderStepOneList();
     });
@@ -852,6 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentWorkMeta = document.getElementById('editorial-current-work-meta');
     const welcomeMessage = document.getElementById('editorial-welcome-message');
     const stepZeroActions = document.getElementById('editorial-step-zero-actions');
+    const stepZeroAddAuthorButton = document.getElementById('editorial-add-author-shortcut');
     const stepZeroAddWorkButton = document.getElementById('editorial-add-work-shortcut');
     const stepPanels = Array.from(document.querySelectorAll('[data-editorial-step]'));
     const stepButtons = Array.from(document.querySelectorAll('[data-editorial-step-target]'));
@@ -952,13 +888,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentWorkTitle || !currentWorkTitleValue || !currentWorkMeta) return;
         const normalizedLabel = String(currentWorkLabel ?? '').trim();
         if (!normalizedLabel) {
-            currentWorkTitleValue.textContent = '';
+            currentWorkTitleValue.innerHTML = '';
             currentWorkMeta.innerHTML = '';
             currentWorkMeta.hidden = true;
             currentWorkTitle.hidden = true;
             return;
         }
-        currentWorkTitleValue.textContent = normalizedLabel;
+        const authorLabel = String(resolveCurrentAuthorLabel() ?? '').trim();
+        const workLabel = stripWorkYears(normalizedLabel);
+        const titleParts = [];
+        if (authorLabel) {
+            titleParts.push(`<span class="editorial-current-work-author">${escapeHtml(authorLabel)}</span>`);
+        }
+        if (workLabel) {
+            titleParts.push(`<em class="editorial-current-work-work">${escapeHtml(workLabel)}</em>`);
+        }
+        currentWorkTitleValue.innerHTML = titleParts.join(', ');
         const metaParts = [];
         const creatorName = String(currentWorkCreatorName ?? '').trim();
         const createdAt = formatOpenedAt(currentWorkCreatedAt);
@@ -980,8 +925,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateStepZeroActions = () => {
         if (!stepZeroActions) return;
         stepZeroActions.hidden = !!currentWorkId;
+        if (stepZeroAddAuthorButton) {
+            stepZeroAddAuthorButton.textContent = 'Nouvel auteur';
+        }
         if (stepZeroAddWorkButton) {
+            const authorLabel = currentAuthorId ? String(resolveCurrentAuthorLabel() ?? '').trim() : '';
             stepZeroAddWorkButton.disabled = !currentAuthorId;
+            stepZeroAddWorkButton.textContent = authorLabel
+                ? `Nouvelle œuvre pour ${authorLabel}`
+                : 'Nouvelle œuvre';
             stepZeroAddWorkButton.title = currentAuthorId
                 ? 'Ajouter une œuvre pour l’auteur sélectionné'
                 : 'Sélectionnez d’abord un auteur';
@@ -1019,6 +971,17 @@ document.addEventListener('DOMContentLoaded', () => {
         updateViewportHeight();
     };
 
+    const dispatchEditorialStepChanged = (reason = 'step-change') => {
+        document.dispatchEvent(new CustomEvent('editorialStepChanged', {
+            detail: {
+                step: currentStep,
+                workId: currentWorkId,
+                authorId: currentAuthorId,
+                reason,
+            }
+        }));
+    };
+
     const openEditorialStep = (step, options = {}) => {
         const parsedStep = Number(step);
         if (!Number.isFinite(parsedStep) || !orderedSteps.includes(parsedStep)) return;
@@ -1035,6 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             // Ignore history failures.
         }
+        dispatchEditorialStepChanged(options.reason || 'step-change');
     };
 
     window.openEditorialStep = openEditorialStep;
@@ -1102,6 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStepZeroActions();
         renderStepOneList();
         updateViewportHeight();
+        dispatchEditorialStepChanged('work-selected');
     });
 
     toggleBladesDisabled(!currentWorkId);
@@ -1111,6 +1076,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStepZeroActions();
     renderStepOneList();
     updateStepUi();
+    dispatchEditorialStepChanged('initial-load');
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             document.body.classList.remove('admin-loading');

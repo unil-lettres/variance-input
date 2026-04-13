@@ -82,6 +82,7 @@ See `descr/api_endpoints.md`. Notables:
 
 ## Deploy notes
 See `descr/deployment_notes.md` for TLS/proxy, volumes, legacy import, and VM recovery steps.
+See `descr/dependency_updates.md` for the regular dependency update process.
 
 ## Staging VM (plett-stage)
 - **Host**: `plett-stage.unil.ch`
@@ -132,3 +133,4 @@ docker compose logs -f laravel laravel-queue medite
 - Docker: `docker-compose.yml`, `nginx/default.conf`, `variance/docker/...`
 - Laravel: `laravel/app/Http/Controllers/*`, `laravel/app/Services/PageMarkerService.php`
 - Medite: `medite/app/flask_app.py`, `medite/app/variance/scripts/diff.py`
+- Dependency updates: `descr/dependency_updates.md`, `.github/dependabot.yml`, `.github/workflows/dependency-checks.yml`

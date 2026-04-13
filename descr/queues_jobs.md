@@ -15,6 +15,11 @@ The `laravel-queue` container runs:
 php artisan queue:work --queue=facsimiles,page-markers,exports
 ```
 
+Before spawning workers, `laravel/scripts/run-queue-workers.sh` now waits for
+Laravel to reach the MariaDB-backed queue/cache tables. This avoids the common
+boot race where the queue container starts before MariaDB is ready and the
+first `queue:work` processes exit immediately with `Connection refused`.
+
 The `laravel-scheduler` container runs:
 ```
 php artisan schedule:run

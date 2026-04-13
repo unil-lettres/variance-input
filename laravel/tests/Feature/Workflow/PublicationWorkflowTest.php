@@ -7,6 +7,7 @@ use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 use ZipArchive;
 use App\Jobs\GenerateLegacyExportJob;
@@ -153,6 +154,8 @@ class PublicationWorkflowTest extends TestCase
             'destination' => 'dev',
         ])->assertOk();
 
+        app(LegacyExportService::class)->deleteExportArtifacts($comparison->id);
+
         $queueResponse = $this->postJson("/comparisons/{$comparison->id}/export");
         $queueResponse->assertAccepted()
             ->assertJsonPath('status', 'queued');
@@ -174,10 +177,9 @@ class PublicationWorkflowTest extends TestCase
 
         $response = $this->get("/comparisons/{$comparison->id}/export/download");
         $response->assertOk();
+        $this->assertInstanceOf(BinaryFileResponse::class, $response->baseResponse);
 
-        $tmpZip = storage_path('app/tmp/test-export-dev.zip');
-        File::ensureDirectoryExists(dirname($tmpZip));
-        File::put($tmpZip, $response->streamedContent());
+        $tmpZip = $response->baseResponse->getFile()->getPathname();
 
         $zip = new ZipArchive();
         $this->assertTrue($zip->open($tmpZip) === true);
@@ -191,6 +193,5 @@ class PublicationWorkflowTest extends TestCase
         $this->assertNotFalse($zip->locateName("2edl/{$targetFiles['thumb']}"));
 
         $zip->close();
-        File::delete($tmpZip);
     }
 }

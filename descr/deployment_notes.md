@@ -85,6 +85,12 @@ Guidance for running the Variance stack outside the default development setup.
   - `./laravel/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro`
   - `./laravel/app/Providers/AppServiceProvider.php:/var/www/html/app/Providers/AppServiceProvider.php:ro`
 - Those mounts keep staging URL/proxy fixes and startup behavior aligned with the checked-out repo without rebuilding the image.
+- After any deployment that changes the synchronized viewer, XHTML fallback, or
+  pagination reconstruction logic, plan a post-deploy warm-up pass for legacy
+  comparisons/versions. The first request to `/admin/api/versions/{id}/reader`
+  now persists a server-side reader artifact (reconstructed text + resolved
+  pagination), so pre-processing all legacy cases avoids slow first loads and
+  timeout risk for large works.
 
 ## Legacy (PHP) setup checklist
 

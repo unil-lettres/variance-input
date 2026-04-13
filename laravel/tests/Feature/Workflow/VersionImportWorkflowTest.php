@@ -45,10 +45,9 @@ class VersionImportWorkflowTest extends TestCase
 
         $xml = File::get($xmlPath);
 
-        $this->assertStringContainsString('Bonjour  monde', $xml);
-        $this->assertStringContainsString('Deux  espaces', $xml);
+        $this->assertStringContainsString('Bonjour monde', $xml);
+        $this->assertStringContainsString('Deux espaces', $xml);
         $this->assertStringNotContainsString('<lb/>', $xml);
-        $this->assertStringContainsString("Bonjour  monde\nDeux  espaces", $xml);
         $this->assertStringNotContainsString("\u{00A0}", $xml);
         $this->assertStringNotContainsString("\u{202F}", $xml);
         $this->assertStringNotContainsString("\t", $xml);

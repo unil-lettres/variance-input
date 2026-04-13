@@ -78,7 +78,7 @@ class WorkController extends Controller
         //]);
 
         $work = Work::findOrFail($workId);
-        if ($forbidden = $this->forbidIfCannotEditStepOne($work)) {
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
             return $forbidden;
         }
         $work->desc = $request->desc;

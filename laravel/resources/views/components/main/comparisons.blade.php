@@ -36,18 +36,19 @@
             <table class="table table-sm table-bordered comparisons-table" id="comparisons-table">
                 <thead>
                     <tr>
-                        <th>Désignation</th>
-                        <th>Source</th>
-                        <th>Cible</th>
-                        <th>Paramètres Medite</th>
+                        <th class="comparison-order-col"></th>
+                        <th class="comparison-folder-col">Désignation</th>
+                        <th class="comparison-source-col">Source</th>
+                        <th class="comparison-target-col">Cible</th>
+                        <th class="comparison-params-col">Paramètres Medite</th>
                         <th class="comparison-data-col">Données</th>
-                        <th>Suppr.</th>
-                        <th>Insert.</th>
-                        <th>Rempl.</th>
-                        <th>Dépl.</th>
-                        <th>Publication</th>
-                        <th>Gérer</th>
-                        <th>Action</th>
+                        <th class="comparison-metric-col">Suppr.</th>
+                        <th class="comparison-metric-col">Insert.</th>
+                        <th class="comparison-metric-col">Rempl.</th>
+                        <th class="comparison-metric-col">Dépl.</th>
+                        <th class="comparison-publish-col">Publication</th>
+                        <th class="comparison-manage-col">Gérer</th>
+                        <th class="comparison-action-col">Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -115,10 +116,10 @@
   .comparison-details-toggle .form-check-label {
     cursor: pointer;
   }
-  .comparisons-table.compact-details th:nth-child(1),
-  .comparisons-table.compact-details td:nth-child(1),
-  .comparisons-table.compact-details th:nth-child(4),
-  .comparisons-table.compact-details td:nth-child(4) {
+  .comparisons-table.compact-details th:nth-child(2),
+  .comparisons-table.compact-details td:nth-child(2),
+  .comparisons-table.compact-details th:nth-child(5),
+  .comparisons-table.compact-details td:nth-child(5) {
     display: none;
   }
   .comparisons-table.compact-details .comparison-role-details,
@@ -132,46 +133,81 @@
   }
   .comparisons-table-wrap {
     overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
   }
   .comparisons-table:not(.compact-details) {
-    table-layout: fixed;
-    width: 100%;
+    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+  }
+  .comparisons-table:not(.compact-details) td {
+    vertical-align: top;
   }
   .comparisons-table:not(.compact-details) .comparison-results-compact {
     display: none !important;
   }
-  .comparisons-table:not(.compact-details) th:nth-child(10),
-  .comparisons-table:not(.compact-details) td:nth-child(10),
-  .comparisons-table:not(.compact-details) th:nth-child(11),
-  .comparisons-table:not(.compact-details) td:nth-child(11),
-  .comparisons-table:not(.compact-details) th:nth-child(12),
-  .comparisons-table:not(.compact-details) td:nth-child(12) {
+  .comparisons-table .comparison-order-col,
+  .comparisons-table .comparison-order-cell {
+    width: 2rem;
+    min-width: 2rem;
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+  }
+  .comparisons-table:not(.compact-details) .comparison-folder-col,
+  .comparisons-table:not(.compact-details) .comparison-folder-cell {
+    width: 8rem;
+    min-width: 8rem;
+  }
+  .comparisons-table:not(.compact-details) .comparison-source-col,
+  .comparisons-table:not(.compact-details) .comparison-source-cell,
+  .comparisons-table:not(.compact-details) .comparison-target-col,
+  .comparisons-table:not(.compact-details) .comparison-target-cell {
     width: 9rem;
     min-width: 9rem;
   }
-  .comparisons-table td:nth-child(6),
+  .comparisons-table:not(.compact-details) .comparison-params-col,
+  .comparisons-table:not(.compact-details) .comparison-params-cell {
+    width: 8rem;
+    min-width: 8rem;
+  }
+  .comparisons-table:not(.compact-details) .comparison-data-col,
+  .comparisons-table:not(.compact-details) .comparison-data-cell {
+    width: 12rem;
+    min-width: 12rem;
+  }
+  .comparisons-table:not(.compact-details) .comparison-publish-col,
+  .comparisons-table:not(.compact-details) .comparison-publish-cell,
+  .comparisons-table:not(.compact-details) .comparison-manage-col,
+  .comparisons-table:not(.compact-details) .comparison-manage-cell {
+    width: 7rem;
+    min-width: 7rem;
+  }
+  .comparisons-table:not(.compact-details) .comparison-action-col,
+  .comparisons-table:not(.compact-details) .comparison-action-cell {
+    width: 8rem;
+    min-width: 8rem;
+  }
   .comparisons-table td:nth-child(7),
   .comparisons-table td:nth-child(8),
   .comparisons-table td:nth-child(9),
   .comparisons-table td:nth-child(10),
   .comparisons-table td:nth-child(11),
-  .comparisons-table td:nth-child(12) {
+  .comparisons-table td:nth-child(12),
+  .comparisons-table td:nth-child(13) {
     text-align: center;
   }
-  .comparisons-table th:nth-child(6),
   .comparisons-table th:nth-child(7),
   .comparisons-table th:nth-child(8),
   .comparisons-table th:nth-child(9),
-  .comparisons-table td:nth-child(6),
   .comparisons-table td:nth-child(7),
   .comparisons-table td:nth-child(8),
-  .comparisons-table td:nth-child(9) {
-    width: 5.5rem;
-    min-width: 5.5rem;
-  }
-  .comparisons-table .comparison-data-col {
-    min-width: 10rem;
-    width: 10rem;
+  .comparisons-table td:nth-child(9),
+  .comparisons-table th:nth-child(10),
+  .comparisons-table td:nth-child(10) {
+    width: 4.5rem;
+    min-width: 4.5rem;
   }
   .comparison-metric-cell {
     display: inline-block;
@@ -199,6 +235,9 @@
   }
   .comparison-data-col .comparison-results {
     align-items: stretch;
+  }
+  .comparisons-table:not(.compact-details) .comparison-data-col .comparison-results {
+    gap: 0.2rem;
   }
   .comparison-data-col .comparison-results-line {
     justify-content: flex-start;
@@ -328,6 +367,13 @@
   .target-cell .role-wrapper {
     margin-top: 0.35rem;
   }
+  .comparison-version-label {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .source-cell,
   .target-cell,
   .source-cell .role-wrapper,
@@ -335,6 +381,16 @@
   .comparison-role-details,
   .comparison-results-slot {
     text-align: center;
+  }
+  .comparisons-table:not(.compact-details) .source-cell .role-wrapper,
+  .comparisons-table:not(.compact-details) .target-cell .role-wrapper {
+    margin-top: 0.45rem;
+  }
+  .comparisons-table:not(.compact-details) .comparison-role-details {
+    gap: 0.25rem;
+  }
+  .comparisons-table:not(.compact-details) .comparison-role-details .badge {
+    font-size: 0.72rem;
   }
   .comparisons-table tr[data-legacy="1"] .source-cell,
   .comparisons-table tr[data-legacy="1"] .target-cell {
@@ -351,6 +407,7 @@
   }
   .comparisons-table:not(.compact-details) .publish-control {
     flex-direction: column;
+    flex-wrap: wrap;
     gap: 0.25rem;
     white-space: normal;
   }
@@ -398,6 +455,32 @@
     font-size: 0.7rem;
     padding: 0.15rem 0.45rem;
     white-space: nowrap;
+  }
+  .comparisons-table:not(.compact-details) .comparison-results-slot .comparison-results-line {
+    justify-content: center;
+    text-align: center;
+  }
+  .comparisons-table:not(.compact-details) .comparison-action-bar {
+    margin-top: 0.15rem;
+    gap: 0.2rem;
+  }
+  .comparison-reorder-bar {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .comparison-reorder-bar .comparison-action-btn {
+    width: 1.35rem;
+    height: 1.1rem;
+    min-width: 1.35rem;
+    font-size: 0.68rem;
+    border-radius: 0.35rem;
+  }
+  .comparison-order-cell {
+    vertical-align: middle !important;
+  }
+  .comparisons-table:not(.compact-details) .comparison-action-cell .d-flex {
+    width: 100%;
   }
 </style>
 @endpush

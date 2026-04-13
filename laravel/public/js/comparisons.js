@@ -37,6 +37,7 @@ function initComparisonsTable() {
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   let latestComparisonsRequest = 0;
   let activeComparisonsRequest = 0;
+  let loadedComparisonsWorkId = null;
   let currentAuthorId = null;
   const adminMain = document.getElementById('admin-main');
   const currentUserId = (() => {
@@ -67,6 +68,14 @@ function initComparisonsTable() {
   };
   const normalizeStatus = status => String(status ?? '').toLowerCase();
   const formatTimestamp = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { hour12: false }) : null;
+  const escapeHtml = (value) => {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
   const formatNumber = value => {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value.toLocaleString('fr-FR');
@@ -255,7 +264,66 @@ function initComparisonsTable() {
       tbody.appendChild(newRow);
     }
     comparisonRows.set(id, newRow);
+    refreshComparisonReorderButtons();
     refreshComparisonCounts();
+  }
+
+  function refreshComparisonReorderButtons() {
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const reorderRows = rows.filter(row => row.querySelector('.comparison-reorder-btn'));
+    const lastIndex = reorderRows.length - 1;
+
+    reorderRows.forEach((row, index) => {
+      const upBtn = row.querySelector('.comparison-reorder-btn[data-direction="up"]');
+      const downBtn = row.querySelector('.comparison-reorder-btn[data-direction="down"]');
+
+      if (upBtn) {
+        upBtn.style.display = (index <= 0) ? 'none' : '';
+      }
+      if (downBtn) {
+        downBtn.style.display = (index >= lastIndex) ? 'none' : '';
+      }
+    });
+  }
+
+  function swapComparisonNumbers(firstId, secondId) {
+    const first = comparisonData.get(Number(firstId));
+    const second = comparisonData.get(Number(secondId));
+    if (!first || !second) return;
+
+    const firstNumber = first.number ?? null;
+    first.number = second.number ?? null;
+    second.number = firstNumber;
+    comparisonData.set(Number(firstId), first);
+    comparisonData.set(Number(secondId), second);
+  }
+
+  function moveComparisonRowLocally(comparisonId, direction) {
+    const id = Number(comparisonId);
+    if (!Number.isFinite(id) || !tbody) return false;
+
+    const row = comparisonRows.get(id) || tbody.querySelector(`tr[data-id="${id}"]`);
+    if (!row) return false;
+
+    const sibling = direction === 'up'
+      ? row.previousElementSibling
+      : row.nextElementSibling;
+
+    if (!sibling) return false;
+
+    const siblingId = Number(sibling.dataset.id);
+    if (!Number.isFinite(siblingId)) return false;
+
+    if (direction === 'up') {
+      tbody.insertBefore(row, sibling);
+    } else {
+      tbody.insertBefore(sibling, row);
+    }
+
+    swapComparisonNumbers(id, siblingId);
+    refreshComparisonReorderButtons();
+    return true;
   }
 
   function normalizeExportBundle(comp) {
@@ -597,7 +665,7 @@ function initComparisonsTable() {
         });
 
         if (terminalTransition && typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
-          loadComparisons(currentWorkId);
+          loadComparisons(currentWorkId, { force: true });
         }
 
         const roles = rolesData;
@@ -610,7 +678,7 @@ function initComparisonsTable() {
 
         if (isTerminal) {
           if (!currentEntry.completed && typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
-            loadComparisons(currentWorkId);
+            loadComparisons(currentWorkId, { force: true });
           }
           currentEntry.completed = true;
           if (currentEntry.timer) {
@@ -926,7 +994,7 @@ function initComparisonsTable() {
         // refresh table after a short delay to reflect new sidecar status
         setTimeout(() => {
           if (typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
-            loadComparisons(currentWorkId);
+            loadComparisons(currentWorkId, { force: true });
           }
         }, 800);
       } catch (err) {
@@ -981,15 +1049,6 @@ function initComparisonsTable() {
     const pushChip = (html, variant) => {
       let variantClass = 'comparison-param-chip--input';
       chips.push(`<span class="comparison-param-chip ${variantClass}">${html}</span>`);
-    };
-
-    const escapeHtml = (value) => {
-      return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
     };
 
     const addNumeric = (label, raw) => {
@@ -1115,10 +1174,6 @@ function initComparisonsTable() {
     );
 
     if (comp?.pagination && typeof comp.pagination === 'object') {
-      const sourceState = describePaginationState(comp.pagination?.source || {});
-      const targetState = describePaginationState(comp.pagination?.target || {});
-      pushLine(`<strong>Pagination</strong> source ${sourceState} · cible ${targetState}`);
-
       const sourceLignesFile = describeLignesFile(comp.pagination?.source || {});
       const targetLignesFile = describeLignesFile(comp.pagination?.target || {});
       if (sourceLignesFile || targetLignesFile) {
@@ -1132,6 +1187,11 @@ function initComparisonsTable() {
     const runtime = formatDuration(comp.medite_runtime_ms);
     if (runtime) {
       pushLine(`<strong>Durée Medite</strong> ${runtime}`);
+    }
+
+    const peakKb = Number(comp.medite_peak_rss_kb);
+    if (Number.isFinite(peakKb) && peakKb > 0) {
+      pushLine(`<strong>Pic mémoire</strong> ${formatBytes(peakKb * 1024)}`);
     }
 
     pushLine(`<strong>Export legacy</strong> ${describeExportStatus(comp)}`);
@@ -1192,36 +1252,8 @@ function initComparisonsTable() {
       }
     }
 
-    const peakKb = Number(comp.medite_peak_rss_kb);
-    if (Number.isFinite(peakKb) && peakKb > 0) {
-      pushLine(`<strong>Pic mémoire</strong> ${formatBytes(peakKb * 1024)}`);
-    }
-
-    const addPaginationMarkerLine = (label, raw, roleName = null) => {
-      const num = Number(raw);
-      const hasRawCount = Number.isFinite(num) && num >= 0;
-      const roleProgress = roleName ? progress?.roles?.[roleName] : null;
-      const inserted = Number(roleProgress?.inserted);
-      const missed = Number(roleProgress?.missed);
-      const hasDetailedProgress = Number.isFinite(inserted) && inserted >= 0
-        && Number.isFinite(missed) && missed >= 0;
-
-      if (hasDetailedProgress) {
-        pushLine(`<strong>${label}</strong> ${formatNumber(inserted)} ins. · ${formatNumber(missed)} manq.`);
-        return;
-      }
-
-      if (!hasRawCount) return;
-      pushLine(`<strong>${label}</strong> ${formatNumber(num)} pb`);
-    };
-
-    if (comp?.pagination && typeof comp.pagination === 'object') {
-      addPaginationMarkerLine('PB source', comp.pagination?.source?.markers, 'source');
-      addPaginationMarkerLine('PB cible', comp.pagination?.target?.markers, 'target');
-    }
-
     if (!lines.length) {
-      return '<span class="text-muted">–</span>';
+      return '';
     }
 
     return `<div class="comparison-results comparison-results-details">${lines.join('')}</div>`;
@@ -1326,7 +1358,7 @@ function initComparisonsTable() {
       if (isValidWorkId(currentWorkId)) {
         setTimeout(() => {
           if (isValidWorkId(currentWorkId)) {
-            loadComparisons(currentWorkId);
+            loadComparisons(currentWorkId, { force: true });
           }
         }, 250);
       }
@@ -1461,7 +1493,7 @@ function initComparisonsTable() {
 
       // Refresh comparison list so pagination marker counts / availability reflect restored state
       if (typeof loadComparisons === 'function' && isValidWorkId(currentWorkId)) {
-        loadComparisons(currentWorkId);
+        loadComparisons(currentWorkId, { force: true });
       }
     } catch (err) {
       console.error('Erreur restauration pagination', err);
@@ -1572,6 +1604,9 @@ function initComparisonsTable() {
 
   function resetUI() {
     loading.style.display = 'none';
+    noComparisons.textContent = `Aucune comparaison n'a encore été établie pour cette œuvre. Cliquez sur "Lancer un alignement" pour lancer une comparaison Medite.`;
+    noComparisons.classList.remove('text-danger');
+    noComparisons.classList.add('text-muted');
     noComparisons.style.display = 'none';
     setComparisonsTableVisible(false);
     tbody.innerHTML = '';
@@ -1581,6 +1616,7 @@ function initComparisonsTable() {
     comparisonData.clear();
     comparisonRows.clear();
     comparisonDetailsRequests.clear();
+    loadedComparisonsWorkId = null;
     updateComparisonCounts(0, 0);
     updateComparisonSummaryState('idle', { total: 0, published: 0 });
     setComparisonsLoading(false);
@@ -1702,6 +1738,25 @@ function initComparisonsTable() {
             <label class="btn btn-outline-secondary" for="${scopeName}-dev">/dev</label>
           </div>
         </div>`;
+    const reorderDisabled = isLegacy || ownershipBlocked || isPublicationPending;
+    const reorderControlsHtml = isRunning
+      ? ''
+      : `<div class="comparison-action-bar comparison-reorder-bar" role="group" aria-label="Ordre des comparaisons">
+          <button class="btn btn-outline-secondary comparison-action-btn comparison-reorder-btn ${reorderDisabled ? 'legacy-disabled' : ''}"
+                  data-id="${comp.id}"
+                  data-direction="up"
+                  title="Monter la comparaison"
+                  ${reorderDisabled ? 'disabled aria-disabled="true"' : ''}>
+            <span aria-hidden="true">▲</span>
+          </button>
+          <button class="btn btn-outline-secondary comparison-action-btn comparison-reorder-btn ${reorderDisabled ? 'legacy-disabled' : ''}"
+                  data-id="${comp.id}"
+                  data-direction="down"
+                  title="Descendre la comparaison"
+                  ${reorderDisabled ? 'disabled aria-disabled="true"' : ''}>
+            <span aria-hidden="true">▼</span>
+          </button>
+        </div>`;
     const actionBarHtml = isRunning
       ? ''
       : `<div class="comparison-action-bar" role="group" aria-label="Action buttons">
@@ -1722,25 +1777,28 @@ function initComparisonsTable() {
         </div>`;
 
     tr.innerHTML = `
-      <td>${folderHtml}</td>
-      <td class="source-cell">
-        <div><strong>${sourceName}</strong></div>
+      <td class="text-center comparison-order-cell">
+        ${reorderControlsHtml}
+      </td>
+      <td class="comparison-folder-cell">${folderHtml}</td>
+      <td class="source-cell comparison-source-cell">
+        <div><strong class="comparison-version-label" title="${escapeHtml(sourceName)}">${escapeHtml(sourceName)}</strong></div>
         <div class="role-wrapper"></div>
       </td>
-      <td class="target-cell">
-        <div><strong>${targetName}</strong></div>
+      <td class="target-cell comparison-target-cell">
+        <div><strong class="comparison-version-label" title="${escapeHtml(targetName)}">${escapeHtml(targetName)}</strong></div>
         <div class="role-wrapper"></div>
       </td>
-      <td class="align-top">${mediteParamsHtml}</td>
-      <td class="align-top comparison-data-col">${dataSummaryHtml}</td>
+      <td class="align-top comparison-params-cell">${mediteParamsHtml}</td>
+      <td class="align-top comparison-data-col comparison-data-cell">${dataSummaryHtml}</td>
       <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.s)}</td>
       <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.i)}</td>
       <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.r)}</td>
       <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.d)}</td>
-      <td class="text-center">
+      <td class="text-center comparison-publish-cell">
         ${publishStatusHtml}
       </td>
-      <td class="text-center">
+      <td class="text-center comparison-manage-cell">
         ${publishControlsHtml}
       </td>
       <td class="text-center comparison-action-cell">
@@ -1802,6 +1860,7 @@ function initComparisonsTable() {
           tbody.appendChild(newRow);
         }
         comparisonRows.set(id, newRow);
+        refreshComparisonReorderButtons();
         refreshComparisonCounts();
       })
       .catch(err => {
@@ -1813,8 +1872,11 @@ function initComparisonsTable() {
     comparisonDetailsRequests.set(id, request);
   }
 
-  async function loadComparisons(workId) {
+  async function loadComparisons(workId, { force = false } = {}) {
     if (!isValidWorkId(workId)) { resetUI(); return; }
+    if (!force && String(loadedComparisonsWorkId ?? '') === String(workId)) {
+      return;
+    }
     currentWorkId = workId;
 
     const requestToken = ++latestComparisonsRequest;
@@ -1830,6 +1892,9 @@ function initComparisonsTable() {
     comparisonRows.clear();
     comparisonDetailsRequests.clear();
     pendingRoleStatuses.clear();
+    noComparisons.textContent = `Aucune comparaison n'a encore été établie pour cette œuvre. Cliquez sur "Lancer un alignement" pour lancer une comparaison Medite.`;
+    noComparisons.classList.remove('text-danger');
+    noComparisons.classList.add('text-muted');
     noComparisons.style.display = 'none';
 
     initComparisonsTable.initializedTooltips?.forEach(tooltip => tooltip.dispose());
@@ -1850,6 +1915,7 @@ function initComparisonsTable() {
         : 0;
 
       if (!Array.isArray(comparisons) || comparisons.length === 0) {
+        loadedComparisonsWorkId = String(workId);
         updateComparisonCounts(publishedCount, totalCount);
         updateComparisonSummaryState('empty', { total: totalCount, published: publishedCount });
         noComparisons.style.display = 'block';
@@ -1857,23 +1923,46 @@ function initComparisonsTable() {
         return;
       }
 
+      loadedComparisonsWorkId = String(workId);
       updateComparisonCounts(publishedCount, totalCount);
       updateComparisonSummaryState('ready', { total: totalCount, published: publishedCount });
       setComparisonsTableVisible(true);
 
+      let renderedCount = 0;
       comparisons.forEach(comp => {
-        const row = buildComparisonRow(comp);
-        tbody.appendChild(row);
-        comparisonRows.set(comp.id, row);
-        if (comp.details_loaded === false) {
-          loadComparisonDetails(comp.id);
+        try {
+          const row = buildComparisonRow(comp);
+          tbody.appendChild(row);
+          comparisonRows.set(comp.id, row);
+          renderedCount += 1;
+          if (comp.details_loaded === false) {
+            loadComparisonDetails(comp.id);
+          }
+        } catch (err) {
+          console.error('Erreur rendu comparaison', comp?.id, err, comp);
         }
       });
+
+      refreshComparisonReorderButtons();
+
+      if (renderedCount === 0) {
+        loadedComparisonsWorkId = null;
+        updateComparisonSummaryState('empty', { total: 0, published: 0 });
+        noComparisons.textContent = 'Erreur d\'affichage des comparaisons. Consultez la console.';
+        noComparisons.classList.remove('text-muted');
+        noComparisons.classList.add('text-danger');
+        noComparisons.style.display = 'block';
+        setComparisonsTableVisible(false);
+        return;
+      }
     } catch (err) {
       console.error('Erreur lors du chargement des comparaisons:', err);
-      // Leave UI cleared; don't try to render an error page as JSON
+      loadedComparisonsWorkId = null;
       updateComparisonCounts(0, 0);
       updateComparisonSummaryState('empty', { total: 0, published: 0 });
+      noComparisons.textContent = `Chargement des comparaisons impossible : ${err.message || 'erreur inconnue'}.`;
+      noComparisons.classList.remove('text-muted');
+      noComparisons.classList.add('text-danger');
       noComparisons.style.display = 'block';
       setComparisonsTableVisible(false);
     } finally {
@@ -1890,8 +1979,8 @@ function initComparisonsTable() {
       if (!runningComparisons.has(numericId)) return;
       const row = comparisonRows.get(numericId);
       if (!row) return;
-      const paramsCell = row.children[3];
-      const resultsCell = row.children[10];
+      const paramsCell = row.children[4];
+      const resultsCell = row.children[12];
       if (paramsCell) {
         paramsCell.innerHTML = renderMediteParams(comp);
       }
@@ -1911,7 +2000,16 @@ function initComparisonsTable() {
   // React to global events, but let loadComparisons() guard invalid IDs
   document.addEventListener('workSelected', e => {
     runningComparisons.clear();
-    loadComparisons(e.detail?.workId);
+    currentWorkId = e.detail?.workId ?? null;
+    if (!isValidWorkId(currentWorkId)) {
+      resetUI();
+    }
+  });
+
+  document.addEventListener('editorialStepChanged', e => {
+    const step = Number(e.detail?.step);
+    if (step !== 3) return;
+    loadComparisons(e.detail?.workId ?? currentWorkId);
   });
 
   document.addEventListener('comparisonCreated', e => {
@@ -1958,11 +2056,15 @@ function initComparisonsTable() {
     };
 
     const row = buildComparisonRow(placeholderComp);
+    noComparisons.textContent = `Aucune comparaison n'a encore été établie pour cette œuvre. Cliquez sur "Lancer un alignement" pour lancer une comparaison Medite.`;
+    noComparisons.classList.remove('text-danger');
+    noComparisons.classList.add('text-muted');
     noComparisons.style.display = 'none';
     setComparisonsTableVisible(true);
     tbody.prepend(row);
     comparisonRows.set(comparisonId, row);
     comparisonData.set(comparisonId, placeholderComp);
+    refreshComparisonReorderButtons();
     refreshComparisonCounts();
   });
 
@@ -1970,7 +2072,7 @@ function initComparisonsTable() {
     if (e.detail?.comparisonId) {
       runningComparisons.delete(Number(e.detail.comparisonId));
     }
-    loadComparisons(e.detail?.workId);
+    loadComparisons(e.detail?.workId, { force: true });
   });
 
   document.addEventListener('comparisonCompleted', e => {
@@ -1981,18 +2083,18 @@ function initComparisonsTable() {
     if (e.detail?.comparisonId) {
       runningComparisons.delete(Number(e.detail.comparisonId));
     }
-    loadComparisons(e.detail?.workId);
+    loadComparisons(e.detail?.workId, { force: true });
   });
 
   document.addEventListener('comparisonDeleted', e => {
     if (e.detail?.comparisonId) {
       runningComparisons.delete(Number(e.detail.comparisonId));
     }
-    loadComparisons(e.detail?.workId);
+    loadComparisons(e.detail?.workId, { force: true });
   });
 
-  document.addEventListener('versionsUpdated',   e => loadComparisons(e.detail?.workId));
-  document.addEventListener('refreshComparisons', () => loadComparisons(currentWorkId));
+  document.addEventListener('versionsUpdated',   e => loadComparisons(e.detail?.workId, { force: true }));
+  document.addEventListener('refreshComparisons', () => loadComparisons(currentWorkId, { force: true }));
   window.setInterval(() => {
     if (runningComparisons.size === 0) return;
     refreshRunningComparisonIndicators();
@@ -2014,7 +2116,7 @@ function initComparisonsTable() {
     const entry = comparisonRoleComponents.get(key);
     if (!entry) {
       if (!detail.workId || Number(detail.workId) === Number(currentWorkId)) {
-        loadComparisons(currentWorkId);
+        loadComparisons(currentWorkId, { force: true });
       }
       return;
     }
@@ -2331,6 +2433,50 @@ function initComparisonsTable() {
       alert(error?.message || 'Impossible de lancer la préparation du pack legacy.');
     } finally {
       btn.disabled = false;
+    }
+  });
+
+  document.addEventListener('click', async event => {
+    const reorderBtn = event.target.closest('.comparison-reorder-btn');
+    if (!reorderBtn) return;
+    if (reorderBtn.disabled || reorderBtn.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
+
+    const comparisonId = reorderBtn.dataset.id;
+    const direction = reorderBtn.dataset.direction;
+    if (!comparisonId || !direction) return;
+
+    const row = reorderBtn.closest('tr');
+    const rowButtons = row ? Array.from(row.querySelectorAll('.comparison-reorder-btn')) : [reorderBtn];
+    rowButtons.forEach((btn) => { btn.disabled = true; });
+
+    try {
+      const response = await fetch(withBasePath(`/comparisons/${comparisonId}/reorder`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {}),
+        },
+        body: JSON.stringify({ direction }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || `HTTP ${response.status}`);
+      }
+
+      if (data?.status === 'ok') {
+        moveComparisonRowLocally(comparisonId, direction);
+      } else {
+        refreshComparisonReorderButtons();
+      }
+    } catch (err) {
+      console.error('Erreur de réordonnancement de la comparaison:', err);
+      alert(err?.message || 'Impossible de modifier l’ordre des comparaisons.');
+    } finally {
+      rowButtons.forEach((btn) => { btn.disabled = false; });
     }
   });
 
