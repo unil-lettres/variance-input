@@ -436,7 +436,7 @@ class PublishController extends Controller
                 ->toArray()
             : [];
 
-        $destDir = "/var/www/variance/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
+        $destDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}");
 
         return [
             'source_prefix' => $sourcePrefix,

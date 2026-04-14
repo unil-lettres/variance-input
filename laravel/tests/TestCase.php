@@ -83,7 +83,9 @@ abstract class TestCase extends BaseTestCase
             storage_path('app/public/uploads/versions'),
             storage_path('app/private/lignes'),
             storage_path('app/private/pagination'),
+            storage_path('app/private/cache/version-editor'),
             storage_path('app/tmp/pager'),
+            storage_path('framework/views'),
             public_path('uploads'),
             base_path('../variance/uploads'),
             '/var/www/variance/uploads',
@@ -92,6 +94,9 @@ abstract class TestCase extends BaseTestCase
         foreach ($paths as $path) {
             $this->ensureDirectoryExistsWhenWritable($path);
         }
+
+        $this->cleanDirectoryIfPresent(storage_path('app/private/cache/version-editor'));
+        $this->cleanDirectoryIfPresent(storage_path('framework/views'));
     }
 
     protected function ensureDirectoryExistsWhenWritable(string $path): void
@@ -110,6 +115,15 @@ abstract class TestCase extends BaseTestCase
         }
 
         File::ensureDirectoryExists($path);
+    }
+
+    protected function cleanDirectoryIfPresent(string $path): void
+    {
+        if (!File::isDirectory($path)) {
+            return;
+        }
+
+        File::cleanDirectory($path);
     }
 
     protected function writeVersionXml(Version $version, string $body = '<p>Texte témoin</p>'): string

@@ -370,7 +370,7 @@ class MediteController extends Controller
             return null;
         }
 
-        $sharedDir = "/var/www/variance/uploads/__medite_inputs/{$comparisonId}";
+        $sharedDir = base_path("../variance/uploads/__medite_inputs/{$comparisonId}");
         File::ensureDirectoryExists($sharedDir);
 
         $stagedPath = "{$sharedDir}/{$short}.xml";
