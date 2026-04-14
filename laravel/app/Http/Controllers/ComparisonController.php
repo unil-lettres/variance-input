@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cache;
 use App\Models\Comparison;
+use App\Models\Chapter;
 use App\Models\Version;
 use App\Models\User;
 use App\Http\Controllers\PublishController;
@@ -112,6 +113,27 @@ class ComparisonController extends Controller
         $comparison->details_loaded = true;
 
         return response()->json($comparison);
+    }
+
+    public function updateComments(Request $request, Comparison $comparison)
+    {
+        $this->assertComparisonOwnership($comparison);
+        $this->assertComparisonEditable($comparison);
+
+        $validated = $request->validate([
+            'comments' => 'nullable|string|max:10000',
+        ]);
+
+        $comments = array_key_exists('comments', $validated) ? trim((string) ($validated['comments'] ?? '')) : '';
+        $comparison->comments = $comments !== '' ? $comments : null;
+        $comparison->save();
+
+        return response()->json([
+            'status' => 'ok',
+            'comparison_id' => $comparison->id,
+            'comments' => $comparison->comments,
+            'has_comments' => $comparison->comments !== null,
+        ]);
     }
 
     private function enrichComparison(
@@ -523,6 +545,7 @@ class ComparisonController extends Controller
         // Remove stale comparison progress snapshot and DB record
         $this->pageMarkerService->clearComparisonProgress($comparison->id);
         $this->legacyExportService->deleteExportArtifacts($comparison->id);
+        Chapter::query()->forFolder($comparison->folder)->delete();
         $comparison->delete();
 
         return response()->json(['message' => 'Comparison deleted']);

@@ -4,37 +4,36 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 
 class Chapter extends Model
 {
     use HasFactory;
 
-    // Define any fields you want to be mass-assignable
-    protected $fillable = ['title', 'content', 'order', 'work_id', 'version_id'];
+    protected $fillable = [
+        'folder',
+        'level',
+        'label_source',
+        'label_target',
+        'chapter_parent',
+        'start_line_source',
+        'start_line_target',
+        'id_tome_source',
+        'id_tome_target',
+    ];
 
-    /**
-     * Relationship: Work Associated with the Chapter
-     *
-     * Defines a `belongsTo` relationship to the `Work` model, linking this
-     * chapter to a specific work, if chapters are organized under works.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     */
-    public function work()
+    public function parent()
     {
-        return $this->belongsTo(Work::class);
+        return $this->belongsTo(self::class, 'chapter_parent');
     }
 
-    /**
-     * Relationship: Version Associated with the Chapter
-     *
-     * Defines a `belongsTo` relationship to the `Version` model, allowing
-     * this chapter to be linked to a specific version if chapters vary by version.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     */
-    public function version()
+    public function children()
     {
-        return $this->belongsTo(Version::class);
+        return $this->hasMany(self::class, 'chapter_parent');
+    }
+
+    public function scopeForFolder(Builder $query, string $folder): Builder
+    {
+        return $query->where('folder', $folder);
     }
 }

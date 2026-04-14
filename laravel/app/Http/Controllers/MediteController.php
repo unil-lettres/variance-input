@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -218,8 +219,18 @@ class MediteController extends Controller
         $outputXml = "{$baseDir}/{$sourceShort}-{$targetShort}.xml";
 
         /* ───── Source / Target absolute paths ───── */
-        $sourceFile = $this->convertPath($sourceShort);
-        $targetFile = $this->convertPath($targetShort);
+        $sourceFile = $this->stageMediteInput($sourceShort, $cmp->id);
+        $targetFile = $this->stageMediteInput($targetShort, $cmp->id);
+
+        if (!$sourceFile || !$targetFile) {
+            return response()->json([
+                'error' => 'Fichiers source Medite introuvables.',
+                'details' => [
+                    'source' => $sourceShort,
+                    'target' => $targetShort,
+                ],
+            ], 422);
+        }
 
         $payload = [
             'source_filename'   => $sourceFile,
@@ -349,29 +360,40 @@ class MediteController extends Controller
     }
 
     /*──────────────────────── Helper ───────────────────────*/
-    private function convertPath(string $short): string
+    private function stageMediteInput(string $short, int $comparisonId): ?string
     {
-        $storageRoot = storage_path('app/public');
-        $localPath   = storage_path("app/public/uploads/versions/{$short}.xml");
-        $publicPath  = public_path("uploads/versions/{$short}.xml");
-
-        if (file_exists($localPath)) {
-            $relative = substr($localPath, strlen($storageRoot));
-            $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-            return "/app/storage_public{$relative}";
+        $sourcePath = $this->resolveVersionXmlPath($short);
+        if (!$sourcePath) {
+            Log::warning('Medite source file missing from storage', [
+                'short' => $short,
+            ]);
+            return null;
         }
 
-        if (file_exists($publicPath)) {
-            return "/app/uploads/versions/{$short}.xml";
+        $sharedDir = "/var/www/variance/uploads/__medite_inputs/{$comparisonId}";
+        File::ensureDirectoryExists($sharedDir);
+
+        $stagedPath = "{$sharedDir}/{$short}.xml";
+        File::copy($sourcePath, $stagedPath);
+
+        return "/app/uploads/__medite_inputs/{$comparisonId}/{$short}.xml";
+    }
+
+    private function resolveVersionXmlPath(string $short): ?string
+    {
+        $candidates = [
+            storage_path("app/public/uploads/versions/{$short}.xml"),
+            public_path("uploads/versions/{$short}.xml"),
+            base_path("../variance/uploads/versions/{$short}.xml"),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
         }
 
-        Log::warning('Medite source file missing from storage', [
-            'short'       => $short,
-            'storagePath' => $localPath,
-            'publicPath'  => $publicPath,
-        ]);
-
-        return "/app/storage_public/uploads/versions/{$short}.xml";
+        return null;
     }
 
     private function nextFolderAndNumber(string $base, int $sourceId, int $targetId, ?int $excludeId = null): array

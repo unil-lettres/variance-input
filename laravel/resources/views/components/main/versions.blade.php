@@ -1482,6 +1482,15 @@ function revealFacsimilesForVersion(versionId, versionName = '') {
     const numericVersionId = Number(versionId);
     if (!Number.isFinite(numericVersionId) || numericVersionId <= 0) return;
 
+    if (currentViewerVersionId === numericVersionId) {
+        currentViewerVersionId = null;
+        updateViewerRowSelection();
+        document.dispatchEvent(new CustomEvent('facsimiles:select', {
+            detail: { versionId: null, versionName: '' }
+        }));
+        return;
+    }
+
     if (typeof window.openEditorialStep === 'function') {
         window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
     }
@@ -1490,11 +1499,6 @@ function revealFacsimilesForVersion(versionId, versionName = '') {
     if (collapseEl && !collapseEl.classList.contains('show') && window.bootstrap?.Collapse) {
         const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
         collapse.show();
-    }
-
-    if (currentViewerVersionId === numericVersionId) {
-        updateViewerRowSelection();
-        return;
     }
 
     currentViewerVersionId = numericVersionId;
@@ -1515,7 +1519,8 @@ function updateViewerRowSelection() {
             button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
             button.disabled = false;
             button.classList.remove('is-loading');
-            button.setAttribute('title', isSelected ? 'Version actuellement affichée dans le lecteur' : 'Ouvrir le viewer');
+            button.setAttribute('title', isSelected ? 'Masquer le viewer pour cette version' : 'Ouvrir le viewer');
+            button.setAttribute('aria-label', isSelected ? 'Masquer le viewer' : 'Ouvrir le viewer');
         }
     });
 }

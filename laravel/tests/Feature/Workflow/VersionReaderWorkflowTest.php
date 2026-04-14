@@ -102,6 +102,8 @@ class VersionReaderWorkflowTest extends TestCase
             ->assertJsonPath('page_count', 1)
             ->assertJsonPath('pages.0.label', 'Texte complet')
             ->assertJsonPath('pagination.available', false)
+            ->assertJsonPath('pages.0.image.name', 'img_reader-fulltext-v1_001.jpg')
+            ->assertJsonPath('pages.0.imageCode', '001')
             ->assertJsonPath('current_page.text', "Premier paragraphe.\n\nSecond paragraphe.");
     }
 

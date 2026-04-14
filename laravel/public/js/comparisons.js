@@ -162,6 +162,8 @@ function initComparisonsTable() {
 
   let paginationWarningModal = null;
   let paginationWarningResolve = null;
+  let commentModal = null;
+  let activeCommentComparisonId = null;
   const getPaginationWarningChoice = () => {
     const modalEl = document.getElementById('pagination-warning-modal');
     if (!modalEl || !window.bootstrap || !bootstrap.Modal) {
@@ -194,6 +196,48 @@ function initComparisonsTable() {
       paginationWarningModal.show();
     });
   };
+  const commentModalEl = document.getElementById('comparison-comment-modal');
+  const commentInput = document.getElementById('comparison-comment-input');
+  const commentSaveBtn = document.getElementById('comparison-comment-save-btn');
+  const getCommentModal = () => {
+    if (!commentModalEl || !window.bootstrap || !bootstrap.Modal) {
+      return null;
+    }
+    if (!commentModal) {
+      commentModal = new bootstrap.Modal(commentModalEl, {
+        backdrop: true,
+        keyboard: true,
+      });
+      commentModalEl.addEventListener('hidden.bs.modal', () => {
+        activeCommentComparisonId = null;
+        if (commentInput) {
+          commentInput.value = '';
+        }
+        if (commentSaveBtn) {
+          commentSaveBtn.disabled = false;
+        }
+      });
+    }
+    return commentModal;
+  };
+
+  function normalizeComment(value) {
+    const text = String(value ?? '').trim();
+    return text === '' ? null : text;
+  }
+
+  function openCommentModal(comparisonId) {
+    const id = Number(comparisonId);
+    if (!Number.isFinite(id) || !commentInput) return;
+    const modal = getCommentModal();
+    if (!modal) return;
+    const comp = comparisonData.get(id) || {};
+    activeCommentComparisonId = id;
+    commentInput.value = comp.comments ?? '';
+    commentSaveBtn.disabled = false;
+    modal.show();
+    window.setTimeout(() => commentInput.focus(), 50);
+  }
 
   function updateComparisonCounts(published, total) {
     const pub = normalizeCount(published);
@@ -1695,6 +1739,21 @@ function initComparisonsTable() {
     const editAllowed = detailsLoaded && !isRunning && ready && !isPublished && !isLegacy;
     const editDisabled = editAllowed && ownershipBlocked;
     const deleteDisabled = isLegacy || ownershipBlocked;
+    const commentDisabled = isLegacy || ownershipBlocked || isPublicationPending;
+    const normalizedComment = normalizeComment(comp.comments);
+    const hasComments = normalizedComment !== null;
+    const commentTitle = hasComments
+      ? 'Voir ou modifier le commentaire'
+      : 'Ajouter un commentaire';
+    const commentButtonHtml = `<button type="button"
+            class="btn ${hasComments ? 'btn-primary comparison-comment-btn--filled' : 'btn-outline-secondary'} comparison-comment-btn ${commentDisabled ? 'legacy-disabled' : ''}"
+            data-comparison-comment="1"
+            data-id="${comp.id}"
+            title="${escapeHtml(commentTitle)}"
+            ${commentDisabled ? 'disabled aria-disabled="true"' : ''}>
+          <i class="bi ${hasComments ? 'bi-chat-left-text-fill' : 'bi-chat-left-text'}" aria-hidden="true"></i>
+          <span class="visually-hidden">${escapeHtml(commentTitle)}</span>
+        </button>`;
 
     const xmlAvailable = comp.xml_available === true;
     const xmlUnknown = comp.xml_available === null || comp.xml_available === undefined;
@@ -1779,6 +1838,9 @@ function initComparisonsTable() {
     tr.innerHTML = `
       <td class="text-center comparison-order-cell">
         ${reorderControlsHtml}
+      </td>
+      <td class="text-center comparison-comment-cell">
+        ${isRunning ? '' : commentButtonHtml}
       </td>
       <td class="comparison-folder-cell">${folderHtml}</td>
       <td class="source-cell comparison-source-cell">
@@ -1979,8 +2041,8 @@ function initComparisonsTable() {
       if (!runningComparisons.has(numericId)) return;
       const row = comparisonRows.get(numericId);
       if (!row) return;
-      const paramsCell = row.children[4];
-      const resultsCell = row.children[12];
+      const paramsCell = row.children[5];
+      const resultsCell = row.children[13];
       if (paramsCell) {
         paramsCell.innerHTML = renderMediteParams(comp);
       }
@@ -2171,6 +2233,15 @@ function initComparisonsTable() {
   };
 
   document.addEventListener('click', async event => {
+    const commentBtn = event.target.closest('[data-comparison-comment="1"]');
+    if (commentBtn) {
+      if (commentBtn.disabled || commentBtn.getAttribute('aria-disabled') === 'true') return;
+      const comparisonId = commentBtn.dataset.id;
+      if (!comparisonId) return;
+      openCommentModal(comparisonId);
+      return;
+    }
+
     const actionBtn = event.target.closest('.publish-action-btn');
     if (!actionBtn) return;
     if (actionBtn.disabled || actionBtn.getAttribute('aria-disabled') === 'true') return;
@@ -2435,6 +2506,51 @@ function initComparisonsTable() {
       btn.disabled = false;
     }
   });
+
+  if (commentSaveBtn && commentInput) {
+    commentSaveBtn.addEventListener('click', async () => {
+      const comparisonId = Number(activeCommentComparisonId);
+      if (!Number.isFinite(comparisonId)) {
+        return;
+      }
+
+      const comments = normalizeComment(commentInput.value);
+      commentSaveBtn.disabled = true;
+
+      try {
+        const res = await fetch(withBasePath(`/comparisons/${comparisonId}/comments`), {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {}),
+          },
+          body: JSON.stringify({ comments }),
+        });
+
+        const text = await res.text();
+        let data = {};
+        try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+        if (!res.ok || data.status !== 'ok') {
+          const reason = data.message || data.error || data.raw || `Statut HTTP ${res.status}`;
+          throw new Error(`Enregistrement du commentaire impossible : ${reason}`);
+        }
+
+        updateComparisonRow(comparisonId, {
+          comments: data.comments ?? null,
+        });
+
+        const modal = getCommentModal();
+        modal?.hide();
+      } catch (err) {
+        console.error(err);
+        alert((err && err.message) ? err.message : 'Erreur lors de l’enregistrement du commentaire');
+      } finally {
+        commentSaveBtn.disabled = false;
+      }
+    });
+  }
 
   document.addEventListener('click', async event => {
     const reorderBtn = event.target.closest('.comparison-reorder-btn');

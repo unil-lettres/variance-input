@@ -682,6 +682,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let readerData           = null;
     let readerPages          = [];
     let readerPageIndex      = 0;
+    let readerImageIndex     = 0;
     let readerFitMode        = 'auto';
     let readerTextSource     = 'auto';
     let readerEncoding       = 'auto';
@@ -860,8 +861,19 @@ document.addEventListener('DOMContentLoaded', () => {
         readerCardTitleEl.textContent = currentVersionName || 'Lecteur synchronisé';
     }
 
+    function readerUsesIndependentImageNavigation() {
+        return !readerData?.pagination?.available && Array.isArray(readerData?.facsimiles) && readerData.facsimiles.length > 0;
+    }
+
+    function currentDisplayedReaderImage() {
+        if (readerUsesIndependentImageNavigation()) {
+            return readerData?.facsimiles?.[readerImageIndex] || null;
+        }
+        return readerPages[readerPageIndex]?.image || null;
+    }
+
     function currentReaderImageName() {
-        return readerPages[readerPageIndex]?.image?.name || null;
+        return currentDisplayedReaderImage()?.name || null;
     }
 
     function hideReaderCropOverlay() {
@@ -1152,8 +1164,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderReaderThumbs() {
         if (!readerThumbsEl) return;
-        const previewPages = readerPages.filter(page => page?.image?.big);
-        if (!previewPages.length) {
+        const independentNavigation = readerUsesIndependentImageNavigation();
+        const previewItems = independentNavigation
+            ? (Array.isArray(readerData?.facsimiles) ? readerData.facsimiles : [])
+                .filter(image => image?.big)
+                .map((image, index) => ({
+                    targetIndex: index,
+                    image,
+                    label: image?.image_code ? `Image ${image.image_code}` : (image?.name || `Image ${index + 1}`),
+                    line: null,
+                    isCurrent: index === readerImageIndex,
+                }))
+            : readerPages
+                .filter(page => page?.image?.big)
+                .map((page, index) => ({
+                    targetIndex: page.index ?? index,
+                    image: page.image || {},
+                    label: page.label || page?.image?.name || page?.image?.image_code || 'Fac-similé',
+                    line: page.line,
+                    isCurrent: (page.index ?? index) === readerPageIndex,
+                }));
+
+        if (!previewItems.length) {
             readerThumbsEl.innerHTML = '';
             if (readerCarouselEl) {
                 readerCarouselEl.classList.add('d-none');
@@ -1165,18 +1197,18 @@ document.addEventListener('DOMContentLoaded', () => {
             readerCarouselEl.classList.remove('d-none');
         }
 
-        readerThumbsEl.innerHTML = previewPages.map((page, index) => {
-            const image = page.image || {};
+        readerThumbsEl.innerHTML = previewItems.map((item) => {
+            const image = item.image || {};
             const thumbSrc = image.thumb || image.big;
-            const label = page.label || image.name || image.image_code || 'Fac-similé';
+            const label = item.label || image.name || image.image_code || 'Fac-similé';
             const meta = [];
-            const pageIndex = page.index ?? index;
-            const isCurrent = pageIndex === readerPageIndex;
-            if (page.line) meta.push(`ligne ${page.line}`);
+            const targetIndex = item.targetIndex;
+            const isCurrent = item.isCurrent;
+            if (item.line) meta.push(`ligne ${item.line}`);
             if (image.size_human) meta.push(image.size_human);
             return `
-                <article class="facsimile-reader-thumb-card ${isCurrent ? 'is-current' : ''}" data-page-index="${pageIndex}">
-                    <button type="button" class="facsimile-reader-thumb-btn" data-page-index="${pageIndex}" aria-pressed="${isCurrent ? 'true' : 'false'}">
+                <article class="facsimile-reader-thumb-card ${isCurrent ? 'is-current' : ''}" data-page-index="${targetIndex}">
+                    <button type="button" class="facsimile-reader-thumb-btn" data-page-index="${targetIndex}" aria-pressed="${isCurrent ? 'true' : 'false'}">
                         <img src="${thumbSrc}" alt="${label}" class="facsimile-reader-thumb-image">
                     </button>
                     <div class="facsimile-reader-thumb-caption">
@@ -1191,7 +1223,12 @@ document.addEventListener('DOMContentLoaded', () => {
             node.addEventListener('click', () => {
                 const targetIndex = Number(node.getAttribute('data-page-index'));
                 if (Number.isFinite(targetIndex)) {
-                    renderReaderPage(targetIndex);
+                    if (independentNavigation) {
+                        readerImageIndex = Math.max(0, Math.min(targetIndex, (readerData?.facsimiles?.length || 1) - 1));
+                        renderReaderPage(readerPageIndex);
+                    } else {
+                        renderReaderPage(targetIndex);
+                    }
                 }
             });
         });
@@ -1354,6 +1391,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function prefetchReaderPage(index) {
+        if (readerUsesIndependentImageNavigation()) {
+            const image = readerData?.facsimiles?.[index];
+            if (!image) return;
+            prefetchReaderImage({ image });
+            return;
+        }
         const page = readerPages[index];
         if (!page) return;
         prefetchReaderImage(page);
@@ -1403,6 +1446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         readerPageIndex = Math.min(Math.max(index, 0), readerPages.length - 1);
         let page = readerPages[readerPageIndex];
         if (!page) return;
+        const independentNavigation = readerUsesIndependentImageNavigation();
 
         if (!page.loaded) {
             try {
@@ -1435,18 +1479,27 @@ document.addEventListener('DOMContentLoaded', () => {
         applyReaderEncodingControl();
         if (readerPageSelect) {
             readerPageSelect.disabled = false;
-            readerPageSelect.value = String(readerPageIndex);
+            readerPageSelect.value = String(independentNavigation ? readerImageIndex : readerPageIndex);
         }
-        if (readerPrevBtn) readerPrevBtn.disabled = readerPageIndex <= 0;
-        if (readerNextBtn) readerNextBtn.disabled = readerPageIndex >= readerPages.length - 1;
+        if (readerPrevBtn) {
+            readerPrevBtn.disabled = independentNavigation ? readerImageIndex <= 0 : readerPageIndex <= 0;
+            readerPrevBtn.textContent = independentNavigation ? '‹ Image précédente' : '‹ Page précédente';
+        }
+        if (readerNextBtn) {
+            const maxImageIndex = Math.max(0, (readerData?.facsimiles?.length || 1) - 1);
+            readerNextBtn.disabled = independentNavigation ? readerImageIndex >= maxImageIndex : readerPageIndex >= readerPages.length - 1;
+            readerNextBtn.textContent = independentNavigation ? 'Image suivante ›' : 'Page suivante ›';
+        }
+
+        const displayedImage = currentDisplayedReaderImage();
 
         if (readerImageEl) {
-            if (page.image?.big) {
+            if (displayedImage?.big) {
                 readerImageEl.onload = () => {
                     applyReaderCropDisplay();
                 };
-                readerImageEl.src = page.image.big;
-                readerImageEl.alt = page.image?.name || page.label;
+                readerImageEl.src = displayedImage.big;
+                readerImageEl.alt = displayedImage?.name || page.label;
             } else {
                 readerImageEl.removeAttribute('src');
                 readerImageEl.alt = 'Fac-similé manquant';
@@ -1454,10 +1507,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (readerImageMetaEl) {
-            if (page.image) {
-                const parts = [page.image.name || page.label];
-                if (page.image.size_human) parts.push(page.image.size_human);
-                if (page.image.width && page.image.height) parts.push(`${page.image.width}×${page.image.height}px`);
+            if (displayedImage) {
+                const parts = [displayedImage.name || page.label];
+                if (independentNavigation && Array.isArray(readerData?.facsimiles) && readerData.facsimiles.length > 1) {
+                    parts.push(`image ${readerImageIndex + 1}/${readerData.facsimiles.length}`);
+                }
+                if (displayedImage.size_human) parts.push(displayedImage.size_human);
+                if (displayedImage.width && displayedImage.height) parts.push(`${displayedImage.width}×${displayedImage.height}px`);
                 readerImageMetaEl.textContent = parts.join(' · ');
             } else {
                 readerImageMetaEl.textContent = `Aucun fac-similé correspondant pour ${page.label}.`;
@@ -1481,7 +1537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerTextEl) readerTextEl.scrollTop = 0;
         syncReaderCropForCurrentPage();
         renderReaderThumbs();
-        prefetchReaderPage(readerPageIndex + 1);
+        prefetchReaderPage(independentNavigation ? readerImageIndex + 1 : readerPageIndex + 1);
     }
 
     function renderReader(payload) {
@@ -1494,13 +1550,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (payload?.current_page && readerPages[initialPageIndex]) {
             mergeReaderPage(initialPageIndex, payload.current_page);
         }
+        readerImageIndex = 0;
+        if (payload?.current_page?.image && Array.isArray(payload?.facsimiles)) {
+            const currentImageName = String(payload.current_page.image.name || '');
+            const currentIndex = payload.facsimiles.findIndex((image) => String(image?.name || '') === currentImageName);
+            if (currentIndex >= 0) {
+                readerImageIndex = currentIndex;
+            }
+        }
 
         if (readerPageSelect) {
             readerPageSelect.innerHTML = '';
-            readerPages.forEach((page, index) => {
-                const option = new Option(`${index + 1}. ${page.label}`, String(index));
-                readerPageSelect.appendChild(option);
-            });
+            if (!payload?.pagination?.available && Array.isArray(payload?.facsimiles) && payload.facsimiles.length) {
+                payload.facsimiles.forEach((image, index) => {
+                    const label = image?.image_code
+                        ? `${index + 1}. Image ${image.image_code}`
+                        : `${index + 1}. ${image?.name || 'Image'}`;
+                    readerPageSelect.appendChild(new Option(label, String(index)));
+                });
+            } else {
+                readerPages.forEach((page, index) => {
+                    const option = new Option(`${index + 1}. ${page.label}`, String(index));
+                    readerPageSelect.appendChild(option);
+                });
+            }
         }
 
         if (!payload?.text_available) {
@@ -2287,19 +2360,35 @@ document.addEventListener('DOMContentLoaded', () => {
         readerPageSelect.addEventListener('change', () => {
             const target = Number(readerPageSelect.value);
             if (Number.isFinite(target)) {
-                renderReaderPage(target);
+                if (readerUsesIndependentImageNavigation()) {
+                    readerImageIndex = Math.max(0, Math.min(target, (readerData?.facsimiles?.length || 1) - 1));
+                    renderReaderPage(readerPageIndex);
+                } else {
+                    renderReaderPage(target);
+                }
             }
         });
     }
     if (readerPrevBtn) {
         readerPrevBtn.addEventListener('click', () => {
-            renderReaderPage(readerPageIndex - 1);
+            if (readerUsesIndependentImageNavigation()) {
+                readerImageIndex = Math.max(0, readerImageIndex - 1);
+                renderReaderPage(readerPageIndex);
+            } else {
+                renderReaderPage(readerPageIndex - 1);
+            }
         });
     }
 
     if (readerNextBtn) {
         readerNextBtn.addEventListener('click', () => {
-            renderReaderPage(readerPageIndex + 1);
+            if (readerUsesIndependentImageNavigation()) {
+                const maxIndex = Math.max(0, (readerData?.facsimiles?.length || 1) - 1);
+                readerImageIndex = Math.min(maxIndex, readerImageIndex + 1);
+                renderReaderPage(readerPageIndex);
+            } else {
+                renderReaderPage(readerPageIndex + 1);
+            }
         });
     }
 

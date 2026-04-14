@@ -36,7 +36,12 @@
             <table class="table table-sm table-bordered comparisons-table" id="comparisons-table">
                 <thead>
                     <tr>
-                        <th class="comparison-order-col"></th>
+                        <th class="comparison-order-col">
+                            <span class="comparison-column-icon" aria-hidden="true">
+                                <i class="bi bi-arrow-up-short"></i><i class="bi bi-arrow-down-short"></i>
+                            </span>
+                        </th>
+                        <th class="comparison-comment-col" title="Commentaires">💬</th>
                         <th class="comparison-folder-col">Désignation</th>
                         <th class="comparison-source-col">Source</th>
                         <th class="comparison-target-col">Cible</th>
@@ -85,6 +90,29 @@
   </div>
 </div>
 
+<div class="modal fade" id="comparison-comment-modal" tabindex="-1" aria-labelledby="comparisonCommentLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="comparisonCommentLabel">Commentaire de la comparaison</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <textarea
+          class="form-control"
+          id="comparison-comment-input"
+          rows="5"
+          maxlength="10000"
+          placeholder="Documenter ici les modifications manuelles effectuées dans cette comparaison."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" id="comparison-comment-save-btn">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @push('styles')
 <style>
   #comparisonsCollapse,
@@ -116,10 +144,10 @@
   .comparison-details-toggle .form-check-label {
     cursor: pointer;
   }
-  .comparisons-table.compact-details th:nth-child(2),
-  .comparisons-table.compact-details td:nth-child(2),
-  .comparisons-table.compact-details th:nth-child(5),
-  .comparisons-table.compact-details td:nth-child(5) {
+  .comparisons-table.compact-details th:nth-child(3),
+  .comparisons-table.compact-details td:nth-child(3),
+  .comparisons-table.compact-details th:nth-child(6),
+  .comparisons-table.compact-details td:nth-child(6) {
     display: none;
   }
   .comparisons-table.compact-details .comparison-role-details,
@@ -152,6 +180,13 @@
   .comparisons-table .comparison-order-cell {
     width: 2rem;
     min-width: 2rem;
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+  }
+  .comparisons-table .comparison-comment-col,
+  .comparisons-table .comparison-comment-cell {
+    width: 2.4rem;
+    min-width: 2.4rem;
     padding-left: 0.2rem;
     padding-right: 0.2rem;
   }
@@ -189,25 +224,58 @@
     width: 8rem;
     min-width: 8rem;
   }
-  .comparisons-table td:nth-child(7),
   .comparisons-table td:nth-child(8),
   .comparisons-table td:nth-child(9),
   .comparisons-table td:nth-child(10),
   .comparisons-table td:nth-child(11),
   .comparisons-table td:nth-child(12),
-  .comparisons-table td:nth-child(13) {
+  .comparisons-table td:nth-child(13),
+  .comparisons-table td:nth-child(14) {
     text-align: center;
   }
-  .comparisons-table th:nth-child(7),
   .comparisons-table th:nth-child(8),
   .comparisons-table th:nth-child(9),
-  .comparisons-table td:nth-child(7),
+  .comparisons-table th:nth-child(10),
   .comparisons-table td:nth-child(8),
   .comparisons-table td:nth-child(9),
-  .comparisons-table th:nth-child(10),
-  .comparisons-table td:nth-child(10) {
+  .comparisons-table td:nth-child(10),
+  .comparisons-table th:nth-child(11),
+  .comparisons-table td:nth-child(11) {
     width: 4.5rem;
     min-width: 4.5rem;
+  }
+  .comparison-comment-btn {
+    width: 1.8rem;
+    height: 1.8rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .comparison-comment-btn i {
+    font-size: 0.9rem;
+  }
+  .comparison-comment-btn--filled {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+  }
+  .comparison-comment-btn--filled:hover,
+  .comparison-comment-btn--filled:focus {
+    background-color: #0b5ed7;
+    border-color: #0a58ca;
+    color: #fff;
+  }
+  .comparison-column-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    color: #495057;
+  }
+  .comparison-column-icon i + i {
+    margin-left: -0.2rem;
   }
   .comparison-metric-cell {
     display: inline-block;
@@ -467,17 +535,44 @@
   .comparison-reorder-bar {
     display: inline-flex;
     flex-direction: column;
-    gap: 0.15rem;
+    justify-content: center;
+    width: 1.8rem;
+    min-height: 1.8rem;
+    gap: 0.1rem;
   }
   .comparison-reorder-bar .comparison-action-btn {
-    width: 1.35rem;
-    height: 1.1rem;
-    min-width: 1.35rem;
-    font-size: 0.68rem;
-    border-radius: 0.35rem;
+    width: 1.8rem;
+    height: 0.82rem;
+    min-width: 1.8rem;
+    font-size: 0.56rem;
+    border-radius: 0.28rem;
+    padding: 0;
   }
   .comparison-order-cell {
     vertical-align: middle !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    text-align: center;
+  }
+  .comparison-comment-cell {
+    vertical-align: middle !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    text-align: center;
+  }
+  .comparison-order-cell,
+  .comparison-comment-cell {
+    height: 100%;
+  }
+  .comparison-order-cell > .comparison-action-bar,
+  .comparison-order-cell > .comparison-reorder-bar,
+  .comparison-comment-cell > .comparison-comment-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .comparison-comment-cell > .comparison-comment-btn {
+    vertical-align: middle;
   }
   .comparisons-table:not(.compact-details) .comparison-action-cell .d-flex {
     width: 100%;

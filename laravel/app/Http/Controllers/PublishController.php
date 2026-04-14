@@ -80,8 +80,8 @@ class PublishController extends Controller
             $comparison->publication_scope = 'dev';
             $comparison->save();
 
-            $manifestInfo = $this->publishManifests($comparison, $paths);
             $facsimiles = $this->publishFacsimilesForComparison($comparison);
+            $manifestInfo = $this->publishManifests($comparison, $paths);
             $draftMirror = $this->mirrorDraftComparisonToLegacy($comparison, $paths, $sourceDir);
 
             return response()->json([
@@ -116,8 +116,8 @@ class PublishController extends Controller
             $this->mirrorToLegacy($destDir, $name, $sanitized);
         }
 
-        $manifestInfo = $this->publishManifests($comparison, $paths);
         $facsimiles = $this->publishFacsimilesForComparison($comparison);
+        $manifestInfo = $this->publishManifests($comparison, $paths);
         $comparison->publication_scope = 'prod';
         $comparison->save();
 
@@ -218,12 +218,44 @@ class PublishController extends Controller
     private function mirrorToLegacy(string $destDir, string $fileName, string $contents): void
     {
         $legacyDir = base_path('../variance/' . $destDir);
+        $publicDir = Storage::disk('public')->path($destDir);
+
+        if ($this->pathsShareSameEntry($publicDir, $legacyDir)) {
+            return;
+        }
+
         if (!is_dir($legacyDir)) {
             File::makeDirectory($legacyDir, 0775, true, true);
         }
 
         $legacyFile = $legacyDir . DIRECTORY_SEPARATOR . $fileName;
-        File::put($legacyFile, $contents);
+        if (is_file($legacyFile) && @file_get_contents($legacyFile) === $contents) {
+            return;
+        }
+
+        $tempFile = tempnam($legacyDir, 'variance-legacy-');
+        if ($tempFile === false) {
+            throw new \RuntimeException(sprintf('Impossible de créer un fichier temporaire dans %s', $legacyDir));
+        }
+
+        try {
+            File::put($tempFile, $contents);
+            @chmod($tempFile, 0664);
+
+            if (!@rename($tempFile, $legacyFile)) {
+                if (is_file($legacyFile) && is_writable($legacyDir)) {
+                    @unlink($legacyFile);
+                }
+
+                if (!@rename($tempFile, $legacyFile)) {
+                    throw new \RuntimeException(sprintf('Impossible de remplacer le fichier legacy %s', $legacyFile));
+                }
+            }
+        } finally {
+            if (is_file($tempFile)) {
+                @unlink($tempFile);
+            }
+        }
     }
 
     private function sanitizeComponent(string $fileName, string $contents): string
@@ -299,20 +331,28 @@ class PublishController extends Controller
             return ['status' => 'skipped', 'reason' => 'empty'];
         }
 
-        File::ensureDirectoryExists($paths['dest_dir']);
-        // Preserve existing manifest JSON files while refreshing published images.
-        foreach (File::files($paths['dest_dir']) as $file) {
-            $name = $file->getFilename();
-            if (preg_match('/\.(jpe?g|png)$/i', $name)) {
-                File::delete($file->getPathname());
-            }
+        $sourceDir = Storage::disk('public')->path($paths['source_prefix']);
+        if ($this->pathsShareSameEntry($sourceDir, $paths['dest_dir'])) {
+            return ['status' => 'skipped', 'reason' => 'same_mount'];
         }
+
+        $parentDir = dirname($paths['dest_dir']);
+        if ($this->legacyFacsimilesAreSynced($paths['source_prefix'], $paths['source_files'], $paths['dest_dir'])) {
+            return ['status' => 'skipped', 'reason' => 'already_synced'];
+        }
+
+        $this->ensureLegacyDirectoryExists($parentDir);
+        if (is_dir($paths['dest_dir'])) {
+            File::deleteDirectory($paths['dest_dir']);
+        }
+        $this->ensureLegacyDirectoryExists($paths['dest_dir']);
 
         $copied = 0;
         $disk = Storage::disk('public');
         foreach ($paths['source_files'] as $fileName) {
             $contents = $disk->get($paths['source_prefix'] . '/' . $fileName);
             File::put($paths['dest_dir'] . '/' . $fileName, $contents);
+            @chmod($paths['dest_dir'] . '/' . $fileName, 0664);
             $copied++;
         }
 
@@ -321,6 +361,62 @@ class PublishController extends Controller
             'copied' => $copied,
             'dest_dir' => $paths['dest_dir'],
         ];
+    }
+
+    private function legacyFacsimilesAreSynced(string $sourcePrefix, array $sourceFiles, string $destDir): bool
+    {
+        if (!is_dir($destDir)) {
+            return false;
+        }
+
+        $disk = Storage::disk('public');
+        $destFiles = collect(File::files($destDir))
+            ->map(fn (\SplFileInfo $file) => $file->getFilename())
+            ->filter(fn (string $name) => preg_match('/\.(jpe?g|png)$/i', $name))
+            ->sort()
+            ->values()
+            ->all();
+
+        $sortedSourceFiles = collect($sourceFiles)->sort()->values()->all();
+        if ($destFiles !== $sortedSourceFiles) {
+            return false;
+        }
+
+        foreach ($sortedSourceFiles as $fileName) {
+            $sourcePath = $disk->path($sourcePrefix . '/' . $fileName);
+            $destPath = $destDir . '/' . $fileName;
+            if (!is_file($destPath)) {
+                return false;
+            }
+
+            if (@filesize($sourcePath) !== @filesize($destPath)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function ensureLegacyDirectoryExists(string $path): void
+    {
+        File::ensureDirectoryExists($path, 0775, true);
+        @chmod($path, 02775);
+    }
+
+    private function pathsShareSameEntry(?string $left, ?string $right): bool
+    {
+        if (!$left || !$right || !file_exists($left) || !file_exists($right)) {
+            return false;
+        }
+
+        $leftStat = @stat($left);
+        $rightStat = @stat($right);
+        if (!is_array($leftStat) || !is_array($rightStat)) {
+            return false;
+        }
+
+        return ($leftStat['dev'] ?? null) === ($rightStat['dev'] ?? null)
+            && ($leftStat['ino'] ?? null) === ($rightStat['ino'] ?? null);
     }
 
     private function facsimilePaths(Version $version): array

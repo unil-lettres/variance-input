@@ -2058,13 +2058,16 @@ class VersionController extends Controller
         }
 
         if (empty($markers)) {
+            $firstFacsimile = $facsimiles[0] ?? null;
+            $firstImageCode = $this->readerImageCode($firstFacsimile['image_code'] ?? $firstFacsimile['name'] ?? null);
+
             return [[
                 'label' => 'Texte complet',
-                'image' => null,
+                'image' => $firstFacsimile,
                 'start' => 0,
                 'end' => mb_strlen($text, 'UTF-8'),
                 'line' => null,
-                'imageCode' => null,
+                'imageCode' => $firstImageCode,
                 'anchorOffset' => null,
                 'anchorPhrase' => null,
                 'guessed' => false,

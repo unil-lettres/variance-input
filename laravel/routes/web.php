@@ -10,6 +10,7 @@ use App\Http\Controllers\MediaController;
 use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
 use App\Http\Controllers\ComparisonController;
+use App\Http\Controllers\ChaptersController;
 use App\Http\Controllers\EditorController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\UserManagementController;
@@ -150,6 +151,9 @@ Route::post('/api/comparisons/{comparison}/pagination/from-xhtml', [ComparisonCo
 // Comparisons
 Route::get('/comparisons/by-work', [ComparisonController::class, 'getByWork']);
 Route::get('/comparisons/{comparison}/details', [ComparisonController::class, 'details']);
+Route::patch('/comparisons/{comparison}/comments', [ComparisonController::class, 'updateComments'])
+    ->middleware('auth')
+    ->name('comparisons.comments.update');
 Route::post('/comparisons/{comparison}/reorder', [ComparisonController::class, 'reorder'])
     ->middleware('auth')
     ->name('comparisons.reorder');
@@ -166,6 +170,16 @@ Route::get('/comparisons/{comparison}/export/status', [ComparisonController::cla
 Route::get('/comparisons/{comparison}/export/download', [ComparisonController::class, 'downloadLegacyExport'])
     ->middleware('auth')
     ->name('comparisons.export.download');
+
+Route::get('/chapters/targets', [ChaptersController::class, 'targets'])
+    ->middleware('auth')
+    ->name('chapters.targets');
+Route::post('/chapters/import/preview', [ChaptersController::class, 'preview'])
+    ->middleware('auth')
+    ->name('chapters.import.preview');
+Route::post('/chapters/import/commit', [ChaptersController::class, 'commit'])
+    ->middleware('auth')
+    ->name('chapters.import.commit');
 
 // Editor
 Route::get('/version/{version}/editor', [EditorController::class, 'versionEditor'])->middleware('auth')->name('version.editor');

@@ -101,7 +101,8 @@ services:
     mem_limit: 20g
     mem_reservation: 10g
     volumes:
-      - ./medite/app:/app
+      - ./medite/app/flask_app.py:/app/flask_app.py
+      - ./medite/app/variance:/app/variance
       - ./laravel/storage/app/public:/app/storage_public
       - ./variance_data:/app/variance_data
       - ./variance/uploads:/app/uploads

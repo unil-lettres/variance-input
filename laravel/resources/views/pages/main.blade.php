@@ -73,6 +73,10 @@
                             <div id="zone-5">
                                 @include('components.main.comparisons')
                             </div>
+
+                            <div id="zone-7">
+                                @include('components.main.chapters')
+                            </div>
                         </div>
                     </section>
                 </div>

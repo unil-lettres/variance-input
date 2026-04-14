@@ -6,6 +6,7 @@ use App\Models\Comparison;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class ComparisonWorkflowTest extends TestCase
@@ -58,12 +59,22 @@ class ComparisonWorkflowTest extends TestCase
         $this->assertTrue($comparison->case_sensitive);
         $this->assertStringEndsWith('run1', $comparison->folder);
 
-        Http::assertSent(function ($request) use ($comparisonId) {
+        $expectedSourcePath = "/app/uploads/__medite_inputs/{$comparisonId}/1ctm.xml";
+        $expectedTargetPath = "/app/uploads/__medite_inputs/{$comparisonId}/2ctm.xml";
+        $hostSourcePath = base_path("../variance/uploads/__medite_inputs/{$comparisonId}/1ctm.xml");
+        $hostTargetPath = base_path("../variance/uploads/__medite_inputs/{$comparisonId}/2ctm.xml");
+
+        Http::assertSent(function ($request) use ($comparisonId, $expectedSourcePath, $expectedTargetPath) {
             return $request->url() === 'http://medite:5000/run_diff2'
                 && $request['comparison_id'] === $comparisonId
                 && $request['lg_pivot'] === 9
-                && $request['ratio'] === 21;
+                && $request['ratio'] === 21
+                && $request['source_filename'] === $expectedSourcePath
+                && $request['target_filename'] === $expectedTargetPath;
         });
+
+        $this->assertTrue(File::exists($hostSourcePath));
+        $this->assertTrue(File::exists($hostTargetPath));
     }
 
     public function test_task_status_persists_medite_metrics_on_completion(): void
