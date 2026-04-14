@@ -73,7 +73,7 @@ class PublicationWorkflowTest extends TestCase
         $this->assertFileExists($sourceManifest);
         $this->assertFileExists($targetManifest);
 
-        $publishedFacsimileDir = "/var/www/variance/uploads/{$authorFolder}/{$workFolder}/{$source->folder}";
+        $publishedFacsimileDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$source->folder}");
         $this->assertFileExists($publishedFacsimileDir . '/img_' . $source->folder . '_001.jpg');
 
         $this->assertSame($sourceDir, storage_path("app/public/uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}"));

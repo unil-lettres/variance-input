@@ -10,6 +10,13 @@ class VersionEditorLoadingTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutVite();
+    }
+
     private function normalizeXmlText(string $xml): string
     {
         $normalized = strip_tags($xml);
