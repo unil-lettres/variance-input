@@ -194,4 +194,135 @@ class PublicationWorkflowTest extends TestCase
 
         $zip->close();
     }
+
+    public function test_publish_dev_skips_recopy_when_legacy_draft_is_already_synced(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Publication dev déjà synchronisée',
+            'short_title' => 'pdds',
+        ]);
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Source',
+            'folder' => '1pdds',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Cible',
+            'folder' => '2pdds',
+        ]);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1pdds-2pdds-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $sourceDir = $this->writeComparisonArtifacts($comparison, [
+            'source.xhtml' => '<p>Source synced</p>',
+            'target.xhtml' => '<p>Target synced</p>',
+        ]);
+        $this->writeFacsimilePair($source);
+        $this->writeFacsimilePair($target);
+
+        $authorFolder = $work->author->folder;
+        $workFolder = $work->folder;
+        $legacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}");
+
+        File::ensureDirectoryExists($legacyDir);
+        foreach (File::files($sourceDir) as $file) {
+            File::copy($file->getPathname(), $legacyDir . DIRECTORY_SEPARATOR . $file->getFilename());
+        }
+
+        chmod($legacyDir, 0555);
+        foreach (File::files($legacyDir) as $file) {
+            chmod($file->getPathname(), 0444);
+        }
+
+        try {
+            $response = $this->postJson('/api/publish_xhtml', [
+                'comparison_id' => $comparison->id,
+                'destination' => 'dev',
+            ]);
+        } finally {
+            chmod($legacyDir, 0775);
+            foreach (File::files($legacyDir) as $file) {
+                chmod($file->getPathname(), 0664);
+            }
+        }
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('published_to', 'dev')
+            ->assertJsonPath('draft_mirror.status', 'skipped')
+            ->assertJsonPath('draft_mirror.reason', 'already_synced');
+
+        $comparison->refresh();
+        $this->assertSame('dev', $comparison->publication_scope);
+    }
+
+    public function test_publish_dev_ignores_editor_backup_files_in_legacy_mirror(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Publication dev sans backups',
+            'short_title' => 'pdsb',
+        ]);
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Source',
+            'folder' => '1pdsb',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Cible',
+            'folder' => '2pdsb',
+        ]);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1pdsb-2pdsb-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $sourceDir = $this->writeComparisonArtifacts($comparison, [
+            'source.xhtml' => '<p>Source changed</p>',
+            'target.xhtml' => '<p>Target changed</p>',
+        ]);
+        File::put($sourceDir . '/source.original.xhtml', '<p>Backup source</p>');
+        File::put($sourceDir . '/target.original.xhtml', '<p>Backup target</p>');
+
+        $this->writeFacsimilePair($source);
+        $this->writeFacsimilePair($target);
+
+        $authorFolder = $work->author->folder;
+        $workFolder = $work->folder;
+        $legacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/comparisons/{$comparison->id}");
+
+        File::ensureDirectoryExists($legacyDir);
+        foreach (['source.xhtml', 'target.xhtml', 'd.xhtml', 'i.xhtml', 'r.xhtml', 's.xhtml'] as $name) {
+            File::copy($sourceDir . DIRECTORY_SEPARATOR . $name, $legacyDir . DIRECTORY_SEPARATOR . $name);
+        }
+
+        File::put($legacyDir . '/source.original.xhtml', '<p>Old backup source</p>');
+        File::put($legacyDir . '/target.original.xhtml', '<p>Old backup target</p>');
+        chmod($legacyDir . '/source.original.xhtml', 0444);
+        chmod($legacyDir . '/target.original.xhtml', 0444);
+
+        File::put($sourceDir . '/source.xhtml', '<p>Source changed again</p>');
+
+        try {
+            $response = $this->postJson('/api/publish_xhtml', [
+                'comparison_id' => $comparison->id,
+                'destination' => 'dev',
+            ]);
+        } finally {
+            chmod($legacyDir . '/source.original.xhtml', 0664);
+            chmod($legacyDir . '/target.original.xhtml', 0664);
+        }
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('draft_mirror.status', 'ok');
+
+        $this->assertSame('<p>Old backup source</p>', trim(File::get($legacyDir . '/source.original.xhtml')));
+        $this->assertStringContainsString('Source changed again', File::get($legacyDir . '/source.xhtml'));
+    }
 }

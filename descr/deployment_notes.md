@@ -2,6 +2,9 @@
 
 Guidance for running the Variance stack outside the default development setup.
 
+For the next staging rebuild after the fixes made on 2026-04-13, also use
+`descr/rebuild_deploy_checklist_2026-04-14.md`.
+
 ---
 
 ## Volumes & Persistence
@@ -22,6 +25,11 @@ Guidance for running the Variance stack outside the default development setup.
   * `ADMIN_BASE_PATH=admin` if the app is mounted under `/admin`.
   * Database credentials matching your MariaDB deployment.
   * `QUEUE_CONNECTION=database` for the current staging/VM setup, unless you explicitly move Laravel queues to Redis.
+  * Set stable Laravel namespace values before any Laravel 12/13 upgrade:
+    - `SESSION_COOKIE=variance_admin_session`
+    - `CACHE_PREFIX=variance_cache_`
+    - `REDIS_PREFIX=variance_database_`
+    This avoids session and cache namespace changes when newer Laravel versions derive prefixes differently from `APP_NAME`.
   * Update mail settings if emailing is required.
   * Optional health thresholds:
     - `HEALTHCHECK_DISK_WARN_GB` (warning floor, default `10`)
@@ -84,7 +92,18 @@ Guidance for running the Variance stack outside the default development setup.
   - `./laravel.env:/var/www/html/.env`
   - `./laravel/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro`
   - `./laravel/app/Providers/AppServiceProvider.php:/var/www/html/app/Providers/AppServiceProvider.php:ro`
+- The proxy also serves `./laravel/public` directly from the host checkout. Vite assets
+  are built inside the Laravel image, so after recreating the Laravel container on the VM
+  you must sync `public/build` back onto the host checkout before admin JavaScript will load.
 - Those mounts keep staging URL/proxy fixes and startup behavior aligned with the checked-out repo without rebuilding the image.
+- After each staging deploy or image refresh, run:
+  ```bash
+  ./scripts/sync_vm_vite_assets.sh
+  ```
+- Quick verification:
+  ```bash
+  curl -I http://127.0.0.1:8081/admin/build/assets/$(jq -r '."resources/js/editor.js".file' laravel/public/build/manifest.json)
+  ```
 - After any deployment that changes the synchronized viewer, XHTML fallback, or
   pagination reconstruction logic, plan a post-deploy warm-up pass for legacy
   comparisons/versions. The first request to `/admin/api/versions/{id}/reader`

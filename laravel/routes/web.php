@@ -123,6 +123,10 @@ Route::delete('/api/works/{work}/media/{type}',        [MediaController::class, 
 Route::post('/api/versions', [VersionController::class, 'store']);
 Route::get('/api/versions', [VersionController::class, 'index']);
 Route::get('/api/versions/{version}/text-length', [VersionController::class, 'textLength'])->middleware('auth');
+Route::get('/api/versions/{version}/reader', [VersionController::class, 'readerData'])->middleware('auth');
+Route::get('/api/versions/{version}/reader/progress', [VersionController::class, 'readerProgress'])->middleware('auth');
+Route::get('/api/versions/{version}/reader/page', [VersionController::class, 'readerPage'])->middleware('auth');
+Route::post('/api/versions/{version}/text/convert-utf8', [VersionController::class, 'convertTextToUtf8'])->middleware('auth');
 Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::patch('/api/versions/{version}/pagination/done', [VersionController::class, 'togglePaginationDone']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);

@@ -508,9 +508,13 @@ class PublishController extends Controller
             return ['status' => 'skipped', 'reason' => 'already_legacy'];
         }
 
+        if ($this->legacyDraftComparisonAlreadySynced($sourceDir, $legacyDir)) {
+            return ['status' => 'skipped', 'reason' => 'already_synced', 'dir' => $legacyDir];
+        }
+
         File::ensureDirectoryExists($legacyDir);
         $copied = [];
-        foreach (File::files($sourceDir) as $file) {
+        foreach ($this->draftMirrorFiles($sourceDir) as $file) {
             $name = $file->getFilename();
             $dest = $legacyDir . DIRECTORY_SEPARATOR . $name;
             File::copy($file->getPathname(), $dest);
@@ -522,6 +526,44 @@ class PublishController extends Controller
             'dir'    => $legacyDir,
             'files'  => $copied,
         ];
+    }
+
+    private function legacyDraftComparisonAlreadySynced(string $sourceDir, string $legacyDir): bool
+    {
+        if (!is_dir($sourceDir) || !is_dir($legacyDir)) {
+            return false;
+        }
+
+        $sourceFiles = $this->draftMirrorFiles($sourceDir);
+        if (empty($sourceFiles)) {
+            return false;
+        }
+
+        foreach ($sourceFiles as $file) {
+            $legacyFile = $legacyDir . DIRECTORY_SEPARATOR . $file->getFilename();
+            if (!is_file($legacyFile)) {
+                return false;
+            }
+
+            if (@filesize($file->getPathname()) !== @filesize($legacyFile)) {
+                return false;
+            }
+
+            if (@md5_file($file->getPathname()) !== @md5_file($legacyFile)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return array<int,\SplFileInfo> */
+    private function draftMirrorFiles(string $sourceDir): array
+    {
+        return array_values(array_filter(
+            File::files($sourceDir),
+            static fn (\SplFileInfo $file) => !preg_match('/\.original\.xhtml$/i', $file->getFilename())
+        ));
     }
 
     private function publishManifests(Comparison $comparison, array $paths): array

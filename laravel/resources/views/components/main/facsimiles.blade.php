@@ -17,16 +17,25 @@
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="facsimile-reader-next">Page suivante ›</button>
                     </div>
                     <div class="facsimile-reader-control-group">
-                        <select id="facsimile-reader-encoding" class="form-select form-select-sm" title="Essayer un autre encodage pour le texte">
+                        <select id="facsimile-reader-text-source" class="form-select form-select-sm" title="Choisir la source du texte affiché">
+                            <option value="auto">Source texte auto</option>
+                        </select>
+                        <select id="facsimile-reader-encoding" class="form-select form-select-sm" title="Ajuster l’encodage si le rendu du texte est visiblement incorrect">
                             <option value="auto">Encodage auto</option>
                             <option value="UTF-8">UTF-8</option>
                             <option value="Windows-1252">Windows-1252</option>
                             <option value="ISO-8859-1">ISO-8859-1</option>
                             <option value="Mac Roman">Mac Roman</option>
                         </select>
-                        <button type="button" class="btn btn-sm btn-outline-success" id="facsimile-reader-convert-utf8" disabled>Convertir en UTF-8</button>
+                        <button type="button" class="btn btn-sm btn-outline-success d-none" id="facsimile-reader-convert-utf8" disabled aria-hidden="true" tabindex="-1">Convertir en UTF-8</button>
                     </div>
                 </div>
+            </div>
+
+            <div id="facsimile-reader-loading" class="facsimile-reader-loading d-none" aria-hidden="true">
+                <div class="facsimile-reader-loading-spinner spinner-border text-secondary" role="status" aria-hidden="true"></div>
+                <div id="facsimile-reader-loading-label" class="facsimile-reader-loading-label small text-muted">Chargement du viewer…</div>
+                <div class="visually-hidden" role="status">Chargement du viewer</div>
             </div>
 
             <div id="facsimile-reader-empty" class="facsimile-reader-empty text-muted small">
@@ -43,18 +52,18 @@
                 <section class="facsimile-reader-pane">
                     <div class="facsimile-reader-pane-heading">
                         <div class="fw-semibold">Fac-similé</div>
-                        <div class="d-flex align-items-center gap-2">
-                            <div id="facsimile-reader-image-meta" class="small text-muted"></div>
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Ajustement de l'image">
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-auto" aria-pressed="true">Auto</button>
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-width">Largeur</button>
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-height">Hauteur</button>
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-natural">Réel</button>
-                            </div>
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Recadrage de l'image">
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-crop-set">Recadrer</button>
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-crop-clear" disabled>Effacer cadre</button>
-                            </div>
+                        <div id="facsimile-reader-image-meta" class="small text-muted"></div>
+                    </div>
+                    <div class="facsimile-reader-pane-toolbar">
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Ajustement de l'image">
+                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-auto" aria-pressed="true">Auto</button>
+                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-width">Largeur</button>
+                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-height">Hauteur</button>
+                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-natural">Réel</button>
+                        </div>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Recadrage de l'image">
+                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-crop-set">Recadrer</button>
+                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-crop-clear" disabled>Effacer cadre</button>
                         </div>
                     </div>
                     <div class="facsimile-reader-image-shell">
@@ -79,7 +88,7 @@
     </div>
 </div>
 
-<div id="facsimiles-card" class="card">
+<div id="facsimiles-card" class="card d-none" aria-hidden="true">
     <div class="card-header fw-semibold d-flex justify-content-between align-items-center facsimiles-toggle"
          role="button"
          data-bs-toggle="collapse"
@@ -309,6 +318,27 @@
         padding: 1rem;
         text-align: center;
     }
+    .facsimile-reader-loading {
+        margin-bottom: 0.85rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        padding: 0.9rem 1rem;
+        border: 1px dashed #d4cec3;
+        border-radius: 0.8rem;
+        background: rgba(255, 255, 255, 0.55);
+    }
+    .facsimile-reader-loading-spinner {
+        width: 1.65rem;
+        height: 1.65rem;
+        border-width: 0.18rem;
+        color: #8a7358 !important;
+    }
+    .facsimile-reader-loading-label {
+        margin-bottom: 0;
+    }
     .facsimile-reader-carousel {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
@@ -398,17 +428,28 @@
     .facsimile-reader-pane-heading {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.75rem;
         padding: 0.85rem 1rem;
         border-bottom: 1px solid #e5ded2;
         background: rgba(248, 245, 239, 0.92);
+        min-height: 3.5rem;
+    }
+    .facsimile-reader-pane-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.6rem;
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid #ece4d8;
+        background: rgba(252, 249, 244, 0.92);
     }
     .facsimile-reader-image-shell {
         flex: 1 1 auto;
         padding: 1rem;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
         background: #f7f3ed;
         overflow: auto;
@@ -416,7 +457,7 @@
     .facsimile-reader-crop-viewport {
         position: relative;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
         width: 100%;
         min-height: 100%;
@@ -521,6 +562,9 @@
         .facsimile-reader-control-group {
             flex-wrap: wrap;
         }
+        .facsimile-reader-pane-toolbar {
+            justify-content: flex-start;
+        }
         .facsimile-reader-workspace {
             grid-template-columns: 1fr;
         }
@@ -555,6 +599,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const manifestSummary   = document.getElementById('manifest-summary');
     const manifestList      = document.getElementById('manifest-list');
     const readerRoot        = document.getElementById('facsimile-reader');
+    const readerLoadingEl   = document.getElementById('facsimile-reader-loading');
+    const readerLoadingLabelEl = document.getElementById('facsimile-reader-loading-label');
     const readerEmptyEl     = document.getElementById('facsimile-reader-empty');
     const readerCarouselEl  = document.getElementById('facsimile-reader-carousel');
     const readerThumbsEl    = document.getElementById('facsimile-reader-thumbs');
@@ -577,6 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const readerFitNaturalBtn = document.getElementById('facsimile-reader-fit-natural');
     const readerCropSetBtn  = document.getElementById('facsimile-reader-crop-set');
     const readerCropClearBtn = document.getElementById('facsimile-reader-crop-clear');
+    const readerTextSourceSelect = document.getElementById('facsimile-reader-text-source');
     const readerEncodingSelect = document.getElementById('facsimile-reader-encoding');
     const readerConvertBtn  = document.getElementById('facsimile-reader-convert-utf8');
     const csrfToken         = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -631,13 +678,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let manifestReadOnly     = false;
     let manifestBusy         = false;
     let manifestRequestToken = 0;
+    let manifestLoadAbortController = null;
     let readerData           = null;
     let readerPages          = [];
     let readerPageIndex      = 0;
     let readerFitMode        = 'auto';
+    let readerTextSource     = 'auto';
     let readerEncoding       = 'auto';
     let readerConvertBusy    = false;
+    let readerLoadRequestToken = 0;
+    let readerLoadAbortController = null;
+    let readerLoadingVersionId = null;
+    let facsimileSelectionInFlight = false;
+    let pendingFacsimileSelection = null;
     let readerPageRequestToken = 0;
+    const readerPageLoadPromises = new Map();
+    const readerImagePrefetchUrls = new Set();
     let readerCropMode       = false;
     let readerCurrentCrop    = null;
     let readerCropDraft      = null;
@@ -658,6 +714,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function readerEncodingStorageKey(versionId) {
         return `variance.facsimileReader.encoding.${versionId || 'default'}`;
+    }
+
+    function readerTextSourceStorageKey(versionId) {
+        return `variance.facsimileReader.textSource.${versionId || 'default'}`;
+    }
+
+    function normalizeReaderTextSource(value) {
+        const raw = String(value || '').trim();
+        if (!raw || raw.toLowerCase() === 'auto') return 'auto';
+        if (raw === 'version-txt') return 'version-txt';
+        if (raw === 'comparison-xhtml') return 'comparison-xhtml';
+        return 'auto';
+    }
+
+    function loadReaderTextSourcePreference(versionId) {
+        try {
+            return normalizeReaderTextSource(window.localStorage?.getItem(readerTextSourceStorageKey(versionId)));
+        } catch (_) {
+            return 'auto';
+        }
+    }
+
+    function saveReaderTextSourcePreference(versionId, value) {
+        try {
+            window.localStorage?.setItem(readerTextSourceStorageKey(versionId), normalizeReaderTextSource(value));
+        } catch (_) {}
     }
 
     function normalizeReaderEncoding(value) {
@@ -730,13 +812,36 @@ document.addEventListener('DOMContentLoaded', () => {
         readerEncodingSelect.value = normalizeReaderEncoding(readerEncoding);
         readerEncodingSelect.disabled = !currentVersionId;
         if (readerConvertBtn) {
-            const canConvert = !!currentVersionId && normalizeReaderEncoding(readerEncoding) !== 'auto' && !readerConvertBusy;
-            readerConvertBtn.disabled = !canConvert;
-            readerConvertBtn.textContent = readerConvertBusy ? 'Conversion…' : 'Convertir en UTF-8';
-            readerConvertBtn.title = canConvert
-                ? `Convertir le fichier texte depuis ${normalizeReaderEncoding(readerEncoding)} vers UTF-8`
-                : 'Choisissez d’abord un encodage source explicite';
+            readerConvertBtn.disabled = true;
+            readerConvertBtn.textContent = 'Convertir en UTF-8';
+            readerConvertBtn.title = 'Conversion désactivée dans le lecteur.';
         }
+    }
+
+    function applyReaderTextSourceControl() {
+        if (!readerTextSourceSelect) return;
+
+        const options = Array.isArray(readerData?.text_source_options) ? readerData.text_source_options : [];
+        const available = options.filter(option => option?.value && option?.label);
+
+        readerTextSourceSelect.innerHTML = '';
+        if (!available.length) {
+            readerTextSourceSelect.appendChild(new Option('Source texte auto', 'auto'));
+            readerTextSourceSelect.value = 'auto';
+            readerTextSourceSelect.disabled = true;
+            return;
+        }
+
+        available.forEach(option => {
+            readerTextSourceSelect.appendChild(new Option(String(option.label), String(option.value)));
+        });
+
+        const selected = normalizeReaderTextSource(readerData?.text_source ?? readerTextSource);
+        readerTextSourceSelect.value = selected === 'auto'
+            ? String(available[0].value)
+            : selected;
+        readerTextSourceSelect.disabled = !currentVersionId || available.length < 2;
+        readerTextSource = normalizeReaderTextSource(readerTextSourceSelect.value);
     }
 
     function updateReaderCardTitle() {
@@ -899,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
             collapse.show();
         }
         window.setTimeout(() => {
-            facsimilesCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            (readerCardEl || facsimilesCard)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 120);
     }
     let pendingManifestFocus = null;
@@ -966,6 +1071,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function describePaginationOrigin(origin, markerCount, guessed = false) {
         if (guessed) return 'approximation sans repères';
+        if (!origin || !Number.isFinite(Number(markerCount)) || Number(markerCount) <= 0) {
+            return 'sans pagination';
+        }
 
         const labels = {
             'lignes': 'fichier _lignes',
@@ -992,10 +1100,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${versionLabel} · Texte : ${textLabel} · Pagination : ${paginationLabel}`;
     }
 
+    function setReaderLoading(isLoading) {
+        if (!readerLoadingEl) return;
+        readerLoadingEl.classList.toggle('d-none', !isLoading);
+        readerLoadingEl.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+        if (readerLoadingLabelEl) {
+            readerLoadingLabelEl.textContent = 'Chargement du viewer…';
+        }
+    }
+
     function resetReader(message = 'Les repères de pagination de cette version permettront d’aligner le fac-similé et le texte ici.') {
         readerData = null;
         readerPages = [];
         readerPageIndex = 0;
+        readerPageLoadPromises.clear();
+        readerImagePrefetchUrls.clear();
+        setReaderLoading(false);
         if (readerRoot) {
             readerRoot.classList.add('d-none');
         }
@@ -1026,6 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerImageMetaEl) readerImageMetaEl.textContent = '';
         if (readerTextMetaEl) readerTextMetaEl.textContent = '';
         if (readerTextEl) readerTextEl.textContent = '';
+        applyReaderTextSourceControl();
         applyReaderEncodingControl();
     }
 
@@ -1171,13 +1292,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return merged;
     }
 
+    function prefetchReaderImage(page) {
+        const url = page?.image?.big;
+        if (!url || readerImagePrefetchUrls.has(url)) return;
+        readerImagePrefetchUrls.add(url);
+        const img = new Image();
+        img.src = url;
+    }
+
     async function loadReaderPage(index, { silent = false, useRequestToken = true } = {}) {
         if (!currentVersionId || !readerPages[index] || readerPages[index].loaded) {
             return readerPages[index] || null;
         }
 
+        if (readerPageLoadPromises.has(index)) {
+            return readerPageLoadPromises.get(index);
+        }
+
         const requestToken = useRequestToken ? ++readerPageRequestToken : readerPageRequestToken;
         const params = new URLSearchParams({ index: String(index) });
+        if (readerTextSource && readerTextSource !== 'auto') {
+            params.set('text_source', readerTextSource);
+        }
         if (readerEncoding && readerEncoding !== 'auto') {
             params.set('encoding', readerEncoding);
         }
@@ -1189,19 +1325,46 @@ document.addEventListener('DOMContentLoaded', () => {
             readerTextMetaEl.textContent = `${readerPages[index].label} · chargement`;
         }
 
-        const res = await fetch(withBasePath(`/api/versions/${currentVersionId}/reader/page?${params.toString()}`), {
-            headers: { Accept: 'application/json' }
-        });
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        const promise = (async () => {
+            try {
+                const res = await fetch(withBasePath(`/api/versions/${currentVersionId}/reader/page?${params.toString()}`), {
+                    headers: { Accept: 'application/json' }
+                });
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                const payload = await res.json();
+                if (useRequestToken && requestToken !== readerPageRequestToken) {
+                    return null;
+                }
+                const merged = mergeReaderPage(index, payload?.page || null);
+                if (payload?.text_source) {
+                    readerTextSource = normalizeReaderTextSource(payload.text_source);
+                }
+                applyReaderTextSourceControl();
+                applyReaderEncodingControl();
+                return merged;
+            } finally {
+                readerPageLoadPromises.delete(index);
+            }
+        })();
+
+        readerPageLoadPromises.set(index, promise);
+        return promise;
+    }
+
+    function prefetchReaderPage(index) {
+        const page = readerPages[index];
+        if (!page) return;
+        prefetchReaderImage(page);
+    }
+
+    function cancelPendingReaderLoad() {
+        if (readerLoadAbortController) {
+            readerLoadAbortController.abort();
+            readerLoadAbortController = null;
         }
-        const payload = await res.json();
-        if (useRequestToken && requestToken !== readerPageRequestToken) {
-            return null;
-        }
-        const merged = mergeReaderPage(index, payload?.page || null);
-        applyReaderEncodingControl();
-        return merged;
+        readerLoadingVersionId = null;
     }
 
     function renderReaderText(page) {
@@ -1305,7 +1468,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const textParts = [page.label];
             if (page.line) textParts.push(`ligne ${page.line}`);
             const segmentLength = Math.max(0, page.end - page.start);
-            textParts.push(page?.guessed === true ? 'approximation' : 'extrait aligné');
+            if (!readerData?.pagination?.available) {
+                textParts.push('texte intégral');
+            } else {
+                textParts.push(page?.guessed === true ? 'approximation' : 'extrait aligné');
+            }
             if (readerData?.text_source_label) textParts.push(readerData.text_source_label);
             textParts.push(`${segmentLength.toLocaleString('fr-FR')} signes`);
             readerTextMetaEl.textContent = textParts.join(' · ');
@@ -1314,10 +1481,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerTextEl) readerTextEl.scrollTop = 0;
         syncReaderCropForCurrentPage();
         renderReaderThumbs();
+        prefetchReaderPage(readerPageIndex + 1);
     }
 
     function renderReader(payload) {
         readerData = payload;
+        readerTextSource = normalizeReaderTextSource(payload?.text_source);
+        readerPageLoadPromises.clear();
+        readerImagePrefetchUrls.clear();
         readerPages = buildReaderPages(payload);
         const initialPageIndex = Number.isFinite(Number(payload?.current_page_index)) ? Number(payload.current_page_index) : 0;
         if (payload?.current_page && readerPages[initialPageIndex]) {
@@ -1337,13 +1508,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!readerPages.length) {
-            resetReader('Aucun repère de pagination exploitable n’est disponible pour synchroniser fac-similé et texte.');
-            if (readerRoot) readerRoot.classList.remove('d-none');
-            return;
-        }
-
         updateReaderCardTitle();
+        applyReaderTextSourceControl();
         renderReaderPage(initialPageIndex);
     }
 
@@ -1548,9 +1714,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
     }
 
+    function cancelPendingManifestLoad() {
+        if (manifestLoadAbortController) {
+            manifestLoadAbortController.abort();
+            manifestLoadAbortController = null;
+        }
+    }
+
     async function loadManifestOptions(versionId, { preserveSelection = false, focusKey = null } = {}) {
         manifestRequestToken++;
         const requestId = manifestRequestToken;
+        cancelPendingManifestLoad();
+        const abortController = new AbortController();
+        manifestLoadAbortController = abortController;
         const previousKey = preserveSelection ? manifestActiveKey : null;
 
         if (!preserveSelection) {
@@ -1584,6 +1760,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch(withBasePath(`/api/versions/${versionId}/comparisons`), {
                 headers: { 'Accept': 'application/json' },
+                signal: abortController.signal,
             });
             const data = await res.json();
             if (requestId !== manifestRequestToken) return;
@@ -1650,6 +1827,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 pendingManifestFocus = null;
             }
         } catch (err) {
+            if (err?.name === 'AbortError') {
+                return;
+            }
             console.error('Could not load manifest options', err);
             if (requestId === manifestRequestToken) {
                 resetManifestControls({ summary: 'Impossible de charger les manifestes pour cette version.' });
@@ -1659,6 +1839,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } finally {
             if (requestId === manifestRequestToken) {
+                manifestLoadAbortController = null;
                 updateManifestButtons();
             }
             bumpFacsimilesLoading(-1);
@@ -1913,38 +2094,131 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadReader(versionId) {
         if (!versionId) {
+            cancelPendingReaderLoad();
             resetReader();
             return;
         }
 
-        resetReader('Chargement du lecteur synchronisé…');
+        if (readerLoadingVersionId === versionId && readerLoadAbortController) {
+            return;
+        }
+
+        cancelPendingReaderLoad();
+        const requestToken = ++readerLoadRequestToken;
+        const abortController = new AbortController();
+        readerLoadAbortController = abortController;
+        readerLoadingVersionId = versionId;
+
+        resetReader();
         if (readerRoot) {
             readerRoot.classList.remove('d-none');
         }
+        setReaderLoading(true);
         bumpFacsimilesLoading(1);
 
         try {
             const params = new URLSearchParams();
+            if (readerTextSource && readerTextSource !== 'auto') {
+                params.set('text_source', readerTextSource);
+            }
             if (readerEncoding && readerEncoding !== 'auto') {
                 params.set('encoding', readerEncoding);
             }
             const suffix = params.toString() ? `?${params.toString()}` : '';
             const res = await fetch(withBasePath(`/api/versions/${versionId}/reader${suffix}`), {
-                headers: { Accept: 'application/json' }
+                headers: { Accept: 'application/json' },
+                signal: abortController.signal,
             });
             if (!res.ok) {
                 throw new Error(`HTTP ${res.status}`);
             }
             const payload = await res.json();
+            if (requestToken !== readerLoadRequestToken) {
+                return;
+            }
             renderReader(payload);
         } catch (err) {
+            if (err?.name === 'AbortError') {
+                return;
+            }
             console.error('Could not load synchronized reader', err);
             resetReader('Impossible de charger le lecteur synchronisé pour cette version.');
             if (readerRoot) {
                 readerRoot.classList.remove('d-none');
             }
         } finally {
+            if (requestToken === readerLoadRequestToken) {
+                readerLoadAbortController = null;
+                readerLoadingVersionId = null;
+            }
+            setReaderLoading(false);
             bumpFacsimilesLoading(-1);
+        }
+    }
+
+    async function processFacsimileSelection(versionId, versionName) {
+        currentVersionId = versionId || null;
+        currentVersionName = versionName || '';
+        updateReaderCardTitle();
+        readerTextSource = loadReaderTextSourcePreference(currentVersionId);
+        readerEncoding = loadReaderEncodingPreference(currentVersionId);
+        resetManifestControls();
+
+        if (!currentVersionId) {
+            cancelPendingReaderLoad();
+            cancelPendingManifestLoad();
+            setWorkspaceState(false);
+            setStatus('');
+            resetGallery();
+            resetReader();
+            return;
+        }
+
+        setWorkspaceState(true);
+        await Promise.allSettled([
+            loadReader(currentVersionId),
+            loadManifestOptions(currentVersionId, { focusKey: pendingManifestFocus }),
+        ]);
+    }
+
+    async function scheduleFacsimileSelection(versionId, versionName) {
+        const normalizedVersionId = versionId || null;
+        const normalizedVersionName = versionName || '';
+        const sameSelection = String(currentVersionId || '') === String(normalizedVersionId || '');
+
+        if (facsimileSelectionInFlight) {
+            pendingFacsimileSelection = {
+                versionId: normalizedVersionId,
+                versionName: normalizedVersionName,
+            };
+            return;
+        }
+
+        if (sameSelection && !readerLoadingVersionId && !manifestLoadAbortController) {
+            setWorkspaceState(!!normalizedVersionId);
+            return;
+        }
+
+        facsimileSelectionInFlight = true;
+        document.dispatchEvent(new CustomEvent('facsimiles:selection-loading', {
+            detail: { loading: true, versionId: normalizedVersionId }
+        }));
+
+        try {
+            await processFacsimileSelection(normalizedVersionId, normalizedVersionName);
+        } finally {
+            facsimileSelectionInFlight = false;
+            document.dispatchEvent(new CustomEvent('facsimiles:selection-loading', {
+                detail: { loading: false, versionId: normalizedVersionId }
+            }));
+            if (pendingFacsimileSelection) {
+                const next = pendingFacsimileSelection;
+                pendingFacsimileSelection = null;
+                const nextIsSame = String(currentVersionId || '') === String(next.versionId || '');
+                if (!nextIsSame || readerLoadingVersionId || manifestLoadAbortController) {
+                    void scheduleFacsimileSelection(next.versionId, next.versionName);
+                }
+            }
         }
     }
 
@@ -1952,7 +2226,12 @@ document.addEventListener('DOMContentLoaded', () => {
         currentWorkId     = e.detail?.workId ?? null;
         currentVersionId  = null;
         currentVersionName= '';
+        readerTextSource  = 'auto';
         readerEncoding    = 'auto';
+        pendingFacsimileSelection = null;
+        facsimileSelectionInFlight = false;
+        cancelPendingReaderLoad();
+        cancelPendingManifestLoad();
         resetManifestControls({ hideManager: true });
         setWorkspaceState(false);
         setStatus('');
@@ -1963,26 +2242,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('facsimiles:select', e => {
         const { versionId, versionName } = e.detail || {};
-        currentVersionId   = versionId || null;
-        currentVersionName = versionName || '';
-        updateReaderCardTitle();
-        readerEncoding     = loadReaderEncodingPreference(currentVersionId);
-        resetManifestControls();
-        if (!currentVersionId) {
-            setWorkspaceState(false);
-            setStatus('');
-            resetGallery();
-            resetReader();
-            return;
-        }
-        loadGallery(currentVersionId, currentVersionName);
-        loadReader(currentVersionId);
-        loadManifestOptions(currentVersionId, { focusKey: pendingManifestFocus });
+        void scheduleFacsimileSelection(versionId || null, versionName || '');
     });
 
     document.addEventListener('facsimilesUploaded', e => {
         if (currentVersionId && e.detail?.versionId === currentVersionId) {
-            loadGallery(currentVersionId, currentVersionName);
             loadReader(currentVersionId);
             loadManifestOptions(currentVersionId, { preserveSelection: true });
         }
@@ -2171,6 +2435,16 @@ document.addEventListener('DOMContentLoaded', () => {
         readerEncodingSelect.addEventListener('change', () => {
             readerEncoding = normalizeReaderEncoding(readerEncodingSelect.value);
             saveReaderEncodingPreference(currentVersionId, readerEncoding);
+            if (currentVersionId) {
+                loadReader(currentVersionId);
+            }
+        });
+    }
+
+    if (readerTextSourceSelect) {
+        readerTextSourceSelect.addEventListener('change', () => {
+            readerTextSource = normalizeReaderTextSource(readerTextSourceSelect.value);
+            saveReaderTextSourcePreference(currentVersionId, readerTextSource);
             if (currentVersionId) {
                 loadReader(currentVersionId);
             }

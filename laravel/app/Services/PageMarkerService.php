@@ -1076,12 +1076,15 @@ class PageMarkerService
         $sidecar = $this->loadPaginationSidecar($version->id);
         $markers = is_array($sidecar['markers'] ?? null) ? array_values($sidecar['markers']) : [];
         if (empty($markers)) {
-            return [
+            $payload = [
                 'xml'          => $contents,
                 'injected'     => 0,
                 'total_sidecar'=> 0,
                 'existing_pb'  => count($existingPb),
             ];
+            $this->storeVersionEditorCache($version->id, $cacheFingerprint, $payload);
+
+            return $payload;
         }
 
         $imageMap = $this->versionEditorImageMap($version, $manifestEntries);

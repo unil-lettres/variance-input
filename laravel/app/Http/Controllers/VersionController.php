@@ -771,7 +771,8 @@ class VersionController extends Controller
     public function readerData(Request $request, Version $version): JsonResponse
     {
         $requestedEncoding = $this->normalizeSourceEncodingHint($request->query('encoding'));
-        $dataset = $this->readerDataset($version, $requestedEncoding);
+        $requestedTextSource = $this->normalizeReaderTextSourceHint($request->query('text_source'));
+        $dataset = $this->readerDataset($version, $requestedEncoding, $requestedTextSource);
         $pagePlans = is_array($dataset['page_plans'] ?? null)
             ? $dataset['page_plans']
             : $this->readerPagePlans($dataset['text'] ?? null, $dataset['markers'] ?? [], $dataset['facsimiles'] ?? []);
@@ -797,6 +798,7 @@ class VersionController extends Controller
             'text_encoding' => $dataset['text_encoding'],
             'text_source' => $dataset['text_source'],
             'text_source_label' => $dataset['text_source_label'],
+            'text_source_options' => $dataset['text_source_options'] ?? [],
             'facsimiles' => $dataset['facsimiles'],
             'pages' => $pageSummaries,
             'page_count' => count($pageSummaries),
@@ -806,11 +808,37 @@ class VersionController extends Controller
         ], 200);
     }
 
+    public function readerProgress(Request $request, Version $version): JsonResponse
+    {
+        $requestedEncoding = $this->normalizeSourceEncodingHint($request->query('encoding'));
+        $requestedTextSource = $this->normalizeReaderTextSourceHint($request->query('text_source'));
+        $snapshot = Cache::get($this->readerProgressCacheKey($version->id, $requestedEncoding, $requestedTextSource));
+
+        if (!is_array($snapshot)) {
+            return response()->json([
+                'version_id' => $version->id,
+                'status' => 'idle',
+                'percent' => 0,
+                'label' => 'En attente du chargement du viewer.',
+                'updated_at' => null,
+            ], 200);
+        }
+
+        return response()->json([
+            'version_id' => $version->id,
+            'status' => $snapshot['status'] ?? 'running',
+            'percent' => max(0, min(100, (int) ($snapshot['percent'] ?? 0))),
+            'label' => $snapshot['label'] ?? 'Chargement du viewer…',
+            'updated_at' => $snapshot['updated_at'] ?? null,
+        ], 200);
+    }
+
     public function readerPage(Request $request, Version $version): JsonResponse
     {
         $requestedEncoding = $this->normalizeSourceEncodingHint($request->query('encoding'));
+        $requestedTextSource = $this->normalizeReaderTextSourceHint($request->query('text_source'));
         $index = max(0, (int) $request->query('index', 0));
-        $dataset = $this->readerDataset($version, $requestedEncoding);
+        $dataset = $this->readerDataset($version, $requestedEncoding, $requestedTextSource);
         $pagePlans = is_array($dataset['page_plans'] ?? null)
             ? $dataset['page_plans']
             : $this->readerPagePlans($dataset['text'] ?? null, $dataset['markers'] ?? [], $dataset['facsimiles'] ?? []);
@@ -830,6 +858,7 @@ class VersionController extends Controller
             'page_index' => $index,
             'page_count' => count($pagePlans),
             'text_encoding' => $dataset['text_encoding'],
+            'text_source' => $dataset['text_source'],
             'page' => $this->materializeReaderPage($pagePlan, $dataset['text'] ?? null),
         ], 200);
     }
@@ -943,6 +972,8 @@ class VersionController extends Controller
             ], 404);
         }
 
+        $this->clearReaderDatasetCache($version->id);
+
         $added = (int) ($result['added'] ?? 0);
         $total = (int) ($result['total'] ?? $result['count'] ?? 0);
         $created = (bool) ($result['created'] ?? false);
@@ -962,6 +993,16 @@ class VersionController extends Controller
             'version_id' => $version->id,
             'message'    => $message,
         ], 200);
+    }
+
+    public function warmReaderCache(Version $version, ?string $requestedEncoding = null, ?string $requestedTextSource = null): array
+    {
+        return $this->readerDataset($version, $requestedEncoding, $requestedTextSource);
+    }
+
+    public function clearReaderCache(Version $version): void
+    {
+        $this->clearReaderDatasetCache($version->id);
     }
 
     /**
@@ -1364,6 +1405,17 @@ class VersionController extends Controller
             return [];
         }
 
+        $cacheKey = null;
+        if ($includeDimensions) {
+            $cacheKey = $this->readerFacsimilesCacheKey($version);
+            if ($cacheKey) {
+                $cached = Cache::get($cacheKey);
+                if (is_array($cached)) {
+                    return $cached;
+                }
+            }
+        }
+
         $dirRel = "uploads/{$authorFolder}/{$workFolder}/{$version->folder}";
         $disk = Storage::disk('public');
         $legacyDir = base_path('../variance/' . $dirRel);
@@ -1388,7 +1440,7 @@ class VersionController extends Controller
             return [];
         }
 
-        return $all
+        $facsimiles = $all
             ->filter(fn ($entry) => preg_match('/\.(jpe?g|png)$/i', $entry['name']) && !str_contains($entry['name'], '_thumb'))
             ->map(function (array $entry) use ($disk, $dirRel, $legacyDir, $useLegacy, $includeDimensions) {
                 $thumbName = preg_replace('/(\.\w+)$/', '_thumb$1', $entry['name']);
@@ -1434,18 +1486,71 @@ class VersionController extends Controller
             ->sortBy(fn (array $entry) => $entry['image_code'] ?: $entry['name'], SORT_NATURAL)
             ->values()
             ->all();
+
+        if ($includeDimensions && $cacheKey) {
+            Cache::put($cacheKey, $facsimiles, now()->addMinutes(30));
+        }
+
+        return $facsimiles;
     }
 
-    private function readerDataset(Version $version, ?string $requestedEncoding): array
+    private function readerFacsimilesCacheKey(Version $version): ?string
+    {
+        $version->loadMissing('work.author');
+        $authorFolder = $version->work?->author?->folder;
+        $workFolder = $version->work?->folder;
+        if (!$authorFolder || !$workFolder) {
+            return null;
+        }
+
+        $dirRel = "uploads/{$authorFolder}/{$workFolder}/{$version->folder}";
+        $disk = Storage::disk('public');
+        $legacyDir = base_path('../variance/' . $dirRel);
+
+        if ($disk->exists($dirRel)) {
+            $files = $disk->files($dirRel);
+            $fingerprint = array_map(function (string $path) use ($disk): array {
+                return [
+                    'name' => basename($path),
+                    'mtime' => (int) @filemtime($disk->path($path)),
+                    'size' => (int) $disk->size($path),
+                ];
+            }, $files);
+        } elseif (File::isDirectory($legacyDir)) {
+            $files = File::files($legacyDir);
+            $fingerprint = array_map(function (\SplFileInfo $file): array {
+                return [
+                    'name' => $file->getFilename(),
+                    'mtime' => (int) $file->getMTime(),
+                    'size' => (int) $file->getSize(),
+                ];
+            }, $files);
+        } else {
+            return null;
+        }
+
+        return 'versions:reader-facsimiles:' . $version->id . ':' . md5(json_encode($fingerprint, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]');
+    }
+
+    private function readerDataset(Version $version, ?string $requestedEncoding, ?string $requestedTextSource): array
     {
         $version->loadMissing('work.author');
         $fingerprint = $this->readerDatasetFingerprint($version);
         $nonce = (int) Cache::get($this->readerDatasetNonceKey($version->id), 0);
-        $cacheKey = $this->readerDatasetCacheKey($version->id, $requestedEncoding, $fingerprint, $nonce);
+        $cacheKey = $this->readerDatasetCacheKey($version->id, $requestedEncoding, $requestedTextSource, $fingerprint, $nonce);
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 6, 'Vérification du cache du lecteur…');
 
-        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($version, $requestedEncoding, $fingerprint) {
-            $artifact = $this->loadReaderDatasetArtifact($version, $requestedEncoding, $fingerprint);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 100, 'Lecteur prêt.', 'ready');
+            return $cached;
+        }
+
+        try {
+            $artifact = $this->loadReaderDatasetArtifact($version, $requestedEncoding, $requestedTextSource, $fingerprint);
             if (is_array($artifact)) {
+                Cache::put($cacheKey, $artifact, now()->addMinutes(10));
+                $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 100, 'Lecteur prêt.', 'ready');
                 return $artifact;
             }
 
@@ -1453,26 +1558,53 @@ class VersionController extends Controller
                 @set_time_limit(0);
             }
 
-            $dataset = $this->buildReaderDataset($version, $requestedEncoding);
+            $bundle = $this->buildReaderDatasetBundle($version, $requestedEncoding, $requestedTextSource);
+            $dataset = $bundle['selected'];
+            $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 84, 'Préparation des pages du lecteur…');
             $dataset['page_plans'] = $this->readerPagePlans($dataset['text'] ?? null, $dataset['markers'] ?? [], $dataset['facsimiles'] ?? []);
-            $this->storeReaderDatasetArtifact($version, $requestedEncoding, $fingerprint, $dataset);
+            $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 93, 'Mise en cache du lecteur…');
+            $this->storeReaderDatasetArtifact($version, $requestedEncoding, $requestedTextSource, $fingerprint, $dataset);
+            $this->warmReaderDatasetArtifacts(
+                $version,
+                $requestedEncoding,
+                $fingerprint,
+                $nonce,
+                $bundle['variants'] ?? []
+            );
+            Cache::put($cacheKey, $dataset, now()->addMinutes(10));
+            $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 100, 'Lecteur prêt.', 'ready');
 
             return $dataset;
-        });
+        } catch (\Throwable $e) {
+            $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 100, 'Échec du chargement du lecteur.', 'error');
+            throw $e;
+        }
     }
 
-    private function buildReaderDataset(Version $version, ?string $requestedEncoding): array
+    private function buildReaderDataset(Version $version, ?string $requestedEncoding, ?string $requestedTextSource): array
+    {
+        return $this->buildReaderDatasetBundle($version, $requestedEncoding, $requestedTextSource)['selected'];
+    }
+
+    private function buildReaderDatasetBundle(Version $version, ?string $requestedEncoding, ?string $requestedTextSource): array
     {
         $version->loadMissing('work.author');
 
         $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
-        $text = null;
-        $fallback = null;
-        $textSource = 'version-txt';
-        $textSourceLabel = 'TXT de version';
+        $textVariants = [];
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 18, 'Lecture du texte de version…');
         if (is_file($textPath)) {
             try {
-                $text = $this->readFileAsUtf8($textPath, $requestedEncoding);
+                $versionText = $this->readFileAsUtf8($textPath, $requestedEncoding);
+                if ($versionText !== '') {
+                    $textVariants['version-txt'] = [
+                        'value' => 'version-txt',
+                        'text' => $versionText,
+                        'label' => 'TXT de version',
+                        'origin' => null,
+                        'markers' => [],
+                    ];
+                }
             } catch (\Throwable $e) {
                 Log::warning('Could not load version text for reader.', [
                     'version_id' => $version->id,
@@ -1483,18 +1615,35 @@ class VersionController extends Controller
             }
         }
 
-        if (!is_string($text) || $text === '') {
-            $fallback = $this->readerTextFromComparisonXhtml($version);
-            if (is_array($fallback) && is_string($fallback['text'] ?? null) && $fallback['text'] !== '') {
-                $text = $fallback['text'];
-                $textSource = (string) ($fallback['source'] ?? 'comparison-xhtml');
-                $textSourceLabel = (string) ($fallback['label'] ?? 'XHTML de comparaison');
-            }
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 34, 'Reconstruction éventuelle depuis le XHTML…');
+        $fallback = $this->readerTextFromComparisonXhtml($version);
+        if (is_array($fallback) && is_string($fallback['text'] ?? null) && $fallback['text'] !== '') {
+            $textVariants['comparison-xhtml'] = [
+                'value' => 'comparison-xhtml',
+                'text' => $fallback['text'],
+                'label' => (string) ($fallback['label'] ?? 'XHTML de comparaison'),
+                'origin' => (string) ($fallback['origin'] ?? 'pb-xhtml'),
+                'markers' => is_array($fallback['markers'] ?? null) ? $fallback['markers'] : [],
+            ];
         }
 
+        $selectedTextSource = $requestedTextSource;
+        if (!$selectedTextSource || !array_key_exists($selectedTextSource, $textVariants)) {
+            $selectedTextSource = array_key_exists('version-txt', $textVariants)
+                ? 'version-txt'
+                : (array_key_first($textVariants) ?: null);
+        }
+
+        $textSourceOptions = array_values(array_map(function (array $variant): array {
+            return [
+                'value' => (string) ($variant['value'] ?? ''),
+                'label' => (string) ($variant['label'] ?? ''),
+            ];
+        }, $textVariants));
+
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 52, 'Chargement des repères de pagination…');
         $sidecar = $this->pageMarkerService->getPaginationSidecar($version->id);
-        $paginationOrigin = $sidecar['origin'] ?? null;
-        $markers = collect(is_array($sidecar['markers'] ?? null) ? $sidecar['markers'] : [])
+        $sidecarMarkers = collect(is_array($sidecar['markers'] ?? null) ? $sidecar['markers'] : [])
             ->filter(fn ($marker) => is_array($marker))
             ->map(function (array $marker) {
                 return [
@@ -1509,38 +1658,86 @@ class VersionController extends Controller
             ->values()
             ->all();
 
-        if (empty($markers) && is_array($fallback) && !empty($fallback['markers']) && is_array($fallback['markers'])) {
-            $paginationOrigin = (string) ($fallback['origin'] ?? 'pb-xhtml');
-            $markers = collect($fallback['markers'])
-                ->filter(fn ($marker) => is_array($marker))
-                ->map(function (array $marker) {
-                    return [
-                        'char_index' => max(0, (int) ($marker['char_index'] ?? 0)),
-                        'image_code' => $marker['image_code'] ?? $marker['image'] ?? null,
-                        'page' => $marker['page'] ?? null,
-                        'line' => isset($marker['line']) && is_numeric($marker['line']) ? (int) $marker['line'] : null,
-                        'phrase' => $marker['match'] ?? $marker['phrase'] ?? null,
-                    ];
-                })
-                ->sortBy('char_index')
-                ->values()
-                ->all();
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 68, 'Inventaire des fac-similés…');
+        $facsimiles = $this->readerFacsimiles($version);
+        $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
+
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 76, 'Assemblage des sources du lecteur…');
+        $variantDatasets = [];
+        foreach ($textVariants as $sourceKey => $variant) {
+            $variantDatasets[$sourceKey] = $this->assembleReaderDatasetPayload(
+                is_string($variant['text'] ?? null) ? $variant['text'] : null,
+                $requestedEncoding,
+                $sourceKey,
+                (string) ($variant['label'] ?? 'source texte non précisée'),
+                $textSourceOptions,
+                is_array($variant['markers'] ?? null) ? $variant['markers'] : [],
+                $variant['origin'] ?? null,
+                $sidecarMarkers,
+                $sidecar['origin'] ?? null,
+                $facsimiles,
+                $paginationInfo
+            );
+        }
+
+        if (array_key_exists($selectedTextSource, $variantDatasets)) {
+            $selectedDataset = $variantDatasets[$selectedTextSource];
+        }
+
+        return [
+            'selected' => $selectedDataset ?? $this->assembleReaderDatasetPayload(
+                null,
+                $requestedEncoding,
+                null,
+                null,
+                $textSourceOptions,
+                [],
+                null,
+                $sidecarMarkers,
+                $sidecar['origin'] ?? null,
+                $facsimiles,
+                $paginationInfo
+            ),
+            'variants' => $variantDatasets,
+        ];
+    }
+
+    private function assembleReaderDatasetPayload(
+        ?string $text,
+        ?string $requestedEncoding,
+        ?string $selectedTextSource,
+        ?string $textSourceLabel,
+        array $textSourceOptions,
+        array $variantMarkers,
+        ?string $variantOrigin,
+        array $sidecarMarkers,
+        ?string $sidecarOrigin,
+        array $facsimiles,
+        ?array $paginationInfo
+    ): array {
+        $paginationOrigin = null;
+        $markers = [];
+
+        if (!empty($sidecarMarkers)) {
+            $paginationOrigin = $sidecarOrigin;
+            $markers = $sidecarMarkers;
+        } elseif ($selectedTextSource === 'comparison-xhtml' && !empty($variantMarkers)) {
+            $paginationOrigin = $variantOrigin;
+            $markers = $variantMarkers;
         }
 
         if (is_string($text) && $text !== '' && !empty($markers)) {
             $markers = $this->pageMarkerService->resolveMarkersForPlainText($text, $markers);
         }
 
-        $facsimiles = $this->readerFacsimiles($version);
-        $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
-
         return [
             'text' => is_string($text) ? $text : null,
             'text_available' => is_string($text),
             'text_length' => is_string($text) ? mb_strlen($text, 'UTF-8') : null,
             'text_encoding' => $requestedEncoding ?: 'AUTO',
-            'text_source' => is_string($text) ? $textSource : null,
-            'text_source_label' => is_string($text) ? $textSourceLabel : null,
+            'text_source' => is_string($text) ? $selectedTextSource : null,
+            'text_source_label' => $textSourceLabel,
+            'text_source_options' => $textSourceOptions,
             'facsimiles' => $facsimiles,
             'markers' => $markers,
             'pagination' => [
@@ -1552,11 +1749,75 @@ class VersionController extends Controller
         ];
     }
 
-    private function readerDatasetCacheKey(int $versionId, ?string $requestedEncoding, array $fingerprint = [], int $nonce = 0): string
+    private function warmReaderDatasetArtifacts(
+        Version $version,
+        ?string $requestedEncoding,
+        array $fingerprint,
+        int $nonce,
+        array $variants
+    ): void {
+        foreach ($variants as $source => $dataset) {
+            if (!is_array($dataset)) {
+                continue;
+            }
+
+            if (!isset($dataset['page_plans'])) {
+                $dataset['page_plans'] = $this->readerPagePlans(
+                    $dataset['text'] ?? null,
+                    $dataset['markers'] ?? [],
+                    $dataset['facsimiles'] ?? []
+                );
+            }
+
+            $this->storeReaderDatasetArtifact($version, $requestedEncoding, $source, $fingerprint, $dataset);
+
+            Cache::put(
+                $this->readerDatasetCacheKey($version->id, $requestedEncoding, $source, $fingerprint, $nonce),
+                $dataset,
+                now()->addMinutes(10)
+            );
+        }
+    }
+
+    private function readerProgressCacheKey(int $versionId, ?string $requestedEncoding, ?string $requestedTextSource): string
     {
         $encoding = $requestedEncoding ?: 'AUTO';
+        $source = $requestedTextSource ?: 'AUTO';
+        return 'versions:reader-progress:' . $versionId . ':' . md5($encoding) . ':' . md5($source);
+    }
+
+    private function setReaderProgress(
+        int $versionId,
+        ?string $requestedEncoding,
+        ?string $requestedTextSource,
+        int $percent,
+        string $label,
+        string $status = 'running'
+    ): void {
+        Cache::put(
+            $this->readerProgressCacheKey($versionId, $requestedEncoding, $requestedTextSource),
+            [
+                'status' => $status,
+                'percent' => max(0, min(100, $percent)),
+                'label' => $label,
+                'updated_at' => now()->toIso8601String(),
+            ],
+            now()->addMinutes(5)
+        );
+    }
+
+    private function normalizeReaderTextSourceHint(?string $hint): ?string
+    {
+        $value = strtolower(trim((string) $hint));
+        return in_array($value, ['version-txt', 'comparison-xhtml'], true) ? $value : null;
+    }
+
+    private function readerDatasetCacheKey(int $versionId, ?string $requestedEncoding, ?string $requestedTextSource, array $fingerprint = [], int $nonce = 0): string
+    {
+        $encoding = $requestedEncoding ?: 'AUTO';
+        $source = $requestedTextSource ?: 'AUTO';
         $fingerprintHash = md5(json_encode($fingerprint, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]');
-        return "versions:reader-dataset:{$versionId}:{$nonce}:" . md5($encoding) . ":{$fingerprintHash}";
+        return "versions:reader-dataset:{$versionId}:{$nonce}:" . md5($encoding) . ':' . md5($source) . ":{$fingerprintHash}";
     }
 
     private function readerDatasetNonceKey(int $versionId): string
@@ -1570,15 +1831,16 @@ class VersionController extends Controller
         Cache::increment($this->readerDatasetNonceKey($versionId));
     }
 
-    private function readerDatasetArtifactRelativePath(int $versionId, ?string $requestedEncoding): string
+    private function readerDatasetArtifactRelativePath(int $versionId, ?string $requestedEncoding, ?string $requestedTextSource): string
     {
         $encoding = $requestedEncoding ?: 'AUTO';
-        return 'reader_cache/' . $versionId . '/' . md5($encoding) . '.json';
+        $source = $requestedTextSource ?: 'AUTO';
+        return 'reader_cache/' . $versionId . '/' . md5($encoding) . '-' . md5($source) . '.json';
     }
 
-    private function loadReaderDatasetArtifact(Version $version, ?string $requestedEncoding, array $fingerprint): ?array
+    private function loadReaderDatasetArtifact(Version $version, ?string $requestedEncoding, ?string $requestedTextSource, array $fingerprint): ?array
     {
-        $relative = $this->readerDatasetArtifactRelativePath($version->id, $requestedEncoding);
+        $relative = $this->readerDatasetArtifactRelativePath($version->id, $requestedEncoding, $requestedTextSource);
         $disk = Storage::disk('local');
         if (!$disk->exists($relative)) {
             return null;
@@ -1612,14 +1874,15 @@ class VersionController extends Controller
         return $dataset;
     }
 
-    private function storeReaderDatasetArtifact(Version $version, ?string $requestedEncoding, array $fingerprint, array $dataset): void
+    private function storeReaderDatasetArtifact(Version $version, ?string $requestedEncoding, ?string $requestedTextSource, array $fingerprint, array $dataset): void
     {
-        $relative = $this->readerDatasetArtifactRelativePath($version->id, $requestedEncoding);
+        $relative = $this->readerDatasetArtifactRelativePath($version->id, $requestedEncoding, $requestedTextSource);
         $disk = Storage::disk('local');
         $disk->makeDirectory(dirname($relative));
         $payload = [
             'version_id' => $version->id,
             'encoding' => $requestedEncoding ?: 'AUTO',
+            'text_source' => $requestedTextSource ?: 'AUTO',
             'generated_at' => time(),
             'fingerprint' => $fingerprint,
             'dataset' => $dataset,
@@ -1795,7 +2058,17 @@ class VersionController extends Controller
         }
 
         if (empty($markers)) {
-            return $this->readerGuessedPagePlans($text, $facsimiles);
+            return [[
+                'label' => 'Texte complet',
+                'image' => null,
+                'start' => 0,
+                'end' => mb_strlen($text, 'UTF-8'),
+                'line' => null,
+                'imageCode' => null,
+                'anchorOffset' => null,
+                'anchorPhrase' => null,
+                'guessed' => false,
+            ]];
         }
 
         $textLength = mb_strlen($text, 'UTF-8');
@@ -2418,6 +2691,8 @@ class VersionController extends Controller
         if (!auth()->check()) {
             abort(403, 'Authentification requise.');
         }
+
+        $this->assertVersionEditable($version);
     }
 
     private function assertComparisonOwnership(Comparison $comparison): void

@@ -309,22 +309,24 @@
       color: #0d6efd;
     }
     .version-table .version-viewer-col {
-      width: 3.2rem;
-      min-width: 3.2rem;
+      width: 2.8rem;
+      min-width: 2.8rem;
       text-align: center;
     }
     .version-table .version-viewer-btn {
-      width: 2.35rem;
-      min-width: 2.35rem;
-      height: 2.35rem;
-      padding: 0;
+      width: 1.9rem;
+      min-width: 1.9rem;
+      height: 1.9rem;
+      padding-left: 0;
+      padding-right: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.1rem;
+      line-height: 1;
+      font-size: 0.9rem;
     }
     .version-table .version-viewer-btn .bi-eye {
-      font-size: 1.15rem;
+      font-size: 0.9rem;
     }
     .version-table .version-viewer-state {
       display: none;
@@ -339,17 +341,11 @@
     .version-table tr.version-row-selected > td {
       background-color: rgba(13, 110, 253, 0.11);
     }
-    .version-table tr.version-row-selected td:first-child {
-      box-shadow: inset 4px 0 0 #0d6efd;
-    }
     .version-table tr.version-row-selected .version-viewer-btn {
       background-color: #0d6efd;
       border-color: #0d6efd;
       color: #fff;
       box-shadow: 0 0 0 0.18rem rgba(13, 110, 253, 0.18);
-    }
-    .version-table tr.version-row-selected .version-viewer-state {
-      display: block;
     }
 </style>
 
@@ -397,6 +393,7 @@ let facUploadAbortController = null;
 let facUploadCancelRequested = false;
 let facCurrentUploadVersionId = null;
 let currentViewerVersionId = null;
+let viewerSelectionLoading = false;
 let selectedAuthorLabel = '';
 let selectedWorkLabel   = '';
 let showVersionDetails  = false;
@@ -1377,6 +1374,11 @@ window.addEventListener('DOMContentLoaded',()=>{
         updateViewerRowSelection();
     });
 
+    document.addEventListener('facsimiles:selection-loading', e => {
+        viewerSelectionLoading = e.detail?.loading === true;
+        updateViewerRowSelection();
+    });
+
     /* ——— Upload submit ——— */
     document.getElementById('upload-version-form').addEventListener('submit',async ev=>{
         ev.preventDefault();
@@ -1479,22 +1481,28 @@ function openFacsimileUploadModal(version) {
 function revealFacsimilesForVersion(versionId, versionName = '') {
     const numericVersionId = Number(versionId);
     if (!Number.isFinite(numericVersionId) || numericVersionId <= 0) return;
-    currentViewerVersionId = numericVersionId;
-    updateViewerRowSelection();
 
     if (typeof window.openEditorialStep === 'function') {
         window.openEditorialStep(2, { focusPanel: false, scrollToJourney: false });
     }
-
-    document.dispatchEvent(new CustomEvent('facsimiles:select', {
-        detail: { versionId: numericVersionId, versionName: versionName || '' }
-    }));
 
     const collapseEl = document.getElementById('facsimilesCollapse');
     if (collapseEl && !collapseEl.classList.contains('show') && window.bootstrap?.Collapse) {
         const collapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
         collapse.show();
     }
+
+    if (currentViewerVersionId === numericVersionId) {
+        updateViewerRowSelection();
+        return;
+    }
+
+    currentViewerVersionId = numericVersionId;
+    updateViewerRowSelection();
+
+    document.dispatchEvent(new CustomEvent('facsimiles:select', {
+        detail: { versionId: numericVersionId, versionName: versionName || '' }
+    }));
 }
 
 function updateViewerRowSelection() {
@@ -1505,6 +1513,8 @@ function updateViewerRowSelection() {
         const button = row.querySelector('.version-viewer-btn');
         if (button) {
             button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+            button.disabled = false;
+            button.classList.remove('is-loading');
             button.setAttribute('title', isSelected ? 'Version actuellement affichée dans le lecteur' : 'Ouvrir le viewer');
         }
     });
