@@ -90,8 +90,26 @@ abstract class TestCase extends BaseTestCase
         ];
 
         foreach ($paths as $path) {
-            File::ensureDirectoryExists($path);
+            $this->ensureDirectoryExistsWhenWritable($path);
         }
+    }
+
+    protected function ensureDirectoryExistsWhenWritable(string $path): void
+    {
+        if (File::isDirectory($path)) {
+            return;
+        }
+
+        $anchor = dirname($path);
+        while (!is_dir($anchor) && $anchor !== dirname($anchor)) {
+            $anchor = dirname($anchor);
+        }
+
+        if (!is_dir($anchor) || !is_writable($anchor)) {
+            return;
+        }
+
+        File::ensureDirectoryExists($path);
     }
 
     protected function writeVersionXml(Version $version, string $body = '<p>Texte témoin</p>'): string
