@@ -42,6 +42,11 @@
                             </span>
                         </th>
                         <th class="comparison-comment-col" title="Commentaires">💬</th>
+                        <th class="comparison-chapters-col" title="Chapitres">
+                            <span class="comparison-column-icon" aria-hidden="true">
+                                <i class="bi bi-list-ul"></i>
+                            </span>
+                        </th>
                         <th class="comparison-folder-col">Désignation</th>
                         <th class="comparison-source-col">Source</th>
                         <th class="comparison-target-col">Cible</th>
@@ -144,10 +149,10 @@
   .comparison-details-toggle .form-check-label {
     cursor: pointer;
   }
-  .comparisons-table.compact-details th:nth-child(3),
-  .comparisons-table.compact-details td:nth-child(3),
-  .comparisons-table.compact-details th:nth-child(6),
-  .comparisons-table.compact-details td:nth-child(6) {
+  .comparisons-table.compact-details th:nth-child(4),
+  .comparisons-table.compact-details td:nth-child(4),
+  .comparisons-table.compact-details th:nth-child(7),
+  .comparisons-table.compact-details td:nth-child(7) {
     display: none;
   }
   .comparisons-table.compact-details .comparison-role-details,
@@ -190,6 +195,13 @@
     padding-left: 0.2rem;
     padding-right: 0.2rem;
   }
+  .comparisons-table .comparison-chapters-col,
+  .comparisons-table .comparison-chapters-cell {
+    width: 2.4rem;
+    min-width: 2.4rem;
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+  }
   .comparisons-table:not(.compact-details) .comparison-folder-col,
   .comparisons-table:not(.compact-details) .comparison-folder-cell {
     width: 8rem;
@@ -224,23 +236,23 @@
     width: 8rem;
     min-width: 8rem;
   }
-  .comparisons-table td:nth-child(8),
   .comparisons-table td:nth-child(9),
   .comparisons-table td:nth-child(10),
   .comparisons-table td:nth-child(11),
   .comparisons-table td:nth-child(12),
   .comparisons-table td:nth-child(13),
-  .comparisons-table td:nth-child(14) {
+  .comparisons-table td:nth-child(14),
+  .comparisons-table td:nth-child(15) {
     text-align: center;
   }
-  .comparisons-table th:nth-child(8),
   .comparisons-table th:nth-child(9),
   .comparisons-table th:nth-child(10),
-  .comparisons-table td:nth-child(8),
+  .comparisons-table th:nth-child(11),
   .comparisons-table td:nth-child(9),
   .comparisons-table td:nth-child(10),
-  .comparisons-table th:nth-child(11),
-  .comparisons-table td:nth-child(11) {
+  .comparisons-table td:nth-child(11),
+  .comparisons-table th:nth-child(12),
+  .comparisons-table td:nth-child(12) {
     width: 4.5rem;
     min-width: 4.5rem;
   }
@@ -254,6 +266,28 @@
   }
   .comparison-comment-btn i {
     font-size: 0.9rem;
+  }
+  .comparison-chapters-btn {
+    width: 1.8rem;
+    height: 1.8rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .comparison-chapters-btn i {
+    font-size: 0.9rem;
+  }
+  .comparison-chapters-btn--filled {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+  }
+  .comparison-chapters-btn--filled:hover,
+  .comparison-chapters-btn--filled:focus {
+    background-color: #0b5ed7;
+    border-color: #0a58ca;
+    color: #fff;
   }
   .comparison-comment-btn--filled {
     background-color: #0d6efd;
@@ -560,18 +594,29 @@
     padding-bottom: 0 !important;
     text-align: center;
   }
+  .comparison-chapters-cell {
+    vertical-align: middle !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    text-align: center;
+  }
   .comparison-order-cell,
-  .comparison-comment-cell {
+  .comparison-comment-cell,
+  .comparison-chapters-cell {
     height: 100%;
   }
   .comparison-order-cell > .comparison-action-bar,
   .comparison-order-cell > .comparison-reorder-bar,
-  .comparison-comment-cell > .comparison-comment-btn {
+  .comparison-comment-cell > .comparison-comment-btn,
+  .comparison-chapters-cell > .comparison-chapters-btn {
     display: flex;
     align-items: center;
     justify-content: center;
   }
   .comparison-comment-cell > .comparison-comment-btn {
+    vertical-align: middle;
+  }
+  .comparison-chapters-cell > .comparison-chapters-btn {
     vertical-align: middle;
   }
   .comparisons-table:not(.compact-details) .comparison-action-cell .d-flex {

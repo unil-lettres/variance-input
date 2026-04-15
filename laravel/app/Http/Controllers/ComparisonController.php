@@ -56,6 +56,10 @@ class ComparisonController extends Controller
         $workFolder = $workInfo->folder ?? null;
 
         $required = PublishController::COMPONENTS;
+        $chapterCounts = Chapter::query()
+            ->select('folder', DB::raw('COUNT(*) as aggregate'))
+            ->groupBy('folder')
+            ->pluck('aggregate', 'folder');
 
         $user = $request->user();
 
@@ -72,7 +76,10 @@ class ComparisonController extends Controller
             ->orderBy('number')
             ->orderBy('id')
             ->get()
-            ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder, $light) {
+            ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder, $light, $chapterCounts) {
+                $cmp->chapter_count = (int) ($chapterCounts[$cmp->folder] ?? 0);
+                $cmp->has_chapters = $cmp->chapter_count > 0;
+
                 if ($light) {
                     $publicationScope = $cmp->publication_scope ?? ($cmp->is_legacy ? 'prod' : null);
                     $cmp->publication_scope = $publicationScope;

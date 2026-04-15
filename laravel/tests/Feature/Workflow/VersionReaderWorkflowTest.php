@@ -190,6 +190,98 @@ class VersionReaderWorkflowTest extends TestCase
         $this->assertSame('Texte reconstruit XHTML', $artifact['dataset']['text'] ?? null);
     }
 
+    public function test_reader_aligns_folio_markers_to_trailing_facsimiles_when_images_start_before_first_page(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $source = Version::factory()->for($work)->create([
+            'folder' => 'reader-folio-v1',
+            'name' => 'Lettre d’un fou (1885)',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'folder' => 'reader-folio-v2',
+            'name' => 'Version cible',
+        ]);
+
+        foreach (['001', '002', '003', '004', '005'] as $basename) {
+            $this->writeFacsimilePair($source, $basename);
+        }
+
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'created_by' => $user->id,
+        ]);
+
+        $this->writeComparisonArtifacts($comparison, [
+            'source.xhtml' => <<<HTML
+<div>
+  <pb n="1a"/>
+  <p>Mon cher docteur, je me mets entre vos mains.</p>
+  <pb n="1b"/>
+  <p>Suite du texte reconstitué.</p>
+  <pb n="2a"/>
+  <p>Fin du texte reconstitué.</p>
+</div>
+HTML,
+        ]);
+
+        $this->getJson("/api/versions/{$source->id}/reader?text_source=comparison-xhtml")
+            ->assertOk()
+            ->assertJsonPath('page_count', 3)
+            ->assertJsonPath('pages.0.label', '1a')
+            ->assertJsonPath('pages.0.image.name', 'img_reader-folio-v1_003.jpg')
+            ->assertJsonPath('pages.1.image.name', 'img_reader-folio-v1_004.jpg')
+            ->assertJsonPath('pages.2.image.name', 'img_reader-folio-v1_005.jpg')
+            ->assertJsonPath('current_page.image.name', 'img_reader-folio-v1_003.jpg');
+    }
+
+    public function test_reader_aligns_numeric_markers_to_trailing_facsimiles_when_images_start_before_first_page(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $source = Version::factory()->for($work)->create([
+            'folder' => 'reader-numeric-v1',
+            'name' => 'Mercure Galant',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'folder' => 'reader-numeric-v2',
+            'name' => 'Version cible',
+        ]);
+
+        foreach (['001', '002', '003', '004'] as $basename) {
+            $this->writeFacsimilePair($source, $basename);
+        }
+
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'created_by' => $user->id,
+        ]);
+
+        $this->writeComparisonArtifacts($comparison, [
+            'source.xhtml' => <<<HTML
+<div>
+  <pb n="75"/>
+  <p>LA BELLE AU BOIS DORMANT.</p>
+  <pb n="76"/>
+  <p>CONTE.</p>
+  <pb n="77"/>
+  <p>Suite du texte reconstitué.</p>
+</div>
+HTML,
+        ]);
+
+        $this->getJson("/api/versions/{$source->id}/reader?text_source=comparison-xhtml")
+            ->assertOk()
+            ->assertJsonPath('page_count', 3)
+            ->assertJsonPath('pages.0.label', '75')
+            ->assertJsonPath('pages.0.image.name', 'img_reader-numeric-v1_002.jpg')
+            ->assertJsonPath('pages.1.image.name', 'img_reader-numeric-v1_003.jpg')
+            ->assertJsonPath('pages.2.image.name', 'img_reader-numeric-v1_004.jpg')
+            ->assertJsonPath('current_page.image.name', 'img_reader-numeric-v1_002.jpg');
+    }
+
     public function test_convert_text_to_utf8_requires_authenticated_session(): void
     {
         $user = $this->signInEditor();

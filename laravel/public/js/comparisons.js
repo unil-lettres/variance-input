@@ -239,6 +239,18 @@ function initComparisonsTable() {
     window.setTimeout(() => commentInput.focus(), 50);
   }
 
+  function openChaptersPanel(comparisonId) {
+    const id = Number(comparisonId);
+    if (!Number.isFinite(id)) return;
+
+    document.dispatchEvent(new CustomEvent('comparisonChaptersRequested', {
+      detail: {
+        comparisonId: id,
+        workId: currentWorkId,
+      }
+    }));
+  }
+
   function updateComparisonCounts(published, total) {
     const pub = normalizeCount(published);
     const tot = normalizeCount(total);
@@ -1742,9 +1754,14 @@ function initComparisonsTable() {
     const commentDisabled = isLegacy || ownershipBlocked || isPublicationPending;
     const normalizedComment = normalizeComment(comp.comments);
     const hasComments = normalizedComment !== null;
+    const chapterCount = Number(comp.chapter_count ?? 0);
+    const hasChapters = chapterCount > 0;
     const commentTitle = hasComments
       ? 'Voir ou modifier le commentaire'
       : 'Ajouter un commentaire';
+    const chaptersTitle = hasChapters
+      ? `Voir les chapitres (${chapterCount})`
+      : 'Ouvrir le panneau des chapitres';
     const commentButtonHtml = `<button type="button"
             class="btn ${hasComments ? 'btn-primary comparison-comment-btn--filled' : 'btn-outline-secondary'} comparison-comment-btn ${commentDisabled ? 'legacy-disabled' : ''}"
             data-comparison-comment="1"
@@ -1753,6 +1770,14 @@ function initComparisonsTable() {
             ${commentDisabled ? 'disabled aria-disabled="true"' : ''}>
           <i class="bi ${hasComments ? 'bi-chat-left-text-fill' : 'bi-chat-left-text'}" aria-hidden="true"></i>
           <span class="visually-hidden">${escapeHtml(commentTitle)}</span>
+        </button>`;
+    const chaptersButtonHtml = `<button type="button"
+            class="btn ${hasChapters ? 'btn-primary comparison-chapters-btn--filled' : 'btn-outline-secondary'} comparison-chapters-btn"
+            data-comparison-chapters="1"
+            data-id="${comp.id}"
+            title="${escapeHtml(chaptersTitle)}">
+          <i class="bi ${hasChapters ? 'bi-list-ul' : 'bi-list'}" aria-hidden="true"></i>
+          <span class="visually-hidden">${escapeHtml(chaptersTitle)}</span>
         </button>`;
 
     const xmlAvailable = comp.xml_available === true;
@@ -1841,6 +1866,9 @@ function initComparisonsTable() {
       </td>
       <td class="text-center comparison-comment-cell">
         ${isRunning ? '' : commentButtonHtml}
+      </td>
+      <td class="text-center comparison-chapters-cell">
+        ${chaptersButtonHtml}
       </td>
       <td class="comparison-folder-cell">${folderHtml}</td>
       <td class="source-cell comparison-source-cell">
@@ -2239,6 +2267,14 @@ function initComparisonsTable() {
       const comparisonId = commentBtn.dataset.id;
       if (!comparisonId) return;
       openCommentModal(comparisonId);
+      return;
+    }
+
+    const chaptersBtn = event.target.closest('[data-comparison-chapters="1"]');
+    if (chaptersBtn) {
+      const comparisonId = chaptersBtn.dataset.id;
+      if (!comparisonId) return;
+      openChaptersPanel(comparisonId);
       return;
     }
 

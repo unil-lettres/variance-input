@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Models\Chapter;
 use App\Models\Comparison;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -164,5 +165,27 @@ class ComparisonWorkflowTest extends TestCase
             collect([$mine->id, $legacy->id])->sort()->values()->all(),
             $ids
         );
+
+        Chapter::create([
+            'folder' => $mine->folder,
+            'level' => '1',
+            'label_source' => 'Première partie',
+            'label_target' => 'Première partie',
+            'chapter_parent' => 0,
+            'start_line_source' => '1a',
+            'start_line_target' => '1a',
+            'id_tome_source' => 0,
+            'id_tome_target' => 0,
+        ]);
+
+        $response = $this->getJson("/comparisons/by-work?work_id={$work->id}&light=1");
+        $payload = collect($response->json());
+        $minePayload = $payload->firstWhere('id', $mine->id);
+        $legacyPayload = $payload->firstWhere('id', $legacy->id);
+
+        $this->assertSame(1, $minePayload['chapter_count'] ?? null);
+        $this->assertTrue($minePayload['has_chapters'] ?? false);
+        $this->assertSame(0, $legacyPayload['chapter_count'] ?? null);
+        $this->assertFalse($legacyPayload['has_chapters'] ?? true);
     }
 }

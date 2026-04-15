@@ -174,6 +174,9 @@ Route::get('/comparisons/{comparison}/export/download', [ComparisonController::c
 Route::get('/chapters/targets', [ChaptersController::class, 'targets'])
     ->middleware('auth')
     ->name('chapters.targets');
+Route::get('/chapters/{comparison}', [ChaptersController::class, 'show'])
+    ->middleware('auth')
+    ->name('chapters.show');
 Route::post('/chapters/import/preview', [ChaptersController::class, 'preview'])
     ->middleware('auth')
     ->name('chapters.import.preview');

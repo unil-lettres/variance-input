@@ -157,6 +157,7 @@
     let currentTargets = [];
     let previewToken = null;
     let targetsRequestSerial = 0;
+    let pendingComparisonId = null;
     const defaultMessage = 'Sélectionnez une œuvre pour préparer l’import des chapitres.';
 
     const escapeHtml = (value) => String(value ?? '')
@@ -180,11 +181,22 @@
       warningList.classList.add('d-none');
       warningList.innerHTML = '';
       previewWrap.classList.add('d-none');
-      commitBtn.disabled = true;
+      commitBtn.textContent = 'Importer les chapitres';
+    }
+
+    function selectedTarget() {
+      const value = String(targetSelect.value || '').trim();
+      if (!value) return null;
+      return currentTargets.find((target) => String(target?.id ?? '') === value) || null;
     }
 
     function syncPreviewAvailability() {
-      previewBtn.disabled = !(currentWorkId && targetSelect.value && fileInput.files?.length);
+      const target = selectedTarget();
+      const canImport = !!(target && target.readonly !== true);
+      const ready = !!(currentWorkId && canImport && fileInput.files?.length);
+      fileInput.disabled = !currentTargets.length || !canImport;
+      previewBtn.disabled = !ready;
+      commitBtn.disabled = !ready;
     }
 
     function renderTargets(targets) {
@@ -194,13 +206,15 @@
       currentTargets.forEach((target) => {
         const option = document.createElement('option');
         option.value = String(target.id);
-        option.textContent = `${target.label} [${target.folder}]`;
+        option.textContent = target.readonly
+          ? `${target.label} [${target.folder}] — legacy`
+          : `${target.label} [${target.folder}]`;
         option.dataset.chapterCount = String(target.chapter_count ?? 0);
+        option.dataset.readonly = target.readonly ? '1' : '0';
         targetSelect.appendChild(option);
       });
 
       targetSelect.disabled = currentTargets.length === 0;
-      fileInput.disabled = currentTargets.length === 0;
       syncPreviewAvailability();
 
       if (currentTargets.length === 0) {
@@ -208,6 +222,34 @@
       } else {
         targetHelp.textContent = 'Les chapitres seront enregistrés sous le dossier de comparaison sélectionné.';
       }
+
+      if (pendingComparisonId) {
+        const requestedId = pendingComparisonId;
+        pendingComparisonId = null;
+        selectComparisonTarget(requestedId, { scroll: true });
+      }
+    }
+
+    function selectComparisonTarget(comparisonId, { scroll = false } = {}) {
+      const normalizedId = String(comparisonId ?? '').trim();
+      if (!normalizedId) return false;
+
+      const option = Array.from(targetSelect.options).find((item) => item.value === normalizedId);
+      if (!option) {
+        pendingComparisonId = normalizedId;
+        return false;
+      }
+
+      targetSelect.value = normalizedId;
+      targetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+      if (scroll) {
+        const card = document.getElementById('chapters-card');
+        card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      pendingComparisonId = null;
+      return true;
     }
 
     async function loadTargets(workId) {
@@ -298,15 +340,77 @@
       setFeedback('Aperçu prêt. Vérifiez les lignes détectées puis confirmez l’import.', 'success');
     }
 
+    function renderReadOnlyRows(data) {
+      const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+      const rowCount = Number(data?.summary?.count ?? 0);
+      const rootCount = Number(data?.summary?.root_count ?? 0);
+      const folderLabel = selectedOption ? selectedOption.textContent : '';
+
+      previewSummary.innerHTML = `
+        <strong>${escapeHtml(folderLabel)}</strong><br>
+        ${rowCount} ligne(s) actuellement stockée(s), dont ${rootCount} racine(s).<br>
+        Consultation en lecture seule.
+      `;
+
+      previewBody.innerHTML = (data.rows || []).map((row) => `
+        <tr>
+          <td>${escapeHtml(row.row_number)}</td>
+          <td><code>${escapeHtml(row.level)}</code></td>
+          <td>${escapeHtml(row.label)}</td>
+          <td>${escapeHtml(row.start_line_source)}</td>
+          <td>${escapeHtml(row.start_line_target)}</td>
+          <td>${escapeHtml(row.parent_level || '—')}</td>
+        </tr>
+      `).join('');
+
+      warningList.classList.add('d-none');
+      warningList.innerHTML = '';
+      previewToken = null;
+      previewWrap.classList.remove('d-none');
+      commitBtn.disabled = true;
+      commitBtn.textContent = 'Importer les chapitres';
+      setFeedback('Chapitres chargés en lecture seule pour cette comparaison legacy.', 'success');
+    }
+
+    async function loadReadOnlyRows(comparisonId) {
+      if (!comparisonId) return;
+
+      resetPreview();
+      setFeedback('Chargement des chapitres existants…');
+
+      try {
+        const res = await fetch(withBasePath(`/chapters/${encodeURIComponent(comparisonId)}`), {
+          headers: { 'Accept': 'application/json' },
+        });
+        const data = await res.json();
+        if (!res.ok || data.status !== 'ok') {
+          throw new Error(data.message || data.error || `HTTP ${res.status}`);
+        }
+
+        renderReadOnlyRows(data);
+      } catch (err) {
+        setFeedback(`Impossible de charger les chapitres : ${err.message || 'erreur inconnue'}`, 'error');
+      }
+    }
+
     targetSelect.addEventListener('change', () => {
       resetPreview();
       syncPreviewAvailability();
       const selectedOption = targetSelect.options[targetSelect.selectedIndex];
       const count = selectedOption?.dataset.chapterCount ?? '0';
-      if (targetSelect.value) {
+      const target = selectedTarget();
+      if (targetSelect.value && target?.readonly) {
+        setFeedback(`${count} ligne(s) de chapitres déjà stockée(s) pour cette comparaison legacy. Consultation uniquement.`, 'success');
+        targetHelp.textContent = 'Cette comparaison legacy est visible ici en lecture seule.';
+        loadReadOnlyRows(target.id);
+      } else if (targetSelect.value) {
         setFeedback(`${count} ligne(s) de chapitres actuellement stockée(s) pour cette comparaison.`);
+        targetHelp.textContent = 'Les chapitres seront enregistrés sous le dossier de comparaison sélectionné.';
       } else {
         setFeedback('Choisissez une comparaison, puis chargez le fichier XLSX.');
+        targetHelp.textContent = currentTargets.length === 0
+          ? 'Aucune comparaison éditoriale disponible pour cette œuvre.'
+          : 'Les chapitres seront enregistrés sous le dossier de comparaison sélectionné.';
       }
     });
 
@@ -315,13 +419,14 @@
       syncPreviewAvailability();
     });
 
-    previewBtn.addEventListener('click', async () => {
+    async function runPreview() {
       if (!currentWorkId || !targetSelect.value || !fileInput.files?.length) {
-        return;
+        return false;
       }
 
       resetPreview();
       previewBtn.disabled = true;
+      commitBtn.disabled = true;
       setFeedback('Lecture du fichier XLSX et préparation de l’aperçu…');
 
       const formData = new FormData();
@@ -346,19 +451,37 @@
         }
 
         renderPreview(data);
+        commitBtn.textContent = 'Importer les chapitres';
+        return true;
       } catch (err) {
         setFeedback(`Prévisualisation impossible : ${err.message || 'erreur inconnue'}`, 'error');
+        return false;
       } finally {
         syncPreviewAvailability();
       }
+    }
+
+    previewBtn.addEventListener('click', async () => {
+      await runPreview();
     });
 
     commitBtn.addEventListener('click', async () => {
-      if (!previewToken || !targetSelect.value) {
+      if (!targetSelect.value || !fileInput.files?.length) {
+        return;
+      }
+
+      if (!previewToken) {
+        commitBtn.textContent = 'Prévisualisation…';
+        const previewReady = await runPreview();
+        if (previewReady) {
+          commitBtn.textContent = 'Confirmer l’import';
+          setFeedback('Aperçu prêt. Vérifiez les lignes détectées puis cliquez de nouveau sur « Importer les chapitres ».', 'success');
+        }
         return;
       }
 
       commitBtn.disabled = true;
+      commitBtn.textContent = 'Import en cours…';
       setFeedback('Import des chapitres en cours…');
 
         try {
@@ -387,7 +510,8 @@
         setFeedback(`${data.imported_count} ligne(s) de chapitres importée(s) avec succès.`, 'success');
       } catch (err) {
         setFeedback(`Import impossible : ${err.message || 'erreur inconnue'}`, 'error');
-        commitBtn.disabled = false;
+        syncPreviewAvailability();
+        commitBtn.textContent = 'Confirmer l’import';
       }
     });
 
@@ -427,6 +551,18 @@
 
     document.addEventListener('refreshComparisons', () => {
       refreshTargetsForEvent(currentWorkId);
+    });
+
+    document.addEventListener('comparisonChaptersRequested', (event) => {
+      const requestedWorkId = (event?.detail?.workId ?? '').toString().trim();
+      const comparisonId = (event?.detail?.comparisonId ?? '').toString().trim();
+      if (!comparisonId) {
+        return;
+      }
+      if (requestedWorkId && currentWorkId && requestedWorkId !== currentWorkId) {
+        return;
+      }
+      selectComparisonTarget(comparisonId, { scroll: true });
     });
   })();
 </script>

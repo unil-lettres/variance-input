@@ -16,7 +16,9 @@ For the next staging rebuild after the fixes made on 2026-04-13, also use
 ## Environment
 
 - Local development uses `laravel/.env` (copied from `laravel/example.env`).
-- The staging VM uses a repo-root `laravel.env` file mounted into `/var/www/html/.env`; start from `laravel.env.example`.
+- Non-local deployment environments should keep their real hostnames, paths,
+  and mount details in internal operations documentation; start from
+  `laravel.env.example` when preparing environment-specific configuration.
 - Set:
   * `APP_ENV=production`
   * `APP_URL` to your external URL.
@@ -79,63 +81,46 @@ For the next staging rebuild after the fixes made on 2026-04-13, also use
 - Rotate application keys and database credentials regularly.
 - Disable or restrict direct container shell access on production hosts.
 
-## Staging VM compose notes
+## Internal Deployment Notes
 
-- `docker-compose.vm.yml` is the canonical VM compose file and includes:
-  - `laravel`
-  - `laravel-queue`
-  - `laravel-scheduler`
-  - `medite`
-  - `variance-web`
-  - `variance-proxy`
-- The VM compose mounts the following host-managed files into the Laravel containers:
-  - `./laravel.env:/var/www/html/.env`
-  - `./laravel/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro`
-  - `./laravel/app/Providers/AppServiceProvider.php:/var/www/html/app/Providers/AppServiceProvider.php:ro`
-- The proxy also serves `./laravel/public` directly from the host checkout. Vite assets
-  are built inside the Laravel image, so after recreating the Laravel container on the VM
-  you must sync `public/build` back onto the host checkout before admin JavaScript will load.
-- Those mounts keep staging URL/proxy fixes and startup behavior aligned with the checked-out repo without rebuilding the image.
-- After each staging deploy or image refresh, run:
-  ```bash
-  ./scripts/sync_vm_vite_assets.sh
-  ```
-- Quick verification:
-  ```bash
-  curl -I http://127.0.0.1:8081/admin/build/assets/$(jq -r '."resources/js/editor.js".file' laravel/public/build/manifest.json)
-  ```
-- After any deployment that changes the synchronized viewer, XHTML fallback, or
-  pagination reconstruction logic, plan a post-deploy warm-up pass for legacy
-  comparisons/versions. The first request to `/admin/api/versions/{id}/reader`
-  now persists a server-side reader artifact (reconstructed text + resolved
-  pagination), so pre-processing all legacy cases avoids slow first loads and
-  timeout risk for large works.
+- Real staging / production hostnames, deploy paths, SSH targets, local proxy
+  addresses, and environment-specific compose filenames should live in internal
+  operations documentation, not in the public repository.
+- If a deployment environment serves built frontend assets directly from a host
+  checkout, include a documented post-deploy step to sync `laravel/public/build`
+  from the running Laravel image or build container back onto that checkout.
+- After any deployment that changes synchronized viewer behavior, XHTML
+  fallback, or pagination reconstruction logic, plan a post-deploy warm-up pass
+  for legacy comparisons/versions. The first request to
+  `/admin/api/versions/{id}/reader` persists a server-side reader artifact
+  (reconstructed text + resolved pagination), so pre-processing all legacy
+  cases avoids slow first loads and timeout risk for large works.
 
 ## Legacy (PHP) setup checklist
 
-- Copy `/var/www/variance-input/variance/php/settings.inc.example.php` to
-  `/var/www/variance-input/variance/php/settings.inc.php` on the host. This file is
-  git-ignored and required by public comparison pages.
+- Copy the legacy `settings.inc.example.php` to `settings.inc.php` on the
+  deployment host. This file is git-ignored and required by public comparison
+  pages.
 - Ensure legacy PHP dependencies exist (needed for `vendor/autoload.php`). If missing,
   run:
   ```bash
-  docker compose -f docker-compose.vm.yml exec -T variance-app \
-    sh -lc 'cd /var/www && composer install --no-dev --optimize-autoloader'
+  docker compose exec -T variance-app \
+    sh -lc 'composer install --no-dev --optimize-autoloader'
   ```
 
 ## Legacy data import (one-time)
 
 - Copy legacy assets to the new host (exclude any deprecated folders):
   ```bash
-  rsync -a --exclude 'deprecated' user@legacy-host:/var/www/variance/uploads/ /var/www/variance-input/variance/uploads/
-  rsync -a user@legacy-host:/var/www/variance/uploads_images/ /var/www/variance-input/variance/uploads_images/
-  rsync -a user@legacy-host:/var/www/variance/uploads/pdf/ /var/www/variance-input/variance/uploads/pdf/
+  rsync -a --exclude 'deprecated' user@legacy-host:/path/to/legacy/uploads/ /path/to/deployment/variance/uploads/
+  rsync -a user@legacy-host:/path/to/legacy/uploads_images/ /path/to/deployment/variance/uploads_images/
+  rsync -a user@legacy-host:/path/to/legacy/uploads/pdf/ /path/to/deployment/variance/uploads/pdf/
   ```
 - Ensure the upload directories are writable by the deployment user:
   ```bash
-  sudo chown -R deployer:www-data /var/www/variance-input/variance/uploads \
-    /var/www/variance-input/variance/uploads_images \
-    /var/www/variance-input/variance/uploads/pdf
+  sudo chown -R deployer:www-data /path/to/deployment/variance/uploads \
+    /path/to/deployment/variance/uploads_images \
+    /path/to/deployment/variance/uploads/pdf
   ```
 - Copy the legacy SQL dump into the Laravel container and import it:
   ```bash
@@ -149,15 +134,15 @@ For the next staging rebuild after the fixes made on 2026-04-13, also use
 ## Legacy PDF notices (work ID remap)
 
 If notices point to the wrong PDF after import, overwrite the new-ID PDFs with
-the legacy PDFs using the work ID map. Run on the VM (no access to legacy prod
-required):
+the legacy PDFs using the work ID map. Run on the deployment host:
 
 ```bash
 python3 - <<'PY'
 import json, os, shutil, hashlib, datetime
-map_path = '/var/www/variance-input/var/laravel_storage/app/private/legacy_import/work_id_map.json'
-pdf_dir = '/var/www/variance-input/var/uploads_pdf'
-backup_dir = '/var/www/variance-input/var/uploads_pdf_backup_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+base = '/path/to/deployment'
+map_path = os.path.join(base, 'var/laravel_storage/app/private/legacy_import/work_id_map.json')
+pdf_dir = os.path.join(base, 'var/uploads_pdf')
+backup_dir = os.path.join(base, 'var/uploads_pdf_backup_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
 os.makedirs(backup_dir, exist_ok=True)
 
 def md5(path):
@@ -194,7 +179,7 @@ PY
 
 ## Disk space recovery (VM)
 
-If `/var` fills up during large legacy syncs, reclaim space from unused Docker
+If the deployment filesystem fills up during large legacy syncs, reclaim space from unused Docker
 artifacts first:
 
 ```bash

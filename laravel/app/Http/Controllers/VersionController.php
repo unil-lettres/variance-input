@@ -18,6 +18,8 @@ use App\Services\PageMarkerService;
 
 class VersionController extends Controller
 {
+    private const READER_DATASET_SCHEMA_VERSION = 2;
+
     public function __construct(private PageMarkerService $pageMarkerService)
     {
     }
@@ -1911,6 +1913,7 @@ class VersionController extends Controller
         $facsimiles = $this->readerFacsimiles($version);
 
         return [
+            'schema_version' => self::READER_DATASET_SCHEMA_VERSION,
             'text' => [
                 'path' => is_file($textPath) ? $textPath : null,
                 'mtime' => is_file($textPath) ? ((int) @filemtime($textPath)) : null,
@@ -2086,14 +2089,29 @@ class VersionController extends Controller
         $normalizedMarkers = array_values(array_map(function (array $marker) {
             $marker['resolved_char_index'] = max(0, (int) ($marker['resolved_char_index'] ?? $marker['char_index'] ?? 0));
             $marker['image_code'] = $this->readerImageCode($marker['image_code'] ?? $marker['page'] ?? null);
+            $marker['page_label'] = trim((string) ($marker['page'] ?? ''));
             return $marker;
         }, $markers));
 
         usort($normalizedMarkers, static fn (array $a, array $b) => ((int) ($a['resolved_char_index'] ?? 0)) <=> ((int) ($b['resolved_char_index'] ?? 0)));
 
+        $allSequentialLabels = !empty($normalizedMarkers)
+            && collect($normalizedMarkers)->every(static fn (array $marker) => preg_match('/^\d+(?:[a-z]+)?$/i', (string) ($marker['page_label'] ?? '')) === 1);
+        $hasAlphaSequentialLabels = collect($normalizedMarkers)
+            ->contains(static fn (array $marker) => preg_match('/^\d+[a-z]+$/i', (string) ($marker['page_label'] ?? '')) === 1);
+        $exactMarkerMatches = collect($normalizedMarkers)
+            ->filter(static fn (array $marker) => !empty($marker['image_code']) && array_key_exists((string) $marker['image_code'], $imagesByCode))
+            ->count();
+        $useTrailingSequentialAlignment = count($facsimiles) >= count($normalizedMarkers)
+            && $allSequentialLabels
+            && ($hasAlphaSequentialLabels || $exactMarkerMatches === 0);
+        $trailingImageOffset = $useTrailingSequentialAlignment
+            ? max(0, count($facsimiles) - count($normalizedMarkers))
+            : 0;
+
         $pages = [];
         $firstMarker = $normalizedMarkers[0] ?? null;
-        if ($firstMarker) {
+        if ($firstMarker && !$useTrailingSequentialAlignment) {
             $firstStart = min(max(0, (int) ($firstMarker['resolved_char_index'] ?? 0)), $textLength);
             $firstCode = $this->readerImageCode($firstMarker['image_code'] ?? null);
             if ($firstStart > 0 && $firstCode) {
@@ -2130,10 +2148,15 @@ class VersionController extends Controller
                 ? min(max($start, (int) ($nextMarker['resolved_char_index'] ?? 0)), $textLength)
                 : $textLength;
 
-            $imageCode = $this->readerImageCode($marker['image_code'] ?? null);
-            $image = $imageCode && array_key_exists($imageCode, $imagesByCode)
-                ? $imagesByCode[$imageCode]
-                : null;
+            if ($useTrailingSequentialAlignment) {
+                $image = $facsimiles[$trailingImageOffset + $index] ?? null;
+                $imageCode = $this->readerImageCode($image['image_code'] ?? $image['name'] ?? null);
+            } else {
+                $imageCode = $this->readerImageCode($marker['image_code'] ?? null);
+                $image = $imageCode && array_key_exists($imageCode, $imagesByCode)
+                    ? $imagesByCode[$imageCode]
+                    : null;
+            }
             $label = trim((string) ($marker['page'] ?? '')) ?: ($imageCode ? 'p. ' . $imageCode : 'Repère ' . ($index + 1));
             $excerptStart = $start;
             $excerptEnd = $end;

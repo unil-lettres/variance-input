@@ -121,6 +121,60 @@ class ChaptersImportWorkflowTest extends TestCase
         $this->assertSame($chapters[0]->id, $chapters[1]->chapter_parent);
     }
 
+    public function test_legacy_comparison_with_existing_chapters_is_listed_as_read_only_target(): void
+    {
+        $user = $this->signInEditor();
+        $author = \App\Models\Author::factory()->create([
+            'name' => 'Auteur legacy',
+            'is_legacy' => true,
+        ]);
+        $this->grantAuthorEditPermission($user, $author);
+        $work = \App\Models\Work::factory()->for($author)->create([
+            'title' => 'Chapitres legacy visibles',
+            'short_title' => 'cdlegacy',
+            'is_legacy' => true,
+        ]);
+
+        $source = Version::factory()->for($work)->create(['folder' => '1cdlegacy']);
+        $target = Version::factory()->for($work)->create(['folder' => '2cdlegacy']);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1cdlegacy-2cdlegacy',
+            'is_legacy' => true,
+            'created_by' => null,
+        ]);
+
+        Chapter::create([
+            'folder' => $comparison->folder,
+            'level' => '1',
+            'label_source' => 'Chapitre legacy',
+            'label_target' => 'Chapitre legacy',
+            'chapter_parent' => 0,
+            'start_line_source' => '1a',
+            'start_line_target' => '1a',
+            'id_tome_source' => 0,
+            'id_tome_target' => 0,
+        ]);
+
+        $response = $this->getJson("/chapters/targets?work_id={$work->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('targets.0.id', $comparison->id)
+            ->assertJsonPath('targets.0.folder', $comparison->folder)
+            ->assertJsonPath('targets.0.chapter_count', 1)
+            ->assertJsonPath('targets.0.readonly', true);
+
+        $show = $this->getJson("/chapters/{$comparison->id}");
+
+        $show->assertOk()
+            ->assertJsonPath('comparison.id', $comparison->id)
+            ->assertJsonPath('comparison.readonly', true)
+            ->assertJsonPath('summary.count', 1)
+            ->assertJsonPath('rows.0.level', '1')
+            ->assertJsonPath('rows.0.label', 'Chapitre legacy');
+    }
+
     private function makeLegacyChaptersWorkbook(array $rows): UploadedFile
     {
         $path = storage_path('app/testing/chapters-' . uniqid('', true) . '.xlsx');

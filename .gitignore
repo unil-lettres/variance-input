@@ -64,6 +64,7 @@ laravel/bootstrap/cache/*.php
 #  Local scripts / uploads / sidecars      #
 ############################################
 /scripts/
+descr/internal/
 laravel/storage/app/public/uploads/
 laravel/storage/app/private/
 laravel/storage/app/tmp/

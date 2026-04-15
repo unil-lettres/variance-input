@@ -25,7 +25,7 @@ class ChaptersController extends Controller
         ]);
 
         $work = Work::with('author')->findOrFail($validated['work_id']);
-        $this->assertWorkEditable($work);
+        $this->assertWorkChapterReadable($work);
 
         $chapterCounts = Chapter::query()
             ->select('folder', DB::raw('COUNT(*) as aggregate'))
@@ -34,10 +34,16 @@ class ChaptersController extends Controller
 
         $comparisons = Comparison::query()
             ->with(['sourceVersion', 'targetVersion'])
-            ->where('is_legacy', false)
             ->where(function ($query) use ($work) {
                 $query->whereHas('sourceVersion', fn ($q) => $q->where('work_id', $work->id))
                     ->orWhereHas('targetVersion', fn ($q) => $q->where('work_id', $work->id));
+            })
+            ->where(function ($query) use ($chapterCounts) {
+                $query->where('is_legacy', false);
+
+                if ($chapterCounts->isNotEmpty()) {
+                    $query->orWhereIn('folder', $chapterCounts->keys()->all());
+                }
             })
             ->orderByRaw('CASE WHEN number IS NULL THEN 1 ELSE 0 END')
             ->orderBy('number')
@@ -56,6 +62,7 @@ class ChaptersController extends Controller
                     'folder' => $comparison->folder,
                     'label' => $label,
                     'published' => $comparison->publication_scope !== null,
+                    'readonly' => (bool) $comparison->is_legacy,
                     'chapter_count' => (int) ($chapterCounts[$comparison->folder] ?? 0),
                 ];
             })
@@ -109,6 +116,46 @@ class ChaptersController extends Controller
             'warnings' => $preview['warnings'],
             'summary' => $preview['summary'] + [
                 'existing_count' => Chapter::query()->forFolder($comparison->folder)->count(),
+            ],
+        ]);
+    }
+
+    public function show(Request $request, Comparison $comparison): JsonResponse
+    {
+        $comparison->loadMissing(['sourceVersion.work.author', 'targetVersion.work.author']);
+        $work = $comparison->sourceVersion?->work ?? $comparison->targetVersion?->work;
+        abort_unless($work, 422, 'Œuvre introuvable pour cette comparaison.');
+        $this->assertWorkChapterReadable($work);
+
+        $rows = Chapter::query()
+            ->forFolder($comparison->folder)
+            ->orderBy('id')
+            ->get()
+            ->map(function (Chapter $chapter) {
+                return [
+                    'row_number' => $chapter->id,
+                    'level' => $chapter->level,
+                    'label' => $chapter->label_source !== '' ? $chapter->label_source : $chapter->label_target,
+                    'label_source' => $chapter->label_source,
+                    'label_target' => $chapter->label_target,
+                    'parent_level' => $chapter->parent?->level,
+                    'start_line_source' => $chapter->start_line_source,
+                    'start_line_target' => $chapter->start_line_target,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'status' => 'ok',
+            'comparison' => [
+                'id' => $comparison->id,
+                'folder' => $comparison->folder,
+                'readonly' => (bool) $comparison->is_legacy,
+            ],
+            'rows' => $rows,
+            'summary' => [
+                'count' => $rows->count(),
+                'root_count' => $rows->where('parent_level', null)->count(),
             ],
         ]);
     }
@@ -180,6 +227,28 @@ class ChaptersController extends Controller
         $user = auth()->user();
         abort_unless($user, 403);
         abort_if(!$user->can('edit', $work), 403, 'Vous n’avez pas la permission de modifier les chapitres de cette œuvre.');
+    }
+
+    private function assertWorkChapterReadable(Work $work): void
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        if ($user->is_admin) {
+            return;
+        }
+
+        $hasWorkPermission = $user->permissions()
+            ->where('work_id', $work->id)
+            ->where('permission_type', 'edit')
+            ->exists();
+
+        $hasAuthorPermission = $user->permissions()
+            ->where('author_id', $work->author_id)
+            ->where('permission_type', 'edit')
+            ->exists();
+
+        abort_if(!$hasWorkPermission && !$hasAuthorPermission, 403, 'Vous n’avez pas la permission de consulter les chapitres de cette œuvre.');
     }
 
     private function previewCacheKey(int $userId, string $token): string

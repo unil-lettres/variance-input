@@ -1,6 +1,6 @@
 {{-- resources/views/components/main/facsimiles.blade.php --}}
 <div id="facsimile-reader-card" class="card mb-3 d-none">
-    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <div class="card-header fw-semibold d-flex justify-content-center align-items-center facsimile-reader-card-header">
         <div class="d-flex align-items-start gap-2 admin-card-heading">
             <span class="admin-card-heading-text">
                 <span id="facsimile-reader-card-title" class="admin-card-title">Lecteur synchronisé</span>
@@ -266,18 +266,31 @@
         border-radius: 0;
         padding: 0;
     }
+    .facsimile-reader-card-header .admin-card-heading {
+        width: 100%;
+        justify-content: center;
+    }
+    .facsimile-reader-card-header .admin-card-heading-text {
+        display: block;
+        width: 100%;
+        text-align: center;
+    }
     .facsimile-reader-card-title {
         display: block;
         white-space: normal;
         line-height: 1.35;
+        font-size: 1.18rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: #3f352b;
     }
     .facsimile-reader-card-subtitle {
         display: block;
-        margin-top: 0.15rem;
+        margin-top: 0.25rem;
         font-size: 0.88rem;
         font-weight: 500;
         color: #5f5b55;
-        text-align: right;
+        text-align: center;
     }
     .facsimile-reader-toolbar {
         display: flex;
@@ -430,20 +443,33 @@
         justify-content: space-between;
         align-items: center;
         gap: 0.75rem;
-        padding: 0.85rem 1rem;
+        padding: 0.5rem 0.85rem;
         border-bottom: 1px solid #e5ded2;
         background: rgba(248, 245, 239, 0.92);
-        min-height: 3.5rem;
+        min-height: 2.5rem;
+        font-size: 0.92rem;
     }
     .facsimile-reader-pane-toolbar {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        justify-content: flex-end;
-        gap: 0.6rem;
-        padding: 0.65rem 1rem;
+        justify-content: center;
+        gap: 0.45rem;
+        padding: 0.45rem 0.85rem;
         border-bottom: 1px solid #ece4d8;
         background: rgba(252, 249, 244, 0.92);
+    }
+    .facsimile-reader-pane-heading .fw-semibold {
+        font-size: 0.9rem;
+        letter-spacing: 0.01em;
+        color: #43382c;
+    }
+    .facsimile-reader-pane-heading .small {
+        font-size: 0.76rem;
+        line-height: 1.35;
+    }
+    .facsimile-reader-pane-toolbar .btn-group > .btn {
+        min-width: 5.4rem;
     }
     .facsimile-reader-image-shell {
         flex: 1 1 auto;
@@ -536,6 +562,8 @@
         font-size: 0.94rem;
         line-height: 1.7;
         color: #2f2a24;
+        text-align: justify;
+        text-justify: inter-word;
     }
     .facsimile-reader-anchor {
         display: inline-block;
@@ -1508,7 +1536,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (readerImageMetaEl) {
             if (displayedImage) {
-                const parts = [displayedImage.name || page.label];
+                const parts = [];
+                if (displayedImage.image_code) {
+                    parts.push(`image ${displayedImage.image_code}`);
+                } else if (page.label) {
+                    parts.push(page.label);
+                }
                 if (independentNavigation && Array.isArray(readerData?.facsimiles) && readerData.facsimiles.length > 1) {
                     parts.push(`image ${readerImageIndex + 1}/${readerData.facsimiles.length}`);
                 }
@@ -1521,15 +1554,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (readerTextMetaEl) {
-            const textParts = [page.label];
-            if (page.line) textParts.push(`ligne ${page.line}`);
-            const segmentLength = Math.max(0, page.end - page.start);
+            const textParts = [];
             if (!readerData?.pagination?.available) {
                 textParts.push('texte intégral');
             } else {
                 textParts.push(page?.guessed === true ? 'approximation' : 'extrait aligné');
             }
+            if (page.label) textParts.push(page.label);
+            if (page.line) textParts.push(`ligne ${page.line}`);
             if (readerData?.text_source_label) textParts.push(readerData.text_source_label);
+            const segmentLength = Math.max(0, page.end - page.start);
             textParts.push(`${segmentLength.toLocaleString('fr-FR')} signes`);
             readerTextMetaEl.textContent = textParts.join(' · ');
         }

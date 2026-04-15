@@ -83,30 +83,8 @@ See `descr/api_endpoints.md`. Notables:
 ## Deploy notes
 See `descr/deployment_notes.md` for TLS/proxy, volumes, legacy import, and VM recovery steps.
 See `descr/dependency_updates.md` for the regular dependency update process.
-
-## Staging VM (plett-stage)
-- **Host**: `plett-stage.unil.ch`
-- **Deploy path**: `/var/www/variance-input`
-- **Compose file**: `/var/www/variance-input/docker-compose.vm.yml`
-- **Public URL**: `https://plt-tst-1.unil.ch/` (Variance), `https://plt-tst-2.unil.ch/` (Lumières)
-- **Local proxy** (VM): `http://127.0.0.1:8081` → nginx `variance-proxy`
-
-Common staging commands (run on VM):
-```
-cd /var/www/variance-input
-docker compose -f docker-compose.vm.yml pull laravel laravel-queue medite
-docker compose -f docker-compose.vm.yml up -d --force-recreate laravel laravel-queue laravel-scheduler medite variance-proxy
-docker compose -f docker-compose.vm.yml exec -T laravel sh -lc "php artisan route:clear"
-docker compose -f docker-compose.vm.yml ps
-docker compose -f docker-compose.vm.yml logs -f laravel laravel-queue laravel-scheduler variance-proxy
-```
-
-Quick health checks (VM):
-```
-curl -I http://127.0.0.1:8081/
-curl -I http://127.0.0.1:8081/admin/
-curl http://127.0.0.1:8081/health
-```
+Detailed staging and production infrastructure coordinates are documented in
+internal operations notes and should not be committed to the public repository.
 
 ## Local file inventory for legacy import
 - `descr/legacy_texts_lignes.md` lists available legacy TXT/_lignes files in `variance/uploads/`.

@@ -237,16 +237,20 @@
   }
   #container-work-selector .editorial-current-work-value {
     font-size: 1.18rem;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.35;
-    color: #223044;
+    letter-spacing: 0.01em;
+    color: #3f352b;
   }
   #container-work-selector .editorial-current-work-author {
     font-style: normal;
+    font-weight: 700;
+    color: #3f352b;
   }
   #container-work-selector .editorial-current-work-work {
-    font-style: italic;
+    font-style: normal;
     font-weight: 700;
+    color: #3f352b;
   }
   #container-work-selector .editorial-current-work-meta {
     display: flex;
@@ -477,7 +481,7 @@
     letter-spacing: 0.14em;
   }
   #container-work-selector.work-selector-redesign .editorial-current-work-value {
-    color: #26374a;
+    color: #3f352b;
     font-size: 1.22rem;
   }
   #container-work-selector.work-selector-redesign .editorial-current-work-meta {
