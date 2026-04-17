@@ -80,7 +80,7 @@ class PublishController extends Controller
             $comparison->publication_scope = 'dev';
             $comparison->save();
 
-            $facsimiles = $this->publishFacsimilesForComparison($comparison);
+            ['results' => $facsimiles, 'warnings' => $publishWarnings] = $this->publishFacsimilesForComparison($comparison);
             $manifestInfo = $this->publishManifests($comparison, $paths);
             $draftMirror = $this->mirrorDraftComparisonToLegacy($comparison, $paths, $sourceDir);
 
@@ -91,6 +91,7 @@ class PublishController extends Controller
                 'missing_files' => $missing,
                 'manifests'     => $manifestInfo,
                 'facsimiles'    => $facsimiles,
+                'warnings'      => $publishWarnings,
                 'default_marker' => $defaultMarkerInfo,
                 'draft_mirror'  => $draftMirror,
             ]);
@@ -116,7 +117,7 @@ class PublishController extends Controller
             $this->mirrorToLegacy($destDir, $name, $sanitized);
         }
 
-        $facsimiles = $this->publishFacsimilesForComparison($comparison);
+        ['results' => $facsimiles, 'warnings' => $publishWarnings] = $this->publishFacsimilesForComparison($comparison);
         $manifestInfo = $this->publishManifests($comparison, $paths);
         $comparison->publication_scope = 'prod';
         $comparison->save();
@@ -128,6 +129,7 @@ class PublishController extends Controller
             'missing_files' => $missing,
             'manifests'     => $manifestInfo,
             'facsimiles'    => $facsimiles,
+            'warnings'      => $publishWarnings,
             'default_marker' => $defaultMarkerInfo,
         ]);
     }
@@ -304,18 +306,48 @@ class PublishController extends Controller
     {
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author');
         $results = [];
+        $warnings = [];
 
         $sourceVersion = $comparison->sourceVersion;
         if ($sourceVersion instanceof Version) {
-            $results['source'] = $this->publishFacsimilesForVersion($sourceVersion);
+            try {
+                $results['source'] = $this->publishFacsimilesForVersion($sourceVersion);
+            } catch (\Throwable $e) {
+                report($e);
+                $results['source'] = [
+                    'status' => 'warning',
+                    'reason' => 'copy_failed',
+                    'message' => $e->getMessage(),
+                ];
+                $warnings[] = sprintf(
+                    'Les fac-similés source n’ont pas pu être recopiés vers le miroir legacy : %s',
+                    $e->getMessage()
+                );
+            }
         }
 
         $targetVersion = $comparison->targetVersion;
         if ($targetVersion instanceof Version) {
-            $results['target'] = $this->publishFacsimilesForVersion($targetVersion);
+            try {
+                $results['target'] = $this->publishFacsimilesForVersion($targetVersion);
+            } catch (\Throwable $e) {
+                report($e);
+                $results['target'] = [
+                    'status' => 'warning',
+                    'reason' => 'copy_failed',
+                    'message' => $e->getMessage(),
+                ];
+                $warnings[] = sprintf(
+                    'Les fac-similés cible n’ont pas pu être recopiés vers le miroir legacy : %s',
+                    $e->getMessage()
+                );
+            }
         }
 
-        return $results;
+        return [
+            'results' => $results,
+            'warnings' => $warnings,
+        ];
     }
 
     private function publishFacsimilesForVersion(Version $version): array

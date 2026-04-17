@@ -7,6 +7,7 @@ use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 use ZipArchive;
@@ -611,5 +612,61 @@ class PublicationWorkflowTest extends TestCase
 
         $this->assertFileExists($sourceLegacyDir . DIRECTORY_SEPARATOR . $sourceFiles['main']);
         $this->assertFileExists($targetLegacyDir . DIRECTORY_SEPARATOR . $targetFiles['main']);
+    }
+
+    public function test_publish_succeeds_with_warning_when_legacy_facsimile_copy_fails(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Publication facsimiles warning',
+            'short_title' => 'pfw',
+        ]);
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Source',
+            'folder' => '1pfw',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Cible',
+            'folder' => '2pfw',
+        ]);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1pfw-2pfw-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $this->writeComparisonArtifacts($comparison);
+        $this->writeFacsimilePair($source);
+        $this->writeFacsimilePair($target);
+
+        $authorFolder = $work->author->folder;
+        $workFolder = $work->folder;
+        $sourceLegacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$source->folder}");
+        $targetLegacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$target->folder}");
+
+        File::partialMock()
+            ->shouldReceive('put')
+            ->withArgs(function (string $path) use ($sourceLegacyDir) {
+                return str_starts_with($path, $sourceLegacyDir . DIRECTORY_SEPARATOR);
+            })
+            ->andThrow(new \RuntimeException('legacy denied'));
+
+        $response = $this->postJson('/api/publish_xhtml', [
+            'comparison_id' => $comparison->id,
+            'destination' => 'dev',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('published_to', 'dev')
+            ->assertJsonPath('facsimiles.source.status', 'warning')
+            ->assertJsonPath('facsimiles.source.reason', 'copy_failed')
+            ->assertJsonPath('facsimiles.target.status', 'ok')
+            ->assertJsonCount(1, 'warnings');
+
+        $comparison->refresh();
+        $this->assertSame('dev', $comparison->publication_scope);
+        $this->assertFileExists($targetLegacyDir . DIRECTORY_SEPARATOR . 'img_' . $target->folder . '_001.jpg');
     }
 }

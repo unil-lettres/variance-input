@@ -76,6 +76,12 @@ function initComparisonsTable() {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   };
+  const formatPublishWarnings = warnings => {
+    if (!Array.isArray(warnings)) return [];
+    return warnings
+      .map(item => String(item ?? '').trim())
+      .filter(Boolean);
+  };
   const formatNumber = value => {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value.toLocaleString('fr-FR');
@@ -2377,6 +2383,14 @@ function initComparisonsTable() {
           );
         }
 
+        const publishWarnings = formatPublishWarnings(data.warnings);
+        if (publishWarnings.length) {
+          alert(
+            'Publication effectuée avec avertissement(s)\n- ' +
+            publishWarnings.join('\n- ')
+          );
+        }
+
         if (insertDefaultMarker && data.default_marker && Number(data.default_marker.inserted ?? 0) === 0) {
           alert(
             'Aucun marqueur par défaut n\'a été inséré. ' +
@@ -2476,6 +2490,14 @@ function initComparisonsTable() {
       if (!res.ok || data.error || data.status !== 'ok') {
         const reason = data.error || data.message || data.raw || `Statut HTTP ${res.status}`;
         throw new Error(`Publication échouée : ${reason}`);
+      }
+
+      const publishWarnings = formatPublishWarnings(data.warnings);
+      if (publishWarnings.length) {
+        alert(
+          'Publication effectuée avec avertissement(s)\n- ' +
+          publishWarnings.join('\n- ')
+        );
       }
 
       updateComparisonRow(comparisonId, {
