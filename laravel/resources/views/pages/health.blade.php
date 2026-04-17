@@ -433,7 +433,7 @@
                 <tr>
                     <th>Chemin</th>
                     <th>Existe</th>
-                    <th>Mode</th>
+                    <th>Accès attendu</th>
                 </tr>
                 </thead>
                 <tbody>

@@ -184,4 +184,18 @@ class AdminMaintenanceModeTest extends TestCase
             @unlink($path);
         }
     }
+
+    public function test_health_report_lists_critical_legacy_path_checks(): void
+    {
+        $this->signInAdmin();
+
+        $response = $this->get('/health/report');
+
+        $this->assertContains($response->status(), [200, 503]);
+        $response
+            ->assertSeeText('uploads_legacy')
+            ->assertSeeText('uploads_images_legacy')
+            ->assertSeeText('uploads_pdf_legacy')
+            ->assertSeeText('Accès attendu');
+    }
 }

@@ -597,7 +597,22 @@ class HealthController extends Controller
             [
                 'label' => 'uploads_legacy',
                 'path' => base_path('../variance/uploads'),
-                'writable' => false,
+                'writable' => true,
+            ],
+            [
+                'label' => 'uploads_images_public',
+                'path' => public_path('uploads_images'),
+                'writable' => true,
+            ],
+            [
+                'label' => 'uploads_images_legacy',
+                'path' => base_path('../variance/uploads_images'),
+                'writable' => true,
+            ],
+            [
+                'label' => 'uploads_pdf_legacy',
+                'path' => base_path('../variance/uploads/pdf'),
+                'writable' => true,
             ],
             [
                 'label' => 'variance_data',
