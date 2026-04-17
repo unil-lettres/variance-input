@@ -159,8 +159,20 @@ class WorkController extends Controller
     
         //  Prevent deletion if work has versions
         if ($work->versions()->exists()) {
+            $versions = $work->versions()
+                ->orderBy('name')
+                ->get(['name'])
+                ->pluck('name')
+                ->all();
+
             return response()->json([
-                'error' => 'Impossible de supprimer cette œuvre car elle contient encore des versions.'
+                'error' => sprintf(
+                    'Impossible de supprimer cette œuvre : %d version(s) y sont encore rattachée(s)%s.',
+                    count($versions),
+                    $versions ? ' (' . implode(', ', array_slice($versions, 0, 3)) . (count($versions) > 3 ? ', …' : '') . ')' : ''
+                ),
+                'blocking_versions_count' => count($versions),
+                'blocking_versions' => array_slice($versions, 0, 10),
             ], 400);
         }
     

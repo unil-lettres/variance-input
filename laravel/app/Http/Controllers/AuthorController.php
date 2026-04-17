@@ -91,7 +91,21 @@ class AuthorController extends Controller
         }
 
         if ($author->works()->exists()) {
-            return response()->json(['error' => 'Impossible de supprimer cet auteur car des oeuvres lui sont associées.'], 409);
+            $works = $author->works()
+                ->orderBy('title')
+                ->get(['title'])
+                ->pluck('title')
+                ->all();
+
+            return response()->json([
+                'error' => sprintf(
+                    'Impossible de supprimer cet auteur : %d œuvre(s) lui sont encore associée(s)%s.',
+                    count($works),
+                    $works ? ' (' . implode(', ', array_slice($works, 0, 3)) . (count($works) > 3 ? ', …' : '') . ')' : ''
+                ),
+                'blocking_works_count' => count($works),
+                'blocking_works' => array_slice($works, 0, 10),
+            ], 409);
         }
 
         $authorId = $author->id;

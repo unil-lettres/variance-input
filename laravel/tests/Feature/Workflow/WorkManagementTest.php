@@ -124,4 +124,49 @@ class WorkManagementTest extends TestCase
             'short_title' => 'pib',
         ]);
     }
+
+    public function test_cannot_delete_work_while_versions_still_exist_and_error_lists_them(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Oeuvre bloquée',
+            'short_title' => 'obl',
+        ]);
+
+        \App\Models\Version::factory()->for($work)->create(['name' => 'Version A']);
+        \App\Models\Version::factory()->for($work)->create(['name' => 'Version B']);
+
+        $response = $this->deleteJson("/api/works/{$work->id}");
+
+        $response->assertStatus(400)
+            ->assertJsonPath('blocking_versions_count', 2)
+            ->assertJsonPath('blocking_versions.0', 'Version A')
+            ->assertJsonPath('blocking_versions.1', 'Version B');
+
+        $this->assertStringContainsString('2 version(s)', $response->json('error'));
+        $this->assertStringContainsString('Version A', $response->json('error'));
+    }
+
+    public function test_cannot_delete_author_while_works_still_exist_and_error_lists_them(): void
+    {
+        $user = $this->signInEditor();
+        $author = Author::factory()->create([
+            'name' => 'Auteur bloqué',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $author);
+
+        Work::factory()->for($author)->create(['title' => 'Oeuvre A', 'short_title' => 'oa']);
+        Work::factory()->for($author)->create(['title' => 'Oeuvre B', 'short_title' => 'ob']);
+
+        $response = $this->deleteJson("/api/authors/{$author->id}");
+
+        $response->assertStatus(409)
+            ->assertJsonPath('blocking_works_count', 2)
+            ->assertJsonPath('blocking_works.0', 'Oeuvre A')
+            ->assertJsonPath('blocking_works.1', 'Oeuvre B');
+
+        $this->assertStringContainsString('2 œuvre(s)', $response->json('error'));
+        $this->assertStringContainsString('Oeuvre A', $response->json('error'));
+    }
 }

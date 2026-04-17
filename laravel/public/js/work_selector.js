@@ -582,7 +582,11 @@ document.addEventListener("DOMContentLoaded", () => {
       headers: { 'X-CSRF-TOKEN': csrfToken, ...JSON_HEADERS }
     })
     .then(async response => {
-      if (!response.ok) throw new Error("Erreur lors de la suppression de l'auteur.");
+      if (!response.ok) {
+        let msg = "Erreur lors de la suppression de l'auteur.";
+        try { msg = (await response.json()).error || msg; } catch {}
+        throw new Error(msg);
+      }
 
       // refresh authors list (no author pre-selected)
       loadAuthors();
@@ -595,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
     })
     .catch(error => {
       console.error(error);
-      alert("Impossible de supprimer cet auteur. Vérifiez qu'il n'a pas encore d'œuvres associées.");
+      alert(error.message);
     });
   });
 
