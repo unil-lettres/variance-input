@@ -4,6 +4,8 @@ namespace Tests\Feature\Workflow;
 
 use App\Services\AdminMaintenanceMode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class AdminMaintenanceModeTest extends TestCase
@@ -117,7 +119,7 @@ class AdminMaintenanceModeTest extends TestCase
     {
         $this->artisan('admin:maintenance:on', [
             '--message' => 'Pause de maintenance.',
-            '--until' => '2026-04-17 10:30',
+            '--until' => now()->addHour()->format('Y-m-d H:i'),
             '--no-admin-bypass' => true,
         ])->assertSuccessful();
 
@@ -137,8 +139,8 @@ class AdminMaintenanceModeTest extends TestCase
     {
         $this->artisan('admin:maintenance:announce', [
             '--message' => 'Intervention prévue.',
-            '--starts' => '2026-04-17 09:30',
-            '--until' => '2026-04-17 10:00',
+            '--starts' => now()->addHour()->format('Y-m-d H:i'),
+            '--until' => now()->addHours(2)->format('Y-m-d H:i'),
         ])->assertSuccessful();
 
         $state = app(AdminMaintenanceMode::class)->currentAnnouncement();
@@ -151,5 +153,35 @@ class AdminMaintenanceModeTest extends TestCase
             ->assertSuccessful();
 
         $this->assertFalse(app(AdminMaintenanceMode::class)->currentAnnouncement()['enabled']);
+    }
+
+    public function test_maintenance_state_survives_cache_flush(): void
+    {
+        app(AdminMaintenanceMode::class)->activate('Déploiement en cours.');
+
+        Cache::flush();
+
+        $state = app(AdminMaintenanceMode::class)->currentState();
+        $this->assertTrue($state['enabled']);
+        $this->assertSame('Déploiement en cours.', $state['message']);
+    }
+
+    public function test_health_report_marks_pending_migrations(): void
+    {
+        $this->signInAdmin();
+
+        $path = database_path('migrations/2099_12_31_235959_health_pending_migration.php');
+        File::put($path, "<?php\n");
+
+        try {
+            $response = $this->get('/health/report');
+
+            $this->assertContains($response->status(), [200, 503]);
+            $response
+                ->assertSee('Migrations')
+                ->assertSeeText('en attente');
+        } finally {
+            @unlink($path);
+        }
     }
 }

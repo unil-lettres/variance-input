@@ -130,6 +130,7 @@ Then:
 docker compose -f docker-compose.vm.yml pull laravel laravel-queue medite
 docker compose -f docker-compose.vm.yml up -d --force-recreate \
   laravel laravel-queue laravel-scheduler medite variance-proxy
+docker compose -f docker-compose.vm.yml exec -T laravel php artisan migrate --force
 docker compose -f docker-compose.vm.yml exec -T laravel sh -lc 'php artisan optimize:clear'
 ./scripts/sync_vm_vite_assets.sh
 docker compose -f docker-compose.vm.yml ps

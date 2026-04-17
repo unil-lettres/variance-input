@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Cache;
 
 class AdminMaintenanceMode
@@ -13,7 +14,10 @@ class AdminMaintenanceMode
 
     public function currentState(): array
     {
-        $state = Cache::get(self::CACHE_KEY);
+        $state = $this->readPersistedState(
+            $this->statePath(),
+            self::CACHE_KEY,
+        );
 
         if (! is_array($state) || ! ($state['enabled'] ?? false)) {
             return $this->disabledState();
@@ -46,14 +50,17 @@ class AdminMaintenanceMode
             'allow_admins' => $allowAdmins,
         ];
 
-        Cache::forever(self::CACHE_KEY, $state);
+        $this->writePersistedState($this->statePath(), $state);
 
         return $state;
     }
 
     public function currentAnnouncement(): array
     {
-        $announcement = Cache::get(self::ANNOUNCEMENT_CACHE_KEY);
+        $announcement = $this->readPersistedState(
+            $this->announcementPath(),
+            self::ANNOUNCEMENT_CACHE_KEY,
+        );
 
         if (! is_array($announcement) || ! ($announcement['enabled'] ?? false)) {
             return $this->disabledAnnouncement();
@@ -87,18 +94,20 @@ class AdminMaintenanceMode
             'created_at' => now()->toIso8601String(),
         ];
 
-        Cache::forever(self::ANNOUNCEMENT_CACHE_KEY, $state);
+        $this->writePersistedState($this->announcementPath(), $state);
 
         return $state;
     }
 
     public function deactivate(): void
     {
+        @unlink($this->statePath());
         Cache::forget(self::CACHE_KEY);
     }
 
     public function clearAnnouncement(): void
     {
+        @unlink($this->announcementPath());
         Cache::forget(self::ANNOUNCEMENT_CACHE_KEY);
     }
 
@@ -175,5 +184,58 @@ class AdminMaintenanceMode
     private function defaultAnnouncementMessage(): string
     {
         return 'Une opération de maintenance de l’atelier éditorial Variance est prévue prochainement.';
+    }
+
+    private function statePath(): string
+    {
+        return storage_path('app/private/admin_maintenance_state.json');
+    }
+
+    private function announcementPath(): string
+    {
+        return storage_path('app/private/admin_maintenance_announcement.json');
+    }
+
+    private function readPersistedState(string $path, string $legacyCacheKey): ?array
+    {
+        $fromFile = $this->readJsonFile($path);
+        if (is_array($fromFile)) {
+            return $fromFile;
+        }
+
+        $legacyState = Cache::get($legacyCacheKey);
+        if (! is_array($legacyState)) {
+            return null;
+        }
+
+        $this->writePersistedState($path, $legacyState);
+        Cache::forget($legacyCacheKey);
+
+        return $legacyState;
+    }
+
+    private function writePersistedState(string $path, array $state): void
+    {
+        File::ensureDirectoryExists(dirname($path));
+        File::put(
+            $path,
+            json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+    }
+
+    private function readJsonFile(string $path): ?array
+    {
+        if (! is_file($path)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($path);
+        if ($raw === false) {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 }

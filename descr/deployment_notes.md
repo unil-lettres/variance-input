@@ -73,6 +73,9 @@ For the next staging rebuild after the fixes made on 2026-04-13, also use
 
 - Database dumps (MariaDB).
 - Uploads (versions, facsimiles, sidecars) – copy `variance_data` + `variance/uploads` to durable storage.
+- The Laravel scheduler can generate a daily compressed SQL dump with
+  `php artisan backup:database` into `storage/app/private/db_backups`
+  (default retention: 14 days).
 
 ## Security Checklist
 
@@ -89,6 +92,8 @@ For the next staging rebuild after the fixes made on 2026-04-13, also use
 - If a deployment environment serves built frontend assets directly from a host
   checkout, include a documented post-deploy step to sync `laravel/public/build`
   from the running Laravel image or build container back onto that checkout.
+- Standard deployment should run `php artisan migrate --force` before
+  `php artisan optimize:clear` once the new containers are up.
 - After any deployment that changes synchronized viewer behavior, XHTML
   fallback, or pagination reconstruction logic, plan a post-deploy warm-up pass
   for legacy comparisons/versions. The first request to

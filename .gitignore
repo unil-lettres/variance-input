@@ -59,6 +59,7 @@ assets/
 laravel/storage/*.key
 laravel/storage/logs/
 laravel/bootstrap/cache/*.php
+laravel/bootstrap/cache/build_revision.json
 
 ############################################
 #  Local scripts / uploads / sidecars      #

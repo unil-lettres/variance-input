@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Comparison;
 use App\Services\AdminMaintenanceMode;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -284,6 +285,11 @@ class HealthController extends Controller
 
         if ($dbOk) {
             try {
+                $checks['migrations'] = $this->resolveMigrationStatus(app(Migrator::class));
+                if (! ($checks['migrations']['ok'] ?? false)) {
+                    $this->markWarning($status, $httpStatus);
+                }
+
                 $prodCount = Comparison::where('publication_scope', 'prod')->count();
                 $devCount = Comparison::where('publication_scope', 'dev')->count();
                 $legacyProd = Comparison::whereNull('publication_scope')
@@ -892,8 +898,53 @@ class HealthController extends Controller
         return $worker;
     }
 
+    private function resolveMigrationStatus(Migrator $migrator): array
+    {
+        try {
+            if (! $migrator->repositoryExists()) {
+                return [
+                    'ok' => false,
+                    'status' => 'missing_repository',
+                    'pending_count' => null,
+                    'pending' => [],
+                    'ran_count' => 0,
+                ];
+            }
+
+            $files = $migrator->getMigrationFiles([database_path('migrations')]);
+            $ran = $migrator->getRepository()->getRan();
+            $pending = array_values(array_diff(array_keys($files), $ran));
+
+            return [
+                'ok' => count($pending) === 0,
+                'status' => count($pending) === 0 ? 'ok' : 'pending',
+                'pending_count' => count($pending),
+                'pending' => $pending,
+                'ran_count' => count($ran),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+                'pending_count' => null,
+                'pending' => [],
+                'ran_count' => null,
+            ];
+        }
+    }
+
     private function resolveGitMetadata(): array
     {
+        $buildRevision = $this->resolveBuildRevision();
+        if ($buildRevision !== null) {
+            return [
+                'sha' => $buildRevision,
+                'short_sha' => substr($buildRevision, 0, 8),
+                'source' => 'build',
+            ];
+        }
+
         $raw = $this->resolveEnvValue(['APP_GIT_SHA', 'GIT_SHA']);
 
         $sha = $this->normalizeGitSha($raw);
@@ -951,6 +1002,33 @@ class HealthController extends Controller
         }
 
         return $this->resolveGitShaFromGitDir($gitDir);
+    }
+
+    private function resolveBuildRevision(): ?string
+    {
+        $path = base_path('bootstrap/cache/build_revision.json');
+        if (! is_file($path)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($path);
+        if ($raw === false) {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        foreach (['sha', 'git_sha', 'commit'] as $key) {
+            $sha = $this->normalizeGitSha($decoded[$key] ?? null);
+            if ($sha !== null) {
+                return $sha;
+            }
+        }
+
+        return null;
     }
 
     private function resolveGitShaFromGitDir(string $gitDir): ?string

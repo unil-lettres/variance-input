@@ -123,6 +123,23 @@
                     </div>
                 </div>
                 <div class="col-md-4">
+                    <div class="text-muted small">Migrations</div>
+                    @php
+                        $migrationPending = data_get($checks, 'migrations.pending_count');
+                        $migrationStatus = data_get($checks, 'migrations.status');
+                        $migrationClass = $migrationPending ? $warnText : ($migrationStatus === 'ok' ? $okText : $badText);
+                    @endphp
+                    <div class="{{ $migrationClass }}">
+                        @if($migrationStatus === 'ok')
+                            À jour
+                        @elseif(is_numeric($migrationPending))
+                            {{ $migrationPending }} en attente
+                        @else
+                            {{ $migrationStatus ?? 'n/a' }}
+                        @endif
+                    </div>
+                </div>
+                <div class="col-md-4">
                     <div class="text-muted small">Cache</div>
                     <div class="{{ $cacheClass }}">{{ data_get($checks, 'cache.driver') }}</div>
                 </div>
