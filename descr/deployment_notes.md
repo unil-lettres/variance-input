@@ -2,11 +2,6 @@
 
 Guidance for running the Variance stack outside the default development setup.
 
-For the next staging rebuild after the fixes made on 2026-04-13, also use
-`descr/rebuild_deploy_checklist_2026-04-14.md`.
-
----
-
 ## Volumes & Persistence
 
 - **Database** (`dbdata/`) – Persist MariaDB data outside the repo via a named volume or bind mount.
@@ -136,7 +131,9 @@ For the next staging rebuild after the fixes made on 2026-04-13, also use
   `laravel/storage/app/private/legacy_import/work_id_map.json` for reference and
   copies legacy PDFs to the new work IDs when available.
 
-## Legacy PDF notices (work ID remap)
+## Occasional Repair Procedures
+
+### Legacy PDF notices (work ID remap)
 
 If notices point to the wrong PDF after import, overwrite the new-ID PDFs with
 the legacy PDFs using the work ID map. Run on the deployment host:
@@ -182,7 +179,7 @@ print(f"backup_dir={backup_dir}")
 PY
 ```
 
-## Disk space recovery (VM)
+### Disk space recovery (VM)
 
 If the deployment filesystem fills up during large legacy syncs, reclaim space from unused Docker
 artifacts first:
@@ -200,4 +197,6 @@ by MariaDB/Redis.
 
 ---
 
-These notes should complement your organisation’s deployment standards; adapt paths and practices to your infrastructure.
+These notes are meant as durable deployment guidance. Keep environment-specific
+hostnames, paths, SSH targets, and dated incident procedures in internal
+operations documentation.

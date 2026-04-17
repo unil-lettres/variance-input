@@ -12,6 +12,12 @@ Variance currently has five dependency surfaces that need regular review:
 - Legacy PHP dependencies in `variance/composer.json`
 - Container and workflow dependencies in Dockerfiles, Compose files, and GitHub Actions workflows
 
+Important nuance for Medite:
+
+- most Python dependencies are locked in `medite/app/variance/poetry.lock`
+- but `flask`, `celery`, and `redis` are currently installed separately in `medite/Dockerfile`
+- those three are therefore an infrastructure dependency surface, not part of the Poetry lock
+
 ## Repository Automation
 
 The repository now uses `.github/dependabot.yml` to open **monthly** update pull requests against the `development` branch.
@@ -35,6 +41,11 @@ Current adopted Laravel runtime baseline:
 - PHP runtime line: `8.3`
 - Node runtime line: `22`
 
+Other current runtime baselines:
+
+- Medite Python line: `3.12`
+- Legacy PHP line: `7.4`
+
 Runtime policy for future monthly updates:
 
 - Keep monthly PRs on the currently adopted runtime lines and accept patch/minor updates within those lines
@@ -47,7 +58,10 @@ Regular update PRs should be validated in Docker-backed environments, not agains
 
 Automated checks:
 
-- `dependency-checks.yml` validates compose files, runs Laravel PHPUnit, builds Laravel front-end assets, runs Medite tests, validates the legacy Composer manifest, and builds all three application images
+- `dependency-checks.yml` validates compose files, runs Laravel PHPUnit, builds Laravel front-end assets, runs Medite tests, validates the legacy Composer manifest, and builds the three application images:
+  - `laravel`
+  - `medite`
+  - `variance-app`
 
 Notes:
 
@@ -104,9 +118,16 @@ Those should be opened as explicit Variance requests with their own validation a
 
 Medite now needs a committed `poetry.lock`. Without it, the Python dependency set drifts every time Poetry resolves from `pyproject.toml`, which is not compatible with a stable monthly update process.
 
+Laravel and legacy PHP should also keep their lockfiles committed:
+
+- `laravel/composer.lock`
+- `laravel/package-lock.json`
+- `variance/composer.lock`
+
 ## What Dependabot Does Not Cover Cleanly
 
 - Internal `unillett/*:*-latest` images in Compose are part of the Variance release pipeline, not third-party dependency management
+- `flask`, `celery`, and `redis` installed directly in `medite/Dockerfile`
 - Host packages on the staging VM
 - Manual Laravel environment changes in `laravel.env`
 - Database engine upgrades that require dump/restore planning

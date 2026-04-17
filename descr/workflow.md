@@ -13,17 +13,17 @@ markers into comparison outputs.
    version”).
 
 2. **Validation** (`VersionController::store`)  
-   - File must be plain text (`text/plain`).  
-   - File size limited to 8 MB (`max:8192` in kilobytes).
+   - File is validated as an uploaded file (`file`).
+   - File size is limited to 8 MB (`max:8192` in kilobytes).
 
 3. **Storage**
    - Raw upload stored at `storage/app/public/uploads/versions/{base}.txt`.  
-   - The controller converts the contents to UTF‑8, normalises whitespace, and
-     wraps the text in a TEI skeleton with `<lb/>` markers for every original
+   - The controller reads the source as UTF‑8, checks that it looks like text,
+     and wraps it in a TEI skeleton with `<lb/>` markers for every original
      line.  
-   - The TEI document is saved to `storage/app/public/uploads/versions/{base}.xml`
-     and mirrored to the public tree (`public/uploads/versions/{base}.xml`) for
-     the legacy PHP frontend.
+   - The TEI document is saved to `storage/app/public/uploads/versions/{base}.xml`.
+     Laravel and the legacy fallback logic both read from this canonical storage
+     location (with fallback to `variance/uploads/versions/...` only when needed).
 
 4. **Database**  
    A `versions` row is created with the generated folder name (`{sequence}{shortTitle}`).
@@ -163,17 +163,24 @@ On publish, Laravel also:
 
 ---
 
-## Background Jobs & Workers
+## Background Jobs, Workers & Scheduler
 
 - All pagination work (`ApplyLignesJob`, `InjectComparisonPaginationJob`) runs on
   the `page-markers` queue.  
+- Health probes also dispatch a lightweight `HealthcheckProbeJob` on
+  `page-markers` so `/admin/health/report` can detect whether workers are truly
+  consuming jobs.  
 - Legacy bundle preparation (`GenerateLegacyExportJob`) runs on the `exports`
   queue.
-- The default Docker setup includes a `laravel-queue` service that runs  
-  `php artisan queue:work --queue=facsimiles,page-markers,exports`.  
+- The default Docker setup includes a `laravel-queue` service that runs
+  `laravel/scripts/run-queue-workers.sh`, which spawns multiple
+  `queue:work --queue=facsimiles,page-markers,exports` processes and writes a
+  heartbeat file to `storage/app/private/queue_workers.json`.  
 - Developers can also run `docker compose exec laravel php artisan queue:work
-  --queue=page-markers,exports` to process jobs manually.
+  --queue=facsimiles,page-markers,exports` to process jobs manually.
 - Facsimile uploads trigger `ProcessFacsimileImage` jobs on the `facsimiles` queue; keep the worker running to see gallery updates.
+- The `laravel-scheduler` service runs `schedule:run` every minute. It currently
+  drives the scheduler heartbeat and the daily database backup command.
 
 ---
 

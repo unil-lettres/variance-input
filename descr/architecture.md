@@ -7,35 +7,47 @@ Variance ships as a multi-container stack that combines modern Laravel admin too
 ## Container Topology
 
 ```
-+------------------+      +------------------+
-|   variance-proxy |<---->|   variance-web   |
-| (nginx, :8080)   |      | (Apache + PHP)   |
-|        ^         |      +------------------+
-|        |                         ^
-|        |                         |
-|        v                         |
-|   laravel            redis <-----+
-|  (php-fpm +          (cache, queues)
-|   artisan, :8000)           ^
-|        ^                    |
-|        |                    |
-|        v                    |
-|   laravel-queue             |
-|  (artisan queue)            |
-|        ^                    |
-|        |                    |
-|        v                    |
-| laravel-scheduler           |
-| (artisan schedule:run)      |
-|        ^                    |
-|        |                    |
-|        v                    |
-|   mariadb (data)            |
-|                             |
-|        v                    |
-|   medite (Flask + Celery) --+
-|   (:5000 API)               |
-+-----------------------------+
++------------------+
+| variance-proxy   |
+| (nginx, :8080)   |
++--------+---------+
+         | /admin, /health
+         v
+   +-----------+
+   | laravel   |
+   | php-fpm   |
+   +-----------+
+         ^
+         |
+   +-------------------+
+   | laravel-queue     |
+   | laravel-scheduler |
+   +-------------------+
+         ^
+         |
+   +-----------+        +--------------------+
+   | mariadb   |        | redis              |
+   | database  |        | Laravel cache/queue|
+   +-----------+        | + Celery broker    |
+                        +---------+----------+
+                                  |
+                                  v
+                          +---------------+
+                          | medite        |
+                          | Flask + Celery|
+                          | :5000         |
+                          +---------------+
+
++------------------+
+| variance-proxy   |
+| /                |
++--------+---------+
+         |
+         v
+   +---------------+       +----------------+
+   | variance-web  | ----> | variance-app   |
+   | Apache        | FCGI  | PHP-FPM legacy |
+   +---------------+       +----------------+
 ```
 
 ### variance-proxy (Nginx)
@@ -44,11 +56,11 @@ Variance ships as a multi-container stack that combines modern Laravel admin too
   * `/admin` → `laravel` container
   * `/health` → `laravel` container
   * `/` → `variance-web` (legacy site)
-  * `/medite` (optional) → `medite` flask service
+  * `/medite` → `medite` Flask service
 * Terminates HTTP connections locally; no TLS in dev by default.
 
 ### laravel
-* Runs the Laravel admin panel (`artisan serve` inside the container).
+* Runs the Laravel admin panel behind `php-fpm` on port `9000` (internal to the Docker network).
 * Handles:
   * Version uploads (`VersionController`).
   * `_lignes` ingestion and pagination sidecar generation (`PageMarkerService`, `ApplyLignesJob`).
@@ -81,9 +93,14 @@ Variance ships as a multi-container stack that combines modern Laravel admin too
 * Shares file system roots (`variance_data`, `uploads`) with Laravel so the outputs appear instantly.
 
 ### variance-web
-* Legacy Apache/PHP site serving public content (read-only in development).
-* Consumes uploads prepared by the admin interface (TEI, XHTML, facsimiles, manifests).
-* Helpful as a visual check before publishing or for regression testing.
+* Legacy Apache frontend serving the public site.
+* For dynamic PHP requests, proxies to `variance-app` (legacy PHP-FPM container).
+* Reads legacy-facing assets from the shared upload trees.
+
+### variance-app
+* Legacy PHP-FPM runtime used by `variance-web`.
+* Runs the historical public PHP codebase and legacy templates.
+* Shares the same upload roots as `variance-web`.
 
 ### Supporting services
 * **mariadb** – Primary database for Laravel/legacy PHP and the default Laravel queue backend in current deployments.
@@ -95,18 +112,21 @@ Variance ships as a multi-container stack that combines modern Laravel admin too
 
 | Path in compose project                  | Mounted into containers                    | Purpose                              |
 |------------------------------------------|--------------------------------------------|--------------------------------------|
-| `variance_data/`                         | `laravel`, `laravel-queue`, `medite`, `variance-web` | Shared runtime storage (uploads, manifests, pagination JSON). |
-| `variance/uploads/`                      | `laravel`, `laravel-queue`, `medite`, `variance-web` | Legacy/public upload tree.           |
-| `laravel/storage/app/public`             | Shared with `medite` as `/app/storage_public` | Allow Medite to read TEI versions and mirror outputs. |
-| `laravel` source tree                    | `laravel`, `laravel-queue`, `laravel-scheduler` | PHP application code.                |
-| `medite/app`                             | `medite`                                   | Python application + Medite engine.  |
+| `./laravel`                              | `laravel`, `laravel-queue`, `laravel-scheduler` | Laravel source tree in local dev. |
+| `./laravel/storage/app/public`           | `laravel`, `laravel-queue`, `laravel-scheduler`, `medite`, `variance-proxy` | Laravel public storage, including `/storage/...` assets. |
+| `uploads` Docker volume / `var/uploads` on VM | `laravel*`, `medite`, `variance-web`, `variance-app` | Main upload tree: versions, comparisons, facsimiles, manifests. |
+| `uploads_images` Docker volume / `var/uploads_images` on VM | `laravel*`, `variance-web`, `variance-app` | Work cover images. |
+| `variance/uploads/pdf` locally / `var/uploads_pdf` on VM | `laravel*`, `variance-web`, `variance-app` | Work notice PDFs. |
+| `variance_data/` locally / `var/variance_data` on VM | `laravel*`, `medite` | Private shared staging/runtime area for Medite-related data. |
+| `./medite/app/...` (local dev only)      | `medite`                                   | Flask app and Medite engine code. |
+| `./variance`                             | `variance-web`, `variance-app`             | Legacy public codebase. |
 
 Key data flow:
-1. Laravel stores versions and sidecars under `laravel/storage/app/...`.
-2. Facsimile uploads are normalised and curated via JSON manifests tied to Medite comparisons.
-3. Medite reads TEI from that location, writes diffs/XHTML back.
-4. Queue jobs inject pagination and keep manifest counts in sync.
-5. variance-proxy allows browsing/updating through one port; variance-web serves the published resources.
+1. Laravel stores private sidecars under `storage/app/private/...` and public artifacts under `storage/app/public/...` / `public/uploads`.
+2. Facsimile uploads are normalized and curated via JSON manifests tied to comparisons.
+3. Medite reads staged inputs from shared mounts and writes comparison outputs back into the shared upload/public trees.
+4. Queue jobs inject pagination, process facsimiles, and build export bundles.
+5. `variance-proxy` exposes one frontend entry point; `variance-web` + `variance-app` serve the legacy public site.
 
 ---
 
@@ -115,10 +135,10 @@ Key data flow:
 * All services are connected to the `variance` Docker network (internal DNS).
 * Default exposed ports:
   * `8080` – `variance-proxy` (primary entry point)
-  * `8000` – Laravel (if accessed directly)
   * `5000` – Medite Flask app (useful for debugging raw endpoints)
   * `6379` – Redis (intentionally published for local tooling)
   * `3306` – MariaDB (published for local DB clients)
+  * `127.0.0.1:8282` – `variance-web` (legacy Apache, local debugging only)
 
 > In normal usage, developers only need `localhost:8080` and `localhost:5000`
   (for debugging). All other services communicate internally.
@@ -134,7 +154,8 @@ Key data flow:
 | **Laravel scheduler** | Runs scheduled commands such as health heartbeats once per minute. |
 | **Medite**        | Heavy alignment tasks; transforms TEI versions into comparison artefacts (TEI diff, XHTML fragments). |
 | **variance-proxy**| Developer-friendly entry point, simplifies URL routing, keeps legacy + modern apps accessible via one port, and exposes Laravel `/health` publicly. |
-| **variance-web**  | Legacy read-only frontend consuming generated assets; useful for regression checks. |
+| **variance-web**  | Legacy Apache frontend, serving static/public routes and forwarding PHP execution to `variance-app`. |
+| **variance-app**  | Legacy PHP-FPM runtime for the historical public site. |
 | **MariaDB / Redis** | Data persistence (MariaDB) and queue/backplane support (Redis for Medite/Celery). |
 
 ---
@@ -145,11 +166,11 @@ Key data flow:
 * The scheduler container is also essential for a healthy `/health` report; without it the scheduler heartbeat degrades the global status.
 * Export bundles rely on manifest JSON; keep the facsimile manager up to date or the download will contain no images.
 * `variance-proxy` is optional in theory but recommended—bypassing it requires juggling multiple ports.
-* The legacy PHP site reads from the same storage roots as Laravel; keep that tree mounted read-only (`variance/uploads`) to avoid accidental edits.
+* The legacy public stack (`variance-web` + `variance-app`) reads the same upload roots as Laravel; write access should remain concentrated on Laravel/admin workflows.
 * For production/hardening:
   * Add TLS termination (either in `variance-proxy` or behind an external reverse proxy).
   * Consider splitting Redis usage (separate DBs or instances) for Laravel vs. Celery.
-  * Persist volumes (`dbdata`, `variance_data`) outside of the repository clone.
+  * Persist VM bind mounts / Docker volumes (`dbdata`, uploads, Laravel storage, `variance_data`) outside ephemeral containers.
 
 ---
 

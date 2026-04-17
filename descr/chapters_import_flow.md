@@ -1,30 +1,33 @@
-# Chapters Import Flow In Laravel
+# Chapters XLSX Import
 
-This note proposes a first Laravel implementation for chapter management.
+Ce document décrit l’implémentation réelle actuelle de l’import des chapitres côté Laravel.
 
-## Recommendation
+Références principales :
+- [ChaptersController.php](/Users/jganivet/Développement/variance2/laravel/app/Http/Controllers/ChaptersController.php:1)
+- [ChapterImportService.php](/Users/jganivet/Développement/variance2/laravel/app/Services/ChapterImportService.php:1)
+- [chapters.blade.php](/Users/jganivet/Développement/variance2/laravel/resources/views/components/main/chapters.blade.php:1)
+- [ChaptersImportWorkflowTest.php](/Users/jganivet/Développement/variance2/laravel/tests/Feature/Workflow/ChaptersImportWorkflowTest.php:1)
 
-Phase 1 should be:
-- XLSX import in Laravel
-- parsing preview before write
-- explicit confirmation before replacement
-- read-only inspection of imported chapter trees
+## Périmètre
 
-Phase 1 should **not** be:
-- a full visual tree editor
-- drag and drop hierarchy editing
-- freeform in-browser chapter authoring
+Le système actuel permet :
+- de lister les comparaisons d’une œuvre pouvant recevoir des chapitres
+- de charger un fichier `.xlsx`
+- d’en prévisualiser le contenu
+- de remplacer les lignes existantes de `chapters` pour une comparaison
+- de consulter en lecture seule les chapitres déjà stockés pour une comparaison legacy
 
-The reason is simple:
-- the `chapters` table already exists
-- researchers already use spreadsheets
-- the current operational gap is safe import and validation, not authoring flexibility
+Le système ne permet pas :
+- l’édition manuelle des chapitres dans le navigateur
+- l’upload de `.xls` ou `.csv`
+- l’import de libellés source et cible distincts dans le fichier
+- l’archivage du classeur importé
 
-## Current Data Model
+## Modèle de données
 
-Existing table: `chapters`
+La table `chapters` reste une donnée de navigation liée au `folder` de comparaison, pas une table de sommaire d’œuvre autonome.
 
-Relevant columns:
+Colonnes utilisées par l’import :
 - `folder`
 - `level`
 - `label_source`
@@ -35,229 +38,239 @@ Relevant columns:
 - `id_tome_source`
 - `id_tome_target`
 
-Important reminder:
-- this is not a pure “work table of contents”
-- it is legacy comparison/navigation data tied to a `folder`
-- chapter jumps reuse existing rendered comparison markers
+Valeurs actuellement écrites par défaut :
+- `label_source = label`
+- `label_target = label`
+- `id_tome_source = 0`
+- `id_tome_target = 0`
 
-## Proposed Laravel Scope
+## Contrat du fichier XLSX
 
-### Goal
+Le contrôleur accepte uniquement :
+- un fichier `.xlsx`
+- taille maximale `5 Mo`
 
-Allow a researcher to import a chapters spreadsheet for a selected legacy comparison/work context and replace the existing `chapters` rows safely.
+Le service d’import lit :
+- la **deuxième feuille** du classeur
+- uniquement les **4 premières colonnes**
+- la **première ligne** comme en-tête
 
-### Non-goals for Phase 1
-
-- in-browser tree editing
-- mixed manual edits plus spreadsheet merge logic
-- public-site redesign of TOC behavior
-- chapter creation without a spreadsheet
-
-## User Workflow
-
-### 1. Choose target
-
-User selects the target `folder` to receive chapter data.
-
-Recommended UI:
-- dedicated admin panel section for chapters
-- target chosen from existing imported cases
-- display associated author / work / source version / target version when known
-
-### 2. Upload spreadsheet
-
-User uploads `.xlsx`.
-
-Accepted in Phase 1:
-- `.xlsx` only
-
-Rejected:
-- `.xls`
-- `.csv`
-- malformed workbook
-
-### 3. Parse and preview
-
-Laravel parses the workbook but does not write DB rows yet.
-
-Preview should show:
-- selected target folder
-- row count
-- detected hierarchy
-- first parsed rows
-- validation errors and warnings
-
-### 4. Confirm replacement
-
-User confirms import.
-
-Laravel then:
-- deletes existing `chapters` rows for that folder
-- inserts new rows in one transaction
-- reports success with inserted row count
-
-## Route Design
-
-Suggested routes:
-
-- `GET /chapters/import`
-  - render import page
-- `POST /chapters/import/preview`
-  - upload + parse + validate
-  - return preview payload
-- `POST /chapters/import/commit`
-  - confirm and replace rows
-- `GET /chapters/{folder}`
-  - read-only chapter tree view for one imported folder
-
-All routes should require:
-- `auth`
-
-Recommended permission model:
-- admins always allowed
-- non-admin researchers allowed only when they own or can edit the related work
-
-## Spreadsheet Contract
-
-For legacy-compatible import, accept this core structure on the **second worksheet**:
-
+Ordre attendu des colonnes :
 1. `level`
 2. `label`
 3. `start_line_source`
 4. `start_line_target`
 
-Header row:
-- first row ignored as headers
+Les noms d’en-tête ne sont pas validés textuellement. Ce qui compte est la position des colonnes.
 
-### Example
+### Exemple minimal
 
 ```text
-level | label                       | start_line_source | start_line_target
-1     | Première partie             | 1a                | 9
-1.1   | I - Arrivée de l’héroïne    | 1a                | 9
-1.2   | II - Le voyage              | 2a                | 16
-2     | Deuxième partie             | 10a               | 82
+level | label             | start_line_source | start_line_target
+1     | Première partie   | 1a                | 9
+1.1   | I - Arrivée       | 1a                | 9
+1.2   | II - Le voyage    | 2a                | 16
+2     | Deuxième partie   | 10a               | 82
 ```
 
-## Parsing Rules
+## Règles de parsing
+
+Chaque ligne de données est `trim()`ée sur les 4 colonnes.
+
+Une ligne entièrement vide est ignorée.
 
 ### `level`
 
-Must be a dotted hierarchy token such as:
+Le niveau est obligatoire.
+
+Formats acceptés :
 - `1`
 - `1.1`
 - `1.2.3`
+- plus généralement toute suite de segments non vides séparés par des points
 
-Parent inference:
-- parent of `1.2` is `1`
-- parent of `1.2.3` is `1.2`
+Formats rejetés :
+- niveau vide
+- niveau avec segment vide, par exemple `1..2`
+
+Parent inféré :
+- parent de `1.2` = `1`
+- parent de `1.2.3` = `1.2`
+
+Contrainte importante :
+- le parent doit avoir déjà été rencontré plus haut dans le fichier
 
 ### `label`
 
-Plain text label.
+Le libellé est libre.
 
-Phase 1 default mapping:
-- `label_source = label`
-- `label_target = label`
+S’il est vide :
+- la ligne est importable
+- mais un avertissement est émis
 
-Reason:
-- matches the minimum legacy format we can document reliably
+Le même libellé est copié dans :
+- `label_source`
+- `label_target`
 
-### `start_line_source`
-### `start_line_target`
+### `start_line_source` et `start_line_target`
 
-Plain text marker labels used by chapter navigation.
+Ces ancres sont stockées telles quelles après `trim()`.
 
-Examples:
+Exemples usuels :
 - `1a`
 - `9`
 - `14d`
 
-They should be stored exactly as provided after trim.
+Si une ancre est vide :
+- la ligne reste importable
+- un avertissement est émis
 
-## Validation Rules
+## Validation réelle
 
-### Hard errors
+### Erreurs bloquantes
 
-- workbook missing second worksheet
-- missing header/data rows
-- missing required columns
-- empty `level`
-- invalid hierarchy syntax in `level`
-- child row whose parent level does not exist
-- duplicate exact `level` values in same import
+L’aperçu échoue si :
+- le classeur ne peut pas être ouvert
+- le classeur ne contient pas au moins deux feuilles
+- la deuxième feuille ne peut pas être résolue
+- il n’existe pas au moins une ligne d’en-tête et une ligne de données
+- une ligne utile n’a pas de `level`
+- un `level` est invalide
+- un niveau enfant référence un parent non encore vu
+- un niveau hiérarchique non racine est dupliqué
+- aucune ligne exploitable n’est trouvée après filtrage
 
-### Warnings
+### Avertissements non bloquants
 
-- empty label
-- empty source anchor
-- empty target anchor
-- very long label
-- level sequence gaps such as `1.3` without `1.2`
+Des warnings sont remontés si :
+- le libellé est vide
+- l’ancre source est vide
+- l’ancre cible est vide
+- un niveau racine est répété
 
-Warnings should not block preview by default.
+Important :
+- un niveau racine répété comme `1`, puis plus loin `1` n’est pas bloquant
+- il est importé comme entrée sœur et signalé par un warning
 
-## Persistence Rules
+## Flux utilisateur actuel
 
-On commit:
+### 1. Sélection de l’œuvre
 
-1. begin transaction
-2. delete existing `chapters` rows for target folder
-3. insert new rows in level order
-4. resolve `chapter_parent` ids from parsed hierarchy
-5. commit
+Le panneau `Chapitres` reste inactif tant qu’aucune œuvre n’est sélectionnée.
 
-Stored defaults in Phase 1:
-- `label_source = imported label`
-- `label_target = imported label`
-- `id_tome_source = 0`
-- `id_tome_target = 0`
+### 2. Chargement des cibles
 
-## Import Provenance
+Route :
+- `GET /chapters/targets?work_id={id}`
 
-Recommended even in Phase 1:
-- store the uploaded XLSX file in a private import archive
-- keep metadata:
-  - original filename
-  - uploader
-  - timestamp
-  - target folder
-  - row count
+Le backend renvoie les comparaisons de l’œuvre :
+- non-legacy modifiables
+- legacy uniquement si elles ont déjà des lignes dans `chapters`
 
-This can be done either by:
-- a small `chapter_imports` table
-- or a private JSON log plus archived file
+Chaque cible expose :
+- `id`
+- `folder`
+- `label`
+- `readonly`
+- `chapter_count`
 
-Best option:
-- `chapter_imports` table
+### 3. Cas legacy
 
-## UI For Read-only Inspection
+Si la comparaison est legacy et possède déjà des chapitres :
+- elle apparaît dans la liste
+- elle est marquée lecture seule
+- son contenu peut être chargé via :
+  - `GET /chapters/{comparison}`
+- aucun import n’est autorisé dessus
 
-After import, Laravel should provide a simple tree view:
-- level
-- label
-- source anchor
-- target anchor
+### 4. Prévisualisation
 
-This view is important because it lets researchers verify the import result without opening the old public site logic.
+Route :
+- `POST /chapters/import/preview`
 
-## Test Cases To Use
+Payload :
+- `comparison_id`
+- `file`
 
-Use these real imported legacy cases:
+Si la comparaison est modifiable :
+- le fichier est lu
+- les lignes sont validées
+- un aperçu JSON est renvoyé
 
-- `1mdm-2mdm`
-  - rich balanced case
-  - many rows
-- `2as-3as`
-  - asymmetric case
-  - target labels populated while source labels may be empty
+Le backend met aussi en cache pendant `30 minutes` :
+- l’identifiant de comparaison
+- le `folder`
+- les lignes préparées à l’import
 
-Reference:
-- [legacy_chapter_test_cases.md](/Users/jganivet/Développement/variance2/descr/legacy_chapter_test_cases.md:1)
+La réponse contient :
+- `token`
+- `sheet_name`
+- `header`
+- `rows`
+- `warnings`
+- `summary.count`
+- `summary.root_count`
+- `summary.existing_count`
 
-## Technical Notes
+### 5. Commit
 
-### Parsing library
+Route :
+- `POST /chapters/import/commit`
+
+Payload :
+- `comparison_id`
+- `token`
+
+Le commit :
+1. relit l’aperçu en cache
+2. vérifie que le token correspond bien à la comparaison
+3. supprime les anciennes lignes `chapters` du même `folder`
+4. recrée les lignes dans une transaction
+5. résout `chapter_parent` à partir du `parent_level`
+6. supprime le token de cache
+
+Le commit remplace donc entièrement les chapitres existants pour cette comparaison.
+
+## Permissions
+
+Lecture :
+- admins autorisés
+- non-admins autorisés s’ils ont un droit `edit` sur l’œuvre ou sur l’auteur
+
+Écriture :
+- admins autorisés
+- non-admins soumis à `WorkPolicy::edit`
+- comparaisons legacy toujours bloquées en écriture
+
+## Comportement UI
+
+Le panneau admin actuel :
+- affiche la cible sélectionnée
+- permet une prévisualisation explicite
+- permet aussi un flux en deux clics sur `Importer les chapitres`
+- affiche les warnings
+- affiche le nombre de lignes existantes qui seraient remplacées
+
+En lecture seule legacy :
+- le panneau charge les lignes déjà stockées
+- le bouton d’import reste désactivé
+
+## Écarts avec l’ancienne documentation
+
+Les points suivants ne sont plus des hypothèses mais l’état réel :
+- l’import Laravel existe déjà
+- il n’y a pas aujourd’hui de format source/target séparé dans le fichier
+- il n’y a pas de table `chapter_imports`
+- le classeur n’est pas archivé
+- l’import est centré sur la comparaison, pas sur une “œuvre de destination” abstraite
+
+## Recommandation documentaire
+
+Ce document remplace les anciennes notes séparées :
+- format Excel legacy
+- flux d’import proposé
+
+Il doit désormais servir de source de vérité tant que l’implémentation reste celle de [ChapterImportService.php](/Users/jganivet/Développement/variance2/laravel/app/Services/ChapterImportService.php:1) et [ChaptersController.php](/Users/jganivet/Développement/variance2/laravel/app/Http/Controllers/ChaptersController.php:1).
 
 Phase 1 can use:
 - `phpoffice/phpspreadsheet`

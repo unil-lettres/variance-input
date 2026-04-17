@@ -35,7 +35,7 @@ See `descr/architecture.md` for full topology.
 Reference: `descr/workflow.md`, `descr/facsimiles.md`.
 
 ## Queues & jobs
-- `page-markers`: `ApplyLignesJob`, `InjectComparisonPaginationJob`
+- `page-markers`: `ApplyLignesJob`, `InjectComparisonPaginationJob`, `HealthcheckProbeJob`
 - `facsimiles`: `ProcessFacsimileImage`
 - `exports`: `GenerateLegacyExportJob`
 
@@ -44,6 +44,7 @@ multiple `queue:work` processes for `facsimiles,page-markers,exports`. A heartbe
 is written to `storage/app/private/queue_workers.json`.
 Scheduler container runs `php artisan schedule:run` every minute and writes
 `storage/app/private/scheduler_heartbeat.json` through `health:scheduler-heartbeat`.
+It also runs the daily `backup:database` command.
 See `descr/queues_jobs.md`.
 
 ## Publication model (prod/dev)
@@ -68,6 +69,12 @@ See `descr/api_endpoints.md`. Notables:
 - `/api/comparisons/{id}/page-markers`
 - `/api/comparisons/{id}/pagination/from-xhtml`
 - `/api/versions/{id}/pagination/from-pb`
+- `/api/versions/{id}/pagination/merge-from-pb`
+- `/api/versions/{id}/reader/rebuild`
+- `/comparisons/{id}/comments`
+- `/comparisons/{id}/export/status`
+- `/chapters/import/preview`
+- `/chapters/import/commit`
 - `/api/publish_xhtml`
 
 ## Access control (current)
@@ -112,3 +119,4 @@ docker compose logs -f laravel laravel-queue medite
 - Laravel: `laravel/app/Http/Controllers/*`, `laravel/app/Services/PageMarkerService.php`
 - Medite: `medite/app/flask_app.py`, `medite/app/variance/scripts/diff.py`
 - Dependency updates: `descr/dependency_updates.md`, `.github/dependabot.yml`, `.github/workflows/dependency-checks.yml`
+- Current Laravel map: `descr/laravel_current_code_map.md`
