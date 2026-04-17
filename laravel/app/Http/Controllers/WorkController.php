@@ -165,7 +165,16 @@ class WorkController extends Controller
         }
     
         // Proceed with deletion
+        $workId = $work->id;
+        $workTitle = $work->title;
+        $authorId = $work->author_id;
         $work->delete();
+
+        $this->audit('work.deleted', [
+            'work_id' => $workId,
+            'work_title' => $workTitle,
+            'author_id' => $authorId,
+        ]);
     
         return response()->json(['success' => true]);
     }

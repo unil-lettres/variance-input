@@ -94,7 +94,14 @@ class AuthorController extends Controller
             return response()->json(['error' => 'Impossible de supprimer cet auteur car des oeuvres lui sont associées.'], 409);
         }
 
+        $authorId = $author->id;
+        $authorName = $author->name;
         $author->delete();
+
+        $this->audit('author.deleted', [
+            'author_id' => $authorId,
+            'author_name' => $authorName,
+        ]);
 
         return response()->json(['success' => true]);
     }

@@ -214,6 +214,12 @@ class ChaptersController extends Controller
 
         Cache::forget($cacheKey);
 
+        $this->audit('chapters.import_committed', [
+            'comparison_id' => $comparison->id,
+            'comparison_folder' => $comparison->folder,
+            'imported_count' => $imported,
+        ]);
+
         return response()->json([
             'status' => 'ok',
             'comparison_id' => $comparison->id,

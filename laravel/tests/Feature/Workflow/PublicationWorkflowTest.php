@@ -6,6 +6,7 @@ use App\Models\Comparison;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -668,5 +669,49 @@ class PublicationWorkflowTest extends TestCase
         $comparison->refresh();
         $this->assertSame('dev', $comparison->publication_scope);
         $this->assertFileExists($targetLegacyDir . DIRECTORY_SEPARATOR . 'img_' . $target->folder . '_001.jpg');
+    }
+
+    public function test_publish_writes_audit_log(): void
+    {
+        Log::spy();
+
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Publication auditée',
+            'short_title' => 'pba',
+        ]);
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Source',
+            'folder' => '1pba',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Cible',
+            'folder' => '2pba',
+        ]);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1pba-2pba-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $this->writeComparisonArtifacts($comparison);
+        $this->writeFacsimilePair($source);
+        $this->writeFacsimilePair($target);
+
+        $this->postJson('/api/publish_xhtml', [
+            'comparison_id' => $comparison->id,
+            'destination' => 'dev',
+        ])->assertOk();
+
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(function (string $message, array $context) use ($comparison): bool {
+                return $message === 'audit.comparison.published'
+                    && ($context['event'] ?? null) === 'audit'
+                    && ($context['comparison_id'] ?? null) === $comparison->id
+                    && ($context['destination'] ?? null) === 'dev'
+                    && array_key_exists('warning_count', $context);
+            });
     }
 }

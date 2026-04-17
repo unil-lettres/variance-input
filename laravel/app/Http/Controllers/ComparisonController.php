@@ -137,6 +137,13 @@ class ComparisonController extends Controller
         $comparison->comments = $comments !== '' ? $comments : null;
         $comparison->save();
 
+        $this->audit('comparison.comments_updated', [
+            'comparison_id' => $comparison->id,
+            'comparison_folder' => $comparison->folder,
+            'has_comments' => $comparison->comments !== null,
+            'comment_length' => mb_strlen((string) ($comparison->comments ?? '')),
+        ]);
+
         return response()->json([
             'status' => 'ok',
             'comparison_id' => $comparison->id,
@@ -557,8 +564,21 @@ class ComparisonController extends Controller
         $this->pageMarkerService->clearComparisonProgress($comparison->id);
         $this->legacyExportService->deleteExportArtifacts($comparison->id);
         $this->deleteTransientComparisonInputs($comparison->id);
+        $chapterCount = Chapter::query()->forFolder($comparison->folder)->count();
         Chapter::query()->forFolder($comparison->folder)->delete();
+        $comparisonId = $comparison->id;
+        $comparisonFolder = $comparison->folder;
+        $sourceVersionId = $comparison->source_id;
+        $targetVersionId = $comparison->target_id;
         $comparison->delete();
+
+        $this->audit('comparison.deleted', [
+            'comparison_id' => $comparisonId,
+            'comparison_folder' => $comparisonFolder,
+            'source_version_id' => $sourceVersionId,
+            'target_version_id' => $targetVersionId,
+            'deleted_chapter_count' => $chapterCount,
+        ]);
 
         return response()->json(['message' => 'Comparison deleted']);
     }

@@ -84,6 +84,15 @@ class PublishController extends Controller
             $manifestInfo = $this->publishManifests($comparison, $paths);
             $draftMirror = $this->mirrorDraftComparisonToLegacy($comparison, $paths, $sourceDir);
 
+            $this->audit('comparison.published', [
+                'comparison_id' => $comparison->id,
+                'comparison_folder' => $comparison->folder,
+                'destination' => 'dev',
+                'missing_files' => $missing,
+                'warning_count' => count($publishWarnings),
+                'insert_default_marker' => $insertDefaultMarker,
+            ]);
+
             return response()->json([
                 'status'        => 'ok',
                 'published_to'  => 'dev',
@@ -121,6 +130,15 @@ class PublishController extends Controller
         $manifestInfo = $this->publishManifests($comparison, $paths);
         $comparison->publication_scope = 'prod';
         $comparison->save();
+
+        $this->audit('comparison.published', [
+            'comparison_id' => $comparison->id,
+            'comparison_folder' => $comparison->folder,
+            'destination' => 'prod',
+            'missing_files' => $missing,
+            'warning_count' => count($publishWarnings),
+            'insert_default_marker' => $insertDefaultMarker,
+        ]);
 
         return response()->json([
             'status'        => 'ok',
@@ -166,6 +184,13 @@ class PublishController extends Controller
 
         $comparison->publication_scope = null;
         $comparison->save();
+
+        $this->audit('comparison.unpublished', [
+            'comparison_id' => $comparison->id,
+            'comparison_folder' => $comparison->folder,
+            'deleted_files' => $deleted,
+            'not_found' => $notFound,
+        ]);
 
         return response()->json([
             'status'        => 'ok',

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class ComparisonCommentsWorkflowTest extends TestCase
@@ -72,6 +73,39 @@ class ComparisonCommentsWorkflowTest extends TestCase
 
         $comparison->refresh();
         $this->assertNull($comparison->comments);
+    }
+
+    public function test_saving_comment_writes_audit_log_without_comment_body(): void
+    {
+        Log::spy();
+
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Commentaires audités',
+            'short_title' => 'cda',
+        ]);
+        $source = Version::factory()->for($work)->create(['folder' => '1cda']);
+        $target = Version::factory()->for($work)->create(['folder' => '2cda']);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1cda-2cda-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $this->patchJson("/comparisons/{$comparison->id}/comments", [
+            'comments' => 'Commentaire sensible à ne pas logger tel quel.',
+        ])->assertOk();
+
+        Log::shouldHaveReceived('info')
+            ->once()
+            ->withArgs(function (string $message, array $context): bool {
+                return $message === 'audit.comparison.comments_updated'
+                    && ($context['event'] ?? null) === 'audit'
+                    && ($context['has_comments'] ?? null) === true
+                    && ($context['comment_length'] ?? null) > 0
+                    && !array_key_exists('comments', $context);
+            });
     }
 
     public function test_non_owner_cannot_update_comments(): void

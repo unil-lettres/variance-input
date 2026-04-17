@@ -314,8 +314,21 @@ class VersionController extends Controller
         $this->deleteVersionPrivateArtifacts($version->id);
 
         // Remove DB record regardless of file presence
+        $versionId = $version->id;
+        $versionFolder = $version->folder;
+        $workId = $version->work_id;
         $version->delete();
         Cache::forget("versions:index:work:{$version->work_id}");
+
+        $this->audit('version.deleted', [
+            'version_id' => $versionId,
+            'version_folder' => $versionFolder,
+            'work_id' => $workId,
+            'missing_files' => $missing,
+            'facsimiles_removed' => $facsimilesRemoved,
+            'lignes_removed' => $lignesRemoved,
+            'pagination_removed' => $paginationRemoved,
+        ]);
 
         $message = 'Version supprimée avec succès';
         if ($missing) {
