@@ -18,7 +18,7 @@ use App\Services\PageMarkerService;
 
 class VersionController extends Controller
 {
-    private const READER_DATASET_SCHEMA_VERSION = 2;
+    private const READER_DATASET_SCHEMA_VERSION = 3;
 
     public function __construct(private PageMarkerService $pageMarkerService)
     {
@@ -52,34 +52,42 @@ class VersionController extends Controller
             ->get();
 
         $versionIds = $versions->pluck('id')->all();
-        $versionsInUse = empty($versionIds)
-            ? []
-            : Comparison::query()
-                ->whereIn('source_id', $versionIds)
-                ->orWhereIn('target_id', $versionIds)
-                ->get(['source_id', 'target_id'])
-                ->flatMap(fn (Comparison $comparison) => [$comparison->source_id, $comparison->target_id])
-                ->filter()
-                ->unique()
-                ->map(fn ($id) => (int) $id)
-                ->all();
-
-        $inUseLookup = array_fill_keys($versionsInUse, true);
+        $usageByVersion = [];
+        if (!empty($versionIds)) {
+            Comparison::query()
+                ->where(function ($query) use ($versionIds) {
+                    $query->whereIn('source_id', $versionIds)
+                        ->orWhereIn('target_id', $versionIds);
+                })
+                ->get(['id', 'source_id', 'target_id'])
+                ->each(function (Comparison $comparison) use (&$usageByVersion): void {
+                    foreach (array_unique(array_filter([
+                        $comparison->source_id,
+                        $comparison->target_id,
+                    ])) as $versionId) {
+                        $usageByVersion[(int) $versionId] ??= [];
+                        $usageByVersion[(int) $versionId][] = (int) $comparison->id;
+                    }
+                });
+        }
 
         return $versions
-            ->map(function (Version $version) use ($inUseLookup) {
+            ->map(function (Version $version) use ($usageByVersion) {
                 $paginationInfo = $this->pageMarkerService->getPaginationInfo($version->id);
                 $pageMarkerProgress = $version->is_legacy
                     ? null
                     : $this->pageMarkerService->getProgressSnapshot($version->id);
                 $textLength = null; // lazy-loaded via /api/versions/{id}/text-length
+                $comparisonIds = $usageByVersion[$version->id] ?? [];
                 return [
                     'id'         => $version->id,
                     'name'       => $version->name,
                     'folder'     => $version->folder,
                     'work_id'    => $version->work_id,
                     'is_legacy'  => (bool) $version->is_legacy,
-                    'is_in_use'  => isset($inUseLookup[$version->id]),
+                    'is_in_use'  => !empty($comparisonIds),
+                    'in_use_comparison_count' => count($comparisonIds),
+                    'in_use_comparison_ids' => $comparisonIds,
                     'pagination_done' => (bool) $version->pagination_done,
                     'pagination_done_at' => $version->pagination_done_at?->getTimestamp(),
                     'pagination_done_by' => $version->pagination_done_by,
@@ -775,6 +783,24 @@ class VersionController extends Controller
         $requestedEncoding = $this->normalizeSourceEncodingHint($request->query('encoding'));
         $requestedTextSource = $this->normalizeReaderTextSourceHint($request->query('text_source'));
         $dataset = $this->readerDataset($version, $requestedEncoding, $requestedTextSource);
+        return response()->json($this->buildReaderResponsePayload($version, $dataset), 200);
+    }
+
+    public function rebuildReaderData(Request $request, Version $version): JsonResponse
+    {
+        $requestedEncoding = $this->normalizeSourceEncodingHint($request->input('encoding', $request->query('encoding')));
+        $requestedTextSource = $this->normalizeReaderTextSourceHint($request->input('text_source', $request->query('text_source')));
+        $this->clearReaderDatasetCache($version->id);
+        $dataset = $this->readerDataset($version, $requestedEncoding, $requestedTextSource);
+
+        return response()->json([
+            'status' => 'ok',
+            'message' => 'Lecteur reconstruit pour cette version.',
+        ] + $this->buildReaderResponsePayload($version, $dataset), 200);
+    }
+
+    private function buildReaderResponsePayload(Version $version, array $dataset): array
+    {
         $pagePlans = is_array($dataset['page_plans'] ?? null)
             ? $dataset['page_plans']
             : $this->readerPagePlans($dataset['text'] ?? null, $dataset['markers'] ?? [], $dataset['facsimiles'] ?? []);
@@ -791,7 +817,7 @@ class VersionController extends Controller
         }, $pagePlans);
         $currentPage = isset($pagePlans[0]) ? $this->materializeReaderPage($pagePlans[0], $dataset['text'] ?? null) : null;
 
-        return response()->json([
+        return [
             'version_id' => $version->id,
             'version_name' => $version->name,
             'version_folder' => $version->folder,
@@ -807,7 +833,7 @@ class VersionController extends Controller
             'current_page_index' => $currentPage ? 0 : null,
             'current_page' => $currentPage,
             'pagination' => $dataset['pagination'],
-        ], 200);
+        ];
     }
 
     public function readerProgress(Request $request, Version $version): JsonResponse
@@ -2088,7 +2114,7 @@ class VersionController extends Controller
 
         $normalizedMarkers = array_values(array_map(function (array $marker) {
             $marker['resolved_char_index'] = max(0, (int) ($marker['resolved_char_index'] ?? $marker['char_index'] ?? 0));
-            $marker['image_code'] = $this->readerImageCode($marker['image_code'] ?? $marker['page'] ?? null);
+            $marker['image_code'] = $this->readerImageCode($marker['image_code'] ?? $marker['image'] ?? $marker['page'] ?? null);
             $marker['page_label'] = trim((string) ($marker['page'] ?? ''));
             return $marker;
         }, $markers));

@@ -82,6 +82,52 @@ class VersionReaderWorkflowTest extends TestCase
             ->assertJsonPath('percent', 0);
     }
 
+    public function test_reader_rebuild_endpoint_requires_authenticated_session(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-rebuild-auth-v1',
+        ]);
+
+        auth()->logout();
+
+        $this->postJson("/api/versions/{$version->id}/reader/rebuild")
+            ->assertStatus(401);
+    }
+
+    public function test_reader_rebuild_endpoint_clears_stale_artifacts_and_returns_fresh_payload(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-rebuild-v1',
+        ]);
+
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            "Texte reconstruit."
+        );
+        $this->writeFacsimilePair($version);
+
+        $artifactDir = storage_path("app/private/reader_cache/{$version->id}");
+        File::ensureDirectoryExists($artifactDir);
+        $artifactPath = $artifactDir . '/' . md5('AUTO') . '-' . md5('AUTO') . '.json';
+        File::put($artifactPath, '{"stale":true}');
+
+        $this->postJson("/api/versions/{$version->id}/reader/rebuild")
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('version_id', $version->id)
+            ->assertJsonPath('page_count', 1)
+            ->assertJsonPath('current_page.text', 'Texte reconstruit.');
+
+        $this->assertFileExists($artifactPath);
+        $artifact = json_decode((string) File::get($artifactPath), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($artifact['dataset'] ?? null);
+        $this->assertSame('Texte reconstruit.', $artifact['dataset']['text'] ?? null);
+    }
+
     public function test_reader_without_pagination_returns_full_text_in_single_page(): void
     {
         $user = $this->signInEditor();
@@ -280,6 +326,52 @@ HTML,
             ->assertJsonPath('pages.1.image.name', 'img_reader-numeric-v1_003.jpg')
             ->assertJsonPath('pages.2.image.name', 'img_reader-numeric-v1_004.jpg')
             ->assertJsonPath('current_page.image.name', 'img_reader-numeric-v1_002.jpg');
+    }
+
+    public function test_reader_maps_legacy_xhtml_page_marker_spans_to_facsimiles(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $source = Version::factory()->for($work)->create([
+            'folder' => 'reader-legacy-span-v1',
+            'name' => 'Albert Savarus (Le Siècle, 1842)',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'folder' => 'reader-legacy-span-v2',
+            'name' => 'Version cible',
+        ]);
+
+        foreach (['001', '002', '003'] as $basename) {
+            $this->writeFacsimilePair($source, $basename);
+        }
+
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'created_by' => $user->id,
+        ]);
+
+        $this->writeComparisonArtifacts($comparison, [
+            'source.xhtml' => <<<'HTML'
+<div>
+  <span class="page-marker" data-image-name="002"><span class="page-number">1.<br />1a</span><img src="/img/settings/page_right.svg" /></span>
+  <span>Premier extrait.</span>
+  <span class="page-marker" data-image-name="003"><span class="page-number">1.<br />1b</span><img src="/img/settings/page_right.svg" /></span>
+  <span>Second extrait.</span>
+</div>
+HTML,
+        ]);
+
+        $this->getJson("/api/versions/{$source->id}/reader?text_source=comparison-xhtml")
+            ->assertOk()
+            ->assertJsonPath('page_count', 3)
+            ->assertJsonPath('pages.0.label', 'Avant 1.1a')
+            ->assertJsonPath('pages.0.image.name', 'img_reader-legacy-span-v1_001.jpg')
+            ->assertJsonPath('pages.1.label', '1.1a')
+            ->assertJsonPath('pages.1.image.name', 'img_reader-legacy-span-v1_002.jpg')
+            ->assertJsonPath('pages.2.label', '1.1b')
+            ->assertJsonPath('pages.2.image.name', 'img_reader-legacy-span-v1_003.jpg')
+            ->assertJsonPath('current_page.image.name', 'img_reader-legacy-span-v1_001.jpg');
     }
 
     public function test_convert_text_to_utf8_requires_authenticated_session(): void

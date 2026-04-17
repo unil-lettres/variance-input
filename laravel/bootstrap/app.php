@@ -19,13 +19,19 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
         ]);
 
-        $middleware->web(prepend: [
+        $middleware->web(append: [
             \App\Http\Middleware\AdminMaintenanceMode::class,
         ]);
 
-        $middleware->api(prepend: [
-            \App\Http\Middleware\AdminMaintenanceMode::class,
-        ]);
+        $middleware->prependToPriorityList(
+            before: \Illuminate\Auth\Middleware\Authenticate::class,
+            prepend: \App\Http\Middleware\AdminMaintenanceMode::class,
+        );
+
+        $middleware->appendToPriorityList(
+            after: \Illuminate\Session\Middleware\StartSession::class,
+            append: \App\Http\Middleware\AdminMaintenanceMode::class,
+        );
 
         $middleware->trustProxies(
             at: '*',

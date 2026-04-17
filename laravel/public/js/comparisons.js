@@ -1096,9 +1096,12 @@ function initComparisonsTable() {
     };
   }
 
-  function renderMediteParams(comp) {
+  function renderMediteParams(comp, { detailsLoaded = false } = {}) {
     if (comp?.is_legacy) {
       return '<span class="text-muted">n/a</span>';
+    }
+    if (!detailsLoaded) {
+      return '<span class="text-muted">—</span>';
     }
     const chips = [];
 
@@ -1740,7 +1743,7 @@ function initComparisonsTable() {
       : '<span class="text-muted">—</span>';
 
     comparisonData.set(comp.id, comp);
-    const mediteParamsHtml = renderMediteParams(comp);
+    const mediteParamsHtml = renderMediteParams(comp, { detailsLoaded });
     const dataSummaryHtml = renderComparisonDataSummary(comp, { detailsLoaded });
     const resultsHtml = renderResultsSummary(comp, { isRunning, detailsLoaded });
     const compactStatusHtml = renderCompactProcessStatus(comp, { isRunning });
@@ -2069,10 +2072,10 @@ function initComparisonsTable() {
       if (!runningComparisons.has(numericId)) return;
       const row = comparisonRows.get(numericId);
       if (!row) return;
-      const paramsCell = row.children[5];
-      const resultsCell = row.children[13];
+      const paramsCell = row.querySelector('.comparison-params-cell');
+      const resultsCell = row.querySelector('.comparison-action-cell');
       if (paramsCell) {
-        paramsCell.innerHTML = renderMediteParams(comp);
+        paramsCell.innerHTML = renderMediteParams(comp, { detailsLoaded: !!comp.details_loaded });
       }
       if (resultsCell) {
         const compactStatus = resultsCell.querySelector('.comparison-results-compact');

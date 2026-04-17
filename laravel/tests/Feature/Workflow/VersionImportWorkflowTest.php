@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Models\Comparison;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -112,5 +113,55 @@ class VersionImportWorkflowTest extends TestCase
         $this->assertTrue($version->pagination_done);
         $this->assertSame($user->id, $version->pagination_done_by);
         $this->assertNotNull($version->pagination_done_at);
+    }
+
+    public function test_versions_index_exposes_comparison_usage_for_versions_in_use(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'La Cousine Bette',
+            'short_title' => 'lcb',
+        ]);
+
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Le Musée littéraire du Siècle (1847)',
+            'folder' => '5lcb',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Furne (1848)',
+            'folder' => '6lcb',
+        ]);
+
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '5lcb-6lcb-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $response = $this->getJson("/api/versions?work_id={$work->id}&fresh=1");
+
+        $response->assertOk()
+            ->assertJsonFragment([
+                'id' => $source->id,
+                'is_in_use' => true,
+                'in_use_comparison_count' => 1,
+            ])
+            ->assertJsonFragment([
+                'id' => $target->id,
+                'is_in_use' => true,
+                'in_use_comparison_count' => 1,
+            ]);
+
+        $versions = collect($response->json());
+
+        $this->assertSame(
+            [$comparison->id],
+            $versions->firstWhere('id', $source->id)['in_use_comparison_ids'] ?? null
+        );
+        $this->assertSame(
+            [$comparison->id],
+            $versions->firstWhere('id', $target->id)['in_use_comparison_ids'] ?? null
+        );
     }
 }

@@ -82,14 +82,6 @@
                 </div>
             </div>
 
-            <div class="editorial-carousel-actions">
-                <button type="button" class="editorial-carousel-arrow" id="editorial-step-prev" aria-label="Étape précédente" title="Étape précédente">
-                    <span aria-hidden="true">‹</span>
-                </button>
-                <button type="button" class="editorial-carousel-arrow" id="editorial-step-next" aria-label="Étape suivante" title="Étape suivante">
-                    <span aria-hidden="true">›</span>
-                </button>
-            </div>
         </div>
     </section>
 
@@ -282,42 +274,6 @@
         color: #6c757d;
         font-style: italic;
     }
-    .editorial-carousel-actions {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-    }
-    .editorial-carousel-arrow {
-        flex: 0 0 auto;
-        display: grid;
-        place-items: center;
-        width: 2.5rem;
-        height: 2.5rem;
-        border: 1px solid #ced4da;
-        border-radius: 999px;
-        background: #fff;
-        color: #495057;
-        transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
-    }
-    .editorial-carousel-arrow:hover:not([disabled]) {
-        border-color: #adb5bd;
-        background: #f8f9fa;
-    }
-    .editorial-carousel-arrow:focus-visible {
-        outline: 2px solid rgba(69, 101, 163, 0.4);
-        outline-offset: 2px;
-    }
-    .editorial-carousel-arrow span {
-        font-size: 1.35rem;
-        line-height: 1;
-        font-weight: 700;
-        transform: translateY(-0.04rem);
-    }
-    .editorial-carousel-arrow[disabled] {
-        opacity: 0.45;
-        cursor: default;
-    }
     #admin-main .card-header[role="button"] {
         padding-top: 0.5rem;
         padding-bottom: 0.5rem;
@@ -426,10 +382,6 @@
     @media (max-width: 767.98px) {
         .editorial-history {
             width: 100%;
-        }
-        .editorial-carousel-actions {
-            flex-direction: column-reverse;
-            align-items: stretch;
         }
     }
 </style>

@@ -1566,8 +1566,12 @@ class PageMarkerService
             }
 
             $tail = substr($contents, $pos, 500);
-            if (preg_match('/<span\b[^>]*class=(["\'])[^"\']*\bpage-number\b[^"\']*\1[^>]*>\s*([^<]+?)\s*<\/span>/i', $tail, $m)) {
-                $entry['page'] = trim($m[2]);
+            if (preg_match('/<span\b[^>]*class=(["\'])[^"\']*\bpage-number\b[^"\']*\1[^>]*>(.*?)<\/span>/is', $tail, $m)) {
+                $pageHtml = preg_replace('/<br\s*\/?>/i', '', (string) ($m[2] ?? ''));
+                $pageText = trim(preg_replace('/\s+/u', '', strip_tags((string) $pageHtml)) ?? '');
+                if ($pageText !== '') {
+                    $entry['page'] = $pageText;
+                }
             }
 
             if (empty($entry['image'] ?? null)) {

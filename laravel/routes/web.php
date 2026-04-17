@@ -139,6 +139,7 @@ Route::get('/api/versions/{version}/text-length', [VersionController::class, 'te
 Route::get('/api/versions/{version}/reader', [VersionController::class, 'readerData'])->middleware('auth');
 Route::get('/api/versions/{version}/reader/progress', [VersionController::class, 'readerProgress'])->middleware('auth');
 Route::get('/api/versions/{version}/reader/page', [VersionController::class, 'readerPage'])->middleware('auth');
+Route::post('/api/versions/{version}/reader/rebuild', [VersionController::class, 'rebuildReaderData'])->middleware('auth');
 Route::post('/api/versions/{version}/text/convert-utf8', [VersionController::class, 'convertTextToUtf8'])->middleware('auth');
 Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::patch('/api/versions/{version}/pagination/done', [VersionController::class, 'togglePaginationDone']);

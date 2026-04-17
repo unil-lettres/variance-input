@@ -44,6 +44,8 @@ class AdminMaintenanceMode
     {
         return $request->is('health')
             || $request->is('up')
+            || $request->is('login')
+            || $request->routeIs('login')
             || $request->routeIs('maintenance.notice');
     }
 

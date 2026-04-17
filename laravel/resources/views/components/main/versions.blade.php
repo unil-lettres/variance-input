@@ -25,9 +25,9 @@
     <div id="versionsCollapse" class="show">
     <div class="card-body">
         <!-- ────────────── Versions list  ────────────── -->
-        <ul id="versions-list" class="list-group versions-list-shell">
-            <li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>
-        </ul>
+        <div id="versions-list" class="versions-list-shell">
+            <div class="versions-empty-state">Sélectionner une œuvre pour voir les versions</div>
+        </div>
     </div>
     </div>
 </div>
@@ -35,8 +35,29 @@
 @push('styles')
 <style>
     .versions-list-shell {
+        width: 100%;
+        max-width: 100%;
+    }
+    .versions-empty-state {
+        padding: 0.85rem 1rem;
+        border: 1px solid #dee2e6;
         border-radius: 0.85rem;
+        background: #fff;
+        color: #6c757d;
+        text-align: center;
+    }
+    .versions-table-wrap {
         overflow: hidden;
+        width: 100%;
+        max-width: 100%;
+        border: 1px solid #dee2e6;
+        border-radius: 0.85rem;
+        background: #fff;
+    }
+    .versions-table {
+        width: 100%;
+        margin-bottom: 0;
+        table-layout: fixed;
     }
     @media (max-width: 767.98px) {
         .card-header > #open-upload-version-modal,
@@ -199,9 +220,34 @@
 @push('scripts')
 <style>
     /* Keep table headers visually consistent with card header */
-    .version-table th { font-weight: normal; font-size: 1rem; color: #333; }
+    .version-table th { font-weight: normal; font-size: 1rem; color: #333; white-space: nowrap; background: var(--bs-table-bg, #f8f9fa); }
     .version-table th:nth-child(7) { text-align: center; }
-    .version-table td { vertical-align: middle; }
+    .version-table td {
+      vertical-align: middle;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .version-table th:nth-child(1),
+    .version-table td:nth-child(1) { width: 3.4rem; }
+    .version-table th:nth-child(2),
+    .version-table td:nth-child(2) { width: 4.3rem; }
+    .version-table th:nth-child(3),
+    .version-table td:nth-child(3) { width: 24%; }
+    .version-table th:nth-child(4),
+    .version-table td:nth-child(4) { width: 8%; }
+    .version-table th:nth-child(5),
+    .version-table td:nth-child(5) { width: 7%; }
+    .version-table th:nth-child(6),
+    .version-table td:nth-child(6),
+    .version-table th:nth-child(7),
+    .version-table td:nth-child(7) { width: 4.8%; }
+    .version-table th:nth-child(8),
+    .version-table td:nth-child(8) { width: 17%; }
+    .version-table th:nth-child(9),
+    .version-table td:nth-child(9) { width: 20%; }
+    .version-table th:nth-child(10),
+    .version-table td:nth-child(10) { width: 11%; }
     .version-table.compact-details th:nth-child(2),
     .version-table.compact-details td:nth-child(2),
     .version-table.compact-details th:nth-child(4),
@@ -238,19 +284,20 @@
       justify-content: center;
       gap: 0.5rem;
       width: 100%;
+      min-width: 0;
     }
     .version-table .versions-inline-cell--facsimiles {
-      grid-template-columns: 7.4rem auto;
+      grid-template-columns: minmax(0, 1fr) auto;
     }
     .version-table .versions-inline-cell--pagination {
-      grid-template-columns: 7.4rem 4.5rem 4.8rem;
+      grid-template-columns: minmax(0, 1fr) auto auto;
     }
     .version-table .versions-count-pill {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 7.4rem;
-      max-width: 7.4rem;
+      width: 100%;
+      max-width: 100%;
       text-align: center;
       white-space: nowrap;
       overflow: hidden;
@@ -261,12 +308,36 @@
       position: relative;
       width: 2.2rem;
       min-width: 2.2rem;
+      height: 2.2rem;
       padding-left: 0;
       padding-right: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
     }
     .version-table .versions-action-group {
       display: inline-flex;
       align-items: center;
+      flex-wrap: nowrap;
+      max-width: 100%;
+    }
+    .version-table .versions-text-btn {
+      min-width: 4.5rem;
+      height: 2.2rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 0.6rem;
+      line-height: 1;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+    .version-table .versions-text-btn.disabled {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
     }
     .version-table .versions-switch-wrap {
       width: 4.8rem;
@@ -309,9 +380,11 @@
       color: #0d6efd;
     }
     .version-table .version-viewer-col {
-      width: 2.8rem;
-      min-width: 2.8rem;
+      width: 2.15rem;
+      min-width: 2.15rem;
       text-align: center;
+      padding-left: 0.2rem;
+      padding-right: 0.2rem;
     }
     .version-table .version-viewer-btn {
       width: 1.9rem;
@@ -346,6 +419,114 @@
       border-color: #0d6efd;
       color: #fff;
       box-shadow: 0 0 0 0.18rem rgba(13, 110, 253, 0.18);
+    }
+    @media (max-width: 1280px) {
+      .version-table {
+        font-size: 0.92rem;
+      }
+      .version-table th {
+        font-size: 0.92rem;
+      }
+      .version-table th:nth-child(2),
+      .version-table td:nth-child(2),
+      .version-table th:nth-child(4),
+      .version-table td:nth-child(4) {
+        display: none;
+      }
+      .version-table th:nth-child(3),
+      .version-table td:nth-child(3) { width: 31%; }
+      .version-table th:nth-child(5),
+      .version-table td:nth-child(5) { width: 9%; }
+      .version-table th:nth-child(6),
+      .version-table td:nth-child(6),
+      .version-table th:nth-child(7),
+      .version-table td:nth-child(7) { width: 5.5%; }
+      .version-table th:nth-child(8),
+      .version-table td:nth-child(8) { width: 20%; }
+      .version-table th:nth-child(9),
+      .version-table td:nth-child(9) { width: 20%; }
+      .version-table th:nth-child(10),
+      .version-table td:nth-child(10) { width: 13%; }
+    }
+    @media (max-width: 1024px) {
+      .version-table {
+        font-size: 0.84rem;
+      }
+      .version-table th {
+        font-size: 0.84rem;
+      }
+      .version-table th:nth-child(5),
+      .version-table td:nth-child(5) {
+        display: none;
+      }
+      .version-table th:nth-child(3),
+      .version-table td:nth-child(3) { width: 35%; }
+      .version-table th:nth-child(6),
+      .version-table td:nth-child(6),
+      .version-table th:nth-child(7),
+      .version-table td:nth-child(7) { width: 6%; }
+      .version-table th:nth-child(8),
+      .version-table td:nth-child(8) { width: 22%; }
+      .version-table th:nth-child(9),
+      .version-table td:nth-child(9) { width: 22%; }
+      .version-table th:nth-child(10),
+      .version-table td:nth-child(10) { width: 13%; }
+      .version-table .versions-icon-btn {
+        width: 2rem;
+        min-width: 2rem;
+      }
+      .version-table .versions-text-btn {
+        min-width: 4rem;
+        height: 2rem;
+        padding: 0 0.45rem;
+        font-size: 0.76rem;
+      }
+      .version-table .versions-switch-wrap {
+        width: auto;
+        min-width: 0;
+      }
+      .version-table .versions-switch-wrap .form-check-label {
+        display: none;
+      }
+      .version-table .versions-count-pill {
+        font-size: 0.68rem;
+      }
+      .version-table .versions-inline-cell--pagination {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+    }
+    @media (max-width: 860px) {
+      .version-table {
+        font-size: 0.76rem;
+      }
+      .version-table th {
+        font-size: 0.76rem;
+      }
+      .version-table th:nth-child(7),
+      .version-table td:nth-child(7) {
+        display: none;
+      }
+      .version-table th:nth-child(3),
+      .version-table td:nth-child(3) { width: 39%; }
+      .version-table th:nth-child(6),
+      .version-table td:nth-child(6) { width: 7%; }
+      .version-table th:nth-child(8),
+      .version-table td:nth-child(8) { width: 23%; }
+      .version-table th:nth-child(9),
+      .version-table td:nth-child(9) { width: 21%; }
+      .version-table th:nth-child(10),
+      .version-table td:nth-child(10) { width: 13%; }
+      .version-table .versions-inline-cell {
+        gap: 0.3rem;
+      }
+      .version-table .versions-icon-btn {
+        width: 1.85rem;
+        min-width: 1.85rem;
+      }
+      .version-table .versions-text-btn {
+        min-width: 3.6rem;
+        font-size: 0.7rem;
+      }
     }
 </style>
 
@@ -398,6 +579,7 @@ let selectedAuthorLabel = '';
 let selectedWorkLabel   = '';
 let showVersionDetails  = false;
 const UPLOAD_MODAL_BASE_TITLE = 'Téléverser une version textuelle';
+let versionPillResizeScheduled = false;
 /*********************  GLOBAL STATE  *********************/
 /*********************  UTIL HELPERS  *********************/
 const formatNumber = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -422,6 +604,33 @@ const formatTimestamp = (seconds) => {
     const timePart = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     return `${datePart} ${timePart}`;
 };
+const useCompactVersionPills = () => window.innerWidth <= 1024;
+const setVersionCountPill = (pill, count, noun) => {
+    if (!pill) return;
+    const numericCount = Math.max(0, Number(count ?? 0));
+    const compact = useCompactVersionPills();
+    pill.dataset.count = String(numericCount);
+    pill.dataset.noun = noun;
+    pill.textContent = compact ? numericCount.toLocaleString('fr-FR') : `${numericCount.toLocaleString('fr-FR')} ${noun}`;
+    pill.title = `${numericCount.toLocaleString('fr-FR')} ${noun}`;
+};
+const refreshVersionCountPills = () => {
+    document.querySelectorAll('#versions-list .versions-count-pill').forEach((pill) => {
+        const count = Number(pill.dataset.count ?? 0);
+        const noun = pill.dataset.noun || '';
+        if (!noun) return;
+        setVersionCountPill(pill, count, noun);
+    });
+};
+const scheduleVersionPillRefresh = () => {
+    if (versionPillResizeScheduled) return;
+    versionPillResizeScheduled = true;
+    requestAnimationFrame(() => {
+        versionPillResizeScheduled = false;
+        refreshVersionCountPills();
+    });
+};
+window.addEventListener('resize', scheduleVersionPillRefresh, { passive: true });
 function requestTextLength(versionId, cell) {
     const id = Number(versionId);
     if (!Number.isFinite(id) || !cell) return;
@@ -715,7 +924,12 @@ function renderFacsimileStatus(versionId, facsimileData){
     };
 
     if (facsimileData?.loading) {
-        if (state.facCountPill) state.facCountPill.textContent = '… fac-similé(s)';
+        if (state.facCountPill) {
+            state.facCountPill.dataset.count = '';
+            state.facCountPill.dataset.noun = 'fac-similé(s)';
+            state.facCountPill.textContent = '…';
+            state.facCountPill.title = 'Chargement des fac-similés';
+        }
         if (state.viewBtn) {
             state.viewBtn.disabled = false;
             state.viewBtn.title = 'Charger les fac-similés';
@@ -756,7 +970,7 @@ function renderFacsimileStatus(versionId, facsimileData){
     const outstanding = Math.max(0, ready - published);
 
     if (state.facCountPill) {
-        state.facCountPill.textContent = `${ready.toLocaleString('fr-FR')} fac-similé(s)`;
+        setVersionCountPill(state.facCountPill, ready, 'fac-similé(s)');
     }
     if (state.viewBtn) {
         const disableView = queued > 0 || ready === 0;
@@ -825,7 +1039,7 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
     }
 
     if (state.markerCountPill) {
-        state.markerCountPill.textContent = `${markerCount.toLocaleString('fr-FR')} marqueur(s)`;
+        setVersionCountPill(state.markerCountPill, markerCount, 'marqueur(s)');
     }
 
     if (state.lignesUploadBtn) {
@@ -2038,7 +2252,7 @@ async function fetchVersions(workId, force = false){
     
     const list = document.getElementById('versions-list');
     if (!workId) {
-        list.innerHTML = '<li class="list-group-item">Sélectionner une œuvre pour voir les versions</li>';
+        list.innerHTML = '<div class="versions-empty-state">Sélectionner une œuvre pour voir les versions</div>';
         updateVersionsCount(null);
         versionsCache = new Map();
         facsimileRowState.clear();
@@ -2048,7 +2262,7 @@ async function fetchVersions(workId, force = false){
         return;
     }
     setVersionsLoading(true);
-    list.innerHTML='<div class="text-muted p-2">Loading versions…</div>';
+    list.innerHTML='<div class="versions-empty-state text-muted">Loading versions…</div>';
     try{
         const data = await getVersionsForWork(workId, { force });
         list.innerHTML='';
@@ -2057,7 +2271,7 @@ async function fetchVersions(workId, force = false){
         facsimileRowState.clear();
         if(versions.length===0) {
             updateVersionsCount(0);
-            list.innerHTML='<div class="text-muted p-2 text-center">Aucune version textuelle n’est encore associée à cette œuvre. Cliquez sur « Téléverser une version » pour en ajouter une.</div>';
+            list.innerHTML='<div class="versions-empty-state text-muted">Aucune version textuelle n’est encore associée à cette œuvre. Cliquez sur « Téléverser une version » pour en ajouter une.</div>';
             facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
             lignesPollers.forEach((_, id) => stopLignesPolling(id));
             return;
@@ -2065,10 +2279,13 @@ async function fetchVersions(workId, force = false){
 
         updateVersionsCount(versions.length);
 
+        const tableWrap = document.createElement('div');
+        tableWrap.className = 'versions-table-wrap';
+
         const table = document.createElement('table');
-        table.className='table table-bordered table-sm version-table';
+        table.className='table table-bordered table-sm version-table versions-table';
         table.classList.toggle('compact-details', !showVersionDetails);
-        table.innerHTML=`<thead class="table-light"><tr><th class="version-viewer-col"></th><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th></th><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         versions.forEach(v=>{
@@ -2187,7 +2404,7 @@ async function fetchVersions(workId, force = false){
 
             const facCountPill = document.createElement('span');
             facCountPill.className = 'badge rounded-pill bg-light text-muted border versions-count-pill';
-            facCountPill.textContent = `${sourceCount.toLocaleString('fr-FR')} fac-similé(s)`;
+            setVersionCountPill(facCountPill, sourceCount, 'fac-similé(s)');
             facWrap.appendChild(facCountPill);
 
             const facButtons = document.createElement('div');
@@ -2274,7 +2491,7 @@ async function fetchVersions(workId, force = false){
 
             const markerCountPill = document.createElement('span');
             markerCountPill.className = 'badge rounded-pill bg-light text-muted border versions-count-pill';
-            markerCountPill.textContent = '0 marqueur(s)';
+            setVersionCountPill(markerCountPill, 0, 'marqueur(s)');
             lignesWrap.appendChild(markerCountPill);
 
             const lignesActions = document.createElement('div');
@@ -2395,7 +2612,7 @@ async function fetchVersions(workId, force = false){
                 const btnEditor = document.createElement('a');
                 btnEditor.href = editorUrl;
                 btnEditor.setAttribute('data-bs-toggle', 'tooltip');
-                btnEditor.className = 'btn btn-outline-primary';
+                btnEditor.className = 'btn btn-outline-primary versions-text-btn';
                 btnEditor.textContent = 'Edition';
                 const tooltipEditor = new bootstrap.Tooltip(
                     btnEditor,
@@ -2413,7 +2630,7 @@ async function fetchVersions(workId, force = false){
                 wrapper.setAttribute('data-bs-toggle', 'tooltip');
                 wrapper.setAttribute('title', 'Fichier texte non disponible pour cette version.');
                 const disabledBtn = document.createElement('span');
-                disabledBtn.className = 'btn btn-outline-secondary disabled';
+                disabledBtn.className = 'btn btn-outline-secondary versions-text-btn disabled';
                 disabledBtn.setAttribute('tabindex', '-1');
                 disabledBtn.setAttribute('aria-disabled', 'true');
                 disabledBtn.textContent = 'Edition';
@@ -2438,10 +2655,17 @@ async function fetchVersions(workId, force = false){
             if (!deleteDisabled) {
                 btnDel.addEventListener('click',()=>confirmDeleteVersion(v));
             }
+            const comparisonIds = Array.isArray(v.in_use_comparison_ids) ? v.in_use_comparison_ids : [];
+            const comparisonCount = Number(v.in_use_comparison_count ?? comparisonIds.length ?? 0);
+            const comparisonLabel = comparisonIds.length > 0
+                ? comparisonIds.map(id => `#${id}`).join(', ')
+                : '';
             const deleteTitle = v.is_legacy
                 ? 'La suppression est désactivée pour les versions legacy.'
                 : (v.is_in_use
-                    ? 'La suppression est désactivée car cette version est utilisée dans une comparaison.'
+                    ? (comparisonCount === 1
+                        ? `La suppression est désactivée car cette version est utilisée dans la comparaison ${comparisonLabel || 'éditoriale'}.`
+                        : `La suppression est désactivée car cette version est utilisée dans ${comparisonCount} comparaisons${comparisonLabel ? ` (${comparisonLabel})` : ''}.`)
                     : 'Supprimer la version');
             if (deleteDisabled) {
                 btnDel.disabled = true;
@@ -2476,7 +2700,9 @@ async function fetchVersions(workId, force = false){
             if (!button) return;
             revealFacsimilesForVersion(button.dataset.viewerVersionId, button.dataset.viewerVersionName || '');
         });
-        list.appendChild(table);
+        tableWrap.appendChild(table);
+        list.appendChild(tableWrap);
+        scheduleVersionPillRefresh();
         updateViewerRowSelection();
         facsimilePollers.forEach((_, id) => {
             if (!activeFacsimileIds.has(id)) {
@@ -2487,12 +2713,13 @@ async function fetchVersions(workId, force = false){
         console.error(err);
         versionsCache = new Map();
         updateVersionsCount(null);
-        list.innerHTML='<div class="text-danger p-2">Failed to load versions</div>';
+        list.innerHTML='<div class="versions-empty-state text-danger">Failed to load versions</div>';
         facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
     } finally {
         setVersionsLoading(false);
     }
 }
+
 function openEditModal(v){
     document.getElementById('edit-version-id').value = v.id;
     document.getElementById('edit-version-name').value = v.name;

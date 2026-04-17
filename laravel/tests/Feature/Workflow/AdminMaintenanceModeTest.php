@@ -20,12 +20,22 @@ class AdminMaintenanceModeTest extends TestCase
 
     public function test_maintenance_splash_blocks_non_admin_web_requests(): void
     {
+        $this->signInEditor();
         app(AdminMaintenanceMode::class)->activate('Déploiement en cours.');
 
-        $this->get('/login')
+        $this->get('/')
             ->assertStatus(503)
             ->assertSee('Interface d’édition momentanément indisponible')
             ->assertSee('Déploiement en cours.');
+    }
+
+    public function test_login_form_remains_accessible_during_maintenance(): void
+    {
+        app(AdminMaintenanceMode::class)->activate('Déploiement en cours.');
+
+        $this->get('/login')
+            ->assertOk()
+            ->assertSee('Connexion');
     }
 
     public function test_maintenance_mode_returns_json_for_admin_api_requests(): void

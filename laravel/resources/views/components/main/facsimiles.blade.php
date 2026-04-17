@@ -27,6 +27,8 @@
                             <option value="ISO-8859-1">ISO-8859-1</option>
                             <option value="Mac Roman">Mac Roman</option>
                         </select>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="facsimile-reader-rebuild" title="Reconstruire le dataset du lecteur pour cette version">Reconstruire</button>
+                        <span id="facsimile-reader-action-status" class="small text-muted facsimile-reader-action-status" aria-live="polite"></span>
                         <button type="button" class="btn btn-sm btn-outline-success d-none" id="facsimile-reader-convert-utf8" disabled aria-hidden="true" tabindex="-1">Convertir en UTF-8</button>
                     </div>
                 </div>
@@ -314,6 +316,12 @@
         align-items: center;
         gap: 0.6rem;
         flex-wrap: nowrap;
+    }
+    .facsimile-reader-action-status {
+        min-height: 1.25rem;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
     }
     .facsimile-reader-controls select {
         min-width: 0;
@@ -653,6 +661,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const readerCropClearBtn = document.getElementById('facsimile-reader-crop-clear');
     const readerTextSourceSelect = document.getElementById('facsimile-reader-text-source');
     const readerEncodingSelect = document.getElementById('facsimile-reader-encoding');
+    const readerRebuildBtn  = document.getElementById('facsimile-reader-rebuild');
+    const readerActionStatusEl = document.getElementById('facsimile-reader-action-status');
     const readerConvertBtn  = document.getElementById('facsimile-reader-convert-utf8');
     const csrfToken         = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
@@ -714,6 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let readerFitMode        = 'auto';
     let readerTextSource     = 'auto';
     let readerEncoding       = 'auto';
+    let readerRebuildBusy    = false;
     let readerConvertBusy    = false;
     let readerLoadRequestToken = 0;
     let readerLoadAbortController = null;
@@ -845,6 +856,12 @@ document.addEventListener('DOMContentLoaded', () => {
             readerConvertBtn.textContent = 'Convertir en UTF-8';
             readerConvertBtn.title = 'Conversion désactivée dans le lecteur.';
         }
+    }
+
+    function applyReaderRebuildControl() {
+        if (!readerRebuildBtn) return;
+        readerRebuildBtn.disabled = !currentVersionId || readerRebuildBusy || !!readerLoadingVersionId;
+        readerRebuildBtn.textContent = readerRebuildBusy ? 'Reconstruction…' : 'Reconstruire';
     }
 
     function applyReaderTextSourceControl() {
@@ -1052,6 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
     readerFitMode = loadReaderFitPreference();
     applyReaderFitMode();
     applyReaderEncodingControl();
+    applyReaderRebuildControl();
 
     function manifestOptionKey(comparisonId, role) {
         return `${comparisonId}:${role}`;
@@ -1081,6 +1099,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!statusEl) return;
         statusEl.className = `small mb-3 text-${tone}`;
         statusEl.textContent = message;
+    }
+
+    function setReaderActionStatus(message = '', tone = 'muted') {
+        if (!readerActionStatusEl) return;
+        readerActionStatusEl.className = `small facsimile-reader-action-status text-${tone}`;
+        readerActionStatusEl.textContent = message;
     }
 
     function setWorkspaceState(hasSelection) {
@@ -1145,8 +1169,11 @@ document.addEventListener('DOMContentLoaded', () => {
         readerLoadingEl.classList.toggle('d-none', !isLoading);
         readerLoadingEl.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
         if (readerLoadingLabelEl) {
-            readerLoadingLabelEl.textContent = 'Chargement du viewer…';
+            readerLoadingLabelEl.textContent = readerRebuildBusy
+                ? 'Reconstruction du lecteur…'
+                : 'Chargement du viewer…';
         }
+        applyReaderRebuildControl();
     }
 
     function resetReader(message = 'Les repères de pagination de cette version permettront d’aligner le fac-similé et le texte ici.') {
@@ -1155,7 +1182,9 @@ document.addEventListener('DOMContentLoaded', () => {
         readerPageIndex = 0;
         readerPageLoadPromises.clear();
         readerImagePrefetchUrls.clear();
+        setReaderActionStatus('');
         setReaderLoading(false);
+        applyReaderRebuildControl();
         if (readerRoot) {
             readerRoot.classList.add('d-none');
         }
@@ -2259,6 +2288,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 readerLoadingVersionId = null;
             }
             setReaderLoading(false);
+            applyReaderRebuildControl();
             bumpFacsimilesLoading(-1);
         }
     }
@@ -2560,6 +2590,62 @@ document.addEventListener('DOMContentLoaded', () => {
             saveReaderEncodingPreference(currentVersionId, readerEncoding);
             if (currentVersionId) {
                 loadReader(currentVersionId);
+            }
+        });
+    }
+
+    if (readerRebuildBtn) {
+        readerRebuildBtn.addEventListener('click', async () => {
+            if (!currentVersionId || readerRebuildBusy) {
+                return;
+            }
+
+            readerRebuildBusy = true;
+            applyReaderRebuildControl();
+            if (readerRoot) {
+                readerRoot.classList.remove('d-none');
+            }
+            setReaderLoading(true);
+            setStatus('Reconstruction du lecteur en cours…', 'muted');
+            setReaderActionStatus('Demande envoyée…', 'muted');
+
+            try {
+                const payload = {};
+                if (readerTextSource && readerTextSource !== 'auto') {
+                    payload.text_source = readerTextSource;
+                }
+                if (readerEncoding && readerEncoding !== 'auto') {
+                    payload.encoding = readerEncoding;
+                }
+
+                const res = await fetch(withBasePath(`/api/versions/${currentVersionId}/reader/rebuild`), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(data?.message || `HTTP ${res.status}`);
+                }
+
+                setStatus(data?.message || 'Lecteur reconstruit.', 'success');
+                setReaderActionStatus('Reconstruit.', 'success');
+                renderReader(data);
+            } catch (err) {
+                console.error('Could not rebuild reader dataset', err);
+                const detail = err?.message ? ` (${err.message})` : '';
+                setStatus(`Impossible de reconstruire le lecteur${detail}.`, 'danger');
+                setReaderActionStatus('Échec.', 'danger');
+            } finally {
+                readerRebuildBusy = false;
+                setReaderLoading(false);
+                applyReaderRebuildControl();
             }
         });
     }
