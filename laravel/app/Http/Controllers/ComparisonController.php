@@ -18,12 +18,14 @@ use App\Services\PageMarkerService;
 use App\Jobs\InjectComparisonPaginationJob;
 use App\Jobs\GenerateLegacyExportJob;
 use App\Services\LegacyExportService;
+use App\Services\FilesystemCleanupService;
 
 class ComparisonController extends Controller
 {
     public function __construct(
         private PageMarkerService $pageMarkerService,
-        private LegacyExportService $legacyExportService
+        private LegacyExportService $legacyExportService,
+        private FilesystemCleanupService $filesystemCleanupService,
     )
     {
     }
@@ -547,15 +549,46 @@ class ComparisonController extends Controller
             if (is_dir($legacyPublishedDir)) {
                 File::deleteDirectory($legacyPublishedDir);
             }
+
+            $this->pruneComparisonParents($authorFolder, $workFolder);
         }
 
         // Remove stale comparison progress snapshot and DB record
         $this->pageMarkerService->clearComparisonProgress($comparison->id);
         $this->legacyExportService->deleteExportArtifacts($comparison->id);
+        $this->deleteTransientComparisonInputs($comparison->id);
         Chapter::query()->forFolder($comparison->folder)->delete();
         $comparison->delete();
 
         return response()->json(['message' => 'Comparison deleted']);
+    }
+
+    private function deleteTransientComparisonInputs(int $comparisonId): void
+    {
+        $relative = "uploads/__medite_inputs/{$comparisonId}";
+        Storage::disk('public')->deleteDirectory($relative);
+
+        $legacyDir = base_path('../variance/' . $relative);
+        if (is_dir($legacyDir)) {
+            File::deleteDirectory($legacyDir);
+        }
+
+        $this->filesystemCleanupService->pruneEmptyDirectories([
+            storage_path('app/public/uploads/__medite_inputs'),
+            base_path('../variance/uploads/__medite_inputs'),
+        ]);
+    }
+
+    private function pruneComparisonParents(string $authorFolder, string $workFolder): void
+    {
+        $this->filesystemCleanupService->pruneEmptyDirectories([
+            storage_path("app/public/uploads/{$authorFolder}/{$workFolder}/comparisons"),
+            storage_path("app/public/uploads/{$authorFolder}/{$workFolder}"),
+            storage_path("app/public/uploads/{$authorFolder}"),
+            base_path("../variance/uploads/{$authorFolder}/{$workFolder}/comparisons"),
+            base_path("../variance/uploads/{$authorFolder}/{$workFolder}"),
+            base_path("../variance/uploads/{$authorFolder}"),
+        ]);
     }
 
     public function exportPublishedLegacy(Comparison $comparison)

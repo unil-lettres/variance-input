@@ -7,6 +7,7 @@ use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class VersionImportWorkflowTest extends TestCase
@@ -163,5 +164,54 @@ class VersionImportWorkflowTest extends TestCase
             [$comparison->id],
             $versions->firstWhere('id', $target->id)['in_use_comparison_ids'] ?? null
         );
+    }
+
+    public function test_deleting_version_removes_private_artifacts_and_prunes_empty_facsimile_dirs(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [
+            'name' => 'Auteur version cleanup',
+            'folder' => 'cleanup_version_author',
+        ], [
+            'title' => 'Oeuvre version cleanup',
+            'short_title' => 'cvu',
+            'folder' => 'cleanup_version_work',
+        ]);
+
+        $version = Version::factory()->for($work)->create([
+            'folder' => '1cvu',
+            'name' => 'Version cleanup',
+        ]);
+
+        $this->writeFacsimilePair($version, '001');
+
+        $queueDir = storage_path('app/private/facsimile_queue/cleanup_version_author/cleanup_version_work/1cvu');
+        $backupDir = storage_path('app/private/facsimile_backups/' . $version->id);
+        $cancelFlag = storage_path('app/private/facsimile_cancel/' . $version->id . '.flag');
+        File::ensureDirectoryExists($queueDir);
+        File::put($queueDir . '/queued.txt', 'queued');
+        File::ensureDirectoryExists($backupDir);
+        File::put($backupDir . '/meta.json', '{}');
+        File::ensureDirectoryExists(dirname($cancelFlag));
+        File::put($cancelFlag, '1');
+
+        Storage::disk('local')->put("lignes/{$version->id}.txt", "001\n1\nTexte");
+        Storage::disk('local')->put("pagination/{$version->id}.json", json_encode(['markers' => []]));
+
+        $response = $this->deleteJson("/api/versions/{$version->id}");
+
+        $response->assertOk();
+        $this->assertDatabaseMissing('versions', ['id' => $version->id]);
+        $this->assertDirectoryDoesNotExist(storage_path('app/public/uploads/cleanup_version_author/cleanup_version_work/1cvu'));
+        $this->assertDirectoryDoesNotExist(base_path('../variance/uploads/cleanup_version_author/cleanup_version_work/1cvu'));
+        $this->assertDirectoryDoesNotExist(storage_path('app/public/uploads/cleanup_version_author/cleanup_version_work'));
+        $this->assertDirectoryDoesNotExist(storage_path('app/public/uploads/cleanup_version_author'));
+        $this->assertDirectoryDoesNotExist(storage_path('app/private/facsimile_queue/cleanup_version_author/cleanup_version_work/1cvu'));
+        $this->assertDirectoryDoesNotExist(storage_path('app/private/facsimile_queue/cleanup_version_author/cleanup_version_work'));
+        $this->assertDirectoryDoesNotExist(storage_path('app/private/facsimile_queue/cleanup_version_author'));
+        $this->assertDirectoryDoesNotExist($backupDir);
+        $this->assertFileDoesNotExist($cancelFlag);
+        $this->assertFalse(Storage::disk('local')->exists("lignes/{$version->id}.txt"));
+        $this->assertFalse(Storage::disk('local')->exists("pagination/{$version->id}.json"));
     }
 }

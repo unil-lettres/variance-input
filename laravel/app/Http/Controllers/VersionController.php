@@ -15,12 +15,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 use App\Services\PageMarkerService;
+use App\Services\FilesystemCleanupService;
 
 class VersionController extends Controller
 {
     private const READER_DATASET_SCHEMA_VERSION = 3;
 
-    public function __construct(private PageMarkerService $pageMarkerService)
+    public function __construct(
+        private PageMarkerService $pageMarkerService,
+        private FilesystemCleanupService $filesystemCleanupService,
+    )
     {
     }
 
@@ -306,6 +310,8 @@ class VersionController extends Controller
                 'error'      => $e->getMessage(),
             ]);
         }
+
+        $this->deleteVersionPrivateArtifacts($version->id);
 
         // Remove DB record regardless of file presence
         $version->delete();
@@ -2431,6 +2437,15 @@ class VersionController extends Controller
             }
         }
 
+        $this->filesystemCleanupService->pruneEmptyDirectories([
+            storage_path("app/public/uploads/{$authorFolder}/{$workFolder}"),
+            storage_path("app/public/uploads/{$authorFolder}"),
+            base_path("../variance/uploads/{$authorFolder}/{$workFolder}"),
+            base_path("../variance/uploads/{$authorFolder}"),
+            storage_path("app/private/facsimile_queue/{$authorFolder}/{$workFolder}"),
+            storage_path("app/private/facsimile_queue/{$authorFolder}"),
+        ]);
+
         return $removed;
     }
 
@@ -2458,6 +2473,24 @@ class VersionController extends Controller
     private function queuePrefixFromFolders(string $authorFolder, string $workFolder, string $versionFolder): string
     {
         return trim(sprintf('facsimile_queue/%s/%s/%s', $authorFolder, $workFolder, $versionFolder), '/');
+    }
+
+    private function deleteVersionPrivateArtifacts(int $versionId): void
+    {
+        $backupRoot = storage_path('app/private/facsimile_backups/' . $versionId);
+        if (is_dir($backupRoot)) {
+            File::deleteDirectory($backupRoot);
+        }
+
+        $cancelMarker = $this->facsimileCancelMarkerPath($versionId);
+        if (is_file($cancelMarker)) {
+            @unlink($cancelMarker);
+        }
+
+        $this->filesystemCleanupService->pruneEmptyDirectories([
+            storage_path('app/private/facsimile_backups'),
+            storage_path('app/private/facsimile_cancel'),
+        ]);
     }
 
     private function publishManifestsForVersion(Version $version): array
