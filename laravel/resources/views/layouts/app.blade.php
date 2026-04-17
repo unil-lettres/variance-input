@@ -26,6 +26,7 @@
     <script>
         window.APP_BASE_PATH = @json($basePath);
         window.APP_BASE_URL = @json($baseUrl);
+        window.ADMIN_MAINTENANCE_PATH = @json(admin_path('maintenance'));
         window.withBasePath = function (path) {
             if (typeof path !== 'string') return path;
             if (!path.startsWith('/')) {
@@ -50,6 +51,40 @@
             }
             return baseUrl + window.withBasePath(path);
         };
+        (function () {
+            if (typeof window.fetch !== 'function') {
+                return;
+            }
+
+            var originalFetch = window.fetch.bind(window);
+            window.fetch = async function () {
+                var response = await originalFetch.apply(window, arguments);
+
+                try {
+                    var firstArg = arguments[0];
+                    var requestUrl = typeof firstArg === 'string'
+                        ? firstArg
+                        : (firstArg && typeof firstArg.url === 'string' ? firstArg.url : '');
+                    var sameOrigin = !requestUrl
+                        || requestUrl.startsWith('/')
+                        || requestUrl.startsWith(window.location.origin);
+
+                    if (sameOrigin && response.status === 503) {
+                        var contentType = response.headers.get('content-type') || '';
+                        if (contentType.indexOf('application/json') !== -1) {
+                            var payload = await response.clone().json().catch(function () { return null; });
+                            if (payload && payload.status === 'maintenance' && window.location.pathname !== window.ADMIN_MAINTENANCE_PATH) {
+                                window.location.assign(window.ADMIN_MAINTENANCE_PATH);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    // Ignore maintenance redirect parsing errors and return the original response.
+                }
+
+                return response;
+            };
+        })();
     </script>
 
     <!-- Vite Styles -->
@@ -959,7 +994,9 @@
                     } catch (_) {
                         data = null;
                     }
-                    const status = data?.status || (res.ok ? 'degraded' : 'fail');
+                    const status = data?.status === 'ok'
+                        ? 'ok'
+                        : (data?.status === 'not_ok' ? 'fail' : (res.ok ? 'degraded' : 'fail'));
                     const label = status === 'ok'
                         ? 'État du système : OK'
                         : (status === 'degraded' ? 'État du système : Avertissement' : 'État du système : Critique');

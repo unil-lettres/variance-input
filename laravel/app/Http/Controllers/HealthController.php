@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Comparison;
+use App\Services\AdminMaintenanceMode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -14,11 +15,18 @@ use App\Jobs\HealthcheckProbeJob;
 
 class HealthController extends Controller
 {
+    public function __construct(
+        private readonly AdminMaintenanceMode $adminMaintenanceMode,
+    ) {
+    }
+
     public function index(Request $request): JsonResponse
     {
         [$payload, $httpStatus] = $this->buildReport($this->resolveFailedWindowKey($request));
 
-        return response()->json($payload, $httpStatus);
+        return response()->json([
+            'status' => ($payload['status'] ?? 'fail') === 'ok' ? 'ok' : 'not_ok',
+        ], $httpStatus);
     }
 
     public function page(Request $request)
@@ -37,6 +45,7 @@ class HealthController extends Controller
         $httpStatus = 200;
         $failedWindowSeconds = $this->failedWindowSeconds($failedWindowKey);
         $git = $this->resolveGitMetadata();
+        $adminMaintenanceState = $this->adminMaintenanceMode->currentState();
 
         $checks['app'] = [
             'ok' => true,
@@ -53,6 +62,10 @@ class HealthController extends Controller
             'queue_connection' => config('queue.default'),
             'cache_driver' => config('cache.default'),
             'admin_base_path' => config('app.admin_base_path'),
+        ];
+        $checks['admin_maintenance'] = [
+            'ok' => true,
+            ...$adminMaintenanceState,
         ];
 
         $dbOk = false;
@@ -391,6 +404,9 @@ class HealthController extends Controller
             try {
                 $response = Http::timeout(2)->get($url);
                 $ok = $response->status() >= 200 && $response->status() < 400;
+                if ($this->isExpectedAdminMaintenanceResponse((string) $label, $response->status(), $adminMaintenanceState)) {
+                    $ok = true;
+                }
                 $httpChecks[$label] = [
                     'ok' => $ok,
                     'status' => $response->status(),
@@ -485,6 +501,15 @@ class HealthController extends Controller
     {
         $normalized = strtolower(trim($label));
         return in_array($normalized, ['public', 'admin', 'health', 'main'], true);
+    }
+
+    private function isExpectedAdminMaintenanceResponse(string $label, int $status, array $adminMaintenanceState): bool
+    {
+        if (! ($adminMaintenanceState['enabled'] ?? false) || $status !== 503) {
+            return false;
+        }
+
+        return strtolower(trim($label)) === 'admin';
     }
 
     private function resolveFailedWindowKey(Request $request): string

@@ -19,6 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
         ]);
 
+        $middleware->web(prepend: [
+            \App\Http\Middleware\AdminMaintenanceMode::class,
+        ]);
+
+        $middleware->api(prepend: [
+            \App\Http\Middleware\AdminMaintenanceMode::class,
+        ]);
+
         $middleware->trustProxies(
             at: '*',
             headers: Request::HEADER_X_FORWARDED_FOR

@@ -21,6 +21,18 @@ use App\Models\Work;
 
 Route::get('/health', [HealthController::class, 'index']);
 
+Route::get('/maintenance', function (\App\Services\AdminMaintenanceMode $maintenanceMode) {
+    if (! $maintenanceMode->isEnabled()) {
+        return redirect()->to(admin_url());
+    }
+
+    return response()
+        ->view('pages.admin_maintenance', [
+            'maintenanceState' => $maintenanceMode->currentState(),
+        ])
+        ->setStatusCode(503);
+})->name('maintenance.notice');
+
 Route::get('/', function () {
     if (! auth()->check()) {
         return redirect()->to(admin_path('login'));

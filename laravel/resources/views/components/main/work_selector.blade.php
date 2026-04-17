@@ -1,4 +1,22 @@
 <!-- work_selector.blade.php -->
+@php
+    $plannedMaintenance = app(\App\Services\AdminMaintenanceMode::class)->currentAnnouncement();
+    $formatPlannedMaintenanceDate = static function (?string $value): ?string {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)
+                ->setTimezone('Europe/Zurich')
+                ->format('d/m/Y H:i');
+        } catch (\Throwable) {
+            return null;
+        }
+    };
+    $plannedStartsAt = $formatPlannedMaintenanceDate($plannedMaintenance['starts_at'] ?? null);
+    $plannedUntil = $formatPlannedMaintenanceDate($plannedMaintenance['until'] ?? null);
+@endphp
 
 <div class="card" id ="container-work-selector">
     <div class="card-header work-selector-card-header fw-semibold">
@@ -55,6 +73,22 @@
         </div>
         <div class="editorial-welcome" id="editorial-welcome-message">
             <div class="editorial-welcome-text">Bienvenue dans l'interface de publication Variance.<br>Sélectionnez une oeuvre pour démarrer le processus éditorial.</div>
+            @if($plannedMaintenance['enabled'] ?? false)
+                <div class="editorial-maintenance-notice" id="editorial-maintenance-notice" role="status" aria-live="polite">
+                    <div class="editorial-maintenance-notice__badge">Maintenance annoncée</div>
+                    <div class="editorial-maintenance-notice__text">{{ $plannedMaintenance['message'] }}</div>
+                    @if($plannedStartsAt || $plannedUntil)
+                        <div class="editorial-maintenance-notice__meta">
+                            @if($plannedStartsAt)
+                                <span><strong>Début prévu :</strong> {{ $plannedStartsAt }}</span>
+                            @endif
+                            @if($plannedUntil)
+                                <span><strong>Fin estimée :</strong> {{ $plannedUntil }}</span>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            @endif
         </div>
     </div>
     <div class="work-selector-steps" role="tablist" aria-label="Étapes de l’atelier">
@@ -288,6 +322,41 @@
     max-width: 100%;
     text-align: center;
   }
+  #container-work-selector .editorial-maintenance-notice {
+    width: min(44rem, 100%);
+    margin-top: 0.9rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(191, 145, 56, 0.28);
+    border-radius: 0.9rem;
+    background: linear-gradient(180deg, rgba(191, 145, 56, 0.1), rgba(191, 145, 56, 0.04));
+    color: #6a5530;
+    text-align: left;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  }
+  #container-work-selector .editorial-maintenance-notice__badge {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 0.45rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(191, 145, 56, 0.18);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  #container-work-selector .editorial-maintenance-notice__text {
+    font-size: 0.98rem;
+    line-height: 1.5;
+  }
+  #container-work-selector .editorial-maintenance-notice__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
+    margin-top: 0.45rem;
+    font-size: 0.84rem;
+    color: #7a6441;
+  }
   #container-work-selector .work-selector-dropdown-btn {
     min-height: 2.4rem;
     display: flex;
@@ -496,6 +565,11 @@
     color: #2a3340;
     background: linear-gradient(180deg, #fbfaf7 0%, #f2ede4 100%);
     border-color: #d9cfbf;
+    box-shadow: none;
+  }
+  #container-work-selector.work-selector-redesign .editorial-maintenance-notice {
+    border-color: rgba(166, 125, 43, 0.24);
+    background: linear-gradient(180deg, rgba(191, 145, 56, 0.08), rgba(191, 145, 56, 0.03));
     box-shadow: none;
   }
   #container-work-selector.work-selector-redesign .editorial-step-zero-actions {

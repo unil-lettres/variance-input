@@ -134,6 +134,23 @@
                     <div class="text-muted small">Admin base path</div>
                     <div>{{ data_get($checks, 'config.admin_base_path') ?? '/' }}</div>
                 </div>
+                <div class="col-md-8">
+                    <div class="text-muted small">Mode maintenance admin</div>
+                    @php
+                        $maintenanceEnabled = (bool) data_get($checks, 'admin_maintenance.enabled', false);
+                        $maintenanceUntil = data_get($checks, 'admin_maintenance.until');
+                        $maintenanceText = $maintenanceEnabled
+                            ? (data_get($checks, 'admin_maintenance.message') ?: 'Maintenance activée')
+                            : 'Désactivé';
+                        $maintenanceClass = $maintenanceEnabled ? $warnText : $mutedText;
+                    @endphp
+                    <div class="{{ $maintenanceClass }}">
+                        {{ $maintenanceText }}
+                        @if($maintenanceEnabled && $maintenanceUntil)
+                            <span class="text-muted small">· jusqu’à {{ $formatDate($maintenanceUntil) }}</span>
+                        @endif
+                    </div>
+                </div>
             </div>
         </div>
     </div>
