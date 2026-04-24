@@ -376,6 +376,7 @@ class ComparisonController extends Controller
                 'c.is_legacy',
                 'a.name as author_name',
                 'a.folder as author_folder',
+                'w.catalog_group',
                 'w.title as work_title',
                 'w.folder as work_folder',
                 'vs.name as source_version_name',
@@ -383,8 +384,8 @@ class ComparisonController extends Controller
             ]);
 
         $tree = [
-            'prod' => [],
-            'dev' => [],
+            'prod' => ['main' => [], 'allographic' => []],
+            'dev' => ['main' => [], 'allographic' => []],
         ];
 
         foreach ($rows as $row) {
@@ -393,14 +394,22 @@ class ComparisonController extends Controller
                 continue;
             }
 
-            $pairKey = $row->author_folder . '/' . $row->work_folder;
+            $catalogGroup = ($row->catalog_group ?? 'main') === 'allographic' ? 'allographic' : 'main';
+            $authorKey = (string) ($row->author_folder ?: $row->author_name);
+            $workKey = (string) ($row->work_folder ?: $row->work_title);
 
-            if (!isset($tree[$scope][$pairKey])) {
-                $tree[$scope][$pairKey] = [
-                    'key' => $pairKey,
+            if (!isset($tree[$scope][$catalogGroup][$authorKey])) {
+                $tree[$scope][$catalogGroup][$authorKey] = [
+                    'key' => $authorKey,
                     'author_label' => $row->author_name,
+                    'works' => [],
+                ];
+            }
+
+            if (!isset($tree[$scope][$catalogGroup][$authorKey]['works'][$workKey])) {
+                $tree[$scope][$catalogGroup][$authorKey]['works'][$workKey] = [
+                    'key' => $workKey,
                     'work_label' => $row->work_title,
-                    'pair_label' => $row->author_name . ' - ' . $row->work_title,
                     'comparisons' => [],
                 ];
             }
@@ -417,16 +426,29 @@ class ComparisonController extends Controller
                 ? "{$row->author_folder}/{$row->work_folder}/comparaison/{$row->comparison_folder}"
                 : "dev/{$row->author_folder}/{$row->work_folder}/comparaison/{$row->id}";
 
-            $tree[$scope][$pairKey]['comparisons'][] = [
+            $tree[$scope][$catalogGroup][$authorKey]['works'][$workKey]['comparisons'][] = [
                 'id' => (int) $row->id,
                 'label' => $comparisonLabel,
                 'url' => legacy_url($comparisonPath),
             ];
         }
 
+        foreach (['prod', 'dev'] as $scope) {
+            foreach (['main', 'allographic'] as $catalogGroup) {
+                foreach ($tree[$scope][$catalogGroup] as &$authorNode) {
+                    $authorNode['works'] = array_values(array_map(function (array $workNode) {
+                        $workNode['comparisons'] = array_values($workNode['comparisons']);
+                        return $workNode;
+                    }, $authorNode['works']));
+                }
+                unset($authorNode);
+                $tree[$scope][$catalogGroup] = array_values($tree[$scope][$catalogGroup]);
+            }
+        }
+
         return response()->json([
-            'prod' => array_values($tree['prod']),
-            'dev' => array_values($tree['dev']),
+            'prod' => $tree['prod'],
+            'dev' => $tree['dev'],
         ]);
     }
 

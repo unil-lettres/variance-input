@@ -1693,9 +1693,12 @@ class VersionController extends Controller
         $sidecarMarkers = collect(is_array($sidecar['markers'] ?? null) ? $sidecar['markers'] : [])
             ->filter(fn ($marker) => is_array($marker))
             ->map(function (array $marker) {
+                $imageInferred = (bool) ($marker['image_inferred'] ?? false);
                 return [
                     'char_index' => max(0, (int) ($marker['char_index'] ?? 0)),
                     'image_code' => $marker['image_code'] ?? $marker['image'] ?? null,
+                    'explicit_image_code' => $imageInferred ? null : ($marker['image_code'] ?? $marker['image'] ?? null),
+                    'image_inferred' => $imageInferred,
                     'page' => $marker['page'] ?? null,
                     'line' => isset($marker['line']) && is_numeric($marker['line']) ? (int) $marker['line'] : null,
                     'phrase' => $marker['match'] ?? $marker['phrase'] ?? null,
@@ -2133,7 +2136,12 @@ class VersionController extends Controller
 
         $normalizedMarkers = array_values(array_map(function (array $marker) {
             $marker['resolved_char_index'] = max(0, (int) ($marker['resolved_char_index'] ?? $marker['char_index'] ?? 0));
-            $marker['image_code'] = $this->readerImageCode($marker['image_code'] ?? $marker['image'] ?? $marker['page'] ?? null);
+            $imageInferred = (bool) ($marker['image_inferred'] ?? false);
+            $explicitSource = $marker['explicit_image_code']
+                ?? ($imageInferred ? null : ($marker['image_code'] ?? $marker['image'] ?? null));
+            $explicitImageCode = $this->readerImageCode($explicitSource);
+            $marker['explicit_image_code'] = $explicitImageCode;
+            $marker['image_code'] = $explicitImageCode ?? $this->readerImageCode($marker['page'] ?? null);
             $marker['page_label'] = trim((string) ($marker['page'] ?? ''));
             return $marker;
         }, $markers));
@@ -2142,14 +2150,12 @@ class VersionController extends Controller
 
         $allSequentialLabels = !empty($normalizedMarkers)
             && collect($normalizedMarkers)->every(static fn (array $marker) => preg_match('/^\d+(?:[a-z]+)?$/i', (string) ($marker['page_label'] ?? '')) === 1);
-        $hasAlphaSequentialLabels = collect($normalizedMarkers)
-            ->contains(static fn (array $marker) => preg_match('/^\d+[a-z]+$/i', (string) ($marker['page_label'] ?? '')) === 1);
-        $exactMarkerMatches = collect($normalizedMarkers)
-            ->filter(static fn (array $marker) => !empty($marker['image_code']) && array_key_exists((string) $marker['image_code'], $imagesByCode))
+        $exactExplicitMarkerMatches = collect($normalizedMarkers)
+            ->filter(static fn (array $marker) => !empty($marker['explicit_image_code']) && array_key_exists((string) $marker['explicit_image_code'], $imagesByCode))
             ->count();
         $useTrailingSequentialAlignment = count($facsimiles) >= count($normalizedMarkers)
             && $allSequentialLabels
-            && ($hasAlphaSequentialLabels || $exactMarkerMatches === 0);
+            && $exactExplicitMarkerMatches === 0;
         $trailingImageOffset = $useTrailingSequentialAlignment
             ? max(0, count($facsimiles) - count($normalizedMarkers))
             : 0;

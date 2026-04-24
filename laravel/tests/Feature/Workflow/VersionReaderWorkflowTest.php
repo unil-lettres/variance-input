@@ -374,6 +374,75 @@ HTML,
             ->assertJsonPath('current_page.image.name', 'img_reader-legacy-span-v1_001.jpg');
     }
 
+    public function test_reader_prefers_explicit_pagination_image_codes_over_trailing_alignment(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-explicit-sidecar-v1',
+            'name' => 'Le Bien Public',
+        ]);
+
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            "FEUILLETON\n\nTexte initial.\n\nSuite.\n\nFin."
+        );
+
+        foreach (range(1, 15) as $index) {
+            $this->writeFacsimilePair($version, str_pad((string) $index, 3, '0', STR_PAD_LEFT));
+        }
+
+        File::put(
+            storage_path("app/private/pagination/{$version->id}.json"),
+            json_encode([
+                'origin' => 'lignes',
+                'marker_count' => 3,
+                'missed_count' => 0,
+                'markers' => [
+                    [
+                        'char_index' => 12,
+                        'resolved_char_index' => 12,
+                        'image' => '2',
+                        'image_code' => '002',
+                        'page' => '1a',
+                        'phrase' => 'Texte initial.',
+                        'line' => 2,
+                    ],
+                    [
+                        'char_index' => 28,
+                        'resolved_char_index' => 28,
+                        'image' => '3',
+                        'image_code' => '003',
+                        'page' => '1b',
+                        'phrase' => 'Suite.',
+                        'line' => 3,
+                    ],
+                    [
+                        'char_index' => 36,
+                        'resolved_char_index' => 36,
+                        'image' => '4',
+                        'image_code' => '004',
+                        'page' => '1c',
+                        'phrase' => 'Fin.',
+                        'line' => 4,
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR)
+        );
+
+        $this->getJson("/api/versions/{$version->id}/reader")
+            ->assertOk()
+            ->assertJsonPath('pagination.available', true)
+            ->assertJsonPath('pages.0.label', 'Avant 1a')
+            ->assertJsonPath('pages.0.image.name', 'img_reader-explicit-sidecar-v1_001.jpg')
+            ->assertJsonPath('pages.1.label', '1a')
+            ->assertJsonPath('pages.1.image.name', 'img_reader-explicit-sidecar-v1_002.jpg')
+            ->assertJsonPath('pages.2.label', '1b')
+            ->assertJsonPath('pages.2.image.name', 'img_reader-explicit-sidecar-v1_003.jpg')
+            ->assertJsonPath('pages.3.label', '1c')
+            ->assertJsonPath('pages.3.image.name', 'img_reader-explicit-sidecar-v1_004.jpg');
+    }
+
     public function test_convert_text_to_utf8_requires_authenticated_session(): void
     {
         $user = $this->signInEditor();

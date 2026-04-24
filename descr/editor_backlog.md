@@ -111,15 +111,41 @@ Objectif :
 
 ## Priorité moyenne / basse
 
-### 7. Outil italique dans l’éditeur de version
+### 7. Gestion de l’italique
 
 Objectif :
-- offrir un geste éditorial propre pour l’italique, sans convention parasite dans le TXT source
+- définir une stratégie claire et stable pour l’italique dans Variance, depuis
+  l’import jusqu’à Medite et au rendu final
+
+Contexte :
+- certains chercheurs marquent aujourd’hui l’italique avec `\...\` dans les TXT
+- l’éditeur Laravel possède déjà des outils autour de balises italiques HTML
+  (`<em>...</em>`)
+- il faut décider si la représentation éditoriale de référence doit être :
+  - en TEI/XML : `<emph>...</emph>`
+  - en HTML rendu / comparaison : `<em>...</em>`
+
+Points ouverts :
+- faut-il convertir automatiquement la convention `\...\` lors de l’import ?
+- faut-il la conserver seulement comme convention source, ou la supprimer au
+  profit d’une balise éditoriale explicite ?
+- comment exposer cette différence à Medite pour qu’elle soit repérable entre
+  versions ?
+- que faire des longues séquences en italique, sachant qu’aujourd’hui Medite
+  semble surtout repérer le premier et le dernier mot marqués par `\` ?
 
 À faire :
-- définir la balise TEI cible
-- ajouter l’outil UI correspondant
-- ajouter un test de persistance
+- documenter la représentation canonique retenue pour l’italique
+- préciser les conversions attendues :
+  - TXT source
+  - TEI/XML
+  - XHTML / HTML
+- vérifier ce que Medite reçoit réellement et ce qu’il compare
+- ajouter un ou plusieurs cas de test couvrant :
+  - italique court
+  - phrase longue en italique
+  - différences d’italique entre deux versions
+- aligner ensuite l’UI éditeur sur cette décision
 
 ### 8. Outil exposant dans l’éditeur de version
 
@@ -174,6 +200,26 @@ Maintenir une recette simple pour les évolutions de l’éditeur :
 3. sauvegarder
 4. rouvrir
 5. vérifier pagination / fac-similés / comparaison selon le cas
+
+### 13. Test end-to-end du workflow éditorial
+
+Priorité :
+- basse, à traiter dans un prochain cycle
+
+Objectif :
+- figer par un test unique le parcours éditorial principal présenté dans la
+  documentation
+
+Périmètre visé :
+1. création d’une version
+2. import `_lignes`
+3. création d’une comparaison
+4. publication ou export
+5. vérification minimale des artefacts attendus
+
+Remarque :
+- ce test doit rester ciblé et robuste ; il ne doit pas devenir une suite UI
+  lourde ni fragile.
 
 ## Décision documentaire
 

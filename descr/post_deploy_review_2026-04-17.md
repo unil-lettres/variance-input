@@ -92,6 +92,86 @@ Il reste à décider si l’on souhaite en plus :
 - une copie automatique hors VM ;
 - ou un simple backup manuel hors VM avant les déploiements importants.
 
+### 5. Contrôle santé VM après le prochain déploiement
+
+Après le prochain déploiement prévu vendredi prochain, prévoir une vérification
+opérationnelle explicite de la VM sur la nouvelle version :
+
+- `/health`
+- `/health/report`
+- workers / scheduler
+- état des migrations
+- permissions des chemins legacy critiques
+- présence et validité du mécanisme de backup
+- avant migration, vérifier que les `short_title` non nuls des œuvres sont
+  bien uniques sur la VM :
+  ```sql
+  select short_title, count(*) as count
+  from works
+  where short_title is not null and short_title <> ''
+  group by short_title
+  having count(*) > 1;
+  ```
+- garder en tête que les œuvres legacy peuvent encore avoir `short_title =
+  NULL` ; MariaDB accepte plusieurs `NULL` dans l’index unique, mais les
+  doublons non nuls bloqueraient la migration
+
+Objectif :
+- ne pas se limiter à “l’application répond”, mais vérifier aussi les services
+  d’exploitation ajoutés récemment.
+
+### 6. Bascule des backups quotidiens vers Laravel après le prochain déploiement
+
+Aujourd’hui, un backup quotidien DB tourne sur la VM via `cron` comme solution
+transitoire.
+
+Après le déploiement de vendredi prochain, il faudra :
+
+- vérifier que la nouvelle version déployée embarque bien :
+  - la commande `backup:database`
+  - sa planification dans le scheduler Laravel
+- confirmer qu’un premier dump Laravel fonctionne sur la VM
+- puis désactiver le cron temporaire pour éviter deux systèmes concurrents
+
+Objectif :
+- converger vers une seule source de vérité :
+  - le scheduler Laravel versionné dans le dépôt
+  - plutôt qu’un script cron VM maintenu à part
+
+### 7. Annonce de la maintenance de vendredi prochain
+
+Prévoir explicitement l’annonce de la maintenance du vendredi prochain :
+
+- fenêtre prévue : `08:00–12:00`
+- annonce publiée au plus tard `48h` à l’avance
+
+Canal visé :
+- annonce Laravel sur la page d’accueil admin, dès que la version déployée sur
+  la VM embarque bien la commande `admin:maintenance:announce`
+
+Objectif :
+- prévenir les chercheurs suffisamment tôt
+- éviter de dépendre seulement d’un message manuel de dernière minute
+
+### 8. Démarrage Medite local trop lent à cause du sweep de permissions
+
+Constat :
+- en local, le conteneur `medite` peut rester longtemps `Up` mais indisponible
+  car son `entrypoint.sh` fait encore un `chgrp/chmod -R` sur tout `/app/uploads`
+  avant de lancer Celery et Flask
+- pendant cette phase :
+  - `http://medite:5000/health` est injoignable
+  - la page santé locale passe en `fail`
+
+Objectif :
+- éviter qu’un simple redémarrage Medite soit bloqué par un sweep récursif sur
+  tout l’arbre des uploads
+
+Pistes :
+- limiter la correction de permissions à la racine des montages
+- ne traiter que les nouveaux fichiers
+- ou déplacer cette opération dans une maintenance explicite, hors démarrage
+
 ## Décisions prises
 
 - ne plus conserver dans `descr/` public des documents contenant des chemins,

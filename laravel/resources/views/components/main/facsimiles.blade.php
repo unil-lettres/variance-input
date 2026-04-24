@@ -74,6 +74,14 @@
                             <div id="facsimile-reader-crop-overlay" class="facsimile-reader-crop-overlay d-none">
                                 <div id="facsimile-reader-crop-rect" class="facsimile-reader-crop-rect d-none"></div>
                             </div>
+                            <div id="facsimile-reader-image-empty" class="facsimile-reader-image-empty d-none">
+                                <button type="button" class="btn btn-link facsimile-reader-image-empty-action" id="facsimile-reader-upload-prompt">
+                                    <span class="facsimile-reader-image-empty-icon" aria-hidden="true">
+                                        <i class="bi bi-cloud-arrow-up"></i>
+                                    </span>
+                                    <span class="facsimile-reader-image-empty-text">Téléverser des fac-similés pour cette version</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -508,6 +516,40 @@
         border-radius: 0.5rem;
         background: #fff;
     }
+    .facsimile-reader-image-empty {
+        width: 100%;
+        min-height: 18rem;
+        display: grid;
+        place-items: center;
+        padding: 1.25rem;
+    }
+    .facsimile-reader-image-empty-action {
+        display: grid;
+        justify-items: center;
+        gap: 0.55rem;
+        padding: 0.95rem 1.1rem;
+        border: 1px dashed #cdbfae;
+        border-radius: 0.8rem;
+        color: #6f6256;
+        text-decoration: none;
+        background: rgba(255,255,255,0.72);
+    }
+    .facsimile-reader-image-empty-action:hover {
+        color: #5b5046;
+        border-color: #bba792;
+        background: rgba(255,255,255,0.9);
+        text-decoration: none;
+    }
+    .facsimile-reader-image-empty-icon {
+        font-size: 1.15rem;
+        line-height: 1;
+    }
+    .facsimile-reader-image-empty-text {
+        font-size: 0.88rem;
+        font-weight: 500;
+        text-align: center;
+        line-height: 1.4;
+    }
     .facsimile-reader.has-user-crop .facsimile-reader-crop-viewport {
         align-items: stretch;
         justify-content: stretch;
@@ -566,12 +608,26 @@
         word-break: break-word;
         overflow: auto;
         flex: 1 1 auto;
+        max-height: min(72vh, 68rem);
         background: #fffdf9;
         font-size: 0.94rem;
         line-height: 1.7;
         color: #2f2a24;
         text-align: justify;
         text-justify: inter-word;
+        scrollbar-width: thin;
+        scrollbar-color: #c0b4a6 #f4efe8;
+    }
+    .facsimile-reader-text::-webkit-scrollbar {
+        width: 0.7rem;
+    }
+    .facsimile-reader-text::-webkit-scrollbar-track {
+        background: #f4efe8;
+    }
+    .facsimile-reader-text::-webkit-scrollbar-thumb {
+        background: #c0b4a6;
+        border-radius: 999px;
+        border: 2px solid #f4efe8;
     }
     .facsimile-reader-anchor {
         display: inline-block;
@@ -647,6 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const readerNextBtn     = document.getElementById('facsimile-reader-next');
     const readerPageSelect  = document.getElementById('facsimile-reader-page');
     const readerImageEl     = document.getElementById('facsimile-reader-image');
+    const readerImageEmptyEl = document.getElementById('facsimile-reader-image-empty');
+    const readerUploadPromptBtn = document.getElementById('facsimile-reader-upload-prompt');
     const readerCropViewportEl = document.getElementById('facsimile-reader-crop-viewport');
     const readerCropOverlayEl = document.getElementById('facsimile-reader-crop-overlay');
     const readerCropRectEl  = document.getElementById('facsimile-reader-crop-rect');
@@ -1211,12 +1269,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerImageEl) {
             readerImageEl.removeAttribute('src');
             readerImageEl.alt = 'Fac-similé synchronisé';
+            readerImageEl.classList.remove('d-none');
         }
+        if (readerImageEmptyEl) readerImageEmptyEl.classList.add('d-none');
         if (readerImageMetaEl) readerImageMetaEl.textContent = '';
         if (readerTextMetaEl) readerTextMetaEl.textContent = '';
         if (readerTextEl) readerTextEl.textContent = '';
         applyReaderTextSourceControl();
         applyReaderEncodingControl();
+    }
+
+    function setReaderImagePaneEmptyState(enabled) {
+        if (readerImageEl) {
+            readerImageEl.classList.toggle('d-none', enabled);
+            if (enabled) {
+                readerImageEl.removeAttribute('src');
+            }
+        }
+        if (readerCropOverlayEl) {
+            readerCropOverlayEl.classList.add('d-none');
+        }
+        if (readerImageEmptyEl) {
+            readerImageEmptyEl.classList.toggle('d-none', !enabled);
+        }
     }
 
     function renderReaderThumbs() {
@@ -1526,8 +1601,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerEmptyEl) {
             readerEmptyEl.classList.add('d-none');
         }
+        const noFacsimilesForVersion = !Array.isArray(readerData?.facsimiles) || readerData.facsimiles.length === 0;
         if (readerCarouselEl) {
-            readerCarouselEl.classList.toggle('d-none', !readerPages.length);
+            readerCarouselEl.classList.toggle('d-none', !readerPages.length || noFacsimilesForVersion);
         }
         if (readerWorkspaceEl) {
             readerWorkspaceEl.classList.remove('d-none');
@@ -1551,20 +1627,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const displayedImage = currentDisplayedReaderImage();
 
         if (readerImageEl) {
-            if (displayedImage?.big) {
+            if (noFacsimilesForVersion) {
+                setReaderImagePaneEmptyState(true);
+                readerImageEl.alt = 'Aucun fac-similé pour cette version';
+            } else if (displayedImage?.big) {
+                setReaderImagePaneEmptyState(false);
                 readerImageEl.onload = () => {
                     applyReaderCropDisplay();
                 };
                 readerImageEl.src = displayedImage.big;
                 readerImageEl.alt = displayedImage?.name || page.label;
             } else {
+                setReaderImagePaneEmptyState(false);
                 readerImageEl.removeAttribute('src');
                 readerImageEl.alt = 'Fac-similé manquant';
             }
         }
 
         if (readerImageMetaEl) {
-            if (displayedImage) {
+            if (noFacsimilesForVersion) {
+                readerImageMetaEl.textContent = '';
+            } else if (displayedImage) {
                 const parts = [];
                 if (displayedImage.image_code) {
                     parts.push(`image ${displayedImage.image_code}`);
@@ -2711,6 +2794,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (readerCarouselNextBtn) {
         readerCarouselNextBtn.addEventListener('click', () => {
             readerThumbsEl?.scrollBy({ left: 420, behavior: 'smooth' });
+        });
+    }
+
+    if (readerUploadPromptBtn) {
+        readerUploadPromptBtn.addEventListener('click', () => {
+            if (!currentVersionId) return;
+            document.dispatchEvent(new CustomEvent('facsimiles:requestUpload', {
+                detail: {
+                    versionId: currentVersionId,
+                }
+            }));
         });
     }
 

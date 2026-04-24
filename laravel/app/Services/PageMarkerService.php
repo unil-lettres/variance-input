@@ -1356,6 +1356,7 @@ class PageMarkerService
                 } else {
                     $entry['image'] = (string) (count($markers) + 1);
                 }
+                $entry['image_inferred'] = true;
             }
 
             $markers[] = $entry;
@@ -1534,6 +1535,7 @@ class PageMarkerService
                 } else {
                     $entry['image'] = (string) (count($markers) + 1);
                 }
+                $entry['image_inferred'] = true;
             }
 
             $markers[] = $entry;
@@ -1581,6 +1583,7 @@ class PageMarkerService
                 } else {
                     $entry['image'] = (string) (count($markers) + 1);
                 }
+                $entry['image_inferred'] = true;
             }
 
             $markers[] = $entry;

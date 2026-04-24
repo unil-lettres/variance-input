@@ -16,8 +16,10 @@ Thumbs.db
 ############################################
 #  Docker bind-mounts / volumes            #
 ############################################
-dbdata/                 # MariaDB volume
-variance_data/          # Medite & back-office runtime data
+# MariaDB volume
+dbdata/
+# Medite & back-office runtime data
+variance_data/
 
 ############################################
 #  Uploads (generated at runtime)          #
@@ -28,6 +30,8 @@ variance/uploads/
 #  Test / archive data                     #
 ############################################
 assets/
+demo_pda_partie1/
+protocole/
 
 ############################################
 #  Python / Medite build artefacts         #
@@ -70,3 +74,5 @@ laravel/storage/app/public/uploads/
 laravel/storage/app/private/
 laravel/storage/app/tmp/
 laravel/public/uploads/
+laravel/public/uploads_images/
+laravel/public/uploads/pdf/

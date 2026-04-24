@@ -16,7 +16,7 @@ class AuditLogService
             'action' => $action,
             'actor_id' => $user?->getAuthIdentifier(),
             'actor_name' => $user?->name ?? null,
-            'actor_is_admin' => property_exists($user, 'is_admin') ? (bool) $user?->is_admin : null,
+            'actor_is_admin' => is_object($user) && property_exists($user, 'is_admin') ? (bool) $user->is_admin : null,
             'route' => $request?->path(),
             'method' => $request?->method(),
             'ip' => $request?->ip(),

@@ -19,6 +19,7 @@ class WorkFactory extends Factory
             'author_id' => Author::factory(),
             'title' => fake()->unique()->sentence(3),
             'short_title' => fake()->unique()->lexify('w??'),
+            'catalog_group' => 'main',
             'desc' => null,
             'image_url' => null,
             'pdf_url' => null,

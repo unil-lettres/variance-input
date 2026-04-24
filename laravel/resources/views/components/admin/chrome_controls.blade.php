@@ -3,6 +3,22 @@
     $mediteStatusUrl = $mediteStatusUrl ?? env('MEDITE_STATUS_URL', '/medite/');
     $publicSiteUrl = legacy_url();
     $devSiteUrl = legacy_url('dev');
+    $plannedMaintenance = app(\App\Services\AdminMaintenanceMode::class)->currentAnnouncement();
+    $formatPlannedMaintenanceDate = static function (?string $value): ?string {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)
+                ->setTimezone('Europe/Zurich')
+                ->format('d/m/Y H:i');
+        } catch (\Throwable) {
+            return null;
+        }
+    };
+    $plannedStartsAt = $formatPlannedMaintenanceDate($plannedMaintenance['starts_at'] ?? null);
+    $plannedUntil = $formatPlannedMaintenanceDate($plannedMaintenance['until'] ?? null);
 @endphp
 
 <div class="admin-chrome{{ $embedded ? ' admin-chrome--embedded' : '' }}">
@@ -25,6 +41,7 @@
                     type="button"
                     id="admin-public-sites-menu"
                     data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
                     aria-expanded="false">
                 Site public
             </button>
@@ -81,6 +98,23 @@
             </div>
         </div>
     </div>
+
+    @if($plannedMaintenance['enabled'] ?? false)
+        <div class="admin-chrome-announcement" role="status" aria-live="polite">
+            <span class="admin-chrome-announcement__badge">Maintenance annoncée</span>
+            <span class="admin-chrome-announcement__text">{{ $plannedMaintenance['message'] }}</span>
+            @if($plannedStartsAt || $plannedUntil)
+                <span class="admin-chrome-announcement__meta">
+                    @if($plannedStartsAt)
+                        <span>Début {{ $plannedStartsAt }}</span>
+                    @endif
+                    @if($plannedUntil)
+                        <span>Fin {{ $plannedUntil }}</span>
+                    @endif
+                </span>
+            @endif
+        </div>
+    @endif
 
     <div class="d-flex align-items-center gap-2 admin-chrome-actions">
         @auth
@@ -148,3 +182,66 @@
         @endauth
     </div>
 </div>
+
+@once
+    @push('styles')
+        <style>
+            .admin-chrome-announcement {
+                flex: 1 1 18rem;
+                min-width: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 0.45rem 0.75rem;
+                padding: 0.38rem 0.8rem;
+                border: 1px solid rgba(166, 125, 43, 0.24);
+                border-radius: 999px;
+                background: linear-gradient(180deg, rgba(191, 145, 56, 0.08), rgba(191, 145, 56, 0.03));
+                color: #6a5530;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+            }
+            .admin-chrome-announcement__badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 0.14rem 0.5rem;
+                border-radius: 999px;
+                background: rgba(191, 145, 56, 0.18);
+                font-size: 0.72rem;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+            .admin-chrome-announcement__text {
+                min-width: 0;
+                font-size: 0.86rem;
+                line-height: 1.35;
+                text-align: center;
+            }
+            .admin-chrome-announcement__meta {
+                display: inline-flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 0.35rem 0.75rem;
+                font-size: 0.76rem;
+                color: #7a6441;
+                white-space: nowrap;
+            }
+            @media (max-width: 991.98px) {
+                .admin-chrome-announcement {
+                    order: 3;
+                    width: 100%;
+                    justify-content: flex-start;
+                    border-radius: 0.9rem;
+                }
+                .admin-chrome-announcement__text {
+                    text-align: left;
+                }
+                .admin-chrome-announcement__meta {
+                    white-space: normal;
+                }
+            }
+        </style>
+    @endpush
+@endonce

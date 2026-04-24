@@ -7,13 +7,25 @@ use App\Models\Author;
 use App\Models\Work;
 use App\Models\Permission;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class AuthorController extends Controller
 {
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:45',
+            'name' => [
+                'required',
+                'string',
+                'min:3',
+                'max:45',
+                Rule::unique('authors', 'name'),
+            ],
+        ], [
+            'name.required' => 'Le nom de l’auteur est obligatoire.',
+            'name.min' => 'Le nom de l’auteur doit contenir au moins 3 caractères.',
+            'name.max' => 'Le nom de l’auteur ne peut pas dépasser 45 caractères.',
+            'name.unique' => 'Cet auteur existe déjà.',
         ]);
 
         $author = Author::create(['name' => $request->name]);
@@ -46,6 +58,7 @@ class AuthorController extends Controller
                 'works.id',
                 'works.title',
                 'works.short_title',
+                'works.catalog_group',
                 'works.folder',
                 'works.is_legacy',
                 'works.created_at',

@@ -18,6 +18,12 @@ document.addEventListener("DOMContentLoaded", () => {
     .replace(/\s*\(\d{4}(?:-\d{4})?\)\s*$/u, '')
     .trim();
 
+  const workCatalogLabel = (group) => (
+    group === 'allographic'
+      ? 'Réécritures allographiques'
+      : 'Catalogue principal'
+  );
+
   // Grab elements
   const authorSelector  = document.getElementById("author-selector");
   const workSelector    = document.getElementById("work-selector");
@@ -43,6 +49,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveWorkBtn     = document.getElementById("save-work-btn");
   const updateWorkBtn   = document.getElementById("update-work-btn");
   const editWorkShortTitleLabel = document.getElementById("edit-work-short-title-label");
+  const addAuthorNameInput = document.getElementById("new-author-name");
+  const addAuthorErrorBox = document.getElementById("author-exists-msg");
+  const addWorkTitleInput = document.getElementById("new-work-title");
+  const addWorkShortInput = document.getElementById("new-work-short");
+  const addWorkCatalogGroupInput = document.getElementById("new-work-catalog-group");
+  const addWorkErrorBox = document.getElementById("work-exists-msg");
+  const editWorkCatalogGroupInput = document.getElementById("edit-work-catalog-group");
+  let addWorkShortTouched = false;
+  let addWorkSuggestionTimeout = null;
+  let addWorkSuggestionToken = 0;
   const defaultTitles = {
     editAuthor: editAuthorBtn?.title || '',
     deleteAuthor: deleteAuthorBtn?.title || '',
@@ -230,6 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
         author_label: authorLabel,
         work_label: workLabel,
         work_display_label: workDisplayLabel,
+        work_catalog_group: workOption?.dataset.catalogGroup || 'main',
         work_creator_name: workCreatorName,
         work_created_at: workCreatedAt,
         work_updated_at: workUpdatedAt,
@@ -243,6 +260,108 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleEl.textContent = selected?.textContent?.trim() || placeholder;
     toggleEl.disabled = !!selectEl.disabled;
     toggleEl.classList.toggle('text-muted', !selected);
+  }
+
+  function resetAddWorkFeedback() {
+    if (addWorkErrorBox) {
+      addWorkErrorBox.textContent = '';
+      addWorkErrorBox.classList.add('d-none');
+    }
+    addWorkTitleInput?.classList.remove('is-invalid');
+    addWorkShortInput?.classList.remove('is-invalid');
+  }
+
+  function showAddWorkError(message, field = null) {
+    resetAddWorkFeedback();
+    if (field === 'title') addWorkTitleInput?.classList.add('is-invalid');
+    if (field === 'short_title') addWorkShortInput?.classList.add('is-invalid');
+    if (addWorkErrorBox) {
+      addWorkErrorBox.textContent = message;
+      addWorkErrorBox.classList.remove('d-none');
+    }
+  }
+
+  function resetAddAuthorFeedback() {
+    if (addAuthorErrorBox) {
+      addAuthorErrorBox.textContent = '';
+      addAuthorErrorBox.classList.add('d-none');
+    }
+    addAuthorNameInput?.classList.remove('is-invalid');
+  }
+
+  function showAddAuthorError(message) {
+    resetAddAuthorFeedback();
+    addAuthorNameInput?.classList.add('is-invalid');
+    if (addAuthorErrorBox) {
+      addAuthorErrorBox.textContent = message;
+      addAuthorErrorBox.classList.remove('d-none');
+    }
+  }
+
+  function suggestWorkShortTitleFromTitle(title) {
+    const ascii = String(title ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    const words = ascii.match(/[a-z]+/g) || [];
+    if (words.length >= 2) {
+      return words.map(word => word[0]).join('').slice(0, 8);
+    }
+    const letters = ascii.replace(/[^a-z]/g, '');
+
+    if (letters.length >= 2) {
+      return letters.slice(0, 8);
+    }
+
+    if (letters.length === 1) {
+      return `${letters}x`;
+    }
+
+    return '';
+  }
+
+  function syncSuggestedWorkShortTitle() {
+    if (!addWorkTitleInput || !addWorkShortInput || addWorkShortTouched) return;
+    addWorkShortInput.value = suggestWorkShortTitleFromTitle(addWorkTitleInput.value);
+  }
+
+  function requestSuggestedWorkShortTitle() {
+    if (!addWorkTitleInput || !addWorkShortInput || addWorkShortTouched) return;
+
+    const title = addWorkTitleInput.value.trim();
+    const token = ++addWorkSuggestionToken;
+
+    if (title === '') {
+      addWorkShortInput.value = '';
+      return;
+    }
+
+    fetch(buildUrl(`/api/works/short-title-suggestion?title=${encodeURIComponent(title)}`), {
+      headers: JSON_HEADERS
+    })
+      .then(async response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (token !== addWorkSuggestionToken || addWorkShortTouched) return;
+        addWorkShortInput.value = data?.short_title || suggestWorkShortTitleFromTitle(title);
+      })
+      .catch(() => {
+        if (token !== addWorkSuggestionToken || addWorkShortTouched) return;
+        addWorkShortInput.value = suggestWorkShortTitleFromTitle(title);
+      });
+  }
+
+  function queueSuggestedWorkShortTitleRefresh() {
+    if (addWorkSuggestionTimeout) {
+      clearTimeout(addWorkSuggestionTimeout);
+    }
+    addWorkSuggestionTimeout = setTimeout(() => {
+      requestSuggestedWorkShortTitle();
+    }, 160);
   }
 
   function rebuildDropdownMenu(selectEl, menuEl, toggleEl, placeholder) {
@@ -471,9 +590,15 @@ document.addEventListener("DOMContentLoaded", () => {
   //  ADD AUTHOR
   // ==============
   addAuthorBtn.addEventListener("click", () => {
-    document.getElementById("new-author-name").value = "";
-    document.getElementById("author-exists-msg").style.display = "none";
+    if (addAuthorNameInput) addAuthorNameInput.value = "";
+    resetAddAuthorFeedback();
     new bootstrap.Modal(document.getElementById("addAuthorModal")).show();
+  });
+
+  addAuthorNameInput?.addEventListener("input", () => {
+    if (!addAuthorErrorBox?.classList.contains('d-none') || addAuthorNameInput.classList.contains('is-invalid')) {
+      resetAddAuthorFeedback();
+    }
   });
 
   clearSelectionBtn?.addEventListener("click", () => {
@@ -483,21 +608,16 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   saveAuthorBtn.addEventListener("click", () => {
-    const name = document.getElementById("new-author-name").value.trim();
+    resetAddAuthorFeedback();
+
+    const name = addAuthorNameInput.value.trim();
 
     if (name.length < 3) {
-      alert("Le nom de l'auteur doit contenir au moins 3 caractères.");
+      showAddAuthorError("Le nom de l’auteur doit contenir au moins 3 caractères.");
       return;
     }
 
-    // Check for duplicates in existing authors
-    const exists = Array.from(authorSelector.options).some(
-      option => option.text.toLowerCase() === name.toLowerCase()
-    );
-    if (exists) {
-      document.getElementById("author-exists-msg").style.display = "block";
-      return;
-    }
+    saveAuthorBtn.disabled = true;
 
     fetch(buildUrl('/api/authors'), {
       method: 'POST',
@@ -505,18 +625,41 @@ document.addEventListener("DOMContentLoaded", () => {
       body: JSON.stringify({ name })
     })
     .then(async response => {
-      if (response.status === 409) {
-        document.getElementById("author-exists-msg").style.display = "block";
-        throw new Error("Author already exists");
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {}
+
+      if (response.status === 422) {
+        const nameErrors = payload?.errors?.name;
+        if (Array.isArray(nameErrors) && nameErrors.length) {
+          showAddAuthorError(nameErrors[0]);
+          return null;
+        }
+        showAddAuthorError(payload?.message || "Impossible d’enregistrer l’auteur.");
+        return null;
       }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
+
+      if (response.status === 409) {
+        showAddAuthorError(payload?.error || "Cet auteur existe déjà.");
+        return null;
+      }
+
+      if (!response.ok) throw new Error(payload?.error || payload?.message || `HTTP ${response.status}`);
+      return payload;
     })
     .then(data => {
+      if (!data) return;
       bootstrap.Modal.getInstance(document.getElementById("addAuthorModal")).hide();
       loadAuthors(data.id);
     })
-    .catch(err => console.error(err));
+    .catch(err => {
+      console.error(err);
+      showAddAuthorError(err.message || "Impossible d’enregistrer l’auteur.");
+    })
+    .finally(() => {
+      saveAuthorBtn.disabled = false;
+    });
   });
 
   // ==============
@@ -608,62 +751,125 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==============
   addWorkBtn.addEventListener("click", () => {
     if (!authorSelector.value || addWorkBtn.disabled) return;
-    document.getElementById("new-work-title").value = "";
-    document.getElementById("new-work-short").value = "";
-    document.getElementById("work-exists-msg").style.display = "none";
+    addWorkShortTouched = false;
+    addWorkSuggestionToken += 1;
+    if (addWorkSuggestionTimeout) {
+      clearTimeout(addWorkSuggestionTimeout);
+      addWorkSuggestionTimeout = null;
+    }
+    if (addWorkTitleInput) addWorkTitleInput.value = "";
+    if (addWorkShortInput) addWorkShortInput.value = "";
+    if (addWorkCatalogGroupInput) addWorkCatalogGroupInput.value = "main";
+    resetAddWorkFeedback();
     new bootstrap.Modal(document.getElementById("addWorkModal")).show();
   });
 
+  addWorkTitleInput?.addEventListener("input", () => {
+    syncSuggestedWorkShortTitle();
+    queueSuggestedWorkShortTitleRefresh();
+    if (!addWorkErrorBox?.classList.contains('d-none') || addWorkTitleInput.classList.contains('is-invalid')) {
+      resetAddWorkFeedback();
+    }
+  });
+
+  addWorkShortInput?.addEventListener("input", () => {
+    const normalized = addWorkShortInput.value.toLowerCase().replace(/[^a-z]/g, '');
+    if (addWorkShortInput.value !== normalized) {
+      addWorkShortInput.value = normalized;
+    }
+    addWorkShortTouched = addWorkShortInput.value !== '';
+    if (!addWorkShortTouched) {
+      queueSuggestedWorkShortTitleRefresh();
+    }
+    if (!addWorkErrorBox?.classList.contains('d-none') || addWorkShortInput.classList.contains('is-invalid')) {
+      resetAddWorkFeedback();
+    }
+  });
+
   saveWorkBtn.addEventListener("click", () => {
-    const title       = document.getElementById("new-work-title").value.trim();
-    const shortInput = document.getElementById("new-work-short");
+    resetAddWorkFeedback();
+
+    const title       = addWorkTitleInput.value.trim();
+    const shortInput = addWorkShortInput;
     const short_title = shortInput.value.trim().toLowerCase();
     shortInput.value = short_title;
+    const autoSuggestedShortTitle = suggestWorkShortTitleFromTitle(title);
+    const catalog_group = addWorkCatalogGroupInput?.value || 'main';
     const author_id   = authorSelector.value;
 
     if (!author_id) return;
 
     // Validations
     if (title.length < 3) {
-      alert("Le titre de l'œuvre doit contenir au moins 3 caractères.");
+      showAddWorkError("Le titre de l’œuvre doit contenir au moins 3 caractères.", 'title');
       return;
     }
     if (short_title.length < 2 || short_title.length > 8) {
-      alert("Le titre abrégé doit contenir entre 2 et 8 caractères.");
+      showAddWorkError("Le code abrégé doit contenir entre 2 et 8 caractères.", 'short_title');
       return;
     }
     const validShortTitle = /^[a-z]+$/.test(short_title);
     if (!validShortTitle) {
-      alert("Le titre abrégé ne peut contenir que des lettres minuscules (a à z).");
+      showAddWorkError("Le code abrégé ne peut contenir que des lettres minuscules (a à z).", 'short_title');
       return;
     }
-    // Check if short_title already exists for the same author
-    const duplicate = Array.from(workSelector.options).some(option =>
-      option.textContent.includes(`[${short_title}]`)
-    );
-    if (duplicate) {
-      document.getElementById("work-exists-msg").style.display = "block";
-      return;
-    }
+
+    saveWorkBtn.disabled = true;
 
     fetch(buildUrl('/api/works'), {
       method: 'POST',
       headers: JSON_X_CSRF,
-      body: JSON.stringify({ title, short_title, author_id })
+      body: JSON.stringify({
+        title,
+        short_title: addWorkShortTouched ? short_title : (short_title === autoSuggestedShortTitle ? '' : short_title),
+        catalog_group,
+        author_id
+      })
     })
     .then(async response => {
-      if (response.status === 409) {
-        document.getElementById("work-exists-msg").style.display = "block";
-        throw new Error("Work exists");
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {}
+
+      if (response.status === 422) {
+        const shortErrors = payload?.errors?.short_title;
+        const titleErrors = payload?.errors?.title;
+        if (Array.isArray(shortErrors) && shortErrors.length) {
+          showAddWorkError(shortErrors[0], 'short_title');
+          return null;
+        }
+        if (Array.isArray(titleErrors) && titleErrors.length) {
+          showAddWorkError(titleErrors[0], 'title');
+          return null;
+        }
+        showAddWorkError(payload?.message || "Impossible d’enregistrer l’œuvre.");
+        return null;
       }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
+
+      if (response.status === 409) {
+        showAddWorkError(payload?.error || "Ce code abrégé est déjà utilisé.", 'short_title');
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.message || `HTTP ${response.status}`);
+      }
+
+      return payload;
     })
     .then(data => {
+      if (!data) return;
       bootstrap.Modal.getInstance(document.getElementById("addWorkModal")).hide();
       loadWorks(author_id, data.id);
     })
-    .catch(err => console.error(err));
+    .catch(err => {
+      console.error(err);
+      showAddWorkError(err.message || "Impossible d’enregistrer l’œuvre.");
+    })
+    .finally(() => {
+      saveWorkBtn.disabled = false;
+    });
   });
 
   // ==============
@@ -683,6 +889,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (editWorkShortTitleLabel) {
           editWorkShortTitleLabel.textContent = work.short_title || '';
         }
+        if (editWorkCatalogGroupInput) {
+          editWorkCatalogGroupInput.value = work.catalog_group || 'main';
+        }
         new bootstrap.Modal(document.getElementById("editWorkModal")).show();
       })
       .catch(err => {
@@ -694,6 +903,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updateWorkBtn.addEventListener("click", () => {
     const id          = document.getElementById("edit-work-id").value;
     const title       = document.getElementById("edit-work-title").value.trim();
+    const catalog_group = editWorkCatalogGroupInput?.value || 'main';
     const author_id   = authorSelector.value;
 
     if (title.length < 3) {
@@ -704,7 +914,7 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch(buildUrl(`/api/works/${id}`), {
       method: 'PUT',
       headers: JSON_X_CSRF,
-      body: JSON.stringify({ title })
+      body: JSON.stringify({ title, catalog_group })
     })
     .then(res => {
       if (!res.ok) throw new Error("Erreur serveur");
@@ -859,6 +1069,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ? `${displayTitle} [${work.short_title}]`
             : displayTitle;
           opt.setAttribute('data-short-title', work.short_title || '');
+          opt.dataset.catalogGroup = work.catalog_group || 'main';
           opt.dataset.fullTitle = work.title || '';
           opt.dataset.folder = work.folder || '';
           opt.dataset.isLegacy = work.is_legacy ? '1' : '0';

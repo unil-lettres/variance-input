@@ -19,6 +19,7 @@ class Work extends Model
     protected $fillable = [
         'title',
         'short_title',
+        'catalog_group',
         'author_id',
         'desc',
         'image_url',

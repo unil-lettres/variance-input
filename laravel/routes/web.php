@@ -83,6 +83,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])->name('admin.users.destroy');
     Route::get('/tasks', [TaskMonitorController::class, 'index'])->name('admin.tasks.index');
     Route::get('/health/report', [HealthController::class, 'page'])->name('admin.health.report');
+    Route::post('/health/report/admin-maintenance', [HealthController::class, 'toggleAdminMaintenance'])
+        ->name('admin.health.maintenance.toggle');
+    Route::post('/health/report/admin-maintenance-announcement', [HealthController::class, 'updateAdminMaintenanceAnnouncement'])
+        ->name('admin.health.maintenance.announcement.update');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -99,6 +103,7 @@ Route::get('/works/{id}/can-edit', [WorkController::class, 'canEdit'])->name('wo
 Route::get('/api/authors', [AuthorController::class, 'index'])->middleware('auth');
 Route::post('/api/authors', [AuthorController::class, 'store'])->middleware('auth');
 Route::post('/api/works', [WorkController::class, 'store'])->middleware('auth');
+Route::get('/api/works/short-title-suggestion', [WorkController::class, 'suggestShortTitle'])->middleware('auth');
 Route::get('/api/author/{authorId}/works', [AuthorController::class, 'getWorksByAuthor'])->middleware('auth');
 Route::put('/api/authors/{id}', [AuthorController::class, 'update']);
 Route::get('/api/works/{id}', [WorkController::class, 'show']);

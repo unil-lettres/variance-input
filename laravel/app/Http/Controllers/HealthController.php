@@ -39,6 +39,42 @@ class HealthController extends Controller
             ->setStatusCode($httpStatus);
     }
 
+    public function toggleAdminMaintenance(Request $request)
+    {
+        $enabled = $request->boolean('enabled');
+
+        if ($enabled) {
+            $currentState = $this->adminMaintenanceMode->currentState();
+            $this->adminMaintenanceMode->activate(
+                $currentState['message'] ?? null,
+                null,
+                (bool) ($currentState['allow_admins'] ?? true),
+            );
+
+            return back()->with('status', 'Mode maintenance admin activé.');
+        }
+
+        $this->adminMaintenanceMode->deactivate();
+
+        return back()->with('status', 'Mode maintenance admin désactivé.');
+    }
+
+    public function updateAdminMaintenanceAnnouncement(Request $request)
+    {
+        $enabled = $request->boolean('enabled');
+        $message = trim((string) $request->input('message', ''));
+
+        if ($enabled) {
+            $this->adminMaintenanceMode->announce($message !== '' ? $message : null);
+
+            return back()->with('status', 'Annonce de maintenance enregistrée.');
+        }
+
+        $this->adminMaintenanceMode->clearAnnouncement();
+
+        return back()->with('status', 'Annonce de maintenance désactivée.');
+    }
+
     private function buildReport(string $failedWindowKey): array
     {
         $checks = [];
@@ -47,6 +83,7 @@ class HealthController extends Controller
         $failedWindowSeconds = $this->failedWindowSeconds($failedWindowKey);
         $git = $this->resolveGitMetadata();
         $adminMaintenanceState = $this->adminMaintenanceMode->currentState();
+        $adminAnnouncementState = $this->adminMaintenanceMode->currentAnnouncement();
 
         $checks['app'] = [
             'ok' => true,
@@ -67,6 +104,10 @@ class HealthController extends Controller
         $checks['admin_maintenance'] = [
             'ok' => true,
             ...$adminMaintenanceState,
+        ];
+        $checks['admin_maintenance_announcement'] = [
+            'ok' => true,
+            ...$adminAnnouncementState,
         ];
 
         $dbOk = false;

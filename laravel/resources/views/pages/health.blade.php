@@ -57,6 +57,10 @@
         <div class="d-flex align-items-center gap-3"></div>
     </div>
 
+    @if(session('status'))
+        <div class="alert alert-success small py-2 mb-3">{{ session('status') }}</div>
+    @endif
+
     <div class="card mb-4">
         <div class="card-header fw-semibold">Site public (legacy)</div>
         <div class="card-body p-0">
@@ -151,22 +155,110 @@
                     <div class="text-muted small">Admin base path</div>
                     <div>{{ data_get($checks, 'config.admin_base_path') ?? '/' }}</div>
                 </div>
-                <div class="col-md-8">
-                    <div class="text-muted small">Mode maintenance admin</div>
-                    @php
-                        $maintenanceEnabled = (bool) data_get($checks, 'admin_maintenance.enabled', false);
-                        $maintenanceUntil = data_get($checks, 'admin_maintenance.until');
-                        $maintenanceText = $maintenanceEnabled
-                            ? (data_get($checks, 'admin_maintenance.message') ?: 'Maintenance activée')
-                            : 'Désactivé';
-                        $maintenanceClass = $maintenanceEnabled ? $warnText : $mutedText;
-                    @endphp
+            </div>
+        </div>
+    </div>
+
+    @php
+        $maintenanceEnabled = (bool) data_get($checks, 'admin_maintenance.enabled', false);
+        $maintenanceUntil = data_get($checks, 'admin_maintenance.until');
+        $maintenanceText = $maintenanceEnabled
+            ? (data_get($checks, 'admin_maintenance.message') ?: 'Maintenance activée')
+            : 'Désactivé';
+        $maintenanceClass = $maintenanceEnabled ? $warnText : $mutedText;
+
+        $announcementEnabled = (bool) data_get($checks, 'admin_maintenance_announcement.enabled', false);
+        $announcementMessage = (string) data_get($checks, 'admin_maintenance_announcement.message', '');
+        $announcementStartsAt = data_get($checks, 'admin_maintenance_announcement.starts_at');
+        $announcementUntil = data_get($checks, 'admin_maintenance_announcement.until');
+        $announcementClass = $announcementEnabled ? $warnText : $mutedText;
+    @endphp
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Maintenance admin</div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="text-muted small">Mode maintenance</div>
                     <div class="{{ $maintenanceClass }}">
                         {{ $maintenanceText }}
                         @if($maintenanceEnabled && $maintenanceUntil)
                             <span class="text-muted small">· jusqu’à {{ $formatDate($maintenanceUntil) }}</span>
                         @endif
                     </div>
+                    <form method="POST" action="{{ admin_path('health/report/admin-maintenance') }}" class="mt-2">
+                        @csrf
+                        <input type="hidden" name="enabled" value="0">
+                        <div class="form-check form-switch d-inline-flex align-items-center gap-2">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                role="switch"
+                                id="admin-maintenance-switch"
+                                name="enabled"
+                                value="1"
+                                @checked($maintenanceEnabled)
+                                onchange="this.form.submit()"
+                            >
+                            <label class="form-check-label small" for="admin-maintenance-switch">
+                                {{ $maintenanceEnabled ? 'Désactiver' : 'Activer' }}
+                            </label>
+                        </div>
+                        <div class="text-muted small mt-1">
+                            Utilise le message de maintenance actuel et conserve le bypass admin.
+                        </div>
+                    </form>
+                </div>
+                <div class="col-lg-6">
+                    <div class="text-muted small">Annonce de maintenance</div>
+                    <div class="{{ $announcementClass }}">
+                        {{ $announcementEnabled ? ($announcementMessage !== '' ? $announcementMessage : 'Annonce activée') : 'Désactivée' }}
+                        @if($announcementEnabled && ($announcementStartsAt || $announcementUntil))
+                            <span class="text-muted small">
+                                @if($announcementStartsAt)
+                                    · début {{ $formatDate($announcementStartsAt) }}
+                                @endif
+                                @if($announcementUntil)
+                                    · fin {{ $formatDate($announcementUntil) }}
+                                @endif
+                            </span>
+                        @endif
+                    </div>
+                    <form method="POST" action="{{ admin_path('health/report/admin-maintenance-announcement') }}" class="mt-2">
+                        @csrf
+                        <input type="hidden" name="enabled" value="0">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1" for="admin-maintenance-announcement-message">Message affiché sur l’accueil admin</label>
+                            <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                id="admin-maintenance-announcement-message"
+                                name="message"
+                                value="{{ $announcementMessage }}"
+                                placeholder="Une opération de maintenance est prévue prochainement."
+                            >
+                        </div>
+                        <div class="form-check form-switch d-inline-flex align-items-center gap-2">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                role="switch"
+                                id="admin-maintenance-announcement-switch"
+                                name="enabled"
+                                value="1"
+                                @checked($announcementEnabled)
+                                onchange="this.form.submit()"
+                            >
+                            <label class="form-check-label small" for="admin-maintenance-announcement-switch">
+                                {{ $announcementEnabled ? 'Annonce activée' : 'Activer l’annonce' }}
+                            </label>
+                        </div>
+                        <div class="mt-2">
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Enregistrer l’annonce</button>
+                        </div>
+                        <div class="text-muted small mt-1">
+                            Le switch active ou désactive immédiatement l’annonce. Le bouton sert à enregistrer un changement de message sans toucher à l’état.
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

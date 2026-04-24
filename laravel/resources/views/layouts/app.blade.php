@@ -322,6 +322,20 @@
         .admin-public-menu-section {
             padding: 0.15rem 0;
         }
+        .admin-public-catalog-group + .admin-public-catalog-group {
+            margin-top: 0.45rem;
+            padding-top: 0.45rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .admin-public-catalog-heading {
+            display: block;
+            padding: 0.2rem 1rem 0.35rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
         .admin-public-menu-heading {
             display: inline-flex;
             align-items: center;
@@ -353,10 +367,12 @@
             width: 100%;
             height: 100%;
         }
-        .admin-public-pair {
+        .admin-public-author,
+        .admin-public-work {
             position: relative;
         }
-        .admin-public-pair-toggle {
+        .admin-public-author-toggle,
+        .admin-public-work-toggle {
             width: 100%;
             border: 0;
             background: transparent;
@@ -369,41 +385,45 @@
             justify-content: space-between;
             gap: 0.75rem;
         }
-        .admin-public-pair-toggle:hover,
-        .admin-public-pair-toggle:focus {
+        .admin-public-author-toggle:hover,
+        .admin-public-author-toggle:focus,
+        .admin-public-work-toggle:hover,
+        .admin-public-work-toggle:focus {
             background-color: rgba(0, 0, 0, 0.06);
         }
-        .admin-public-pair-toggle[aria-expanded="true"] {
+        .admin-public-author-toggle[aria-expanded="true"],
+        .admin-public-work-toggle[aria-expanded="true"] {
             font-weight: 700;
         }
-        .admin-public-pair-toggle::after {
+        .admin-public-author-toggle::after,
+        .admin-public-work-toggle::after {
             content: "›";
             font-size: 1rem;
             line-height: 1;
             opacity: 0.65;
         }
-        .admin-public-comparisons {
-            position: absolute;
-            top: -0.35rem;
-            left: calc(100% - 0.35rem);
-            width: max-content;
-            min-width: 28rem;
-            max-width: none;
-            max-height: none;
-            overflow: visible;
-            padding: 0.35rem 0;
-            background: #fff;
-            border: 1px solid rgba(0, 0, 0, 0.12);
-            border-radius: 14px;
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-            z-index: 1085;
+        .admin-public-author-works,
+        .admin-public-work-comparisons {
+            padding: 0.2rem 0 0.35rem;
         }
-        .admin-public-comparisons[hidden] {
+        .admin-public-author-works[hidden],
+        .admin-public-work-comparisons[hidden] {
             display: none !important;
+        }
+        .admin-public-work {
+            margin-left: 0.55rem;
+        }
+        .admin-public-work-toggle {
+            padding-left: 1.35rem;
+            font-size: 0.84rem;
+            color: #5b554c;
+        }
+        .admin-public-work-comparisons {
+            margin-left: 1.2rem;
         }
         .admin-public-comparison-link {
             display: block;
-            padding: 0.45rem 0.95rem;
+            padding: 0.38rem 1.35rem 0.38rem 1.95rem;
             font-size: 0.84rem;
             color: #5b554c;
             text-decoration: none;
@@ -419,30 +439,11 @@
             font-size: 0.84rem;
             color: #7a7165;
         }
-        .admin-public-comparisons-heading {
-            padding: 0.15rem 0.95rem 0.35rem;
-            font-size: 0.74rem;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: #8b8173;
-        }
         @media (max-width: 991.98px) {
             .admin-public-menu {
                 width: min(92vw, 30rem);
                 min-width: 0;
                 max-width: 92vw;
-            }
-            .admin-public-comparisons {
-                position: static;
-                left: auto;
-                top: auto;
-                width: auto;
-                min-width: 0;
-                max-width: none;
-                max-height: none;
-                margin: 0 0.6rem 0.45rem;
-                border-radius: 12px;
             }
         }
         .system-status-dot {
@@ -847,10 +848,10 @@
             const closeSubmenus = (scope) => {
                 const root = scope ? scopeContainers[scope] : menu;
                 if (!root) return;
-                root.querySelectorAll('[data-public-pair-toggle]').forEach((toggle) => {
+                root.querySelectorAll('[data-public-author-toggle], [data-public-work-toggle]').forEach((toggle) => {
                     toggle.setAttribute('aria-expanded', 'false');
                 });
-                root.querySelectorAll('.admin-public-comparisons').forEach((panel) => {
+                root.querySelectorAll('.admin-public-author-works, .admin-public-work-comparisons').forEach((panel) => {
                     panel.hidden = true;
                 });
             };
@@ -858,31 +859,72 @@
             const renderScope = (scope, items) => {
                 const container = scopeContainers[scope];
                 if (!container) return;
-                if (!Array.isArray(items) || items.length === 0) {
+                const groups = [
+                    {
+                        key: 'main',
+                        label: 'Catalogue principal',
+                        items: Array.isArray(items?.main) ? items.main : [],
+                    },
+                    {
+                        key: 'allographic',
+                        label: 'Réécritures allographiques',
+                        items: Array.isArray(items?.allographic) ? items.allographic : [],
+                    },
+                ];
+                const visibleGroups = groups.filter((group) => group.items.length > 0);
+
+                if (visibleGroups.length === 0) {
                     container.innerHTML = '<div class="admin-public-empty">Aucune comparaison publiée.</div>';
                     return;
                 }
 
-                container.innerHTML = items.map((item) => {
-                    const comparisons = Array.isArray(item.comparisons) ? item.comparisons : [];
-                    const comparisonsMarkup = comparisons.length
-                        ? comparisons.map((comparison) =>
-                            `<a class="admin-public-comparison-link" href="${escapeHtml(comparison.url)}" target="_blank" rel="noopener">${escapeHtml(comparison.label)}</a>`
-                        ).join('')
-                        : '<div class="admin-public-empty">Aucune comparaison publiée.</div>';
+                container.innerHTML = visibleGroups.map((group) => {
+                    const authorsMarkup = group.items.map((item) => {
+                        const works = Array.isArray(item.works) ? item.works : [];
+                        const worksMarkup = works.length
+                            ? works.map((work) => {
+                                const comparisons = Array.isArray(work.comparisons) ? work.comparisons : [];
+                                const comparisonsMarkup = comparisons.length
+                                    ? comparisons.map((comparison) =>
+                                        `<a class="admin-public-comparison-link" href="${escapeHtml(comparison.url)}" target="_blank" rel="noopener">${escapeHtml(comparison.label)}</a>`
+                                    ).join('')
+                                    : '<div class="admin-public-empty">Aucune comparaison publiée.</div>';
+
+                                return `
+                                    <div class="admin-public-work">
+                                        <button type="button"
+                                                class="admin-public-work-toggle"
+                                                data-public-work-toggle
+                                                aria-expanded="false">
+                                            ${escapeHtml(work.work_label)}
+                                        </button>
+                                        <div class="admin-public-work-comparisons" hidden>
+                                            ${comparisonsMarkup}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')
+                            : '<div class="admin-public-empty">Aucune œuvre publiée.</div>';
+
+                        return `
+                            <div class="admin-public-author">
+                                <button type="button"
+                                        class="admin-public-author-toggle"
+                                        data-public-author-toggle
+                                        aria-expanded="false">
+                                    ${escapeHtml(item.author_label)}
+                                </button>
+                                <div class="admin-public-author-works" hidden>
+                                    ${worksMarkup}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
 
                     return `
-                        <div class="admin-public-pair">
-                            <button type="button"
-                                    class="admin-public-pair-toggle"
-                                    data-public-pair-toggle
-                                    aria-expanded="false">
-                                ${escapeHtml(item.pair_label)}
-                            </button>
-                            <div class="admin-public-comparisons" hidden>
-                                <div class="admin-public-comparisons-heading">${escapeHtml(item.pair_label)}</div>
-                                ${comparisonsMarkup}
-                            </div>
+                        <div class="admin-public-catalog-group" data-public-catalog-group="${escapeHtml(group.key)}">
+                            <div class="admin-public-catalog-heading">${escapeHtml(group.label)}</div>
+                            ${authorsMarkup}
                         </div>
                     `;
                 }).join('');
@@ -912,14 +954,16 @@
             });
 
             menu.addEventListener('click', (event) => {
-                const toggle = event.target.closest('[data-public-pair-toggle]');
-                if (toggle) {
+                const authorToggle = event.target.closest('[data-public-author-toggle]');
+                if (authorToggle) {
                     event.preventDefault();
-                    const content = toggle.nextElementSibling;
-                    const expanded = toggle.getAttribute('aria-expanded') === 'true';
-                    closeSubmenus();
+                    event.stopPropagation();
+                    const content = authorToggle.nextElementSibling;
+                    const expanded = authorToggle.getAttribute('aria-expanded') === 'true';
+                    const scopeRoot = authorToggle.closest('[data-public-scope]');
+                    closeSubmenus(scopeRoot?.dataset?.publicScope || null);
                     if (!expanded) {
-                        toggle.setAttribute('aria-expanded', 'true');
+                        authorToggle.setAttribute('aria-expanded', 'true');
                         if (content) {
                             content.hidden = false;
                         }
@@ -927,19 +971,29 @@
                     return;
                 }
 
-                if (!event.target.closest('.admin-public-comparisons')) {
-                    closeSubmenus();
+                const workToggle = event.target.closest('[data-public-work-toggle]');
+                if (workToggle) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const content = workToggle.nextElementSibling;
+                    const expanded = workToggle.getAttribute('aria-expanded') === 'true';
+                    const workList = workToggle.closest('.admin-public-author-works');
+                    if (workList) {
+                        workList.querySelectorAll('[data-public-work-toggle]').forEach((toggle) => {
+                            toggle.setAttribute('aria-expanded', 'false');
+                        });
+                        workList.querySelectorAll('.admin-public-work-comparisons').forEach((panel) => {
+                            panel.hidden = true;
+                        });
+                    }
+                    if (!expanded) {
+                        workToggle.setAttribute('aria-expanded', 'true');
+                        if (content) {
+                            content.hidden = false;
+                        }
+                    }
+                    return;
                 }
-            });
-
-            menu.addEventListener('mouseover', (event) => {
-                const toggle = event.target.closest('[data-public-pair-toggle]');
-                if (!toggle) return;
-                const content = toggle.nextElementSibling;
-                if (!content) return;
-                closeSubmenus();
-                toggle.setAttribute('aria-expanded', 'true');
-                content.hidden = false;
             });
 
             menu.addEventListener('keydown', (event) => {

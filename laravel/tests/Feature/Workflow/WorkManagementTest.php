@@ -30,7 +30,8 @@ class WorkManagementTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('author_id', $author->id)
             ->assertJsonPath('title', 'Nouvelle œuvre critique')
-            ->assertJsonPath('short_title', 'noc');
+            ->assertJsonPath('short_title', 'noc')
+            ->assertJsonPath('catalog_group', 'main');
 
         $work = Work::query()->where('author_id', $author->id)->firstOrFail();
 
@@ -43,6 +44,201 @@ class WorkManagementTest extends TestCase
             'work_id' => $work->id,
             'permission_type' => 'edit',
         ]);
+    }
+
+    public function test_cannot_create_duplicate_author_name(): void
+    {
+        $user = $this->signInEditor();
+        $existing = Author::factory()->create([
+            'name' => 'Honoré de Balzac',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $existing);
+
+        $response = $this->postJson('/api/authors', [
+            'name' => 'Honoré de Balzac',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['name']);
+
+        $this->assertSame(
+            'Cet auteur existe déjà.',
+            $response->json('errors.name.0')
+        );
+    }
+
+    public function test_cannot_create_two_works_with_same_short_title(): void
+    {
+        $user = $this->signInEditor();
+        $author = Author::factory()->create([
+            'name' => 'Auteur de test',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $author);
+
+        Work::factory()->for($author)->create([
+            'title' => 'Première œuvre',
+            'short_title' => 'pda',
+        ]);
+
+        $response = $this->postJson('/api/works', [
+            'author_id' => $author->id,
+            'title' => 'Seconde œuvre',
+            'short_title' => 'pda',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['short_title']);
+
+        $this->assertSame(
+            'Ce code abrégé est déjà utilisé par une autre œuvre.',
+            $response->json('errors.short_title.0')
+        );
+
+        $this->assertSame(1, Work::query()
+            ->where('short_title', 'pda')
+            ->count());
+    }
+
+    public function test_same_short_title_is_rejected_even_for_different_authors(): void
+    {
+        $user = $this->signInEditor();
+        $authorA = Author::factory()->create([
+            'name' => 'Auteur A',
+            'is_legacy' => false,
+        ]);
+        $authorB = Author::factory()->create([
+            'name' => 'Auteur B',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $authorA);
+        $this->grantAuthorEditPermission($user, $authorB);
+
+        Work::factory()->for($authorA)->create([
+            'title' => 'Œuvre A',
+            'short_title' => 'pda',
+        ]);
+
+        $response = $this->postJson('/api/works', [
+            'author_id' => $authorB->id,
+            'title' => 'Œuvre B',
+            'short_title' => 'pda',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['short_title']);
+    }
+
+    public function test_missing_short_title_is_generated_automatically(): void
+    {
+        $user = $this->signInEditor();
+        $author = Author::factory()->create([
+            'name' => 'Auteur auto',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $author);
+
+        $response = $this->postJson('/api/works', [
+            'author_id' => $author->id,
+            'title' => 'Rosalie',
+            'short_title' => '',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('short_title', 'rosalie');
+    }
+
+    public function test_work_can_be_created_in_allographic_catalog(): void
+    {
+        $user = $this->signInEditor();
+        $author = Author::factory()->create([
+            'name' => 'Auteur catalogue',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $author);
+
+        $response = $this->postJson('/api/works', [
+            'author_id' => $author->id,
+            'title' => 'Poèmes nègres',
+            'short_title' => 'pn',
+            'catalog_group' => 'allographic',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('catalog_group', 'allographic');
+
+        $this->assertDatabaseHas('works', [
+            'author_id' => $author->id,
+            'title' => 'Poèmes nègres',
+            'catalog_group' => 'allographic',
+        ]);
+    }
+
+    public function test_missing_short_title_prefers_title_initials_when_available(): void
+    {
+        $user = $this->signInEditor();
+        $author = Author::factory()->create([
+            'name' => 'Auteur initiales',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $author);
+
+        $response = $this->postJson('/api/works', [
+            'author_id' => $author->id,
+            'title' => "Page d'amour",
+            'short_title' => '',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('short_title', 'pda');
+    }
+
+    public function test_short_title_suggestion_prefers_initials(): void
+    {
+        $this->signInEditor();
+
+        $this->getJson('/api/works/short-title-suggestion?title=' . urlencode("Page d'amour"))
+            ->assertOk()
+            ->assertJsonPath('short_title', 'pda');
+    }
+
+    public function test_generated_short_title_stays_alpha_when_initials_are_already_taken(): void
+    {
+        $user = $this->signInEditor();
+        $author = Author::factory()->create([
+            'name' => 'Auteur collision',
+            'is_legacy' => false,
+        ]);
+        $this->grantAuthorEditPermission($user, $author);
+
+        Work::factory()->create([
+            'title' => 'Œuvre existante',
+            'short_title' => 'pda',
+        ]);
+
+        $response = $this->postJson('/api/works', [
+            'author_id' => $author->id,
+            'title' => "Page d'amour",
+            'short_title' => '',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('short_title', 'pdaa');
+    }
+
+    public function test_short_title_suggestion_is_unique_when_initials_are_taken(): void
+    {
+        $this->signInEditor();
+
+        Work::factory()->create([
+            'title' => 'Œuvre existante',
+            'short_title' => 'pda',
+        ]);
+
+        $this->getJson('/api/works/short-title-suggestion?title=' . urlencode("Page d'amour"))
+            ->assertOk()
+            ->assertJsonPath('short_title', 'pdaa');
     }
 
     public function test_can_edit_endpoint_distinguishes_editable_and_legacy_works(): void
@@ -122,6 +318,29 @@ class WorkManagementTest extends TestCase
             'id' => $work->id,
             'title' => 'Le Parfum des îles Borromées',
             'short_title' => 'pib',
+        ]);
+    }
+
+    public function test_work_catalog_group_can_be_updated_without_changing_short_title(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Poèmes nègres',
+            'short_title' => 'pn',
+        ]);
+
+        $response = $this->putJson("/api/works/{$work->id}", [
+            'title' => $work->title,
+            'short_title' => $work->short_title,
+            'catalog_group' => 'allographic',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('catalog_group', 'allographic');
+
+        $this->assertDatabaseHas('works', [
+            'id' => $work->id,
+            'catalog_group' => 'allographic',
         ]);
     }
 

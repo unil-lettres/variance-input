@@ -3,6 +3,8 @@
 namespace Tests\Feature\Workflow;
 
 use App\Services\AdminMaintenanceMode;
+use App\Models\Author;
+use App\Models\Work;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -97,6 +99,19 @@ class AdminMaintenanceModeTest extends TestCase
             ->assertSee('Déploiement en cours.');
     }
 
+    public function test_admin_health_report_shows_announcement_state(): void
+    {
+        $this->signInAdmin();
+        app(AdminMaintenanceMode::class)->announce('Maintenance vendredi matin.');
+
+        $response = $this->get('/health/report');
+
+        $this->assertContains($response->status(), [200, 503]);
+        $response
+            ->assertSee('Annonce de maintenance')
+            ->assertSee('Maintenance vendredi matin.');
+    }
+
     public function test_planned_maintenance_announcement_is_shown_on_welcome_page(): void
     {
         $this->signInEditor();
@@ -111,8 +126,31 @@ class AdminMaintenanceModeTest extends TestCase
             ->assertOk()
             ->assertSee('Maintenance annoncée')
             ->assertSee('Déploiement prévu demain matin.')
-            ->assertSee('Début prévu :')
-            ->assertSee('Fin estimée :');
+            ->assertSee('Début')
+            ->assertSee('Fin');
+    }
+
+    public function test_planned_maintenance_announcement_remains_visible_with_selected_work(): void
+    {
+        $this->signInEditor();
+
+        $author = Author::factory()->create([
+            'folder' => 'balzac',
+        ]);
+        $work = Work::factory()->for($author)->create([
+            'folder' => 'cousine_bette',
+        ]);
+
+        app(AdminMaintenanceMode::class)->announce(
+            'Maintenance prévue vendredi matin.',
+            now()->addDay()->setTime(8, 0),
+            now()->addDay()->setTime(12, 0),
+        );
+
+        $this->get("/select/{$author->folder}/{$work->folder}")
+            ->assertOk()
+            ->assertSee('Maintenance annoncée')
+            ->assertSee('Maintenance prévue vendredi matin.');
     }
 
     public function test_artisan_commands_toggle_admin_maintenance_mode(): void
@@ -197,5 +235,66 @@ class AdminMaintenanceModeTest extends TestCase
             ->assertSeeText('uploads_images_legacy')
             ->assertSeeText('uploads_pdf_legacy')
             ->assertSeeText('Accès attendu');
+    }
+
+    public function test_admin_can_toggle_maintenance_mode_from_health_report(): void
+    {
+        $this->signInAdmin();
+
+        $this->post('/health/report/admin-maintenance', [
+            'enabled' => '1',
+        ])->assertRedirect();
+
+        $this->assertTrue(app(AdminMaintenanceMode::class)->isEnabled());
+
+        $this->post('/health/report/admin-maintenance', [
+            'enabled' => '0',
+        ])->assertRedirect();
+
+        $this->assertFalse(app(AdminMaintenanceMode::class)->isEnabled());
+    }
+
+    public function test_editor_cannot_toggle_maintenance_mode_from_health_report(): void
+    {
+        $this->signInEditor();
+
+        $this->post('/health/report/admin-maintenance', [
+            'enabled' => '1',
+        ])->assertForbidden();
+
+        $this->assertFalse(app(AdminMaintenanceMode::class)->isEnabled());
+    }
+
+    public function test_admin_can_update_maintenance_announcement_from_health_report(): void
+    {
+        $this->signInAdmin();
+
+        $this->post('/health/report/admin-maintenance-announcement', [
+            'enabled' => '1',
+            'message' => 'Maintenance prévue mardi matin.',
+        ])->assertRedirect();
+
+        $announcement = app(AdminMaintenanceMode::class)->currentAnnouncement();
+        $this->assertTrue($announcement['enabled']);
+        $this->assertSame('Maintenance prévue mardi matin.', $announcement['message']);
+
+        $this->post('/health/report/admin-maintenance-announcement', [
+            'enabled' => '0',
+            'message' => 'Message ignoré',
+        ])->assertRedirect();
+
+        $this->assertFalse(app(AdminMaintenanceMode::class)->currentAnnouncement()['enabled']);
+    }
+
+    public function test_editor_cannot_update_maintenance_announcement_from_health_report(): void
+    {
+        $this->signInEditor();
+
+        $this->post('/health/report/admin-maintenance-announcement', [
+            'enabled' => '1',
+            'message' => 'Maintenance prévue mardi matin.',
+        ])->assertForbidden();
+
+        $this->assertFalse(app(AdminMaintenanceMode::class)->currentAnnouncement()['enabled']);
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 use App\Models\Work;
 use App\Models\WorkStatus;
 use App\Models\Permission;
@@ -22,11 +24,31 @@ class WorkController extends Controller
 
         return response()->json(['canEdit' => $canEdit]);
     }
+
+    public function suggestShortTitle(Request $request)
+    {
+        $title = trim((string) $request->query('title', ''));
+
+        if ($title === '') {
+            return response()->json([
+                'short_title' => '',
+            ]);
+        }
+
+        return response()->json([
+            'short_title' => $this->generateUniqueWorkShortTitle($title),
+        ]);
+    }
     
     public function store(Request $request)
     {
+        $incomingShortTitle = strtolower(trim((string) $request->input('short_title', '')));
+        if ($incomingShortTitle === '') {
+            $incomingShortTitle = $this->generateUniqueWorkShortTitle($request->input('title', ''));
+        }
+
         $request->merge([
-            'short_title' => strtolower($request->input('short_title', '')),
+            'short_title' => $incomingShortTitle,
         ]);
 
         $validated = $request->validate([
@@ -37,15 +59,25 @@ class WorkController extends Controller
                 'min:2',
                 'max:8',
                 'regex:/^[a-z]+$/',
-                // Uniqueness scoped to the author
-                function ($attribute, $value, $fail) use ($request) {
-                    if (Work::where('author_id', $request->author_id)->where('short_title', $value)->exists()) {
-                        $fail("Le titre abrégé '$value' existe déjà pour cet auteur.");
-                    }
-                }
+                Rule::unique('works', 'short_title'),
             ],
+            'catalog_group' => 'nullable|string|in:main,allographic',
             'author_id' => 'required|exists:authors,id',
+        ], [
+            'title.required' => 'Le titre de l’œuvre est obligatoire.',
+            'title.min' => 'Le titre de l’œuvre doit contenir au moins 3 caractères.',
+            'title.max' => 'Le titre de l’œuvre ne peut pas dépasser 80 caractères.',
+            'short_title.required' => 'Le code abrégé est obligatoire.',
+            'short_title.min' => 'Le code abrégé doit contenir entre 2 et 8 caractères.',
+            'short_title.max' => 'Le code abrégé doit contenir entre 2 et 8 caractères.',
+            'short_title.regex' => 'Le code abrégé ne peut contenir que des lettres minuscules (a à z).',
+            'short_title.unique' => 'Ce code abrégé est déjà utilisé par une autre œuvre.',
+            'catalog_group.in' => 'Le catalogue sélectionné est invalide.',
+            'author_id.required' => 'L’auteur est obligatoire.',
+            'author_id.exists' => 'L’auteur sélectionné est invalide.',
         ]);
+
+        $validated['catalog_group'] = $validated['catalog_group'] ?? 'main';
 
         $author = \App\Models\Author::findOrFail($validated['author_id']);
     
@@ -113,6 +145,67 @@ class WorkController extends Controller
         return response()->json(['success' => true]);
     }
 
+    private function generateUniqueWorkShortTitle(?string $title): string
+    {
+        $base = $this->normalizeWorkShortTitleBase($title);
+        $candidate = $base;
+        $suffixIndex = 0;
+
+        while (Work::where('short_title', $candidate)->exists()) {
+            $suffix = $this->alphabeticSuffix($suffixIndex);
+            $prefixLength = max(1, 8 - strlen($suffix));
+            $candidate = substr($base, 0, $prefixLength) . $suffix;
+            $suffixIndex++;
+        }
+
+        return $candidate;
+    }
+
+    private function normalizeWorkShortTitleBase(?string $title): string
+    {
+        $ascii = Str::lower(Str::ascii((string) $title));
+        $wordInitials = $this->extractWorkShortTitleInitials($ascii);
+        if (strlen($wordInitials) >= 2) {
+            return substr($wordInitials, 0, 8);
+        }
+
+        $letters = preg_replace('/[^a-z]/', '', $ascii) ?? '';
+
+        if (strlen($letters) >= 2) {
+            return substr($letters, 0, 8);
+        }
+
+        if ($letters !== '') {
+            return str_pad(substr($letters, 0, 8), 2, 'x');
+        }
+
+        return 'oeuvre';
+    }
+
+    private function extractWorkShortTitleInitials(string $asciiTitle): string
+    {
+        preg_match_all('/[a-z]+/', $asciiTitle, $matches);
+        $words = $matches[0] ?? [];
+        if (count($words) < 2) {
+            return '';
+        }
+
+        return implode('', array_map(static fn (string $word) => $word[0], $words));
+    }
+
+    private function alphabeticSuffix(int $index): string
+    {
+        $suffix = '';
+        $current = $index;
+
+        do {
+            $suffix = chr(97 + ($current % 26)) . $suffix;
+            $current = intdiv($current, 26) - 1;
+        } while ($current >= 0);
+
+        return $suffix;
+    }
+
     public function show($id)
     {
         $work = Work::findOrFail($id);
@@ -128,7 +221,10 @@ class WorkController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|min:3|max:80',
+            'catalog_group' => 'sometimes|string|in:main,allographic',
             'short_title' => 'sometimes|string',
+        ], [
+            'catalog_group.in' => 'Le catalogue sélectionné est invalide.',
         ]);
 
         if ($request->has('short_title')) {
@@ -142,7 +238,12 @@ class WorkController extends Controller
             }
         }
 
-        $work->update(['title' => $validated['title']]);
+        $payload = ['title' => $validated['title']];
+        if (array_key_exists('catalog_group', $validated)) {
+            $payload['catalog_group'] = $validated['catalog_group'];
+        }
+
+        $work->update($payload);
 
         return response()->json($work);
     }

@@ -84,6 +84,7 @@ abstract class TestCase extends BaseTestCase
             storage_path('app/public/uploads/versions'),
             storage_path('app/private/lignes'),
             storage_path('app/private/pagination'),
+            storage_path('app/private/reader_cache'),
             storage_path('app/private/cache/version-editor'),
             storage_path('app/tmp/pager'),
             storage_path('framework/views'),
@@ -96,6 +97,9 @@ abstract class TestCase extends BaseTestCase
             $this->ensureDirectoryExistsWhenWritable($path);
         }
 
+        $this->cleanDirectoryIfPresent(storage_path('app/private/pagination'));
+        $this->cleanDirectoryIfPresent(storage_path('app/private/reader_cache'));
+        $this->cleanDirectoryIfPresent(storage_path('app/tmp/pager'));
         $this->cleanDirectoryIfPresent(storage_path('app/private/cache/version-editor'));
         $this->cleanDirectoryIfPresent(storage_path('framework/views'));
     }

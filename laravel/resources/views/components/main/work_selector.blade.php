@@ -1,21 +1,5 @@
 <!-- work_selector.blade.php -->
 @php
-    $plannedMaintenance = app(\App\Services\AdminMaintenanceMode::class)->currentAnnouncement();
-    $formatPlannedMaintenanceDate = static function (?string $value): ?string {
-        if (! is_string($value) || trim($value) === '') {
-            return null;
-        }
-
-        try {
-            return \Illuminate\Support\Carbon::parse($value)
-                ->setTimezone('Europe/Zurich')
-                ->format('d/m/Y H:i');
-        } catch (\Throwable) {
-            return null;
-        }
-    };
-    $plannedStartsAt = $formatPlannedMaintenanceDate($plannedMaintenance['starts_at'] ?? null);
-    $plannedUntil = $formatPlannedMaintenanceDate($plannedMaintenance['until'] ?? null);
 @endphp
 
 <div class="card" id ="container-work-selector">
@@ -73,22 +57,6 @@
         </div>
         <div class="editorial-welcome" id="editorial-welcome-message">
             <div class="editorial-welcome-text">Bienvenue dans l'interface de publication Variance.<br>Sélectionnez une oeuvre pour démarrer le processus éditorial.</div>
-            @if($plannedMaintenance['enabled'] ?? false)
-                <div class="editorial-maintenance-notice" id="editorial-maintenance-notice" role="status" aria-live="polite">
-                    <div class="editorial-maintenance-notice__badge">Maintenance annoncée</div>
-                    <div class="editorial-maintenance-notice__text">{{ $plannedMaintenance['message'] }}</div>
-                    @if($plannedStartsAt || $plannedUntil)
-                        <div class="editorial-maintenance-notice__meta">
-                            @if($plannedStartsAt)
-                                <span><strong>Début prévu :</strong> {{ $plannedStartsAt }}</span>
-                            @endif
-                            @if($plannedUntil)
-                                <span><strong>Fin estimée :</strong> {{ $plannedUntil }}</span>
-                            @endif
-                        </div>
-                    @endif
-                </div>
-            @endif
         </div>
     </div>
     <div class="work-selector-steps" role="tablist" aria-label="Étapes de l’atelier">
@@ -109,15 +77,21 @@
 
 <!-- Add Author Modal -->
 <div class="modal fade" tabindex="-1" id="addAuthorModal">
-  <div class="modal-dialog">
-    <div class="modal-content">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content author-modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Ajouter un auteur</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <input type="text" class="form-control" id="new-author-name" placeholder="Nom de l'auteur">
-        <div id="author-exists-msg" class="text-danger mt-2" style="display: none;">Cet auteur existe déjà.</div>
+        <div class="author-modal-intro">
+          Ajoutez un auteur au catalogue éditorial. Le nom doit être unique dans l’application.
+        </div>
+        <div class="mb-2">
+          <label for="new-author-name" class="form-label">Nom de l’auteur</label>
+          <input type="text" class="form-control" id="new-author-name" placeholder="Nom de l’auteur" maxlength="45">
+        </div>
+        <div id="author-exists-msg" class="alert alert-danger author-modal-feedback d-none mb-0" role="alert"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -168,6 +142,13 @@
           Nom abrégé (non modifiable) :
           <span id="edit-work-short-title-label" class="fw-semibold"></span>
         </p>
+        <div class="mt-3">
+          <label for="edit-work-catalog-group" class="form-label">Catalogue</label>
+          <select class="form-select" id="edit-work-catalog-group">
+            <option value="main">Catalogue principal</option>
+            <option value="allographic">Réécritures allographiques</option>
+          </select>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -179,16 +160,34 @@
 
 <!-- Add Work Modal -->
 <div class="modal fade" tabindex="-1" id="addWorkModal">
-  <div class="modal-dialog">
-    <div class="modal-content">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content work-modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Ajouter une œuvre</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <input type="text" class="form-control mb-2" id="new-work-title" placeholder="Titre de l’œuvre">
-        <input type="text" class="form-control" id="new-work-short" placeholder="Titre abrégé (2 à 10 lettres minuscules)" maxlength="10">
-        <div id="work-exists-msg" class="text-danger mt-2" style="display: none;">Cette œuvre existe déjà pour cet auteur.</div>
+        <div class="work-modal-intro">
+          Créez une œuvre avec son titre affiché et un code court unique utilisé dans les fichiers et versions.
+        </div>
+        <div class="mb-3">
+          <label for="new-work-title" class="form-label">Titre de l’œuvre</label>
+          <input type="text" class="form-control" id="new-work-title" placeholder="Titre de l’œuvre" maxlength="80">
+        </div>
+        <div class="mb-2">
+          <label for="new-work-short" class="form-label">Code abrégé</label>
+          <input type="text" class="form-control" id="new-work-short" placeholder="Ex. pda" maxlength="8" autocomplete="off" spellcheck="false">
+          <div class="form-text">Prérempli automatiquement à partir du titre. 2 à 8 lettres minuscules, unique dans toute l’application.</div>
+        </div>
+        <div class="mb-2">
+          <label for="new-work-catalog-group" class="form-label">Catalogue</label>
+          <select class="form-select" id="new-work-catalog-group">
+            <option value="main" selected>Catalogue principal</option>
+            <option value="allographic">Réécritures allographiques</option>
+          </select>
+          <div class="form-text">Choisissez dans quel catalogue public l’œuvre doit apparaître.</div>
+        </div>
+        <div id="work-exists-msg" class="alert alert-danger work-modal-feedback d-none mb-0" role="alert"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -262,12 +261,22 @@
     padding: 0.65rem 1rem 0.6rem;
     display: grid;
     align-content: center;
-    gap: 0.16rem;
-    text-align: center;
+    gap: 0.35rem;
+    text-align: left;
     background: linear-gradient(180deg, #fbfcfd 0%, #f1f4f7 100%);
     border: 1px solid #d8e0e7;
     border-radius: 0.8rem;
     box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.55);
+  }
+  #container-work-selector .editorial-current-work-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  #container-work-selector .editorial-current-work-heading {
+    min-width: 0;
+    flex: 1 1 auto;
   }
   #container-work-selector .editorial-current-work-value {
     font-size: 1.18rem;
@@ -288,7 +297,7 @@
   }
   #container-work-selector .editorial-current-work-meta {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 0.45rem 0.8rem;
     margin-top: 0.1rem;
@@ -299,6 +308,27 @@
   #container-work-selector .editorial-current-work-meta-item strong {
     color: #3a4758;
     font-weight: 700;
+  }
+  #container-work-selector .editorial-current-work-catalog {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+  #container-work-selector .editorial-current-work-catalog .form-select {
+    min-width: 13rem;
+    min-height: 2rem;
+    padding: 0.14rem 1.8rem 0.14rem 0.55rem;
+    font-size: 0.82rem;
+    border-radius: 999px;
+  }
+  @media (max-width: 768px) {
+    #container-work-selector .editorial-current-work-main {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #container-work-selector .editorial-current-work-catalog .form-select {
+      min-width: 100%;
+    }
   }
   #container-work-selector .editorial-welcome {
     width: min(50rem, calc(100% - 1rem));
@@ -321,41 +351,6 @@
   #container-work-selector .editorial-welcome-text {
     max-width: 100%;
     text-align: center;
-  }
-  #container-work-selector .editorial-maintenance-notice {
-    width: min(44rem, 100%);
-    margin-top: 0.9rem;
-    padding: 0.9rem 1rem;
-    border: 1px solid rgba(191, 145, 56, 0.28);
-    border-radius: 0.9rem;
-    background: linear-gradient(180deg, rgba(191, 145, 56, 0.1), rgba(191, 145, 56, 0.04));
-    color: #6a5530;
-    text-align: left;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
-  }
-  #container-work-selector .editorial-maintenance-notice__badge {
-    display: inline-flex;
-    align-items: center;
-    margin-bottom: 0.45rem;
-    padding: 0.18rem 0.55rem;
-    border-radius: 999px;
-    background: rgba(191, 145, 56, 0.18);
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  #container-work-selector .editorial-maintenance-notice__text {
-    font-size: 0.98rem;
-    line-height: 1.5;
-  }
-  #container-work-selector .editorial-maintenance-notice__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.65rem 1rem;
-    margin-top: 0.45rem;
-    font-size: 0.84rem;
-    color: #7a6441;
   }
   #container-work-selector .work-selector-dropdown-btn {
     min-height: 2.4rem;
@@ -424,6 +419,68 @@
     font-weight: 700;
     white-space: nowrap;
     line-height: 1.2;
+  }
+  #addWorkModal .work-modal-content {
+    border: 1px solid #d8e0e7;
+    border-radius: 0.85rem;
+    box-shadow: 0 20px 50px -28px rgba(15, 23, 42, 0.45);
+  }
+  #addWorkModal .modal-header {
+    padding-bottom: 0.8rem;
+    border-bottom-color: #e6ecf1;
+  }
+  #addWorkModal .modal-body {
+    padding-top: 1rem;
+    padding-bottom: 1.1rem;
+  }
+  #addWorkModal .modal-footer {
+    border-top-color: #e6ecf1;
+  }
+  #addWorkModal .work-modal-intro {
+    margin-bottom: 0.9rem;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    color: #526173;
+  }
+  #addWorkModal .work-modal-feedback {
+    padding: 0.7rem 0.85rem;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    border-radius: 0.65rem;
+  }
+  #addWorkModal .form-control.is-invalid {
+    background-image: none;
+  }
+  #addAuthorModal .author-modal-content {
+    border: 1px solid #d8e0e7;
+    border-radius: 0.85rem;
+    box-shadow: 0 20px 50px -28px rgba(15, 23, 42, 0.45);
+  }
+  #addAuthorModal .modal-header {
+    padding-bottom: 0.8rem;
+    border-bottom-color: #e6ecf1;
+  }
+  #addAuthorModal .modal-body {
+    padding-top: 1rem;
+    padding-bottom: 1.1rem;
+  }
+  #addAuthorModal .modal-footer {
+    border-top-color: #e6ecf1;
+  }
+  #addAuthorModal .author-modal-intro {
+    margin-bottom: 0.9rem;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    color: #526173;
+  }
+  #addAuthorModal .author-modal-feedback {
+    padding: 0.7rem 0.85rem;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    border-radius: 0.65rem;
+  }
+  #addAuthorModal .form-control.is-invalid {
+    background-image: none;
   }
   #container-work-selector .work-selector-grid {
     display: grid;
@@ -565,11 +622,6 @@
     color: #2a3340;
     background: linear-gradient(180deg, #fbfaf7 0%, #f2ede4 100%);
     border-color: #d9cfbf;
-    box-shadow: none;
-  }
-  #container-work-selector.work-selector-redesign .editorial-maintenance-notice {
-    border-color: rgba(166, 125, 43, 0.24);
-    background: linear-gradient(180deg, rgba(191, 145, 56, 0.08), rgba(191, 145, 56, 0.03));
     box-shadow: none;
   }
   #container-work-selector.work-selector-redesign .editorial-step-zero-actions {

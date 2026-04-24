@@ -74,202 +74,49 @@ require_once 'php/settings.inc.php';
     </header>
 
     <main>
-        <!-- Partie "Catalogue" avec pagination -->
         <div class="content-cover container">
             <div class="col-lg-10 col-lg-offset-1 col-md-12 catalogue">
-                <div class="row catalogue__title">
-                    <h2 class="col-sm-9" style="padding-left:0">
-						Catalogue
-                    </h2>
-					<?php
-					$perPage = 40;
-                    $workIds = array_map('intval', getWorkIdsWithDraftComparisons());
-                    $workFilterSql = empty($workIds)
-                        ? 'WHERE 1=0'
-                        : 'WHERE w.id IN (' . implode(',', $workIds) . ')';
-					$previous = array('a_id' => 0, 'a_name' => 0, 'a_folder' => 0, 'w_id' => 0, 'w_title' => 0, 'w_folder' => 0, 'w_desc' => 0);
-					$query = 'SELECT SQL_CALC_FOUND_ROWS a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.title as w_title, w.folder as w_folder, w.desc as w_desc FROM `authors` a INNER JOIN works w ON w.author_id = a.id ' . $workFilterSql . ' ORDER BY a.order ASC, w_id ASC LIMIT :limit OFFSET :offset';
-					$page = (!empty($_GET['page']) ? intval($_GET['page']) : 1);
-					$offset = ($page -1) * $perPage;
+                <?php
+                $draftWorkIds = array_map('intval', getWorkIdsWithDraftComparisons());
+                $comparisonQuery = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
+                $comparisonFilter = static function (array $comparison, array $element): bool {
+                    return comparisonIsDraft(
+                        $element['a_folder'],
+                        $element['w_folder'],
+                        $comparison['c_id'],
+                        $comparison['c_folder'],
+                        $comparison['c_scope'] ?? null
+                    );
+                };
+                $comparisonUrlBuilder = static function (array $comparison, array $element): string {
+                    return getOeuvreUrl($element['a_folder'], $element['w_folder'], $comparison['c_id']);
+                };
 
-					$queryStatement = $cnx->prepare($query);
-					$queryStatement->bindValue(':offset', $offset, PDO::PARAM_INT);
-					$queryStatement->bindValue(':limit', $perPage, PDO::PARAM_INT);
-					$queryStatement->execute();
-					$total = $cnx->query('SELECT found_rows()')->fetchColumn();
-					$nbPages = ceil($total / $perPage);
-					$hasResults = false;
-					if ($nbPages > 1):?>
-                        <div class="catalogue__pagination pull-right">
-                            <span class="smaller-1">pages</span>
-							<?php for ($i = 1; $i <= $nbPages; $i++): ?>
-                                <a class="item <?php echo (($page == $i) ? 'active': '') ?>" href="?page=<?php echo $i; ?>"><?php echo $i ?></a>
-							<?php endfor; ?>
-                        </div>
-					<?php endif; ?>
-                </div><!--END ROW TITLE + PAGINATION-->
-				<?php while ($element = $queryStatement->fetch(PDO::FETCH_ASSOC)):
-                    $hasResults = true; ?>
-                    <div class="catalogue__item row<?php echo (($element['a_id'] === $previous['a_id']) ? ' author_'.$element['a_id'].'" style="display:none"' : '"'); ?>>
-						<?php if ($element['a_id'] != $previous['a_id']):
-							$authorName = $element['a_name'];
-							$authorFirstNameArr = explode(' ', $authorName, 2);
-							$autorFirstName = array_shift($authorFirstNameArr);
-							$autorLastName = implode($authorFirstNameArr);
-							?>
-                            <h3 class="catalogue__author">
-                                <a href="javascript:void(0);" onclick="$('.author_<?php echo $element['a_id']; ?>').slideToggle('slow');"><span><?php echo $autorFirstName ?></span> <?php echo $autorLastName?></a>
-                            </h3>
-                            <div class="author_<?php echo $element['a_id']; ?>" style="display:none">
-						<?php endif; ?>
-						<?php if ($element['w_id'] != $previous['w_id']): ?>
-                            <h4 style="padding-left:15px">
-                                <a href="javascript:void(0);" onclick="$('.work_<?php echo $element['w_id']; ?>').slideToggle('slow');"><?php echo $element['w_title']; ?></a>
-                            </h4>
-                            <div class="work_<?php echo $element['w_id']; ?>" style="display:none">
-                                <div class="img col-sm-4">
-                                    <img class="img-responsive" src="/uploads_images/<?php echo $element['w_image'] ?>" alt="<?php echo $element['w_image'] ?>" />
-                                </div>
-						<?php endif; ?>
+                $catalogSectionTitle = 'Catalogue';
+                $catalogWorkIds = $draftWorkIds;
+                $catalogGroup = 'main';
+                $catalogPageParam = 'page';
+                $catalogPaginate = true;
+                $catalogHideWhenEmpty = false;
+                $catalogPerPage = 40;
+                $catalogEmptyMessage = 'Aucune comparaison en cours pour le moment.';
+                $catalogComparisonQuery = $comparisonQuery;
+                $catalogComparisonFilter = $comparisonFilter;
+                $catalogComparisonUrlBuilder = $comparisonUrlBuilder;
+                include dirname(__DIR__) . '/partials/cover/catalog_section.php';
 
-
-
-						<?php if ($element['w_id'] != $previous['w_id']): ?>
-                            <div class="col-sm-8">
-                                <div>
-									<?php
-									$desc = $element['w_desc'];
-                                    echo '<p>'. $desc .'</p>';
-
-									?>
-                                </div>
-								<?php $query = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
-								$comparisonStatement = $cnx->prepare($query);
-								$comparisonStatement->bindValue(':id', $element['w_id'], PDO::PARAM_INT);
-								$comparisonStatement->execute();
-								$comparisons = array_values(array_filter(
-                                    $comparisonStatement->fetchAll(PDO::FETCH_ASSOC),
-                                    function ($comparison) use ($element) {
-                                        return comparisonIsDraft(
-                                            $element['a_folder'],
-                                            $element['w_folder'],
-                                            $comparison['c_id'],
-                                            $comparison['c_folder'],
-                                            $comparison['c_scope'] ?? null
-                                        );
-                                    }
-                                ));
-								$isPlural = count($comparisons) > 1;
-								if (!empty($comparisons)): ?>
-                                    <p><strong>Comparaison<?php echo (($isPlural) ? 's' : ''); ?></strong></p>
-                                    <style>
-                                        .wrapper_flex {
-                                            display: flex;
-                                            padding:5px 0 5px;
-                                            border-bottom: #f1f1f1 1px solid;
-                                        }
-
-                                        .wrapper_flex > div {
-                                            flex: 1;
-                                        }
-
-                                        #General-Wrapper .content-cover ul.catalogue-versions {
-                                            padding-bottom: 0 !important;
-                                        }
-
-                                        .wrapper_flex:hover {
-                                            background-color: #EEEEEE;
-                                        }
-
-                                        @keyframes changewidth {
-                                            from {
-                                                margin-left: 0;
-                                            }
-                                            to {
-                                                margin-left: 30px;
-                                            }
-                                        }
-
-                                        .wrapper_flex:hover .arrow-versions {
-                                            animation-duration: 1s;
-                                            animation-name: changewidth;
-                                            animation-iteration-count: infinite;
-                                            animation-direction: alternate;
-                                        }
-
-                                        .dia_btn {
-                                            margin-top: 1em
-                                        }
-
-                                    </style>
-                                    <?php $displayIndex = 1; ?>
-                                    <?php foreach ($comparisons as $version): ?>
-                                        <a class="wrapper_menu_a" title="cliquez pour comparer"
-                                           href="<?php echo getOeuvreUrl($element['a_folder'], $element['w_folder'], $version['c_id']); ?>">
-                                            <div class="wrapper_flex">
-
-                                                <?php
-                                                    $prefix = isset($version['c_prefix_label'])
-                                                        ? trim($version['c_prefix_label'])
-                                                        : '';
-                                                    if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
-                                                        $prefix = '';
-                                                    }
-                                                    if ($prefix !== '' && substr($prefix, -1) !== ' ') {
-                                                        $prefix .= ' ';
-                                                    }
-                                                    $sourceLabel = trim($prefix . $version['s_name']);
-                                                ?>
-                                                <div style="white-space: nowrap;">
-                                                    <?php echo $displayIndex . '. ' . $sourceLabel; ?>
-                                                </div>
-                                                <div style="text-align: center">
-                                                    <span class="arrow-versions">&rarr;</span>
-                                                </div>
-                                                <div style="text-align: right; white-space: nowrap;">
-                                                    <?php echo $version['t_name']; ?>
-                                                </div>
-                                            </div>
-                                        </a>
-                                        <?php $displayIndex++; ?>
-                                    <?php endforeach; ?>
-
-								<?php endif;?>
-                                <br style="clear:both" />
-                                <div class="dia_btn align-right primary small">
-                                    <a href="/uploads/pdf/<?php echo $element['w_id']; ?>.pdf" target="_blank">Notice</a>
-                                </div>
-
-                            </div>
-						<?php endif; ?>
-
-                        <?php if ($element['w_id'] != $previous['w_id']): ?>
-                        </div>
-                        <?php endif;
-
-                        // This condition is here to slide up / slide down the comparisons
-                        if ($element['a_id'] != $previous['a_id']):
-                        ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-					<?php
-					$previous = $element;
-				endwhile;
-                if (!$hasResults): ?>
-                    <div class="text-muted" style="padding: 10px 0;">Aucune comparaison en cours pour le moment.</div>
-                <?php endif;
-				if ($nbPages > 1):?>
-                    <div class="catalogue__pagination pull-right">
-                        <span class="smaller-1">pages</span>
-						<?php for ($i = 1; $i <= $nbPages; $i++): ?>
-                            <a class="item <?php echo (($page == $i) ? 'active': '') ?>" href="?page=<?php echo $i; ?>"><?php echo $i ?></a>
-						<?php endfor; ?>
-                    </div>
-				<?php endif; ?>
+                $catalogSectionTitle = 'Réécritures allographiques';
+                $catalogWorkIds = $draftWorkIds;
+                $catalogGroup = 'allographic';
+                $catalogPageParam = 'allographic_page';
+                $catalogPaginate = false;
+                $catalogHideWhenEmpty = true;
+                $catalogPerPage = 40;
+                $catalogEmptyMessage = 'Aucune comparaison en cours pour le moment.';
+                include dirname(__DIR__) . '/partials/cover/catalog_section.php';
+                ?>
             </div>
         </div>
-        <!-- Fin de la partie "Catalogue" -->
     </main>
 
 	<?php include_once('partials/cover/footer_content.php') ?>

@@ -449,6 +449,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
     const buildSelectUrl = (entry) => {
         const authorSlug = String(entry?.authorSlug ?? '').trim();
         const workSlug = String(entry?.workSlug ?? '').trim();
@@ -500,6 +502,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentAuthorLabel = null;
     let currentWorkId = null;
     let currentWorkLabel = null;
+    let currentWorkCatalogGroup = null;
+    let currentWorkCatalogSaving = false;
     let currentWorkCreatorName = null;
     let currentWorkCreatedAt = null;
     let currentWorkUpdatedAt = null;
@@ -757,6 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentAuthorSlug = (adminMain?.dataset?.initialAuthorSlug || '').trim() || null;
     currentWorkId = (adminMain?.dataset?.initialWorkId || '').trim() || null;
     currentWorkLabel = selectedWorkOption()?.dataset?.fullTitle?.trim() || selectedWorkOption()?.textContent?.trim() || null;
+    currentWorkCatalogGroup = selectedWorkOption()?.dataset?.catalogGroup?.trim() || null;
     currentWorkCreatorName = selectedWorkOption()?.dataset?.creatorName || null;
     currentWorkCreatedAt = selectedWorkOption()?.dataset?.createdAt || null;
     currentWorkUpdatedAt = selectedWorkOption()?.dataset?.updatedAt || null;
@@ -852,6 +857,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const authorLabel = String(resolveCurrentAuthorLabel() ?? '').trim();
         const workLabel = stripWorkYears(normalizedLabel);
+        const selectedWork = selectedWorkOption();
+        const canEditCatalog = !!selectedWork && selectedWork.dataset?.isLegacy !== '1';
         const titleParts = [];
         if (authorLabel) {
             titleParts.push(`<span class="editorial-current-work-author">${escapeHtml(authorLabel)}</span>`);
@@ -859,7 +866,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (workLabel) {
             titleParts.push(`<em class="editorial-current-work-work">${escapeHtml(workLabel)}</em>`);
         }
-        currentWorkTitleValue.innerHTML = titleParts.join(', ');
+        currentWorkTitleValue.innerHTML = `
+            <div class="editorial-current-work-main">
+                <div class="editorial-current-work-heading">${titleParts.join(', ')}</div>
+                <div class="editorial-current-work-catalog">
+                    <select
+                        class="form-select form-select-sm"
+                        id="current-work-catalog-group"
+                        ${canEditCatalog && !currentWorkCatalogSaving ? '' : 'disabled'}
+                        aria-label="Catalogue de l’œuvre sélectionnée"
+                    >
+                        <option value="main" ${currentWorkCatalogGroup === 'allographic' ? '' : 'selected'}>Catalogue principal</option>
+                        <option value="allographic" ${currentWorkCatalogGroup === 'allographic' ? 'selected' : ''}>Réécritures allographiques</option>
+                    </select>
+                </div>
+            </div>
+        `;
         const metaParts = [];
         const creatorName = String(currentWorkCreatorName ?? '').trim();
         const createdAt = formatOpenedAt(currentWorkCreatedAt);
@@ -1001,6 +1023,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentAuthorLabel = (event?.detail?.author_label ?? '').toString().trim() || null;
         currentWorkId = (event?.detail?.workId ?? '').toString().trim() || null;
         currentWorkLabel = (event?.detail?.work_label ?? '').toString().trim() || null;
+        currentWorkCatalogGroup = (event?.detail?.work_catalog_group ?? '').toString().trim() || null;
+        currentWorkCatalogSaving = false;
         currentWorkCreatorName = (event?.detail?.work_creator_name ?? '').toString().trim() || null;
         currentWorkCreatedAt = (event?.detail?.work_created_at ?? '').toString().trim() || null;
         currentWorkUpdatedAt = (event?.detail?.work_updated_at ?? '').toString().trim() || null;
@@ -1023,6 +1047,64 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStepOneList();
         updateViewportHeight();
         dispatchEditorialStepChanged('work-selected');
+    });
+
+    currentWorkTitle?.addEventListener('change', async (event) => {
+        const select = event.target;
+        if (!(select instanceof HTMLSelectElement) || select.id !== 'current-work-catalog-group') {
+            return;
+        }
+
+        if (!currentWorkId || !currentWorkLabel) {
+            return;
+        }
+
+        const selectedWork = selectedWorkOption();
+        if (!selectedWork || selectedWork.dataset?.isLegacy === '1') {
+            select.value = currentWorkCatalogGroup || 'main';
+            return;
+        }
+
+        const nextGroup = select.value === 'allographic' ? 'allographic' : 'main';
+        if (nextGroup === (currentWorkCatalogGroup || 'main')) {
+            return;
+        }
+
+        currentWorkCatalogSaving = true;
+        updateCurrentWorkTitle();
+
+        try {
+            const updateUrl = typeof window.withBasePath === 'function'
+                ? window.withBasePath(`/api/works/${encodeURIComponent(currentWorkId)}`)
+                : `/api/works/${encodeURIComponent(currentWorkId)}`;
+
+            const response = await fetch(updateUrl, {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({
+                    title: currentWorkLabel,
+                    catalog_group: nextGroup,
+                }),
+            });
+
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || payload?.message || 'Erreur lors de la mise à jour du catalogue.');
+            }
+
+            currentWorkCatalogGroup = nextGroup;
+            selectedWork.dataset.catalogGroup = nextGroup;
+        } catch (error) {
+            console.error(error);
+            window.alert(error?.message || 'Erreur lors de la mise à jour du catalogue.');
+        } finally {
+            currentWorkCatalogSaving = false;
+            updateCurrentWorkTitle();
+        }
     });
 
     toggleBladesDisabled(!currentWorkId);
