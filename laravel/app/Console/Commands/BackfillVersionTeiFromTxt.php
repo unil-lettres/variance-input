@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Version;
+use App\Support\Txt2TeiInlineMarkup;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
@@ -224,7 +225,7 @@ class BackfillVersionTeiFromTxt extends Command
         $txt = $this->normalizeTxt2TeiCharacters($txt);
         $txt = $this->collapseTxt2TeiSpacesAndTabs($txt);
 
-        $escapedText = htmlspecialchars($txt, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+        $escapedText = Txt2TeiInlineMarkup::escapeWithItalicMarkup($txt);
 
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
             . "<TEI xml:id=\"v{$versionNumber}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n"

@@ -22,7 +22,7 @@ class VersionImportWorkflowTest extends TestCase
             'short_title' => 'lspn',
         ]);
 
-        $sourceText = "  Bonjour\u{00A0}\u{202F}monde  \r\n\tDeux  espaces\t\r\n\r\n";
+        $sourceText = "  Bonjour\u{00A0}\u{202F}\\monde\\  \r\n\tDeux  espaces\t\r\nImpair \\orphelin\r\n";
         $upload = UploadedFile::fake()->createWithContent('version.txt', $sourceText);
 
         $response = $this->post('/api/versions', [
@@ -47,8 +47,10 @@ class VersionImportWorkflowTest extends TestCase
 
         $xml = File::get($xmlPath);
 
-        $this->assertStringContainsString('Bonjour monde', $xml);
+        $this->assertStringContainsString('Bonjour <emph>monde</emph>', $xml);
         $this->assertStringContainsString('Deux espaces', $xml);
+        $this->assertStringContainsString('Impair \\orphelin', $xml);
+        $this->assertStringNotContainsString('\\monde\\', $xml);
         $this->assertStringNotContainsString('<lb/>', $xml);
         $this->assertStringNotContainsString("\u{00A0}", $xml);
         $this->assertStringNotContainsString("\u{202F}", $xml);

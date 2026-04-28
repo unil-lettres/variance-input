@@ -28,9 +28,9 @@ class InvisibleTagWidget extends WidgetType {
 
 // Widget to style italic tags
 class ItalicTagWidget extends WidgetType {
-  constructor(isOpening, view) {
+  constructor(tag, view) {
     super();
-    this.isOpening = isOpening;
+    this.tag = tag;
     this.view = view;
     this.tooltip = null;
   }
@@ -38,7 +38,7 @@ class ItalicTagWidget extends WidgetType {
   toDOM() {
     const span = document.createElement("span");
     span.className = "cm-italic-tag";
-    span.textContent = this.isOpening ? "⟨i⟩" : "⟨/i⟩";
+    span.textContent = this.tag.startsWith("</") ? "⟨/i⟩" : "⟨i⟩";
     span.style.cursor = 'pointer';
 
     const bootstrapLib = window.bootstrap;
@@ -58,10 +58,8 @@ class ItalicTagWidget extends WidgetType {
         const pos = this.view.posAtDOM(span);
         if (pos === null) return;
 
-        const tag = this.isOpening ? '<em>' : '</em>';
-
         this.view.dispatch({
-          changes: { from: pos, to: pos + tag.length, insert: '' }
+          changes: { from: pos, to: pos + this.tag.length, insert: '' }
         });
         this.view.focus();
       } catch (err) {
@@ -226,7 +224,8 @@ const createHideTagsField = () => StateField.define({
 
         // Skip italic tags - they have their own decoration plugin
         const originalTag = match[0];
-        if (originalTag.match(/<em\s*>/i) || originalTag.match(/<\/em\s*>/i)) {
+        if (originalTag.match(/<emph\s*>/i) || originalTag.match(/<\/emph\s*>/i)
+            || originalTag.match(/<em\s*>/i) || originalTag.match(/<\/em\s*>/i)) {
           continue;
         }
 
@@ -302,9 +301,9 @@ const createItalicTagPlugin = (hideTagsStateField) => ViewPlugin.fromClass(class
   constructor(view) {
     this.view = view;
     this.italicOpenMatcher = new MatchDecorator({
-      regexp: /(<em\s*>|<\/em\s*>)/gi,
+      regexp: /(<emph\s*>|<\/emph\s*>|<em\s*>|<\/em\s*>)/gi,
       decoration: (match) => Decoration.replace({
-        widget: new ItalicTagWidget(match[1].startsWith("<em"), view),
+        widget: new ItalicTagWidget(match[1], view),
       })
     });
     this.placeholders = this.buildDecorations(view);
@@ -785,7 +784,7 @@ export default function (container, initialXml) {
 
     insertItalicOpenTag() {
       const { head } = view.state.selection.main;
-      const openingTag = '<em>';
+      const openingTag = '<emph>';
 
       view.dispatch({
         changes: { from: head, insert: openingTag },
@@ -798,7 +797,7 @@ export default function (container, initialXml) {
 
     insertItalicCloseTag() {
       const { head } = view.state.selection.main;
-      const closingTag = '</em>';
+      const closingTag = '</emph>';
 
       view.dispatch({
         changes: { from: head, insert: closingTag },
@@ -815,8 +814,8 @@ export default function (container, initialXml) {
       const processedPositions = new Set(); // Track positions that already have an error
 
       // Find all italic opening and all closing tags
-      const openTagRegex = /<em\s*>/gi;
-      const closeTagRegex = /<\/em\s*>/gi;
+      const openTagRegex = /<(?:emph|em)\s*>/gi;
+      const closeTagRegex = /<\/(?:emph|em)\s*>/gi;
 
       const openTags = [];
       const closeTags = [];

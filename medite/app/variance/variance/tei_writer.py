@@ -78,6 +78,19 @@ def _next_index(name: str, tei_id: str, counterpart_id: Optional[str] = None) ->
     return index
 
 
+def render_inline_tei_for_xhtml(txt: str) -> str:
+    """
+    Convert inline TEI tags that are meaningful in the final XHTML snippets.
+    """
+    return (
+        txt
+        .replace("<emph>", "<em>")
+        .replace("</emph>", "</em>")
+        .replace("&lt;emph&gt;", "<em>")
+        .replace("&lt;/emph&gt;", "</em>")
+    )
+
+
 # ----------------------------------------------------------------------
 # TEI header builder
 # ----------------------------------------------------------------------
@@ -153,7 +166,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"#ar_{num}"
         lid = f"lbr_{num}"
-        link_text = label.replace("\n", _LIST_NEWLINE_MARKER).strip()
+        link_text = render_inline_tei_for_xhtml(label).replace("\n", _LIST_NEWLINE_MARKER).strip()
 
     elif name == "transpose" and isinstance(id_suffix, tuple):
         src_id, tgt_id, _label = id_suffix
@@ -161,7 +174,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"#ad_{num}"
         lid = f"lbd_{num}"
-        link_text = txt.replace("\n", _LIST_NEWLINE_MARKER).strip()
+        link_text = render_inline_tei_for_xhtml(txt).replace("\n", _LIST_NEWLINE_MARKER).strip()
 
     else:
         tei_id: str
@@ -173,7 +186,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"{o['href']}_{num}"
         lid = f"{o['id']}_{num}"
-        link_text = txt.replace("\n", _LIST_NEWLINE_MARKER).strip()
+        link_text = render_inline_tei_for_xhtml(txt).replace("\n", _LIST_NEWLINE_MARKER).strip()
 
     xhtml_lists[name].append(
         f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
@@ -199,6 +212,7 @@ def add_main_xhtml(
         ("</div>", ""), ("<div>", "")
     ):
         txt = txt.replace(a, b)
+    txt = render_inline_tei_for_xhtml(txt)
 
     index = _next_index(name, id_suffix, counterpart_id)
     num = f"{index:05d}"

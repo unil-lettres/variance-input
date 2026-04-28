@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 use App\Services\PageMarkerService;
 use App\Services\FilesystemCleanupService;
+use App\Support\Txt2TeiInlineMarkup;
 
 class VersionController extends Controller
 {
@@ -1238,7 +1239,7 @@ class VersionController extends Controller
         $txt = $this->normalizeTxt2TeiCharacters($txt);
         $txt = $this->collapseTxt2TeiSpacesAndTabs($txt);
 
-        $escapedText = htmlspecialchars($txt, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+        $escapedText = Txt2TeiInlineMarkup::escapeWithItalicMarkup($txt);
 
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
             . "<TEI xml:id=\"v{$versionNumber}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n"
