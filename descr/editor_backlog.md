@@ -34,38 +34,7 @@ Ce qui n’est pas encore clairement bouclé :
 
 ## Priorité haute — retours Maxime à traiter en premier
 
-### 1. Insertions / suppressions Medite sans libellé visible
-
-Objectif :
-- rendre compréhensibles les transformations détectées par Medite quand elles
-  ne contiennent aucun caractère visible dans les listes `i.xhtml`, `s.xhtml`,
-  `d.xhtml` ou `r.xhtml`
-
-Contexte :
-- Maxime signale des entrées du type :
-  - `<li><a class="sync" href="#bi_00003" id="lai_00003" data-tags=""></a></li>`
-- le writer XHTML Medite extrait le texte de la transformation puis le nettoie ;
-  une transformation portant seulement sur un espace, un retour ligne, une
-  frontière de paragraphe ou un séparateur peut donc produire un lien vide
-- ce n’est pas forcément une ancre cassée, mais le résultat est opaque pour la
-  relecture scientifique
-
-À faire :
-- reproduire sur l’édition de Melmoth signalée par Maxime
-- identifier si les entrées vides correspondent à :
-  - espaces
-  - retours ligne
-  - paragraphes
-  - ponctuation ou séparateurs normalisés
-  - vrai bug d’extraction
-- choisir le comportement attendu :
-  - afficher un libellé éditorial explicite (`[espace]`, `[retour ligne]`,
-    `[séparateur]`, `[transformation invisible]`)
-  - ou filtrer certaines micro-transformations si elles n’ont pas d’intérêt
-- ajouter un diagnostic dans l’éditeur de comparaison pour repérer ces entrées
-- ajouter un test de non-régression Medite/XHTML
-
-### 2. Accès restreint à l’éditeur de versions
+### 1. Accès restreint à l’éditeur de versions
 
 Objectif :
 - permettre à des éditeurs scientifiques externes de poser ou corriger les
@@ -98,7 +67,7 @@ Contexte :
 
 ## Priorité haute — pagination
 
-### 3. Clarifier le flux éditorial pagination
+### 2. Clarifier le flux éditorial pagination
 
 Objectif :
 - faire des balises `<pb>` la représentation éditoriale claire dans la version
@@ -111,7 +80,7 @@ Objectif :
   - marqueur XHTML injecté `<span class="page-marker">...`
 - documenter explicitement le flux recommandé dans `descr/workflow.md`
 
-### 4. Outil d’insertion/édition de `<pb>` dans l’éditeur
+### 3. Outil d’insertion/édition de `<pb>` dans l’éditeur
 
 Objectif :
 - offrir un vrai geste éditorial pour poser un repère de pagination TEI
@@ -124,7 +93,7 @@ Objectif :
   - éventuellement `n`
 - afficher une aide courte dans l’éditeur sur le format attendu
 
-### 5. Vérification bout en bout `<pb>` → sidecar → comparaison
+### 4. Vérification bout en bout `<pb>` → sidecar → comparaison
 
 Objectif :
 - figer le workflow réel par des tests et une recette manuelle simple
@@ -140,7 +109,7 @@ Objectif :
 
 ## Priorité moyenne
 
-### 6. Signalement UI de l’état pagination dans l’éditeur
+### 5. Signalement UI de l’état pagination dans l’éditeur
 
 Objectif :
 - mieux montrer à l’éditeur ce qui est déjà aligné ou non
@@ -153,7 +122,7 @@ Pistes :
   - “Créer sidecar depuis `<pb>`”
   - “Fusionner `<pb>` vers sidecar”
 
-### 7. Nettoyage d’anciens marqueurs incohérents
+### 6. Nettoyage d’anciens marqueurs incohérents
 
 Objectif :
 - éviter les cas hybrides où des versions ou comparaisons anciennes portent encore des marqueurs historiques ambigus
@@ -164,7 +133,7 @@ Objectif :
   - nettoyer automatiquement
   - ou seulement documenter les cas legacy
 
-### 8. Tests Medite autour des `<pb>`
+### 7. Tests Medite autour des `<pb>`
 
 Objectif :
 - confirmer que le passage par Medite ne casse pas la stratégie pagination
@@ -175,7 +144,7 @@ Objectif :
 
 ## Priorité moyenne / basse
 
-### 9. Outil exposant dans l’éditeur de version
+### 8. Outil exposant dans l’éditeur de version
 
 Objectif :
 - gérer les exposants sans conventions ad hoc de type `^...^`
@@ -185,7 +154,7 @@ Objectif :
 - ajouter l’UI
 - tester l’aller-retour sauvegarde/rechargement
 
-### 10. Insertion d’image in-texte
+### 9. Insertion d’image in-texte
 
 Objectif :
 - permettre un ancrage éditorial explicite d’image dans le flux de texte
