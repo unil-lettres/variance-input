@@ -115,6 +115,13 @@ opérationnelle explicite de la VM sur la nouvelle version :
 - garder en tête que les œuvres legacy peuvent encore avoir `short_title =
   NULL` ; MariaDB accepte plusieurs `NULL` dans l’index unique, mais les
   doublons non nuls bloqueraient la migration
+- vérifier que le checkout hôte utilisé par les bind mounts est bien synchronisé
+  avec la révision déployée ; lors du déploiement du 24 avril, les images
+  Docker étaient à jour mais certains fichiers servis depuis le checkout hôte
+  restaient anciens, notamment le JavaScript admin et les fichiers PHP legacy
+- après synchronisation du checkout hôte, contrôler au moins un asset public
+  modifié depuis l’URL servie ; si l’interface semble encore ancienne, demander
+  un hard refresh car certains assets JS peuvent rester en cache navigateur
 
 Objectif :
 - ne pas se limiter à “l’application répond”, mais vérifier aussi les services
@@ -144,6 +151,10 @@ Prévoir explicitement l’annonce de la maintenance du vendredi prochain :
 
 - fenêtre prévue : `08:00–12:00`
 - annonce publiée au plus tard `48h` à l’avance
+- pendant la fenêtre de déploiement elle-même, activer aussi le splashscreen
+  admin (`admin:maintenance:on`) avant les migrations / recreations de
+  conteneurs, puis le désactiver (`admin:maintenance:off`) après validation
+  finale
 
 Canal visé :
 - annonce Laravel sur la page d’accueil admin, dès que la version déployée sur

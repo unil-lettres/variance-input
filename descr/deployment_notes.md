@@ -87,6 +87,22 @@ Guidance for running the Variance stack outside the default development setup.
 - If a deployment environment serves built frontend assets directly from a host
   checkout, include a documented post-deploy step to sync `laravel/public/build`
   from the running Laravel image or build container back onto that checkout.
+- If a deployment environment bind-mounts repository paths from the host
+  checkout into web containers, pulling and recreating images is not enough for
+  files served from those mounts. Fast-forward or otherwise sync the host
+  checkout during deployment, especially for `laravel/public` JavaScript and
+  legacy PHP files under `variance/`.
+- After deploying with host bind mounts, verify that the host checkout commit
+  matches the intended deployed revision and spot-check one changed static
+  asset from the public URL. Browser caches may continue serving old
+  JavaScript until their `Cache-Control` window expires, so ask testers to hard
+  refresh when validating UI changes immediately after deploy.
+- Persistent upload trees must remain writable by the web/PHP group after
+  imports, manual copies, or container-run commands. Check for directories
+  missing group write before publishing (`find var/uploads -type d ! -perm
+  -g+w`) and repair them before editors resume work. Non-writable legacy
+  facsimile directories can produce a publish warning even though the
+  comparison itself is marked published.
 - Standard deployment should run `php artisan migrate --force` before
   `php artisan optimize:clear` once the new containers are up.
 - After any deployment that changes synchronized viewer behavior, XHTML
