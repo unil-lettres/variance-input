@@ -10,6 +10,8 @@ $catalogEmptyMessage = (string) ($catalogEmptyMessage ?? 'Aucune comparaison dis
 $catalogComparisonQuery = (string) ($catalogComparisonQuery ?? '');
 $catalogComparisonFilter = $catalogComparisonFilter ?? null;
 $catalogComparisonUrlBuilder = $catalogComparisonUrlBuilder ?? null;
+$catalogImagesBaseUrl = '/uploads_images';
+$catalogPdfRoot = defined('UPLOAD_ROOT') ? UPLOAD_ROOT . '/pdf' : ROOT . '/uploads/pdf';
 
 if (!$cnx instanceof PDO || $catalogComparisonQuery === '' || !is_callable($catalogComparisonFilter) || !is_callable($catalogComparisonUrlBuilder)) {
     return;
@@ -24,11 +26,11 @@ if (empty($catalogWorkIds)) {
 $filters[] = 'COALESCE(w.catalog_group, \'main\') = :catalog_group';
 $whereSql = 'WHERE ' . implode(' AND ', $filters);
 
-$baseQuery = 'SELECT %s a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.title as w_title, w.folder as w_folder, w.desc as w_desc
+$baseQuery = 'SELECT %s a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.pdf_url as w_pdf, w.is_legacy as w_is_legacy, w.title as w_title, w.folder as w_folder, w.desc as w_desc
 FROM `authors` a
 INNER JOIN works w ON w.author_id = a.id
 ' . $whereSql . '
-ORDER BY a.order ASC, w_id ASC';
+ORDER BY a.`order` ASC, w_id ASC';
 
 $page = 1;
 $offset = 0;
@@ -104,7 +106,7 @@ $hasResults = !empty($elements);
             <div class="work_<?php echo $element['w_id']; ?>" style="display:none">
                 <div class="img col-sm-4">
                     <img class="img-responsive"
-                         src="<?= DIR_REL ?>/uploads_images/<?= htmlspecialchars($element['w_image'], ENT_QUOTES, 'UTF-8') ?>"
+                         src="<?= $catalogImagesBaseUrl ?>/<?= htmlspecialchars($element['w_image'], ENT_QUOTES, 'UTF-8') ?>"
                          alt="<?= htmlspecialchars($element['w_title'], ENT_QUOTES, 'UTF-8') ?>"
                          onerror="this.onerror=null;this.src='<?= DIR_REL ?>/img/cover_site/main_visuel.png';" />
                 </div>
@@ -162,11 +164,16 @@ $hasResults = !empty($elements);
 
                 <br style="clear:both" />
                 <?php
-                $pdfPath = ROOT . '/uploads/pdf/' . $element['w_id'] . '.pdf';
-                if (is_file($pdfPath)):
+                $pdfFile = trim((string) ($element['w_pdf'] ?? ''));
+                if ($pdfFile === '' && (bool) ($element['w_is_legacy'] ?? false)) {
+                    $pdfFile = (int) $element['w_id'] . '.pdf';
+                }
+                $pdfFile = basename($pdfFile);
+                $pdfPath = $pdfFile !== '' ? $catalogPdfRoot . '/' . $pdfFile : '';
+                if ($pdfFile !== '' && is_file($pdfPath)):
                 ?>
                     <div class="dia_btn align-right primary small">
-                        <a href="/uploads/pdf/<?php echo (int) $element['w_id']; ?>.pdf" target="_blank">Notice</a>
+                        <a href="/uploads/pdf/<?php echo htmlspecialchars($pdfFile, ENT_QUOTES, 'UTF-8'); ?>" target="_blank">Notice</a>
                     </div>
                 <?php endif; ?>
             </div>

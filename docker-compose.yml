@@ -15,6 +15,7 @@ services:
       - ./variance/uploads_images:/var/www/variance/uploads_images
       - ./variance/uploads/pdf:/var/www/variance/uploads/pdf
       - ./variance/uploads:/var/www/variance/uploads
+      - ./variance/partials:/var/www/variance/partials:ro
       - ./variance_data:/var/www/html/storage/app/private/variance_data
     working_dir: /var/www/html
     environment:

@@ -665,6 +665,11 @@ class PublicationWorkflowTest extends TestCase
             ->assertJsonPath('facsimiles.source.reason', 'copy_failed')
             ->assertJsonPath('facsimiles.target.status', 'ok')
             ->assertJsonCount(1, 'warnings');
+        $this->assertStringContainsString(
+            'Les fac-similés source n’ont pas pu être recopiés vers le miroir legacy',
+            $response->json('warnings.0')
+        );
+        $this->assertStringContainsString('legacy denied', $response->json('warnings.0'));
 
         $comparison->refresh();
         $this->assertSame('dev', $comparison->publication_scope);

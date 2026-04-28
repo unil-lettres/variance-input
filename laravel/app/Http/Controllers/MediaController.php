@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Work;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class MediaController extends Controller
 {
@@ -77,8 +78,7 @@ class MediaController extends Controller
                 $this->deleteLegacyPdf($work->pdf_url);
             }
             $pdf     = $request->file('pdf');
-            $pdfName = $work->id . '.pdf';
-            // Stocke sous public/uploads/pdf/{work_id}.pdf
+            $pdfName = $work->id . '-' . Str::random(16) . '.pdf';
             Storage::disk('uploads')->putFileAs('pdf', $pdf, $pdfName);
             $work->pdf_url = $pdfName;
 
