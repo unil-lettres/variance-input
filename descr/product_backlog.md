@@ -5,31 +5,7 @@ ops post-déploiement, ni du backlog spécifique de l’éditeur.
 
 ## Semaine du 20 avril 2026
 
-### 1. Adaptation du catalogue : « Réécritures allographiques »
-
-Origine :
-- demande transmise par Maxime / direction éditoriale
-
-Besoin :
-- distinguer dans le catalogue un ensemble d’éditions atypiques
-- pour le moment, la proposition est d’ajouter sous le dernier auteur une
-  rubrique :
-  - `Réécritures allographiques`
-
-Contraintes / remarques :
-- ne pas brouiller la ligne éditoriale principale du catalogue existant
-- garder une solution simple dans un premier temps
-- si ce sous-catalogue prend de l’ampleur, une autre présentation pourra être
-  étudiée plus tard :
-  - par exemple deux colonnes ou une vraie séparation visuelle
-
-À faire :
-- identifier le point de génération du catalogue public legacy
-- définir comment marquer une œuvre / un auteur comme relevant de cette rubrique
-- proposer une implémentation minimale compatible avec l’existant
-- vérifier le rendu sur la page catalogue
-
-### 2. Cas « version fantôme » sur *La Cousine Bette*
+### 1. Cas « version fantôme » sur *La Cousine Bette*
 
 Origine :
 - retour Maxime après imports/alignements sur *La Cousine Bette*
@@ -63,7 +39,7 @@ Objectif :
   - ou être masquée tant qu’elle ne peut pas être supprimée
 - améliorer l’UI / le message associé si ce cas reste possible
 
-### 3. Vérification des ajustements UI demandés par Maxime
+### 2. Vérification des ajustements UI demandés par Maxime
 
 Contexte :
 - plusieurs problèmes d’affichage des tableaux ont déjà été corrigés
