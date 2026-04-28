@@ -34,53 +34,7 @@ Ce qui n’est pas encore clairement bouclé :
 
 ## Priorité haute — retours Maxime à traiter en premier
 
-### 1. Gestion de l’italique
-
-Objectif :
-- définir une stratégie claire et stable pour l’italique dans Variance, depuis
-  l’import jusqu’à Medite et au rendu final
-
-Contexte :
-- certains chercheurs marquent aujourd’hui l’italique avec `\...\` dans les TXT
-- l’import TXT vers TEI conserve actuellement ces barres obliques inversées
-  comme des caractères ordinaires
-- l’éditeur Laravel possède déjà des outils autour de balises italiques HTML
-  (`<em>...</em>`)
-- il faut décider si la représentation éditoriale de référence doit être :
-  - en TEI/XML : `<emph>...</emph>`
-  - en HTML rendu / comparaison : `<em>...</em>`
-
-Points ouverts :
-- faut-il convertir automatiquement la convention `\...\` lors de l’import ?
-- faut-il offrir une action explicite de conversion dans l’éditeur plutôt
-  qu’une conversion silencieuse ?
-- faut-il conserver la convention source, ou la supprimer au profit d’une
-  balise éditoriale explicite ?
-- comment exposer cette différence à Medite pour qu’elle soit repérable entre
-  versions ?
-- que faire des longues séquences en italique, sachant qu’aujourd’hui Medite
-  semble surtout repérer le premier et le dernier mot marqués par `\` ?
-- comment signaler les cas invalides ou ambigus :
-  - nombre impair de `\`
-  - barre oblique inversée littérale
-  - italique traversant plusieurs lignes ou balises
-
-À faire :
-- documenter la représentation canonique retenue pour l’italique
-- préciser les conversions attendues :
-  - TXT source
-  - TEI/XML
-  - XHTML / HTML
-- vérifier ce que Medite reçoit réellement et ce qu’il compare
-- implémenter la conversion retenue
-- ajouter un ou plusieurs cas de test couvrant :
-  - italique court
-  - phrase longue en italique
-  - différences d’italique entre deux versions
-  - nombre impair de marqueurs
-- aligner ensuite l’UI éditeur sur cette décision
-
-### 2. Insertions / suppressions Medite sans libellé visible
+### 1. Insertions / suppressions Medite sans libellé visible
 
 Objectif :
 - rendre compréhensibles les transformations détectées par Medite quand elles
@@ -111,7 +65,7 @@ Contexte :
 - ajouter un diagnostic dans l’éditeur de comparaison pour repérer ces entrées
 - ajouter un test de non-régression Medite/XHTML
 
-### 3. Accès restreint à l’éditeur de versions
+### 2. Accès restreint à l’éditeur de versions
 
 Objectif :
 - permettre à des éditeurs scientifiques externes de poser ou corriger les
@@ -144,7 +98,7 @@ Contexte :
 
 ## Priorité haute — pagination
 
-### 4. Clarifier le flux éditorial pagination
+### 3. Clarifier le flux éditorial pagination
 
 Objectif :
 - faire des balises `<pb>` la représentation éditoriale claire dans la version
@@ -157,7 +111,7 @@ Objectif :
   - marqueur XHTML injecté `<span class="page-marker">...`
 - documenter explicitement le flux recommandé dans `descr/workflow.md`
 
-### 5. Outil d’insertion/édition de `<pb>` dans l’éditeur
+### 4. Outil d’insertion/édition de `<pb>` dans l’éditeur
 
 Objectif :
 - offrir un vrai geste éditorial pour poser un repère de pagination TEI
@@ -170,7 +124,7 @@ Objectif :
   - éventuellement `n`
 - afficher une aide courte dans l’éditeur sur le format attendu
 
-### 6. Vérification bout en bout `<pb>` → sidecar → comparaison
+### 5. Vérification bout en bout `<pb>` → sidecar → comparaison
 
 Objectif :
 - figer le workflow réel par des tests et une recette manuelle simple
@@ -186,7 +140,7 @@ Objectif :
 
 ## Priorité moyenne
 
-### 7. Signalement UI de l’état pagination dans l’éditeur
+### 6. Signalement UI de l’état pagination dans l’éditeur
 
 Objectif :
 - mieux montrer à l’éditeur ce qui est déjà aligné ou non
@@ -199,7 +153,7 @@ Pistes :
   - “Créer sidecar depuis `<pb>`”
   - “Fusionner `<pb>` vers sidecar”
 
-### 8. Nettoyage d’anciens marqueurs incohérents
+### 7. Nettoyage d’anciens marqueurs incohérents
 
 Objectif :
 - éviter les cas hybrides où des versions ou comparaisons anciennes portent encore des marqueurs historiques ambigus
@@ -210,7 +164,7 @@ Objectif :
   - nettoyer automatiquement
   - ou seulement documenter les cas legacy
 
-### 9. Tests Medite autour des `<pb>`
+### 8. Tests Medite autour des `<pb>`
 
 Objectif :
 - confirmer que le passage par Medite ne casse pas la stratégie pagination
@@ -221,7 +175,7 @@ Objectif :
 
 ## Priorité moyenne / basse
 
-### 10. Outil exposant dans l’éditeur de version
+### 9. Outil exposant dans l’éditeur de version
 
 Objectif :
 - gérer les exposants sans conventions ad hoc de type `^...^`
@@ -231,7 +185,7 @@ Objectif :
 - ajouter l’UI
 - tester l’aller-retour sauvegarde/rechargement
 
-### 11. Insertion d’image in-texte
+### 10. Insertion d’image in-texte
 
 Objectif :
 - permettre un ancrage éditorial explicite d’image dans le flux de texte

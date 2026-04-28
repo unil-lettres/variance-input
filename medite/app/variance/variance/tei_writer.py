@@ -12,6 +12,8 @@
 # used there.
 
 from __future__ import annotations
+import html
+import re
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional
 
@@ -38,6 +40,8 @@ ops2xhtml: Dict[str, dict] = {
 }
 
 _LIST_NEWLINE_MARKER = "¶"
+_LINE_BREAK_TAG_RE = re.compile(r"<\s*(?:br|lb)\s*/?\s*>", re.IGNORECASE)
+_TAG_RE = re.compile(r"<[^>]+>")
 
 # For generating the *final* XHTML IDs, we want these exact prefixes:
 #
@@ -89,6 +93,28 @@ def render_inline_tei_for_xhtml(txt: str) -> str:
         .replace("&lt;emph&gt;", "<em>")
         .replace("&lt;/emph&gt;", "</em>")
     )
+
+
+def render_list_label_for_xhtml(txt: str) -> str:
+    """
+    Render a short XHTML list label, keeping invisible transformations legible.
+    """
+    rendered = render_inline_tei_for_xhtml(txt)
+    rendered = _LINE_BREAK_TAG_RE.sub("\n", rendered)
+    label = rendered.replace("\n", _LIST_NEWLINE_MARKER).strip()
+
+    visible_text = html.unescape(_TAG_RE.sub("", label))
+    if visible_text.replace(_LIST_NEWLINE_MARKER, "").strip():
+        return label
+    if _LIST_NEWLINE_MARKER in visible_text:
+        return "[retour ligne]"
+
+    raw_text = html.unescape(_TAG_RE.sub("", rendered))
+    if "\n" in raw_text:
+        return "[retour ligne]"
+    if raw_text and raw_text.strip() == "":
+        return "[espace]"
+    return "[transformation invisible]"
 
 
 # ----------------------------------------------------------------------
@@ -166,7 +192,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"#ar_{num}"
         lid = f"lbr_{num}"
-        link_text = render_inline_tei_for_xhtml(label).replace("\n", _LIST_NEWLINE_MARKER).strip()
+        link_text = render_list_label_for_xhtml(label)
 
     elif name == "transpose" and isinstance(id_suffix, tuple):
         src_id, tgt_id, _label = id_suffix
@@ -174,7 +200,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"#ad_{num}"
         lid = f"lbd_{num}"
-        link_text = render_inline_tei_for_xhtml(txt).replace("\n", _LIST_NEWLINE_MARKER).strip()
+        link_text = render_list_label_for_xhtml(txt)
 
     else:
         tei_id: str
@@ -186,7 +212,7 @@ def add_list_xhtml(
         num = f"{index:05d}"
         href = f"{o['href']}_{num}"
         lid = f"{o['id']}_{num}"
-        link_text = render_inline_tei_for_xhtml(txt).replace("\n", _LIST_NEWLINE_MARKER).strip()
+        link_text = render_list_label_for_xhtml(txt)
 
     xhtml_lists[name].append(
         f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
