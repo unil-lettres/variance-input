@@ -4,6 +4,7 @@ from variance import operations as op
 from variance.tei_writer import (
     add_list_xhtml,
     add_main_xhtml,
+    render_substitution_label_for_xhtml,
     render_inline_tei_for_xhtml,
     render_list_label_for_xhtml,
     reset_numbering_state,
@@ -12,6 +13,11 @@ from variance.tei_writer import (
 
 def test_render_inline_tei_for_xhtml_converts_emph_to_em():
     assert render_inline_tei_for_xhtml("Un <emph>mot</emph>.") == "Un <em>mot</em>."
+
+
+def test_render_inline_tei_for_xhtml_balances_partial_emph_fragments():
+    assert render_inline_tei_for_xhtml("<emph>La") == "<em>La</em>"
+    assert render_inline_tei_for_xhtml("caisse</emph>.") == "<em>caisse</em>."
 
 
 def test_add_main_xhtml_renders_emph_as_html_em():
@@ -32,6 +38,35 @@ def test_add_list_xhtml_renders_emph_as_html_em():
     add_list_xhtml(xhtml_lists, output, 0, len(rchanges.text), "deletion", "v1_0_1")
 
     assert '<a class="sync" href="#as_00000" id="lbs_00000" data-tags=""><em>mot</em></a>' in xhtml_lists["deletion"][0]
+
+
+def test_render_substitution_label_for_xhtml_balances_each_side():
+    assert (
+        render_substitution_label_for_xhtml("<emph>la", "<emph>La")
+        == "<em>la</em> → <em>La</em>"
+    )
+    assert (
+        render_substitution_label_for_xhtml("versa</emph>", "versâ</emph>. Aussitôt")
+        == "<em>versa</em> → <em>versâ</em>. Aussitôt"
+    )
+
+
+def test_add_list_xhtml_renders_substitution_sides_independently():
+    reset_numbering_state()
+    xhtml_lists = {"substitution": []}
+    rchanges = op.Text("<emph>la", (), ())
+    output = SimpleNamespace(rchanges=rchanges)
+
+    add_list_xhtml(
+        xhtml_lists,
+        output,
+        0,
+        len(rchanges.text),
+        "substitution",
+        ("v1_0_1", "v2_0_1", "<emph>la", "<emph>La"),
+    )
+
+    assert "<em>la</em> → <em>La</em>" in xhtml_lists["substitution"][0]
 
 
 def test_render_list_label_for_xhtml_marks_invisible_space():

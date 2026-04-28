@@ -182,10 +182,8 @@ def process(
             # 2) Single list entry “old → new”
             txt_old = slice_fmt(z1, d.a_start, d.a_end).strip()
             txt_new = slice_fmt(z2, d.b_start, d.b_end).strip()
-            label   = f"{txt_old} → {txt_new}"
-
             # pass a tuple so add_list_xhtml knows to emit dual-href row
-            list_suffix = (src_id, tgt_id, label)
+            list_suffix = (src_id, tgt_id, txt_old, txt_new)
             add_list(z1, d.a_start, d.a_end, {"corresp": src_id},
                      "substitution", list_suffix)
 

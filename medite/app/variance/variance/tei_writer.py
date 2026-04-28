@@ -42,6 +42,7 @@ ops2xhtml: Dict[str, dict] = {
 _LIST_NEWLINE_MARKER = "¶"
 _LINE_BREAK_TAG_RE = re.compile(r"<\s*(?:br|lb)\s*/?\s*>", re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")
+_EM_TAG_RE = re.compile(r"</?em>")
 
 # For generating the *final* XHTML IDs, we want these exact prefixes:
 #
@@ -86,12 +87,47 @@ def render_inline_tei_for_xhtml(txt: str) -> str:
     """
     Convert inline TEI tags that are meaningful in the final XHTML snippets.
     """
-    return (
+    rendered = (
         txt
         .replace("<emph>", "<em>")
         .replace("</emph>", "</em>")
         .replace("&lt;emph&gt;", "<em>")
         .replace("&lt;/emph&gt;", "</em>")
+    )
+    return balance_emphasis_for_xhtml(rendered)
+
+
+def balance_emphasis_for_xhtml(txt: str) -> str:
+    """
+    Make a Medite XHTML fragment self-contained for italic rendering.
+
+    Medite can split one TEI <emph> range across several anchors. In the final
+    XHTML each anchor/list item must still be valid on its own, otherwise the
+    browser keeps italics open until a later sibling happens to close them.
+    """
+    balance = 0
+    needed_prefixes = 0
+
+    for match in _EM_TAG_RE.finditer(txt):
+        if match.group(0) == "<em>":
+            balance += 1
+            continue
+
+        if balance > 0:
+            balance -= 1
+        else:
+            needed_prefixes += 1
+
+    return ("<em>" * needed_prefixes) + txt + ("</em>" * balance)
+
+
+def render_substitution_label_for_xhtml(old_txt: str, new_txt: str) -> str:
+    """
+    Render an XHTML substitution label without letting emphasis cross the arrow.
+    """
+    return (
+        f"{render_list_label_for_xhtml(old_txt)} "
+        f"→ {render_list_label_for_xhtml(new_txt)}"
     )
 
 
@@ -187,12 +223,16 @@ def add_list_xhtml(
     }
 
     if name == "substitution" and isinstance(id_suffix, tuple):
-        src_id, tgt_id, label = id_suffix
+        if len(id_suffix) == 4:
+            src_id, tgt_id, old_label, new_label = id_suffix
+            link_text = render_substitution_label_for_xhtml(old_label, new_label)
+        else:
+            src_id, tgt_id, label = id_suffix
+            link_text = render_list_label_for_xhtml(label)
         index = _next_index(name, src_id, tgt_id)
         num = f"{index:05d}"
         href = f"#ar_{num}"
         lid = f"lbr_{num}"
-        link_text = render_list_label_for_xhtml(label)
 
     elif name == "transpose" and isinstance(id_suffix, tuple):
         src_id, tgt_id, _label = id_suffix
