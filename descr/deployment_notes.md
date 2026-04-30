@@ -16,6 +16,7 @@ Guidance for running the Variance stack outside the default development setup.
   `laravel.env.example` when preparing environment-specific configuration.
 - Set:
   * `APP_ENV=production`
+  * `APP_VERSION` to the deployed application version, for example `0.4.0`.
   * `APP_URL` to your external URL.
   * Quote values with spaces, e.g. `APP_NAME="Variance Admin"`.
   * `APP_GIT_SHA` to the deployed commit SHA so `/admin/health` can report the running revision.

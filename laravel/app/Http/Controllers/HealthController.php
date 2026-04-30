@@ -90,6 +90,7 @@ class HealthController extends Controller
             'env' => config('app.env'),
             'debug' => (bool) config('app.debug'),
             'url' => config('app.url'),
+            'version' => config('app.version'),
             'php' => PHP_VERSION,
             'laravel' => app()->version(),
             'git_sha' => $git['sha'],

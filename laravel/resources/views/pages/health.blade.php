@@ -108,6 +108,10 @@
                     <div>{{ data_get($checks, 'app.laravel') }}</div>
                 </div>
                 <div class="col-md-4">
+                    <div class="text-muted small">Version app</div>
+                    <div>{{ data_get($checks, 'app.version') ?? 'n/a' }}</div>
+                </div>
+                <div class="col-md-4">
                     <div class="text-muted small">PHP</div>
                     <div>{{ data_get($checks, 'app.php') }}</div>
                 </div>
