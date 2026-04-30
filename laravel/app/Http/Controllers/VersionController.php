@@ -1058,7 +1058,7 @@ class VersionController extends Controller
      */
     public function toggleIgnoredPage(Version $version, Request $request): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionEditorAllowed($version);
         $validated = $request->validate([
             'filename' => 'required|string|max:255',
         ]);
@@ -2777,17 +2777,25 @@ class VersionController extends Controller
 
     private function assertWorkEditable(Work $work): void
     {
-        if ($work->is_legacy) {
-            abort(403, 'Cette œuvre est en lecture seule.');
+        $user = auth()->user();
+        if (! $user || ! $user->canEditWork($work)) {
+            abort(403, 'Cette œuvre est en lecture seule ou non assignée.');
         }
     }
 
     private function assertVersionEditable(Version $version): void
     {
-        $version->loadMissing('work');
+        $user = auth()->user();
+        if (! $user || ! $user->canEditVersion($version)) {
+            abort(403, 'Cette version est en lecture seule ou non assignée.');
+        }
+    }
 
-        if ($version->is_legacy || $version->work?->is_legacy) {
-            abort(403, 'Cette version est en lecture seule.');
+    private function assertVersionEditorAllowed(Version $version): void
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->canUseVersionEditor($version)) {
+            abort(403, 'Accès limité aux versions assignées.');
         }
     }
 

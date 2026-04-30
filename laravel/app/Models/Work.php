@@ -78,4 +78,9 @@ class Work extends Model
     {
         return $this->belongsTo(Author::class);
     }
+
+    public function permissions(): HasMany
+    {
+        return $this->hasMany(Permission::class);
+    }
 }

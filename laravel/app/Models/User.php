@@ -11,6 +11,9 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
+    public const PERMISSION_EDIT = 'edit';
+    public const PERMISSION_VERSION_EDITOR = 'version_editor';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -89,6 +92,113 @@ class User extends Authenticatable
         return ! $this->is_admin;
     }
 
+    public function canEditWork(Work $work): bool
+    {
+        if ($work->is_legacy) {
+            return false;
+        }
+
+        if ($this->is_admin) {
+            return true;
+        }
+
+        return $this->hasPermissionForWork($work, self::PERMISSION_EDIT);
+    }
+
+    public function canEditVersion(Version $version): bool
+    {
+        $version->loadMissing('work');
+
+        if ($version->is_legacy || ! $version->work) {
+            return false;
+        }
+
+        return $this->canEditWork($version->work);
+    }
+
+    public function canUseVersionEditorForWork(Work $work): bool
+    {
+        if ($this->canEditWork($work)) {
+            return true;
+        }
+
+        return ! $work->is_legacy
+            && $this->hasPermissionForWork($work, self::PERMISSION_VERSION_EDITOR);
+    }
+
+    public function canUseVersionEditor(Version $version): bool
+    {
+        $version->loadMissing('work');
+
+        if ($version->is_legacy || ! $version->work) {
+            return false;
+        }
+
+        return $this->canUseVersionEditorForWork($version->work);
+    }
+
+    public function isRestrictedVersionEditor(): bool
+    {
+        if ($this->is_admin) {
+            return false;
+        }
+
+        $hasVersionEditorPermission = $this->permissions()
+            ->where('permission_type', self::PERMISSION_VERSION_EDITOR)
+            ->exists();
+
+        if (! $hasVersionEditorPermission) {
+            return false;
+        }
+
+        return ! $this->permissions()
+            ->where('permission_type', self::PERMISSION_EDIT)
+            ->exists();
+    }
+
+    public function versionEditorWorks()
+    {
+        if ($this->is_admin) {
+            return Work::query()
+                ->with(['author', 'versions'])
+                ->where('is_legacy', false)
+                ->orderBy('title')
+                ->get();
+        }
+
+        return Work::query()
+            ->with(['author', 'versions'])
+            ->where('is_legacy', false)
+            ->where(function ($query) {
+                $query->whereHas('permissions', function ($inner) {
+                    $inner->where('user_id', $this->id)
+                        ->where('permission_type', self::PERMISSION_VERSION_EDITOR);
+                })->orWhereHas('author.permissions', function ($inner) {
+                    $inner->where('user_id', $this->id)
+                        ->where('permission_type', self::PERMISSION_VERSION_EDITOR);
+                });
+            })
+            ->orderBy('title')
+            ->get();
+    }
+
+    private function hasPermissionForWork(Work $work, string $permissionType): bool
+    {
+        $hasWorkPermission = $this->permissions()
+            ->where('work_id', $work->id)
+            ->where('permission_type', $permissionType)
+            ->exists();
+
+        if ($hasWorkPermission) {
+            return true;
+        }
+
+        return $this->permissions()
+            ->where('author_id', $work->author_id)
+            ->where('permission_type', $permissionType)
+            ->exists();
+    }
+
     /**
      * Relationship: Editable Works
      *
@@ -107,12 +217,12 @@ class User extends Authenticatable
     {
         // Step 1: Works the user has direct permissions to edit
         $workPermissions = $this->hasManyThrough(Work::class, Permission::class, 'user_id', 'id', 'id', 'work_id')
-                                ->where('permission_type', 'edit');
+                                ->where('permission_type', self::PERMISSION_EDIT);
 
         // Step 2: Works from authors the user has edit permissions on
         $authorPermissions = Work::whereHas('author.permissions', function ($query) {
             $query->where('user_id', $this->id)
-                ->where('permission_type', 'edit');
+                ->where('permission_type', self::PERMISSION_EDIT);
         });
 
         // Combine the results from both queries
@@ -132,14 +242,14 @@ class User extends Authenticatable
     {
         // Step 1: Directly allowed works for the given author
         $directWorkPermissions = $this->hasManyThrough(Work::class, Permission::class, 'user_id', 'id', 'id', 'work_id')
-                                    ->where('permission_type', 'edit')
+                                    ->where('permission_type', self::PERMISSION_EDIT)
                                     ->where('author_id', $authorId);
 
         // Step 2: Works by the author where the user has author-level permission
         $authorLevelPermissions = Work::where('author_id', $authorId)
                                     ->whereHas('author.permissions', function ($query) {
                                         $query->where('user_id', $this->id)
-                                                ->where('permission_type', 'edit');
+                                                ->where('permission_type', self::PERMISSION_EDIT);
                                     });
 
         // Combine both sets of permissions

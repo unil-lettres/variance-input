@@ -472,11 +472,20 @@ class MediteController extends Controller
 
     private function assertVersionsEditable(int $sourceId, int $targetId, ?int $workId = null): void
     {
+        $user = auth()->user();
+        if (! $user) {
+            abort(403, 'Authentification requise.');
+        }
+
         $versions = Version::with('work')
             ->whereIn('id', [$sourceId, $targetId])
             ->get();
 
         foreach ($versions as $version) {
+            if (! $user->is_admin && ! $user->canEditVersion($version)) {
+                abort(403, 'Accès limité aux versions éditables.');
+            }
+
             if (($version->is_legacy || $version->work?->is_legacy) && !$this->hasMediteXmlInput($version->folder)) {
                 abort(422, 'Impossible de lancer Medite pour une version legacy sans fichier TEI-XML.');
             }
@@ -484,6 +493,10 @@ class MediteController extends Controller
 
         if ($workId !== null) {
             $work = Work::find($workId);
+            if (! $work || (! $user->is_admin && ! $user->canEditWork($work))) {
+                abort(403, 'Accès limité aux œuvres éditables.');
+            }
+
             if ($work?->is_legacy && $versions->contains(fn (Version $version) => !$this->hasMediteXmlInput($version->folder))) {
                 abort(422, 'Impossible de lancer Medite pour une œuvre legacy dont une version ne dispose pas de fichier TEI-XML.');
             }
@@ -506,6 +519,10 @@ class MediteController extends Controller
         $user = auth()->user();
         if (!$user || $user->is_admin) {
             return;
+        }
+
+        if ($user->isRestrictedVersionEditor()) {
+            abort(403, 'Accès limité à l’éditeur de versions.');
         }
 
         if ($comparison->is_legacy && request()->isMethod('get')) {

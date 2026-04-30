@@ -38,6 +38,13 @@ Route::get('/', function () {
         return redirect()->to(admin_path('login'));
     }
 
+    $user = auth()->user();
+    if ($user?->isRestrictedVersionEditor()) {
+        return view('pages.version_editor_home', [
+            'works' => $user->versionEditorWorks(),
+        ]);
+    }
+
     return view('pages.main', [
         'initialSelection' => null,
     ]);
@@ -55,6 +62,15 @@ Route::get('/select/{authorSlug}/{workSlug?}', function (string $authorSlug, ?st
         $work = Work::where('folder', $workSlug)
             ->where('author_id', $author->id)
             ->firstOrFail();
+    }
+
+    $user = auth()->user();
+    if ($user?->isRestrictedVersionEditor()) {
+        if (! $work || ! $user->canUseVersionEditorForWork($work)) {
+            abort(403, 'Accès limité aux œuvres assignées.');
+        }
+
+        return redirect()->to(admin_path());
     }
 
     return view('pages.main', [
@@ -81,6 +97,14 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('/users', [UserManagementController::class, 'store'])->name('admin.users.store');
     Route::patch('/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
     Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])->name('admin.users.destroy');
+    Route::post('/users/{user}/work-edit-permissions', [UserManagementController::class, 'grantWorkEditPermission'])
+        ->name('admin.users.work-edit-permissions.store');
+    Route::delete('/users/{user}/work-edit-permissions/{permission}', [UserManagementController::class, 'revokeWorkEditPermission'])
+        ->name('admin.users.work-edit-permissions.destroy');
+    Route::post('/users/{user}/version-editor-permissions', [UserManagementController::class, 'grantVersionEditorPermission'])
+        ->name('admin.users.version-editor-permissions.store');
+    Route::delete('/users/{user}/version-editor-permissions/{permission}', [UserManagementController::class, 'revokeVersionEditorPermission'])
+        ->name('admin.users.version-editor-permissions.destroy');
     Route::get('/tasks', [TaskMonitorController::class, 'index'])->name('admin.tasks.index');
     Route::get('/health/report', [HealthController::class, 'page'])->name('admin.health.report');
     Route::post('/health/report/admin-maintenance', [HealthController::class, 'toggleAdminMaintenance'])

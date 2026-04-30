@@ -42,6 +42,12 @@ class WorkController extends Controller
     
     public function store(Request $request)
     {
+        if ($request->user()?->isRestrictedVersionEditor()) {
+            return response()->json([
+                'error' => 'Accès limité à l’éditeur de versions.',
+            ], 403);
+        }
+
         $incomingShortTitle = strtolower(trim((string) $request->input('short_title', '')));
         if ($incomingShortTitle === '') {
             $incomingShortTitle = $this->generateUniqueWorkShortTitle($request->input('title', ''));

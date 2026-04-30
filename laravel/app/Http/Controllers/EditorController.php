@@ -29,6 +29,8 @@ class EditorController extends Controller
 
     public function versionEditor(Request $request, Version $version)
     {
+        $this->assertVersionEditorAllowed($version);
+
         $defaultReturnTo = admin_path(sprintf(
             'select/%s/%s#etape-2',
             $version->work->author->folder,
@@ -65,6 +67,8 @@ class EditorController extends Controller
 
     public function versionEditorDocument(Version $version): Response
     {
+        $this->assertVersionEditorAllowed($version);
+
         $xmlContent = $this->loadVersionEditorXml($version);
 
         return response($xmlContent, 200, [
@@ -75,6 +79,8 @@ class EditorController extends Controller
 
     public function versionUpdate(Version $version, Request $request)
     {
+        $this->assertVersionEditorAllowed($version);
+
         $newXml = $request->getContent();
         $path = $version->getXMLFilePath();
         
@@ -678,12 +684,24 @@ class EditorController extends Controller
             return;
         }
 
+        if ($user->isRestrictedVersionEditor()) {
+            abort(403, 'Accès limité à l’éditeur de versions.');
+        }
+
         if ($comparison->is_legacy && request()->isMethod('get')) {
             return;
         }
 
         if ((int) $comparison->created_by !== (int) $user->id) {
             abort(403, 'Accès limité aux comparaisons personnelles.');
+        }
+    }
+
+    private function assertVersionEditorAllowed(Version $version): void
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->canUseVersionEditor($version)) {
+            abort(403, 'Accès limité aux versions assignées.');
         }
     }
 }

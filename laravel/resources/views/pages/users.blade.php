@@ -90,12 +90,25 @@
                                 <th>Nom</th>
                                 <th>Email</th>
                                 <th>Rôle</th>
+                                <th>Droits édition complète</th>
+                                <th>Édition versions</th>
                                 <th>Créé le</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($users as $user)
+                                @php
+                                    $versionEditorPermissions = $user->permissions
+                                        ->where('permission_type', \App\Models\User::PERMISSION_VERSION_EDITOR)
+                                        ->filter(fn ($permission) => $permission->work);
+                                    $fullEditAuthorPermissions = $user->permissions
+                                        ->where('permission_type', \App\Models\User::PERMISSION_EDIT)
+                                        ->filter(fn ($permission) => $permission->author && ! $permission->work);
+                                    $fullEditWorkPermissions = $user->permissions
+                                        ->where('permission_type', \App\Models\User::PERMISSION_EDIT)
+                                        ->filter(fn ($permission) => $permission->work);
+                                @endphp
                                 <tr>
                                     <td>
                                         <div class="fw-semibold">{{ $user->display_name }}</div>
@@ -109,6 +122,96 @@
                                             <span class="badge text-bg-primary">Admin</span>
                                         @else
                                             <span class="badge text-bg-secondary">Chercheur</span>
+                                            @if($versionEditorPermissions->isNotEmpty())
+                                                <span class="badge text-bg-info">Éditeur versions</span>
+                                            @endif
+                                        @endif
+                                    </td>
+                                    <td style="min-width: 16rem;">
+                                        @if($user->is_admin)
+                                            <span class="text-muted small">Toutes les œuvres.</span>
+                                        @else
+                                            @if($fullEditAuthorPermissions->isEmpty() && $fullEditWorkPermissions->isEmpty())
+                                                <div class="text-muted small mb-2">Aucun droit édition complète.</div>
+                                            @else
+                                                <div class="d-flex flex-column gap-1 mb-2">
+                                                    @foreach($fullEditAuthorPermissions as $permission)
+                                                        <span class="badge text-bg-light border text-wrap text-start">
+                                                            Auteur : {{ $permission->author->name }}
+                                                        </span>
+                                                    @endforeach
+                                                    @foreach($fullEditWorkPermissions as $permission)
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ admin_path('users/' . $user->id . '/work-edit-permissions/' . $permission->id) }}"
+                                                            class="d-flex align-items-center gap-2"
+                                                        >
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <span class="badge text-bg-light border text-wrap text-start">
+                                                                {{ $permission->work->author?->name }} — {{ $permission->work->title }}
+                                                            </span>
+                                                            <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1" title="Retirer le droit édition complète">
+                                                                <span aria-hidden="true">&times;</span>
+                                                                <span class="visually-hidden">Retirer</span>
+                                                            </button>
+                                                        </form>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                            <form method="POST" action="{{ admin_path('users/' . $user->id . '/work-edit-permissions') }}" class="d-flex gap-2">
+                                                @csrf
+                                                <select name="work_id" class="form-select form-select-sm" aria-label="Œuvre à rendre éditable" required>
+                                                    <option value="">Ajouter une œuvre…</option>
+                                                    @foreach($works as $work)
+                                                        <option value="{{ $work->id }}">
+                                                            {{ $work->author?->name }} — {{ $work->title }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <button type="submit" class="btn btn-outline-primary btn-sm">Ajouter</button>
+                                            </form>
+                                        @endif
+                                    </td>
+                                    <td style="min-width: 18rem;">
+                                        @if($user->is_admin)
+                                            <span class="text-muted small">Accès complet.</span>
+                                        @else
+                                            @if($versionEditorPermissions->isEmpty())
+                                                <div class="text-muted small mb-2">Aucun accès restreint assigné.</div>
+                                            @else
+                                                <div class="d-flex flex-column gap-1 mb-2">
+                                                    @foreach($versionEditorPermissions as $permission)
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ admin_path('users/' . $user->id . '/version-editor-permissions/' . $permission->id) }}"
+                                                            class="d-flex align-items-center gap-2"
+                                                        >
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <span class="badge text-bg-light border text-wrap text-start">
+                                                                {{ $permission->work->author?->name }} — {{ $permission->work->title }}
+                                                            </span>
+                                                            <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1" title="Retirer l’accès">
+                                                                <span aria-hidden="true">&times;</span>
+                                                                <span class="visually-hidden">Retirer</span>
+                                                            </button>
+                                                        </form>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                            <form method="POST" action="{{ admin_path('users/' . $user->id . '/version-editor-permissions') }}" class="d-flex gap-2">
+                                                @csrf
+                                                <select name="work_id" class="form-select form-select-sm" aria-label="Œuvre à assigner" required>
+                                                    <option value="">Ajouter une œuvre…</option>
+                                                    @foreach($works as $work)
+                                                        <option value="{{ $work->id }}">
+                                                            {{ $work->author?->name }} — {{ $work->title }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <button type="submit" class="btn btn-outline-primary btn-sm">Ajouter</button>
+                                            </form>
                                         @endif
                                     </td>
                                     <td class="text-muted small">{{ optional($user->created_at)->format('d/m/Y') }}</td>

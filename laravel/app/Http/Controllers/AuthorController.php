@@ -13,6 +13,12 @@ class AuthorController extends Controller
 {
     public function store(Request $request)
     {
+        if ($request->user()?->isRestrictedVersionEditor()) {
+            return response()->json([
+                'error' => 'Accès limité à l’éditeur de versions.',
+            ], 403);
+        }
+
         $request->validate([
             'name' => [
                 'required',

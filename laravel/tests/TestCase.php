@@ -67,6 +67,16 @@ abstract class TestCase extends BaseTestCase
         ]);
     }
 
+    protected function grantWorkVersionEditorPermission(User $user, Work $work): Permission
+    {
+        return Permission::firstOrCreate([
+            'user_id' => $user->id,
+            'author_id' => null,
+            'work_id' => $work->id,
+            'permission_type' => User::PERMISSION_VERSION_EDITOR,
+        ]);
+    }
+
     protected function createEditableWork(User $user, array $author = [], array $work = []): Work
     {
         $authorModel = Author::factory()->create($author);
