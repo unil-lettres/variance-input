@@ -119,6 +119,15 @@ class ChaptersImportWorkflowTest extends TestCase
         $this->assertSame(0, (int) $chapters[0]->chapter_parent);
         $this->assertSame('I - Arrivée', $chapters[1]->label_source);
         $this->assertSame($chapters[0]->id, $chapters[1]->chapter_parent);
+
+        $show = $this->getJson("/chapters/{$comparison->id}");
+
+        $show->assertOk()
+            ->assertJsonPath('comparison.id', $comparison->id)
+            ->assertJsonPath('comparison.readonly', false)
+            ->assertJsonPath('summary.count', 3)
+            ->assertJsonPath('rows.0.level', '1')
+            ->assertJsonPath('rows.0.label', 'Première partie');
     }
 
     public function test_legacy_comparison_with_existing_chapters_is_listed_as_read_only_target(): void

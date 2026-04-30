@@ -340,7 +340,7 @@
       setFeedback('Aperçu prêt. Vérifiez les lignes détectées puis confirmez l’import.', 'success');
     }
 
-    function renderReadOnlyRows(data) {
+    function renderStoredRows(data, { readonly = false } = {}) {
       const selectedOption = targetSelect.options[targetSelect.selectedIndex];
       const rowCount = Number(data?.summary?.count ?? 0);
       const rootCount = Number(data?.summary?.root_count ?? 0);
@@ -349,7 +349,7 @@
       previewSummary.innerHTML = `
         <strong>${escapeHtml(folderLabel)}</strong><br>
         ${rowCount} ligne(s) actuellement stockée(s), dont ${rootCount} racine(s).<br>
-        Consultation en lecture seule.
+        ${readonly ? 'Consultation en lecture seule.' : 'Chargez un fichier XLSX pour remplacer ces chapitres.'}
       `;
 
       previewBody.innerHTML = (data.rows || []).map((row) => `
@@ -367,12 +367,21 @@
       warningList.innerHTML = '';
       previewToken = null;
       previewWrap.classList.remove('d-none');
-      commitBtn.disabled = true;
+      if (readonly) {
+        commitBtn.disabled = true;
+      } else {
+        syncPreviewAvailability();
+      }
       commitBtn.textContent = 'Importer les chapitres';
-      setFeedback('Chapitres chargés en lecture seule pour cette comparaison legacy.', 'success');
+      setFeedback(
+        readonly
+          ? 'Chapitres chargés en lecture seule pour cette comparaison legacy.'
+          : `${rowCount} ligne(s) de chapitres actuellement stockée(s) pour cette comparaison.`,
+        'success'
+      );
     }
 
-    async function loadReadOnlyRows(comparisonId) {
+    async function loadStoredRows(comparisonId, { readonly = false } = {}) {
       if (!comparisonId) return;
 
       resetPreview();
@@ -387,7 +396,7 @@
           throw new Error(data.message || data.error || `HTTP ${res.status}`);
         }
 
-        renderReadOnlyRows(data);
+        renderStoredRows(data, { readonly });
       } catch (err) {
         setFeedback(`Impossible de charger les chapitres : ${err.message || 'erreur inconnue'}`, 'error');
       }
@@ -402,10 +411,13 @@
       if (targetSelect.value && target?.readonly) {
         setFeedback(`${count} ligne(s) de chapitres déjà stockée(s) pour cette comparaison legacy. Consultation uniquement.`, 'success');
         targetHelp.textContent = 'Cette comparaison legacy est visible ici en lecture seule.';
-        loadReadOnlyRows(target.id);
+        loadStoredRows(target.id, { readonly: true });
       } else if (targetSelect.value) {
         setFeedback(`${count} ligne(s) de chapitres actuellement stockée(s) pour cette comparaison.`);
         targetHelp.textContent = 'Les chapitres seront enregistrés sous le dossier de comparaison sélectionné.';
+        if (Number(count) > 0) {
+          loadStoredRows(target.id);
+        }
       } else {
         setFeedback('Choisissez une comparaison, puis chargez le fichier XLSX.');
         targetHelp.textContent = currentTargets.length === 0
@@ -506,7 +518,10 @@
         }
 
         resetPreview();
+        const importedComparisonId = data.comparison_id || targetSelect.value;
         await loadTargets(currentWorkId);
+        selectComparisonTarget(importedComparisonId);
+        document.dispatchEvent(new CustomEvent('refreshComparisons'));
         setFeedback(`${data.imported_count} ligne(s) de chapitres importée(s) avec succès.`, 'success');
       } catch (err) {
         setFeedback(`Import impossible : ${err.message || 'erreur inconnue'}`, 'error');
