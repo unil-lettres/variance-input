@@ -398,6 +398,14 @@ class PublishController extends Controller
             return ['status' => 'skipped', 'reason' => 'already_synced'];
         }
 
+        if ($this->legacyFacsimileMirrorIsReadOnlyWithImages($paths['dest_dir'])) {
+            return [
+                'status' => 'skipped',
+                'reason' => 'read_only_legacy_mirror',
+                'dest_dir' => $paths['dest_dir'],
+            ];
+        }
+
         $this->ensureLegacyDirectoryExists($parentDir);
         if (is_dir($paths['dest_dir'])) {
             File::deleteDirectory($paths['dest_dir']);
@@ -452,6 +460,39 @@ class PublishController extends Controller
         }
 
         return true;
+    }
+
+    private function legacyFacsimileMirrorIsReadOnlyWithImages(string $destDir): bool
+    {
+        if (!is_dir($destDir) || $this->pathIsWritableByCurrentProcess($destDir)) {
+            return false;
+        }
+
+        return collect(File::files($destDir))
+            ->contains(fn (\SplFileInfo $file) => preg_match('/\.(jpe?g|png)$/i', $file->getFilename()));
+    }
+
+    private function pathIsWritableByCurrentProcess(string $path): bool
+    {
+        $stat = @stat($path);
+        if (!is_array($stat)) {
+            return is_writable($path);
+        }
+
+        $mode = (int) ($stat['mode'] ?? 0);
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $gid = function_exists('posix_getegid') ? posix_getegid() : null;
+        $groups = function_exists('posix_getgroups') ? posix_getgroups() : [];
+
+        if ($uid !== null && (int) ($stat['uid'] ?? -1) === $uid) {
+            return (bool) ($mode & 0o200);
+        }
+
+        if ($gid !== null && ((int) ($stat['gid'] ?? -1) === $gid || in_array((int) ($stat['gid'] ?? -1), $groups, true))) {
+            return (bool) ($mode & 0o020);
+        }
+
+        return (bool) ($mode & 0o002);
     }
 
     private function ensureLegacyDirectoryExists(string $path): void

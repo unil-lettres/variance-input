@@ -558,6 +558,63 @@ class PublicationWorkflowTest extends TestCase
         $this->assertFileExists($targetLegacyDir . DIRECTORY_SEPARATOR . $targetFiles['main']);
     }
 
+    public function test_publish_skips_read_only_legacy_facsimile_mirror_with_existing_images(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Publication facsimiles legacy lecture seule',
+            'short_title' => 'pfls',
+        ]);
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Source',
+            'folder' => '1pfls',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Cible',
+            'folder' => '2pfls',
+        ]);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1pfls-2pfls-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $this->writeComparisonArtifacts($comparison);
+        $this->writeFacsimilePair($source);
+        $this->writeFacsimilePair($target);
+
+        $authorFolder = $work->author->folder;
+        $workFolder = $work->folder;
+        $sourceLegacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$source->folder}");
+        $targetLegacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$target->folder}");
+
+        File::ensureDirectoryExists($sourceLegacyDir);
+        File::ensureDirectoryExists($targetLegacyDir);
+        File::put($sourceLegacyDir . '/img_' . $source->folder . '_001.jpg', 'existing legacy source');
+        File::put($targetLegacyDir . '/img_' . $target->folder . '_001.jpg', 'existing legacy target');
+        chmod($sourceLegacyDir, 0555);
+        chmod($targetLegacyDir, 0555);
+
+        try {
+            $response = $this->postJson('/api/publish_xhtml', [
+                'comparison_id' => $comparison->id,
+                'destination' => 'prod',
+            ]);
+        } finally {
+            @chmod($sourceLegacyDir, 0775);
+            @chmod($targetLegacyDir, 0775);
+        }
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('facsimiles.source.status', 'skipped')
+            ->assertJsonPath('facsimiles.source.reason', 'read_only_legacy_mirror')
+            ->assertJsonPath('facsimiles.target.status', 'skipped')
+            ->assertJsonPath('facsimiles.target.reason', 'read_only_legacy_mirror')
+            ->assertJsonCount(0, 'warnings');
+    }
+
     public function test_publish_recreates_unwritable_legacy_facsimile_directory(): void
     {
         $user = $this->signInEditor();
