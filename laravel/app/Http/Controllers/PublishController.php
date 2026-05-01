@@ -260,8 +260,12 @@ class PublishController extends Controller
             return;
         }
 
-        $tempFile = tempnam($legacyDir, 'variance-legacy-');
+        $tempFile = @tempnam($legacyDir, 'variance-legacy-');
         if ($tempFile === false) {
+            throw new \RuntimeException(sprintf('Impossible de créer un fichier temporaire dans %s', $legacyDir));
+        }
+        if (realpath(dirname($tempFile)) !== realpath($legacyDir)) {
+            @unlink($tempFile);
             throw new \RuntimeException(sprintf('Impossible de créer un fichier temporaire dans %s', $legacyDir));
         }
 
@@ -798,7 +802,10 @@ class PublishController extends Controller
             $jsonPayload = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
             Storage::disk('public')->put($storagePath, $jsonPayload);
-            $this->mirrorToLegacy($relativeDir, $filename, $jsonPayload);
+            $legacyDir = base_path('../variance/' . $relativeDir);
+            if (!$this->legacyFacsimileMirrorIsReadOnlyWithImages($legacyDir)) {
+                $this->mirrorToLegacy($relativeDir, $filename, $jsonPayload);
+            }
 
             $manifests[$type] = [
                 'file'  => $storagePath,
