@@ -484,7 +484,7 @@ class PublishController extends Controller
         $gid = function_exists('posix_getegid') ? posix_getegid() : null;
         $groups = function_exists('posix_getgroups') ? posix_getgroups() : [];
 
-        if ($uid !== null && (int) ($stat['uid'] ?? -1) === $uid) {
+        if ($uid !== null && $uid !== 0 && (int) ($stat['uid'] ?? -1) === $uid) {
             return (bool) ($mode & 0o200);
         }
 
