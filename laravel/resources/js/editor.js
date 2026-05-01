@@ -19,8 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"], [data-bs-toggle="modal"]');
     const bootstrapLib = window.bootstrap;
     if (!bootstrapLib) {
-        console.error('Bootstrap JavaScript library is not available on window.bootstrap.');
-        return;
+        console.warn('Bootstrap JavaScript library is not available on window.bootstrap. Tooltips and modal helpers are disabled.');
     }
 
     // DOM Elements
@@ -105,18 +104,23 @@ document.addEventListener('DOMContentLoaded', () => {
         element.removeAttribute('title');
     };
 
-    const createStandardTooltip = (element) => new bootstrapLib.Tooltip(
-        element,
-        {
-            title: () => element.dataset.tooltipTitle || '',
-            delay: { "show": 500, "hide": 100 },
-            trigger: 'hover',
-            offset: [0, 6],
-        }
-    );
+    const createStandardTooltip = (element) => {
+        if (!bootstrapLib?.Tooltip) return null;
+
+        return new bootstrapLib.Tooltip(
+            element,
+            {
+                title: () => element.dataset.tooltipTitle || '',
+                delay: { "show": 500, "hide": 100 },
+                trigger: 'hover',
+                offset: [0, 6],
+            }
+        );
+    };
 
     const syncStaticTooltip = (element) => {
         if (!element) return;
+        if (!bootstrapLib?.Tooltip) return;
         captureTooltipTitle(element);
         const instance = bootstrapLib.Tooltip.getInstance(element);
         const tooltipTitle = element.dataset.tooltipTitle || '';
@@ -138,6 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const syncInlineWidgetTooltips = () => {
+        if (!bootstrapLib?.Tooltip) return;
+
         document.querySelectorAll('.cm-italic-tag, .cm-page-number-mark').forEach((element) => {
             const instance = bootstrapLib.Tooltip.getInstance(element);
 
@@ -374,32 +380,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const createFacsimileButtonTooltip = (button) => new bootstrapLib.Tooltip(button, {
-        title: () => {
-            const imageName = button.getAttribute('data-tag');
-            const isInserted = editor.isPageMarkerInserted(imageName);
-            const isIgnored = button.getAttribute('data-ignored') === 'true';
+    const createFacsimileButtonTooltip = (button) => {
+        if (!bootstrapLib?.Tooltip) return null;
 
-            if (isIgnored) {
-                return 'Cette page est ignorée';
-            }
+        return new bootstrapLib.Tooltip(button, {
+            title: () => {
+                const imageName = button.getAttribute('data-tag');
+                const isInserted = editor.isPageMarkerInserted(imageName);
+                const isIgnored = button.getAttribute('data-ignored') === 'true';
 
-            if (isInserted) {
-                return '';
-            }
+                if (isIgnored) {
+                    return 'Cette page est ignorée';
+                }
 
-            if (activeButton === button) {
-                return 'Cliquez dans le texte pour insérer ce marqueur de page';
-            }
+                if (isInserted) {
+                    return '';
+                }
 
-            return 'Cliquez pour sélectionner ce marqueur de page';
-        },
-        trigger: 'hover',
-        delay: { "show": 300, "hide": 0 },
-        offset: [0, 10],
-    });
+                if (activeButton === button) {
+                    return 'Cliquez dans le texte pour insérer ce marqueur de page';
+                }
+
+                return 'Cliquez pour sélectionner ce marqueur de page';
+            },
+            trigger: 'hover',
+            delay: { "show": 300, "hide": 0 },
+            offset: [0, 10],
+        });
+    };
 
     const syncFacsimileButtonTooltips = () => {
+        if (!bootstrapLib?.Tooltip) return;
+
         getTagButtons().forEach((button) => {
             const tooltip = tooltipsMap.get(button);
 
@@ -1174,8 +1186,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pos = parseInt(item.getAttribute('data-error-pos'));
 
                     // Close modal
-                    const modal = bootstrapLib.Modal.getInstance(elements.italicErrorsModal);
-                    modal.hide();
+                    const modal = bootstrapLib?.Modal?.getInstance(elements.italicErrorsModal);
+                    modal?.hide();
 
                     // Navigate to error position
                     editor.scrollToPosition(pos);
@@ -1251,8 +1263,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshButtonStates();
 
         // Close modal
-        const modal = bootstrapLib.Modal.getInstance(document.getElementById('generatePageNumbersModal'));
-        modal.hide();
+        const modal = bootstrapLib?.Modal?.getInstance(document.getElementById('generatePageNumbersModal'));
+        modal?.hide();
     });
 
     // Toggle ignored page button
