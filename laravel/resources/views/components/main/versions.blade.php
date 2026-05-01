@@ -221,15 +221,14 @@
 <style>
     /* Keep table headers visually consistent with card header */
     .version-table th { font-weight: normal; font-size: 1rem; color: #333; white-space: nowrap; background: var(--bs-table-bg, #f8f9fa); }
-    .version-table th:nth-child(7) { text-align: center; }
+    .version-table th:nth-child(7),
+    .version-table th:nth-child(8) { text-align: center; }
     .version-table td {
       vertical-align: middle;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .version-table th:nth-child(1),
-    .version-table td:nth-child(1) { width: 3.4rem; }
     .version-table th:nth-child(2),
     .version-table td:nth-child(2) { width: 4.3rem; }
     .version-table th:nth-child(3),
@@ -238,6 +237,8 @@
     .version-table td:nth-child(4) { width: 8%; }
     .version-table th:nth-child(5),
     .version-table td:nth-child(5) { width: 7%; }
+    .version-table th:nth-child(1),
+    .version-table td:nth-child(1),
     .version-table th:nth-child(6),
     .version-table td:nth-child(6),
     .version-table th:nth-child(7),
@@ -287,22 +288,26 @@
       min-width: 0;
     }
     .version-table .versions-inline-cell--facsimiles {
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(4.25rem, 1fr) auto;
     }
     .version-table .versions-inline-cell--pagination {
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(4.25rem, 1fr) auto auto;
     }
     .version-table .versions-count-pill {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       width: 100%;
+      min-width: 4.25rem;
       max-width: 100%;
       text-align: center;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       font-size: 0.74rem;
+      font-variant-numeric: tabular-nums;
+      padding-left: 0.55rem;
+      padding-right: 0.55rem;
     }
     .version-table .versions-icon-btn {
       position: relative;
@@ -437,6 +442,8 @@
       .version-table td:nth-child(3) { width: 31%; }
       .version-table th:nth-child(5),
       .version-table td:nth-child(5) { width: 9%; }
+      .version-table th:nth-child(1),
+      .version-table td:nth-child(1),
       .version-table th:nth-child(6),
       .version-table td:nth-child(6),
       .version-table th:nth-child(7),
@@ -461,6 +468,8 @@
       }
       .version-table th:nth-child(3),
       .version-table td:nth-child(3) { width: 35%; }
+      .version-table th:nth-child(1),
+      .version-table td:nth-child(1),
       .version-table th:nth-child(6),
       .version-table td:nth-child(6),
       .version-table th:nth-child(7),
@@ -492,7 +501,13 @@
         font-size: 0.68rem;
       }
       .version-table .versions-inline-cell--pagination {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(3.25rem, 1fr) auto;
+      }
+      .version-table .versions-inline-cell--facsimiles {
+        grid-template-columns: minmax(3.25rem, 1fr) auto;
+      }
+      .version-table .versions-count-pill {
+        min-width: 3.25rem;
       }
     }
     @media (max-width: 860px) {
@@ -508,6 +523,8 @@
       }
       .version-table th:nth-child(3),
       .version-table td:nth-child(3) { width: 39%; }
+      .version-table th:nth-child(1),
+      .version-table td:nth-child(1),
       .version-table th:nth-child(6),
       .version-table td:nth-child(6) { width: 7%; }
       .version-table th:nth-child(8),
@@ -604,15 +621,14 @@ const formatTimestamp = (seconds) => {
     const timePart = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     return `${datePart} ${timePart}`;
 };
-const useCompactVersionPills = () => window.innerWidth <= 1024;
 const setVersionCountPill = (pill, count, noun) => {
     if (!pill) return;
     const numericCount = Math.max(0, Number(count ?? 0));
-    const compact = useCompactVersionPills();
     pill.dataset.count = String(numericCount);
     pill.dataset.noun = noun;
-    pill.textContent = compact ? numericCount.toLocaleString('fr-FR') : `${numericCount.toLocaleString('fr-FR')} ${noun}`;
+    pill.textContent = numericCount.toLocaleString('fr-FR');
     pill.title = `${numericCount.toLocaleString('fr-FR')} ${noun}`;
+    pill.setAttribute('aria-label', pill.title);
 };
 const refreshVersionCountPills = () => {
     document.querySelectorAll('#versions-list .versions-count-pill').forEach((pill) => {
@@ -2285,7 +2301,7 @@ async function fetchVersions(workId, force = false){
         const table = document.createElement('table');
         table.className='table table-bordered table-sm version-table versions-table';
         table.classList.toggle('compact-details', !showVersionDetails);
-        table.innerHTML=`<thead class="table-light"><tr><th></th><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th>Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
+        table.innerHTML=`<thead class="table-light"><tr><th></th><th>ID</th><th>Dénomination</th><th>Dossier</th><th>Signes</th><th class="text-center">Texte</th><th class="text-center">TEI-XML</th><th class="text-center">Fac-similés</th><th class="text-center">Pagination</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>`;
         const tbody = table.querySelector('tbody');
         const activeFacsimileIds = new Set();
         versions.forEach(v=>{
@@ -2394,7 +2410,7 @@ async function fetchVersions(workId, force = false){
             tr.appendChild(xmlCell);
 
             const tdFac = document.createElement('td');
-            tdFac.className = 'align-middle';
+            tdFac.className = 'align-middle text-center';
             const publishedCount = Number(facsimileData?.published_count ?? 0);
             const queueCount = Number(facsimileData?.queue_count ?? 0);
             const totalExpected = Number(facsimileData?.total_expected ?? (sourceCount + queueCount));

@@ -263,10 +263,10 @@
     align-content: center;
     gap: 0.35rem;
     text-align: left;
-    background: linear-gradient(180deg, #fbfcfd 0%, #f1f4f7 100%);
+    background: #fbfcfd;
     border: 1px solid #d8e0e7;
     border-radius: 0.8rem;
-    box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.55);
+    box-shadow: none;
   }
   #container-work-selector .editorial-current-work-main {
     display: flex;
@@ -317,9 +317,11 @@
   #container-work-selector .editorial-current-work-catalog .form-select {
     min-width: 13rem;
     min-height: 2rem;
-    padding: 0.14rem 1.8rem 0.14rem 0.55rem;
+    padding: 0.14rem 1.8rem;
     font-size: 0.82rem;
     border-radius: 999px;
+    text-align: center;
+    text-align-last: center;
   }
   @media (max-width: 768px) {
     #container-work-selector .editorial-current-work-main {
@@ -598,9 +600,9 @@
   }
   #container-work-selector.work-selector-redesign .editorial-current-work {
     width: min(56rem, calc(100% - 0.5rem));
-    background: linear-gradient(180deg, #fffdf9 0%, #f6f1e7 100%);
+    background: #fffdf9;
     border-color: #d9cfbf;
-    box-shadow: 0 12px 28px -24px rgba(56, 45, 31, 0.52);
+    box-shadow: none;
   }
   #container-work-selector.work-selector-redesign .editorial-current-work-label {
     color: #7a7267;

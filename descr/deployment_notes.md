@@ -85,9 +85,11 @@ Guidance for running the Variance stack outside the default development setup.
 - Real staging / production hostnames, deploy paths, SSH targets, local proxy
   addresses, and environment-specific compose filenames should live in internal
   operations documentation, not in the public repository.
-- If a deployment environment serves built frontend assets directly from a host
-  checkout, include a documented post-deploy step to sync `laravel/public/build`
-  from the running Laravel image or build container back onto that checkout.
+- VM deployments should serve Vite assets from the `vite_build` Docker volume,
+  populated by the one-shot `laravel-assets` service from the freshly pulled
+  Laravel image. Run `docker compose -f docker-compose.vm.yml run --rm
+  laravel-assets` after pulling the new image and before or during container
+  recreation so `/admin/build/...` matches the deployed application code.
 - If a deployment environment bind-mounts repository paths from the host
   checkout into web containers, pulling and recreating images is not enough for
   files served from those mounts. Fast-forward or otherwise sync the host
@@ -95,7 +97,8 @@ Guidance for running the Variance stack outside the default development setup.
   legacy PHP files under `variance/`.
 - After deploying with host bind mounts, verify that the host checkout commit
   matches the intended deployed revision and spot-check one changed static
-  asset from the public URL. Browser caches may continue serving old
+  asset from the public URL. For Vite assets, check an `/admin/build/assets/...`
+  URL from the current manifest. Browser caches may continue serving old
   JavaScript until their `Cache-Control` window expires, so ask testers to hard
   refresh when validating UI changes immediately after deploy.
 - Persistent upload trees must remain writable by the web/PHP group after

@@ -203,6 +203,16 @@
     padding-left: 0.2rem;
     padding-right: 0.2rem;
   }
+  .comparisons-table.compact-details .comparison-publish-col,
+  .comparisons-table.compact-details .comparison-publish-cell {
+    width: 7.25rem;
+    min-width: 7.25rem;
+  }
+  .comparisons-table.compact-details .comparison-manage-col,
+  .comparisons-table.compact-details .comparison-manage-cell {
+    width: 11.8rem;
+    min-width: 11.8rem;
+  }
   .comparisons-table:not(.compact-details) .comparison-folder-col,
   .comparisons-table:not(.compact-details) .comparison-folder-cell {
     width: 12%;
@@ -226,15 +236,18 @@
     min-width: 0;
   }
   .comparisons-table:not(.compact-details) .comparison-publish-col,
-  .comparisons-table:not(.compact-details) .comparison-publish-cell,
+  .comparisons-table:not(.compact-details) .comparison-publish-cell {
+    width: 7%;
+    min-width: 0;
+  }
   .comparisons-table:not(.compact-details) .comparison-manage-col,
   .comparisons-table:not(.compact-details) .comparison-manage-cell {
-    width: 8%;
+    width: 12%;
     min-width: 0;
   }
   .comparisons-table:not(.compact-details) .comparison-action-col,
   .comparisons-table:not(.compact-details) .comparison-action-cell {
-    width: 8%;
+    width: 7%;
     min-width: 0;
   }
   .comparisons-table td:nth-child(9),
@@ -525,11 +538,13 @@
     gap: 0.35rem;
     flex-wrap: nowrap;
     white-space: nowrap;
+    width: 11.2rem;
+    min-width: 11.2rem;
+    max-width: 11.2rem;
+    margin-left: auto;
+    margin-right: auto;
   }
   .comparisons-table:not(.compact-details) .publish-control {
-    flex-direction: column;
-    flex-wrap: wrap;
-    gap: 0.25rem;
     white-space: normal;
   }
   .comparisons-table:not(.compact-details) .comparison-publish-status {
@@ -540,9 +555,14 @@
     justify-content: center;
     flex-wrap: wrap;
   }
+  .publish-scope {
+    width: 4.9rem;
+    min-width: 4.9rem;
+  }
   .publish-action-btn {
-    min-width: 5.7rem;
-    padding: 0.22rem 0.55rem;
+    width: 5.95rem;
+    min-width: 0;
+    padding: 0.22rem 0.45rem;
     font-size: 0.76rem;
     white-space: nowrap;
   }
@@ -573,6 +593,8 @@
     white-space: nowrap;
   }
   .publish-scope .btn {
+    flex: 1 1 0;
+    min-width: 0;
     font-size: 0.7rem;
     padding: 0.15rem 0.45rem;
     white-space: nowrap;
@@ -664,11 +686,13 @@
     }
     .comparisons-table:not(.compact-details) .comparison-publish-col,
     .comparisons-table:not(.compact-details) .comparison-publish-cell,
-    .comparisons-table:not(.compact-details) .comparison-manage-col,
-    .comparisons-table:not(.compact-details) .comparison-manage-cell,
     .comparisons-table:not(.compact-details) .comparison-action-col,
     .comparisons-table:not(.compact-details) .comparison-action-cell {
       width: 9%;
+    }
+    .comparisons-table:not(.compact-details) .comparison-manage-col,
+    .comparisons-table:not(.compact-details) .comparison-manage-cell {
+      width: 13%;
     }
   }
   @media (max-width: 1080px) {
@@ -689,7 +713,7 @@
       height: 1.7rem;
     }
     .publish-action-btn {
-      min-width: 4.7rem;
+      min-width: 0;
       font-size: 0.68rem;
       padding: 0.18rem 0.4rem;
     }
