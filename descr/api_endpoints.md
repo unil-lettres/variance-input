@@ -81,7 +81,6 @@ Important notes:
 | POST | `/api/versions/{version}/reader/rebuild` | Force rebuild of the persisted reader dataset. |
 | POST | `/api/versions/{version}/text/convert-utf8` | Re-encode a version TXT file to UTF-8 with an explicit source encoding. |
 | DELETE | `/api/versions/{version}` | Remove a version if not used in comparisons. |
-| GET | `/view-version/{id}` | Return a simplified XML view of the version. |
 | GET | `/versions/{version}/download` | Download the raw TXT. |
 | GET | `/versions/{version}/download-xml` | Download the TEI/XML. |
 

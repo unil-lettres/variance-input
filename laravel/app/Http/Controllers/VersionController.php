@@ -567,15 +567,6 @@ class VersionController extends Controller
         ]);
     }
 
-    /** Serve TEI */
-    public function viewXmlClean($id)
-    {
-        $version = DB::table('versions')->find($id) ?? abort(404);
-        $path    = storage_path("app/public/uploads/versions/{$version->folder}.xml");
-        file_exists($path) || abort(404);
-        return response(file_get_contents($path), 200)->header('Content-Type', 'application/xml');
-    }
-
     /** Download version text */
     public function downloadText(Version $version)
     {

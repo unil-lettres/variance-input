@@ -176,7 +176,6 @@ Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
 Route::post('/api/versions/{version}/page-markers', [VersionController::class, 'applyPageMarkers']);
 Route::post('/api/versions/{version}/lignes', [VersionController::class, 'uploadLignes']);
 Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])->name('versions.lignes.download');
-Route::get('/view-version/{id}', [VersionController::class, 'viewXmlClean']);
 Route::get('/versions/{version}/download', [VersionController::class, 'downloadText'])->name('versions.text.download');
 Route::get('/versions/{version}/download-xml', [VersionController::class, 'downloadXml'])->name('versions.xml.download');
 Route::post('/versions/{version}/facsimiles/toggle-ignored', [VersionController::class, 'toggleIgnoredPage'])->middleware('auth');

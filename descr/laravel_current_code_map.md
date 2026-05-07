@@ -265,7 +265,6 @@ Méthodes publiques majeures :
 - `deleteLignesFile`
 - `manifestComparisons`
 - `updateManifestImages`
-- `viewXmlClean`
 - `downloadText`
 - `downloadXml`
 - `applyPageMarkers`
