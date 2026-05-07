@@ -2241,28 +2241,6 @@ class VersionController extends Controller
         return $page;
     }
 
-    private function readerNextBoundary(string $text, int $position): int
-    {
-        $length = mb_strlen($text, 'UTF-8');
-        $position = max(0, min($position, $length));
-        if ($position >= $length) {
-            return $length;
-        }
-
-        $after = mb_substr($text, $position, null, 'UTF-8');
-        $doubleBreak = mb_strpos($after, "\n\n", 0, 'UTF-8');
-        if ($doubleBreak !== false && $doubleBreak <= 600) {
-            return min($length, $position + (int) $doubleBreak + 2);
-        }
-
-        $singleBreak = mb_strpos($after, "\n", 0, 'UTF-8');
-        if ($singleBreak !== false && $singleBreak <= 300) {
-            return min($length, $position + (int) $singleBreak + 1);
-        }
-
-        return $position;
-    }
-
     private function readerImageCode(?string $value): ?string
     {
         $raw = trim((string) $value);
