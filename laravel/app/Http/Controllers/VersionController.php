@@ -146,12 +146,6 @@ class VersionController extends Controller
             'work_id'     => 'required|exists:works,id',
             'name'        => 'required|string|max:100',
             'versionFile' => 'required|file|max:8192',
-            'strip_indentation'      => 'nullable|boolean',
-            'collapse_double_spaces' => 'nullable|boolean',
-            'trim_line_ends'         => 'nullable|boolean',
-            'trim_file_edges'        => 'nullable|boolean',
-            'preserve_nbsp'          => 'nullable|boolean',
-            'legacy_typography'      => 'nullable|boolean',
         ]);
 
         /* 2. Context */
