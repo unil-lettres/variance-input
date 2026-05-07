@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Http\Controllers\VersionController;
 use App\Models\Version;
+use App\Services\VersionReaderService;
 use Illuminate\Console\Command;
 
 class WarmReaderCache extends Command
@@ -16,7 +16,7 @@ class WarmReaderCache extends Command
 
     protected $description = 'Preheat persisted reader datasets for versions so reader pages load from cache.';
 
-    public function handle(VersionController $controller): int
+    public function handle(VersionReaderService $readerService): int
     {
         $versionIds = collect((array) $this->option('version-id'))
             ->map(fn ($value) => (int) $value)
@@ -32,6 +32,7 @@ class WarmReaderCache extends Command
 
         if ($versions->isEmpty()) {
             $this->components->warn('Aucune version trouvée pour cette sélection.');
+
             return self::SUCCESS;
         }
 
@@ -52,10 +53,10 @@ class WarmReaderCache extends Command
         foreach ($versions as $version) {
             try {
                 if ($force) {
-                    $controller->clearReaderCache($version);
+                    $readerService->clearCache($version);
                 }
 
-                $dataset = $controller->warmReaderCache($version, $encoding ?: null, null);
+                $dataset = $readerService->dataset($version, $encoding ?: null, null);
                 $pageCount = is_array($dataset['page_plans'] ?? null) ? count($dataset['page_plans']) : 0;
                 $rows[] = [
                     $version->id,
@@ -80,7 +81,7 @@ class WarmReaderCache extends Command
                     '—',
                     '—',
                     '—',
-                    'erreur: ' . $e->getMessage(),
+                    'erreur: '.$e->getMessage(),
                 ];
             } finally {
                 $progress->advance();
@@ -100,6 +101,7 @@ class WarmReaderCache extends Command
                 'Warm-up terminé avec %d erreur(s).',
                 $errors
             ));
+
             return self::FAILURE;
         }
 

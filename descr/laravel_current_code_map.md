@@ -274,15 +274,12 @@ Méthodes publiques majeures :
 - `paginationInfo`
 - `readerData`
 - `rebuildReaderData`
-- `buildReaderResponsePayload`
 - `readerProgress`
 - `readerPage`
 - `convertTextToUtf8`
 - `clearPageMarkers`
 - `createPaginationFromPb`
 - `mergePaginationFromPb`
-- `warmReaderCache`
-- `clearReaderCache`
 - `toggleIgnoredPage`
 
 Helpers et logique interne notables :
@@ -296,25 +293,14 @@ Helpers et logique interne notables :
   - `buildTeiHeaderXml`
 - fac-similés :
   - `facsimileStatus`
-  - `readerFacsimiles`
-  - `collectReaderFacsimiles`
   - `purgeFacsimileStorage`
   - `deleteVersionPrivateArtifacts`
 - lecteur synchronisé :
-  - `readerDataset`
-  - `buildReaderDataset`
-  - `buildReaderDatasetBundle`
-  - `assembleReaderDatasetPayload`
-  - `readerPagePlans`
-  - `readerGuessedPagePlans`
-  - `materializeReaderPage`
-  - `readerImageCode`
+  - délègue la construction du dataset et des pages à `VersionReaderService`
 - manifests :
-  - `publishManifestsForVersion`
   - `formatManifestComparison`
   - `manifestRelativePath`
   - `readManifestMetadata`
-  - `resolveManifestEntries`
   - `buildManifestEntryFromName`
 - permissions :
   - `assertWorkEditable`
@@ -665,6 +651,35 @@ Helpers et logique interne notables :
 - `normalizeManifestAssetPath`
 - `addDirectoryToZip`
 
+### `VersionReaderService.php`
+
+Service dédié au lecteur synchronisé des versions.
+
+Fonctions majeures :
+- endpoints lecteur :
+  - `responsePayload`
+  - `progressPayload`
+  - `pagePayload`
+- cache / warm-up :
+  - `dataset`
+  - `clearCache`
+  - `readerDatasetCacheKey`
+  - `readerDatasetFingerprint`
+  - `loadReaderDatasetArtifact`
+  - `storeReaderDatasetArtifact`
+- sources texte :
+  - `normalizeSourceEncodingHint`
+  - `normalizeReaderTextSourceHint`
+  - `readerTextFromComparisonXhtml`
+  - `extractReaderTextFromComparisonXhtml`
+- pagination lecteur :
+  - `readerPagePlans`
+  - `materializeReaderPage`
+- fac-similés lecteur :
+  - `readerFacsimiles`
+  - `collectReaderFacsimiles`
+  - `readerImageCode`
+
 ### `PageMarkerService.php`
 
 Service central de pagination, `_lignes`, sidecars, injection de balises et restauration.
@@ -991,14 +1006,15 @@ Pour comprendre rapidement le Laravel actuel, lire dans cet ordre :
 
 1. `routes/web.php` et `routes/api.php`
 2. `VersionController.php`
-3. `ComparisonController.php`
-4. `PublishController.php`
-5. `FacsimileController.php`
-6. `PageMarkerService.php`
-7. `resources/views/components/main/versions.blade.php`
-8. `resources/views/components/main/facsimiles.blade.php`
-9. `resources/views/components/main/comparisons.blade.php` + `public/js/comparisons.js`
-10. `tests/Feature/Workflow/*`
+3. `VersionReaderService.php`
+4. `ComparisonController.php`
+5. `PublishController.php`
+6. `FacsimileController.php`
+7. `PageMarkerService.php`
+8. `resources/views/components/main/versions.blade.php`
+9. `resources/views/components/main/facsimiles.blade.php`
+10. `resources/views/components/main/comparisons.blade.php` + `public/js/comparisons.js`
+11. `tests/Feature/Workflow/*`
 
 ## 15. Conclusion
 
