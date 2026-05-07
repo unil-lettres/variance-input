@@ -1038,16 +1038,32 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
     if (!state) return;
     const isLegacy = !!state.isLegacy;
 
+    const paginationMarkerCount = (info) => {
+        if (!info || typeof info !== 'object') return null;
+        const candidates = [
+            info?.details?.marker_count,
+            info?.details?.counts?.total,
+            info?.marker_count,
+            info?.count,
+            info?.total,
+        ];
+        for (const value of candidates) {
+            const count = Number(value);
+            if (Number.isFinite(count)) {
+                return Math.max(0, count);
+            }
+        }
+        return null;
+    };
+
     const hasSidecar = paginationInfo && typeof paginationInfo === 'object';
     const progressData = progress ?? null;
     const status = progressData?.status ?? null;
-    let markerCount = hasSidecar
-        ? Math.max(0, Number(paginationInfo?.details?.marker_count ?? 0))
-        : 0;
+    let markerCount = hasSidecar ? (paginationMarkerCount(paginationInfo) ?? 0) : 0;
 
     if (status === 'done') {
         const sidecarMeta = progressData?.sidecar ?? paginationInfo ?? null;
-        const sidecarTotal = Number(paginationInfo?.details?.marker_count ?? sidecarMeta?.details?.marker_count ?? sidecarMeta?.marker_count ?? NaN);
+        const sidecarTotal = paginationMarkerCount(paginationInfo) ?? paginationMarkerCount(sidecarMeta);
         const summaryTotal = Number.isFinite(sidecarTotal)
             ? sidecarTotal
             : Number(progressData?.summary?.total ?? 0);
@@ -2164,11 +2180,19 @@ async function createPaginationFromPb(versionId){
 
     const payload = await readJsonResponse(res);
     if (payload?.status === 'ok') {
+        const refreshed = await refreshPaginationInfo(id);
+        const paginationInfo = refreshed ?? { details: { marker_count: payload.count }, count: payload.count };
         if (versionsCache.has(id)) {
             const cached = versionsCache.get(id);
-            cached.pagination = { status: 'generated_from_pb', count: payload.count };
+            cached.pagination = paginationInfo;
             versionsCache.set(id, cached);
         }
+        renderLignesStatus(
+            id,
+            versionsCache.get(id)?.lignes ?? null,
+            versionsCache.get(id)?.page_marker_progress ?? null,
+            paginationInfo
+        );
         alert(`Sidecar pagination créé (${payload.count} balises <pb>).`);
     } else if (payload?.status === 'empty') {
         alert(payload.message || 'Aucune balise <pb> trouvée.');
