@@ -268,7 +268,6 @@ Méthodes publiques majeures :
 - `viewXmlClean`
 - `downloadText`
 - `downloadXml`
-- `publishFacsimiles`
 - `applyPageMarkers`
 - `uploadLignes`
 - `pageMarkersProgress`

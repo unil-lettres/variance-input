@@ -71,7 +71,6 @@ Important notes:
 | PATCH | `/api/versions/{version}/pagination/done` | Toggle the `pagination_done` flag for a version. |
 | GET | `/api/versions/{version}/comparisons` | List comparisons involving the version (used for manifest selection). |
 | PUT | `/api/versions/{version}/manifests/{comparison}` | Save manifest images for the given comparison/role. |
-| POST | `/api/facsimiles/publish` | Publish facsimiles for a version (legacy mirror). |
 | DELETE | `/api/versions/{version}/facsimiles/cancel-upload?restore_previous=1` | Cancel the current facsimile folder upload, purge partial files, and restore the previous series when a backup exists. |
 | DELETE | `/api/versions/{version}/facsimiles` | Delete draft facsimiles / cancel current facsimile publication state for the version. |
 | GET | `/api/versions/{version}/facsimiles/progress` | Poll facsimile processing progress. |

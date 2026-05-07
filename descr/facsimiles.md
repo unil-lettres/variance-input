@@ -221,15 +221,9 @@ Important :
 
 ### Publication d’une version seule
 
-Route :
-- `POST /api/facsimiles/publish`
-
-Payload :
-- `version_id`
-
-Cette opération :
-- copie tous les fac-similés de la version vers le miroir legacy
-- republie aussi les manifests liés à cette version
+Il n’existe plus de publication manuelle des fac-similés pour une version seule.
+Les fac-similés sont copiés vers le miroir legacy lors de la publication d’une
+comparaison.
 
 ### Publication d’une comparaison
 
