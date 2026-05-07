@@ -173,7 +173,6 @@ Route::post('/api/versions/{version}/text/convert-utf8', [VersionController::cla
 Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::patch('/api/versions/{version}/pagination/done', [VersionController::class, 'togglePaginationDone']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
-Route::post('/api/facsimiles/publish', [VersionController::class, 'publishFacsimiles']);
 Route::post('/api/versions/{version}/page-markers', [VersionController::class, 'applyPageMarkers']);
 Route::post('/api/versions/{version}/lignes', [VersionController::class, 'uploadLignes']);
 Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])->name('versions.lignes.download');

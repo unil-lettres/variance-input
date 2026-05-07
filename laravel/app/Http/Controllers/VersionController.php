@@ -597,46 +597,6 @@ class VersionController extends Controller
         return response()->download($path, "{$version->folder}.xml");
     }
 
-    public function publishFacsimiles(Request $request)
-    {
-        $validated = $request->validate([
-            'version_id' => 'required|exists:versions,id',
-        ]);
-
-        $version = Version::with('work.author')->findOrFail($validated['version_id']);
-        $this->assertVersionEditable($version);
-        $paths   = $this->facsimilePaths($version);
-
-        if (!$paths['source_exists'] || empty($paths['source_files'])) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Aucun fac-similé à publier pour cette version.',
-            ], 400);
-        }
-
-        File::ensureDirectoryExists($paths['dest_dir']);
-        File::cleanDirectory($paths['dest_dir']);
-
-        $copied = 0;
-        $disk   = Storage::disk('public');
-
-        foreach ($paths['source_files'] as $fileName) {
-            $contents = $disk->get($paths['source_prefix'] . '/' . $fileName);
-            File::put($paths['dest_dir'] . '/' . $fileName, $contents);
-            $copied++;
-        }
-
-        $manifestInfo = $this->publishManifestsForVersion($version);
-        $status       = $this->facsimileStatus($version);
-
-        return response()->json([
-            'status'     => 'ok',
-            'message'    => "{$copied} fichier(s) publié(s) dans {$paths['dest_dir']}",
-            'facsimiles' => $status,
-            'manifests'  => $manifestInfo,
-        ]);
-    }
-
     public function applyPageMarkers(Request $request, Version $version)
     {
         $this->assertVersionEditable($version);
@@ -2426,44 +2386,6 @@ class VersionController extends Controller
         ]);
     }
 
-    private function publishManifestsForVersion(Version $version): array
-    {
-        $version->loadMissing('work.author');
-        $authorFolder = $version->work->author->folder ?? null;
-        $workFolder   = $version->work->folder ?? null;
-        if (!$authorFolder || !$workFolder) {
-            return [];
-        }
-
-        $defaultEntries = $version->collectManifestEntries();
-        $comparisons = Comparison::where('source_id', $version->id)
-            ->orWhere('target_id', $version->id)
-            ->get();
-
-        $results = [];
-        foreach ($comparisons as $comparison) {
-            $baseName = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparison->folder));
-
-            if ($comparison->source_id === $version->id) {
-                $entries = $this->resolveManifestEntries($version, $comparison, 'source', $defaultEntries);
-                if (!empty($entries)) {
-                    $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'source', $baseName, $entries);
-                    $results[] = ['comparison_id' => $comparison->id, 'type' => 'source'] + $info;
-                }
-            }
-
-            if ($comparison->target_id === $version->id) {
-                $entries = $this->resolveManifestEntries($version, $comparison, 'target', $defaultEntries);
-                if (!empty($entries)) {
-                    $info = $this->writeManifest($authorFolder, $workFolder, $version->folder, 'target', $baseName, $entries);
-                    $results[] = ['comparison_id' => $comparison->id, 'type' => 'target'] + $info;
-                }
-            }
-        }
-
-        return $results;
-    }
-
     private function formatManifestComparison(Version $version, Comparison $comparison, string $role, array $fallbackNames): array
     {
         $meta = $this->readManifestMetadata($version, $comparison, $role, $fallbackNames);
@@ -2578,57 +2500,6 @@ class VersionController extends Controller
         ];
     }
 
-    private function readManifestEntries(Version $version, Comparison $comparison, string $role): ?array
-    {
-        $relativePath = $this->manifestRelativePath($version, $comparison, $role);
-        if (!$relativePath) {
-            return null;
-        }
-
-        $disk = Storage::disk('public');
-        $raw = null;
-        if ($disk->exists($relativePath)) {
-            $raw = $disk->get($relativePath);
-        } else {
-            $legacyPath = base_path('../variance/' . $relativePath);
-            if (is_file($legacyPath)) {
-                $raw = File::get($legacyPath);
-            }
-        }
-
-        if ($raw === null) {
-            return null;
-        }
-
-        $entries = json_decode($raw, true);
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($entries)) {
-            return null;
-        }
-
-        $filtered = [];
-        foreach ($entries as $entry) {
-            if (is_array($entry) && isset($entry['big'])) {
-                $filtered[] = $entry;
-            }
-        }
-
-        return $filtered;
-    }
-
-    private function resolveManifestEntries(Version $version, Comparison $comparison, string $role, array $fallbackEntries = []): array
-    {
-        $existing = $this->readManifestEntries($version, $comparison, $role);
-        if (is_array($existing) && !empty($existing)) {
-            return $existing;
-        }
-
-        if (!empty($fallbackEntries)) {
-            return $fallbackEntries;
-        }
-
-        return $version->collectManifestEntries();
-    }
-
     private function buildManifestEntryFromName(Version $version, string $fileName): ?array
     {
         $version->loadMissing('work.author', 'work');
@@ -2653,18 +2524,6 @@ class VersionController extends Controller
             'small' => '/' . ltrim($smallRel, '/'),
             'big'   => '/' . ltrim($imageRel, '/'),
         ];
-    }
-
-    private function writeManifest(string $authorFolder, string $workFolder, string $versionFolder, string $type, string $baseName, array $entries): array
-    {
-        $relativeDir = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
-        $filename    = sprintf('images_%s_%s.json', $type, $baseName);
-        $payload     = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        Storage::disk('public')->put("{$relativeDir}/{$filename}", $payload);
-        $this->mirrorToLegacy($relativeDir, $filename, $payload);
-
-        return ['file' => "{$relativeDir}/{$filename}", 'count' => count($entries)];
     }
 
     private function mirrorToLegacy(string $relativeDir, string $fileName, string $contents): void
