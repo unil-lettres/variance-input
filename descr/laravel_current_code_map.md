@@ -283,14 +283,8 @@ Méthodes publiques majeures :
 - `toggleIgnoredPage`
 
 Helpers et logique interne notables :
-- lecture/normalisation TXT :
-  - `readFileAsUtf8`
-  - `normalizeSourceEncodingHint`
-  - `convertToUtf8`
-  - `preferMacRomanIfCleaner`
-- génération TEI :
-  - `buildLegacyTxt2TeiXml`
-  - `buildTeiHeaderXml`
+- lecture/normalisation TXT et génération TEI :
+  - délègue à `VersionTextService`
 - fac-similés :
   - `facsimileStatus`
   - `purgeFacsimileStorage`
@@ -668,7 +662,7 @@ Fonctions majeures :
   - `loadReaderDatasetArtifact`
   - `storeReaderDatasetArtifact`
 - sources texte :
-  - `normalizeSourceEncodingHint`
+  - décodage TXT via `VersionTextService`
   - `normalizeReaderTextSourceHint`
   - `readerTextFromComparisonXhtml`
   - `extractReaderTextFromComparisonXhtml`
@@ -679,6 +673,19 @@ Fonctions majeures :
   - `readerFacsimiles`
   - `collectReaderFacsimiles`
   - `readerImageCode`
+
+### `VersionTextService.php`
+
+Service partagé pour les textes de versions.
+
+Fonctions majeures :
+- décodage TXT :
+  - `readFileAsUtf8`
+  - `normalizeSourceEncodingHint`
+- validation texte :
+  - `isLikelyTextContent`
+- génération TEI depuis TXT :
+  - `buildLegacyTxt2TeiXml`
 
 ### `PageMarkerService.php`
 

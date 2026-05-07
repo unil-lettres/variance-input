@@ -13,7 +13,10 @@ class VersionReaderService
 {
     private const READER_DATASET_SCHEMA_VERSION = 3;
 
-    public function __construct(private PageMarkerService $pageMarkerService) {}
+    public function __construct(
+        private PageMarkerService $pageMarkerService,
+        private VersionTextService $versionTextService,
+    ) {}
 
     public function responsePayload(Version $version, array $dataset): array
     {
@@ -105,122 +108,6 @@ class VersionReaderService
     public function clearCache(Version|int $version): void
     {
         $this->clearReaderDatasetCache($version instanceof Version ? $version->id : $version);
-    }
-
-    private function readFileAsUtf8(string $absPath, ?string $hint = null, bool $normalizeLineEndings = true): string
-    {
-        $bytes = file_get_contents($absPath);
-        if ($bytes === false) {
-            throw new \RuntimeException("Impossible de lire le fichier source : {$absPath}");
-        }
-
-        $hintEncoding = $this->normalizeSourceEncodingHint($hint);
-        $enc = $hintEncoding;
-        if ($enc === null) {
-            $enc = mb_detect_encoding(
-                $bytes,
-                ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'],
-                true
-            ) ?: null;
-        }
-        $enc ??= 'Windows-1252';
-
-        $utf8 = $this->convertToUtf8($bytes, $enc);
-
-        // For unknown/no-BOM legacy files, prefer Mac Roman when decoded text quality is better.
-        if ($hintEncoding === null) {
-            $utf8 = $this->preferMacRomanIfCleaner($bytes, $enc, $utf8);
-        }
-
-        // Last-chance fallback for files reported as unknown/no BOM:
-        // many old Mac exports are Mac Roman.
-        if (! mb_check_encoding($utf8, 'UTF-8')) {
-            $utf8 = $this->convertToUtf8($bytes, 'Macintosh');
-        }
-
-        return $normalizeLineEndings
-            ? str_replace(["\r\n", "\r"], "\n", $utf8)
-            : $utf8;
-    }
-
-    public function normalizeSourceEncodingHint(?string $hint): ?string
-    {
-        if (! $hint) {
-            return null;
-        }
-
-        $h = strtoupper(trim($hint));
-        if ($h === '') {
-            return null;
-        }
-
-        if (str_contains($h, 'UTF-8')) {
-            return 'UTF-8';
-        }
-        if (str_contains($h, 'MAC') && str_contains($h, 'ROMAN')) {
-            return 'Macintosh';
-        }
-        if (str_contains($h, 'MACINTOSH')) {
-            return 'Macintosh';
-        }
-        if (str_contains($h, 'WINDOWS-1252') || str_contains($h, 'CP1252')) {
-            return 'Windows-1252';
-        }
-        if (str_contains($h, 'ISO-8859')) {
-            return 'ISO-8859-1';
-        }
-        if (str_contains($h, 'ASCII')) {
-            return 'ASCII';
-        }
-
-        return null;
-    }
-
-    private function convertToUtf8(string $bytes, string $sourceEncoding): string
-    {
-        $source = trim($sourceEncoding) !== '' ? $sourceEncoding : 'Windows-1252';
-
-        if (strcasecmp($source, 'Macintosh') === 0 && function_exists('iconv')) {
-            $converted = @iconv('MACINTOSH', 'UTF-8//IGNORE', $bytes);
-            if (is_string($converted) && $converted !== '') {
-                return $converted;
-            }
-        }
-
-        return mb_convert_encoding($bytes, 'UTF-8', $source);
-    }
-
-    private function preferMacRomanIfCleaner(string $bytes, string $detectedEncoding, string $decoded): string
-    {
-        $normalized = strtoupper(trim($detectedEncoding));
-        if (! in_array($normalized, ['WINDOWS-1252', 'ISO-8859-1', 'ASCII'], true)) {
-            return $decoded;
-        }
-
-        $macDecoded = $this->convertToUtf8($bytes, 'Macintosh');
-        if ($macDecoded === '' || ! mb_check_encoding($macDecoded, 'UTF-8')) {
-            return $decoded;
-        }
-
-        $decodedScore = $this->decodedTextNoiseScore($decoded);
-        $macScore = $this->decodedTextNoiseScore($macDecoded);
-
-        // Pick Mac Roman when it clearly removes control/mojibake noise.
-        return ($macScore + 3) < $decodedScore ? $macDecoded : $decoded;
-    }
-
-    private function decodedTextNoiseScore(string $content): int
-    {
-        if ($content === '') {
-            return 0;
-        }
-
-        $score = 0;
-        $score += preg_match_all('/[\x{0080}-\x{009F}]/u', $content) * 10; // C1 controls
-        $score += preg_match_all('/[\x{FFFD}]/u', $content) * 6; // replacement chars
-        $score += preg_match_all('/[\x{00D5}\x{0152}\x{0153}\x{02C6}\x{0160}\x{2039}\x{203A}\x{0178}\x{017E}\x{2122}]/u', $content) * 2;
-
-        return $score;
     }
 
     private function readerFacsimiles(Version $version): array
@@ -366,6 +253,7 @@ class VersionReaderService
 
     public function dataset(Version $version, ?string $requestedEncoding, ?string $requestedTextSource): array
     {
+        $requestedEncoding = $this->versionTextService->normalizeSourceEncodingHint($requestedEncoding);
         $version->loadMissing('work.author');
         $fingerprint = $this->readerDatasetFingerprint($version);
         $nonce = (int) Cache::get($this->readerDatasetNonceKey($version->id), 0);
@@ -424,7 +312,7 @@ class VersionReaderService
         $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 18, 'Lecture du texte de version…');
         if (is_file($textPath)) {
             try {
-                $versionText = $this->readFileAsUtf8($textPath, $requestedEncoding);
+                $versionText = $this->versionTextService->readFileAsUtf8($textPath, $requestedEncoding);
                 if ($versionText !== '') {
                     $textVariants['version-txt'] = [
                         'value' => 'version-txt',
