@@ -1439,11 +1439,6 @@ class VersionController extends Controller
         return $this->collectReaderFacsimiles($version, false);
     }
 
-    private function readerFacsimilesDetailed(Version $version): array
-    {
-        return $this->collectReaderFacsimiles($version, true);
-    }
-
     private function collectReaderFacsimiles(Version $version, bool $includeDimensions): array
     {
         $version->loadMissing('work.author');
@@ -1627,11 +1622,6 @@ class VersionController extends Controller
             $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 100, 'Échec du chargement du lecteur.', 'error');
             throw $e;
         }
-    }
-
-    private function buildReaderDataset(Version $version, ?string $requestedEncoding, ?string $requestedTextSource): array
-    {
-        return $this->buildReaderDatasetBundle($version, $requestedEncoding, $requestedTextSource)['selected'];
     }
 
     private function buildReaderDatasetBundle(Version $version, ?string $requestedEncoding, ?string $requestedTextSource): array
@@ -2249,55 +2239,6 @@ class VersionController extends Controller
 
         $page['text'] = $segment;
         return $page;
-    }
-
-    private function readerGuessedPagePlans(string $text, array $facsimiles): array
-    {
-        $count = count($facsimiles);
-        if ($count === 0) {
-            return [];
-        }
-
-        $length = mb_strlen($text, 'UTF-8');
-        if ($length === 0) {
-            return [];
-        }
-
-        $pages = [];
-        $start = 0;
-
-        for ($index = 0; $index < $count; $index++) {
-            $image = $facsimiles[$index] ?? null;
-            $imageCode = $this->readerImageCode($image['image_code'] ?? $image['name'] ?? null);
-
-            if ($index === $count - 1) {
-                $end = $length;
-            } else {
-                $targetEnd = (int) round((($index + 1) * $length) / $count);
-                $end = $this->readerNextBoundary($text, $targetEnd);
-                if ($end <= $start) {
-                    $end = min($length, max($start + 1, $targetEnd));
-                }
-            }
-
-            $label = $imageCode ? 'p. ' . $imageCode : 'Page ' . ($index + 1);
-
-            $pages[] = [
-                'label' => $label,
-                'image' => $image,
-                'start' => $start,
-                'end' => $end,
-                'line' => null,
-                'imageCode' => $imageCode,
-                'anchorOffset' => null,
-                'anchorPhrase' => null,
-                'guessed' => true,
-            ];
-
-            $start = $end;
-        }
-
-        return $pages;
     }
 
     private function readerNextBoundary(string $text, int $position): int
