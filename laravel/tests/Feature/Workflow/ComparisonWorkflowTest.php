@@ -4,6 +4,7 @@ namespace Tests\Feature\Workflow;
 
 use App\Models\Chapter;
 use App\Models\Comparison;
+use App\Models\User;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -122,7 +123,7 @@ class ComparisonWorkflowTest extends TestCase
         $this->assertSame(20480, $comparison->medite_peak_rss_kb);
     }
 
-    public function test_researcher_only_sees_personal_or_legacy_comparisons_in_work_listing(): void
+    public function test_work_editor_sees_all_non_legacy_comparisons_for_assigned_work(): void
     {
         $owner = $this->signInEditor();
         $work = $this->createEditableWork($owner, [], [
@@ -139,7 +140,7 @@ class ComparisonWorkflowTest extends TestCase
             'created_by' => $owner->id,
             'is_legacy' => false,
         ]);
-        Comparison::factory()->create([
+        $other = Comparison::factory()->create([
             'source_id' => $source->id,
             'target_id' => $target->id,
             'folder' => 'other-run1',
@@ -157,14 +158,31 @@ class ComparisonWorkflowTest extends TestCase
         $response = $this->getJson("/comparisons/by-work?work_id={$work->id}&light=1");
 
         $response->assertOk()
-            ->assertJsonCount(2);
+            ->assertJsonCount(3);
 
         $ids = collect($response->json())->pluck('id')->sort()->values()->all();
 
         $this->assertSame(
-            collect([$mine->id, $legacy->id])->sort()->values()->all(),
+            collect([$mine->id, $other->id, $legacy->id])->sort()->values()->all(),
             $ids
         );
+
+        $payload = collect($response->json())->keyBy('id');
+        $this->assertTrue($payload[$mine->id]['can_manage'] ?? false);
+        $this->assertTrue($payload[$other->id]['can_manage'] ?? false);
+        $this->assertFalse($payload[$legacy->id]['can_manage'] ?? true);
+
+        $intruder = User::factory()->create(['is_admin' => false]);
+        $this->actingAs($intruder);
+
+        $response = $this->getJson("/comparisons/by-work?work_id={$work->id}&light=1");
+
+        $response->assertOk()
+            ->assertJsonCount(1);
+
+        $this->assertSame([$legacy->id], collect($response->json())->pluck('id')->all());
+
+        $this->actingAs($owner);
 
         Chapter::create([
             'folder' => $mine->folder,

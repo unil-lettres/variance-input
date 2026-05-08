@@ -692,8 +692,8 @@ class EditorController extends Controller
             return;
         }
 
-        if ((int) $comparison->created_by !== (int) $user->id) {
-            abort(403, 'Accès limité aux comparaisons personnelles.');
+        if (! $user->canManageComparison($comparison)) {
+            abort(403, 'Accès limité aux comparaisons assignées.');
         }
     }
 

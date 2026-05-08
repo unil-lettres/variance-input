@@ -137,6 +137,31 @@ class User extends Authenticatable
         return $this->canUseVersionEditorForWork($version->work);
     }
 
+    public function canManageComparison(Comparison $comparison): bool
+    {
+        if ($this->is_admin) {
+            return true;
+        }
+
+        if ($comparison->is_legacy) {
+            return false;
+        }
+
+        if ((int) $comparison->created_by === (int) $this->id) {
+            return true;
+        }
+
+        $comparison->loadMissing('sourceVersion.work', 'targetVersion.work');
+
+        foreach ([$comparison->sourceVersion?->work, $comparison->targetVersion?->work] as $work) {
+            if ($work && $this->canEditWork($work)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function isRestrictedVersionEditor(): bool
     {
         if ($this->is_admin) {

@@ -450,7 +450,7 @@ class VersionController extends Controller
                     ->orWhere('target_id', $version->id);
             });
 
-        if ($user && ! $user->is_admin) {
+        if ($user && ! $user->is_admin && ! $user->canEditVersion($version)) {
             $comparisonsQuery->where(function ($inner) use ($user) {
                 $inner->where('created_by', $user->id)
                     ->orWhere('is_legacy', true);
@@ -1363,8 +1363,8 @@ class VersionController extends Controller
             return;
         }
 
-        if ((int) $comparison->created_by !== (int) $user->id) {
-            abort(403, 'Accès limité aux comparaisons personnelles.');
+        if (! $user->canManageComparison($comparison)) {
+            abort(403, 'Accès limité aux comparaisons assignées.');
         }
     }
 }

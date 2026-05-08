@@ -138,6 +138,45 @@ class ComparisonCommentsWorkflowTest extends TestCase
         $this->assertNull($comparison->comments);
     }
 
+    public function test_work_editor_can_manage_comparison_created_by_another_user(): void
+    {
+        $creator = User::factory()->create([
+            'is_admin' => false,
+            'password' => bcrypt('password'),
+        ]);
+        $editor = $this->signInEditor();
+        $work = $this->createEditableWork($editor, [], [
+            'title' => 'Comparaison assignée',
+            'short_title' => 'cas',
+        ]);
+        $source = Version::factory()->for($work)->create(['folder' => '1cas']);
+        $target = Version::factory()->for($work)->create(['folder' => '2cas']);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1cas-2cas-run1',
+            'created_by' => $creator->id,
+        ]);
+
+        $this->getJson("/comparisons/{$comparison->id}/details")
+            ->assertOk()
+            ->assertJsonPath('can_manage', true);
+
+        $this->patchJson("/comparisons/{$comparison->id}/comments", [
+            'comments' => 'Commentaire par éditeur de l’œuvre',
+        ])->assertOk()
+            ->assertJsonPath('comments', 'Commentaire par éditeur de l’œuvre');
+
+        $comparison->refresh();
+        $this->assertSame('Commentaire par éditeur de l’œuvre', $comparison->comments);
+
+        $this->deleteJson("/comparisons/{$comparison->id}")
+            ->assertOk()
+            ->assertJsonPath('message', 'Comparison deleted');
+
+        $this->assertDatabaseMissing('comparisons', ['id' => $comparison->id]);
+    }
+
     public function test_deleting_comparison_removes_chapter_rows_for_same_folder(): void
     {
         $user = $this->signInEditor();

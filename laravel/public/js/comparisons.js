@@ -45,7 +45,7 @@ function initComparisonsTable() {
     return /^\d+$/.test(raw) ? Number(raw) : null;
   })();
   const currentUserIsAdmin = adminMain?.dataset?.userIsAdmin === '1';
-  const ownershipNote = 'Action réservée au propriétaire de la comparaison.';
+  const ownershipNote = 'Action réservée au créateur de la comparaison ou aux éditeurs de l’œuvre.';
   const publishedNote = 'Dépubliez cette comparaison avant de modifier ses composants.';
   let showComparisonDetails = false;
   const isComparisonPublished = (comp) => {
@@ -1707,8 +1707,11 @@ function initComparisonsTable() {
     const ready = detailsLoaded ? (comp.components_ready && missing.length === 0) : false;
     const isLegacy = !!comp.is_legacy;
     tr.dataset.legacy = isLegacy ? '1' : '0';
-    const ownershipBlocked = !currentUserIsAdmin && !!currentUserId
-      && Number(comp?.created_by) !== Number(currentUserId);
+    const serverCanManage = typeof comp?.can_manage === 'boolean' ? comp.can_manage : null;
+    const ownershipBlocked = !currentUserIsAdmin
+      && (serverCanManage === null
+        ? (!!currentUserId && Number(comp?.created_by) !== Number(currentUserId))
+        : !serverCanManage);
     comp._ownershipBlocked = ownershipBlocked;
     const manageDisabledNote = isLegacy
       ? 'Comparaison legacy en lecture seule.'

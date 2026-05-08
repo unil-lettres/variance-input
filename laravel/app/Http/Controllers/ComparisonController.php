@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Models\Comparison;
 use App\Models\Chapter;
 use App\Models\Version;
+use App\Models\Work;
 use App\Models\User;
 use App\Http\Controllers\PublishController;
 use App\Services\PageMarkerService;
@@ -44,9 +45,11 @@ class ComparisonController extends Controller
             ->where('work_id', $workId)
             ->pluck('id');
 
-        $workInfo = DB::table('works')
-            ->where('id', $workId)
-            ->first(['folder', 'author_id']);
+        $work = Work::query()->findOrFail($workId);
+        $workInfo = (object) [
+            'folder' => $work->folder,
+            'author_id' => $work->author_id,
+        ];
 
         $authorFolder = $workInfo
             ? DB::table('authors')->where('id', $workInfo->author_id)->value('folder')
@@ -71,16 +74,17 @@ class ComparisonController extends Controller
                     ->orWhereIn('target_id', $versionIds);
             });
 
-        $this->scopeComparisonsToUser($comparisonsQuery, $user);
+        $this->scopeComparisonsToUser($comparisonsQuery, $user, $work);
 
         $comparisons = $comparisonsQuery
             ->orderByRaw('CASE WHEN number IS NULL THEN 1 ELSE 0 END')
             ->orderBy('number')
             ->orderBy('id')
             ->get()
-            ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder, $light, $chapterCounts) {
+            ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder, $light, $chapterCounts, $user) {
                 $cmp->chapter_count = (int) ($chapterCounts[$cmp->folder] ?? 0);
                 $cmp->has_chapters = $cmp->chapter_count > 0;
+                $this->applyUserPermissions($cmp, $user);
 
                 if ($light) {
                     $publicationScope = $cmp->publication_scope ?? ($cmp->is_legacy ? 'prod' : null);
@@ -100,13 +104,13 @@ class ComparisonController extends Controller
                     return $cmp;
                 }
 
-                return $this->enrichComparison($cmp, $destBase, $authorFolder, $workFolder, $required);
+                return $this->enrichComparison($cmp, $destBase, $authorFolder, $workFolder, $required, $user);
             });
 
         return response()->json($comparisons);
     }
 
-    public function details(Comparison $comparison)
+    public function details(Request $request, Comparison $comparison)
     {
         $comparison->loadMissing('sourceVersion.work.author', 'targetVersion.work.author', 'creator');
         $this->assertComparisonOwnership($comparison);
@@ -118,7 +122,7 @@ class ComparisonController extends Controller
 
         $required = PublishController::COMPONENTS;
 
-        $comparison = $this->enrichComparison($comparison, $destBase, $authorFolder, $workFolder, $required);
+        $comparison = $this->enrichComparison($comparison, $destBase, $authorFolder, $workFolder, $required, $request->user());
         $comparison->details_loaded = true;
 
         return response()->json($comparison);
@@ -157,9 +161,11 @@ class ComparisonController extends Controller
         ?string $destBase,
         ?string $authorFolder,
         ?string $workFolder,
-        array $required
+        array $required,
+        ?User $user = null
     ): Comparison {
         $cmp->loadMissing('creator');
+        $this->applyUserPermissions($cmp, $user ?? request()->user());
 
         // Do not inject default pagination markers anymore; rely on real facsimiles/_lignes only
 
@@ -263,6 +269,11 @@ class ComparisonController extends Controller
         $cmp->details_loaded = true;
 
         return $cmp;
+    }
+
+    private function applyUserPermissions(Comparison $cmp, ?User $user): void
+    {
+        $cmp->can_manage = $user ? $user->canManageComparison($cmp) : false;
     }
 
     private function countMediteComponentEntries(?string $componentDir): array
@@ -1098,9 +1109,13 @@ class ComparisonController extends Controller
         }
     }
 
-    private function scopeComparisonsToUser($query, ?User $user): void
+    private function scopeComparisonsToUser($query, ?User $user, ?Work $work = null): void
     {
         if ($user && ! $user->is_admin) {
+            if ($work && $user->canEditWork($work)) {
+                return;
+            }
+
             $query->where(function ($inner) use ($user) {
                 $inner->where('created_by', $user->id)
                     ->orWhere('is_legacy', true);
@@ -1119,8 +1134,8 @@ class ComparisonController extends Controller
             return;
         }
 
-        if ((int) $comparison->created_by !== (int) $user->id) {
-            abort(403, 'Accès limité aux comparaisons personnelles.');
+        if (! $user->canManageComparison($comparison)) {
+            abort(403, 'Accès limité aux comparaisons assignées.');
         }
     }
 
