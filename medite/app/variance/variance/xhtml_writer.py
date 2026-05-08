@@ -35,8 +35,9 @@ def write_xhtml_mains(
     xhtml_mains: Dict[str, List[str]],
 ) -> None:
     """Dump the synced ‘main’ files (source_py.xhtml, target_py.xhtml)."""
+    outdir.mkdir(parents=True, exist_ok=True)
     for name, main_list in xhtml_mains.items():
-        (outdir / f"{name}_py.xhtml").write_text("\n".join(main_list), "utf-8")
+        (outdir / f"{name}_py.xhtml").write_text("".join(main_list), "utf-8")
 
 # ----------------------------------------------------------------------
 # 2 — optional: TEI → XHTML transformation via Saxon
