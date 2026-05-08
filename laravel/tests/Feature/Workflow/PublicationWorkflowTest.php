@@ -670,6 +670,10 @@ class PublicationWorkflowTest extends TestCase
 
         $this->assertFileExists($sourceLegacyDir . DIRECTORY_SEPARATOR . $sourceFiles['main']);
         $this->assertFileExists($targetLegacyDir . DIRECTORY_SEPARATOR . $targetFiles['main']);
+        $this->assertFileDoesNotExist($sourceLegacyDir . DIRECTORY_SEPARATOR . 'stale.json');
+        $this->assertFileDoesNotExist($targetLegacyDir . DIRECTORY_SEPARATOR . 'stale.json');
+        $this->assertNotEmpty(File::glob(dirname($sourceLegacyDir) . '/.' . basename($sourceLegacyDir) . '.stale-*'));
+        $this->assertNotEmpty(File::glob(dirname($targetLegacyDir) . '/.' . basename($targetLegacyDir) . '.stale-*'));
     }
 
     public function test_publish_succeeds_with_warning_when_legacy_facsimile_copy_fails(): void

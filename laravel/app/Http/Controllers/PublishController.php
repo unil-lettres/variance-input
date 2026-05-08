@@ -412,7 +412,14 @@ class PublishController extends Controller
 
         $this->ensureLegacyDirectoryExists($parentDir);
         if (is_dir($paths['dest_dir'])) {
-            File::deleteDirectory($paths['dest_dir']);
+            if ($this->pathIsWritableByCurrentProcess($paths['dest_dir'])) {
+                File::deleteDirectory($paths['dest_dir']);
+            } elseif (! $this->moveStaleLegacyFacsimileDirectoryAside($paths['dest_dir'])) {
+                throw new \RuntimeException(sprintf(
+                    'Le dossier legacy des fac-similés existe mais n’est pas remplaçable : %s',
+                    $paths['dest_dir']
+                ));
+            }
         }
         $this->ensureLegacyDirectoryExists($paths['dest_dir']);
 
@@ -503,6 +510,25 @@ class PublishController extends Controller
     {
         File::ensureDirectoryExists($path, 0775, true);
         @chmod($path, 02775);
+    }
+
+    private function moveStaleLegacyFacsimileDirectoryAside(string $path): bool
+    {
+        if (! is_dir($path)) {
+            return true;
+        }
+
+        $parent = dirname($path);
+        if (! is_dir($parent) || ! $this->pathIsWritableByCurrentProcess($parent)) {
+            return false;
+        }
+
+        $archive = $parent
+            . DIRECTORY_SEPARATOR
+            . '.' . basename($path)
+            . '.stale-' . date('YmdHis') . '-' . bin2hex(random_bytes(4));
+
+        return @rename($path, $archive);
     }
 
     private function pathsShareSameEntry(?string $left, ?string $right): bool
