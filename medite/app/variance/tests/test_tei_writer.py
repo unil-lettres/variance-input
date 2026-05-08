@@ -69,16 +69,26 @@ def test_add_list_xhtml_renders_substitution_sides_independently():
     assert "<em>la</em> → <em>La</em>" in xhtml_lists["substitution"][0]
 
 
-def test_render_list_label_for_xhtml_marks_invisible_space():
-    assert render_list_label_for_xhtml("   ") == "[espace]"
-    assert render_list_label_for_xhtml("&nbsp;") == "[espace]"
+def test_render_list_label_for_xhtml_suppresses_invisible_space():
+    assert render_list_label_for_xhtml("   ") == ""
+    assert render_list_label_for_xhtml("&nbsp;") == ""
 
 
-def test_render_list_label_for_xhtml_marks_explicit_line_break():
-    assert render_list_label_for_xhtml("<br/>") == "[retour ligne]"
+def test_render_list_label_for_xhtml_marks_explicit_line_break_as_pilcrow():
+    assert render_list_label_for_xhtml("<br/>") == "¶"
+    assert render_list_label_for_xhtml("\n") == "¶"
 
 
-def test_add_list_xhtml_does_not_emit_empty_anchor_for_space_only_change():
+def test_render_list_label_for_xhtml_trims_punctuation_spacing():
+    assert render_list_label_for_xhtml("hello ,") == "hello,"
+    assert render_list_label_for_xhtml(" hello ") == "hello"
+
+
+def test_render_substitution_label_for_xhtml_marks_space_to_line_break_as_pilcrow():
+    assert render_substitution_label_for_xhtml(" ", "<br/>") == "¶"
+
+
+def test_add_list_xhtml_does_not_emit_space_only_change():
     reset_numbering_state()
     xhtml_lists = {"addition": []}
     rchanges = op.Text(" ", (), ())
@@ -86,4 +96,4 @@ def test_add_list_xhtml_does_not_emit_empty_anchor_for_space_only_change():
 
     add_list_xhtml(xhtml_lists, output, 0, len(rchanges.text), "addition", "v2_0_1")
 
-    assert '<a class="sync" href="#bi_00000" id="lai_00000" data-tags="">[espace]</a>' in xhtml_lists["addition"][0]
+    assert xhtml_lists["addition"] == []

@@ -43,6 +43,7 @@ _LIST_NEWLINE_MARKER = "¶"
 _LINE_BREAK_TAG_RE = re.compile(r"<\s*(?:br|lb)\s*/?\s*>", re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")
 _EM_TAG_RE = re.compile(r"</?em>")
+_SPACE_ONLY_RE = re.compile(r"^[\s\u00a0\u202f]*$")
 
 # For generating the *final* XHTML IDs, we want these exact prefixes:
 #
@@ -125,10 +126,35 @@ def render_substitution_label_for_xhtml(old_txt: str, new_txt: str) -> str:
     """
     Render an XHTML substitution label without letting emphasis cross the arrow.
     """
-    return (
-        f"{render_list_label_for_xhtml(old_txt)} "
-        f"→ {render_list_label_for_xhtml(new_txt)}"
-    )
+    old_label = render_list_label_for_xhtml(old_txt)
+    new_label = render_list_label_for_xhtml(new_txt)
+
+    if not old_label and not new_label:
+        return ""
+
+    if not old_label and new_label == _LIST_NEWLINE_MARKER:
+        return _LIST_NEWLINE_MARKER
+
+    if old_label == _LIST_NEWLINE_MARKER and not new_label:
+        return _LIST_NEWLINE_MARKER
+
+    if not old_label:
+        return new_label
+
+    if not new_label:
+        return old_label
+
+    return f"{old_label} → {new_label}"
+
+
+def _normalize_list_label_spacing(label: str) -> str:
+    """
+    Remove spacing artefacts at label boundaries without touching inline tags.
+    """
+    label = label.strip()
+    label = re.sub(r"\s+([,.)\]}])", r"\1", label)
+    label = re.sub(r"([(\[{])\s+", r"\1", label)
+    return label
 
 
 def render_list_label_for_xhtml(txt: str) -> str:
@@ -137,19 +163,19 @@ def render_list_label_for_xhtml(txt: str) -> str:
     """
     rendered = render_inline_tei_for_xhtml(txt)
     rendered = _LINE_BREAK_TAG_RE.sub("\n", rendered)
-    label = rendered.replace("\n", _LIST_NEWLINE_MARKER).strip()
+    label = _normalize_list_label_spacing(rendered.replace("\n", _LIST_NEWLINE_MARKER))
 
     visible_text = html.unescape(_TAG_RE.sub("", label))
     if visible_text.replace(_LIST_NEWLINE_MARKER, "").strip():
         return label
     if _LIST_NEWLINE_MARKER in visible_text:
-        return "[retour ligne]"
+        return _LIST_NEWLINE_MARKER
 
     raw_text = html.unescape(_TAG_RE.sub("", rendered))
     if "\n" in raw_text:
-        return "[retour ligne]"
-    if raw_text and raw_text.strip() == "":
-        return "[espace]"
+        return _LIST_NEWLINE_MARKER
+    if raw_text and _SPACE_ONLY_RE.match(raw_text):
+        return ""
     return "[transformation invisible]"
 
 
@@ -229,6 +255,8 @@ def add_list_xhtml(
         else:
             src_id, tgt_id, label = id_suffix
             link_text = render_list_label_for_xhtml(label)
+        if not link_text:
+            return
         index = _next_index(name, src_id, tgt_id)
         num = f"{index:05d}"
         href = f"#ar_{num}"
@@ -236,11 +264,13 @@ def add_list_xhtml(
 
     elif name == "transpose" and isinstance(id_suffix, tuple):
         src_id, tgt_id, _label = id_suffix
+        link_text = render_list_label_for_xhtml(txt)
+        if not link_text:
+            return
         index = _next_index(name, src_id, tgt_id)
         num = f"{index:05d}"
         href = f"#ad_{num}"
         lid = f"lbd_{num}"
-        link_text = render_list_label_for_xhtml(txt)
 
     else:
         tei_id: str
@@ -248,11 +278,13 @@ def add_list_xhtml(
             tei_id = id_suffix[0]
         else:
             tei_id = id_suffix
+        link_text = render_list_label_for_xhtml(txt)
+        if not link_text:
+            return
         index = _next_index(name, tei_id)
         num = f"{index:05d}"
         href = f"{o['href']}_{num}"
         lid = f"{o['id']}_{num}"
-        link_text = render_list_label_for_xhtml(txt)
 
     xhtml_lists[name].append(
         f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'

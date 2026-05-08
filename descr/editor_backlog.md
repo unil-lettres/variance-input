@@ -144,7 +144,45 @@ Objectif :
 
 ## Priorité moyenne / basse
 
-### 8. Outil exposant dans l’éditeur de version
+### 8. Recherche / remplacement dans l’éditeur de version
+
+Origine :
+- demande Maxime, 8 mai 2026
+
+Objectif :
+- ajouter un outil de recherche / remplacement dans l’éditeur XML de version,
+  adapté au travail de correction éditoriale.
+
+À préciser :
+- portée : document entier ou sélection
+- remplacement simple ou expressions régulières
+- prévisualisation / confirmation des occurrences
+- interaction avec la sauvegarde, le rechargement et les contrôles XML
+
+### 9. Export des fichiers `_lignes`
+
+Origine :
+- demande Maxime, 8 mai 2026
+
+Objectif :
+- permettre l’export / téléchargement du fichier `_lignes` associé à une
+  version quand il existe.
+
+Contexte :
+- les fichiers sont stockés côté Laravel dans
+  `storage/app/private/lignes/{version_id}.txt`
+- une route de téléchargement existe déjà côté API admin, mais l’ergonomie UI
+  doit être vérifiée / exposée explicitement.
+
+À faire :
+- vérifier le comportement actuel du bouton / endpoint de téléchargement
+- rendre l’action visible et compréhensible dans le tableau des versions
+- tester les cas :
+  - fichier présent
+  - fichier absent
+  - utilisateur sans droit complet sur l’œuvre
+
+### 10. Outil exposant dans l’éditeur de version
 
 Objectif :
 - gérer les exposants sans conventions ad hoc de type `^...^`
@@ -154,7 +192,7 @@ Objectif :
 - ajouter l’UI
 - tester l’aller-retour sauvegarde/rechargement
 
-### 9. Insertion d’image in-texte
+### 11. Insertion d’image in-texte
 
 Objectif :
 - permettre un ancrage éditorial explicite d’image dans le flux de texte
