@@ -2618,7 +2618,7 @@ class PageMarkerService
     private function buildIndexedPlaintext(string $src, bool $needFold = true): array
     {
         $shadow = '';
-        $fold   = $needFold ? '' : null;
+        $fold   = '';
         $map    = [];
         $length = strlen($src);
         $offset = 0;
@@ -2687,7 +2687,7 @@ class PageMarkerService
             $offset += strlen($glyph);
         }
 
-        return [$shadow, $map, $fold];
+        return [$shadow, $map, $needFold ? $fold : null];
     }
 
     private function appendIndexedPlaintextSegment(
