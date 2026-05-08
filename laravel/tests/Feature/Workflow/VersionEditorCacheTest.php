@@ -41,8 +41,9 @@ class VersionEditorCacheTest extends TestCase
         ]);
 
         $body = '<p>'
-            . str_repeat('Café &amp; Société. ', 50000)
+            . str_repeat('Texte continu sans balise avec accents. ', 80000)
             . '<pb n="1" facs="img_editorcache-large_001.jpg"/>'
+            . str_repeat('Café &amp; Société. ', 5000)
             . 'Après le repère.'
             . '</p>';
         $this->writeVersionXml($version, $body);

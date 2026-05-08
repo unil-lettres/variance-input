@@ -15,6 +15,7 @@ class PageMarkerService
     private const MARKER_TEMPLATE = '<span class="page-marker" data-image-name="%s"><span class="page-number">%s</span><img src="%s" /></span>';
     private const ORIGINAL_SOURCE = 'source.original.xhtml';
     private const ORIGINAL_TARGET = 'target.original.xhtml';
+    private const INDEX_TEXT_CHUNK_BYTES = 32768;
     private ?string $progressPath = null;
     private array $progress = [];
     private ?int $progressVersionId = null;
@@ -1314,11 +1315,8 @@ class PageMarkerService
         // Ignore the header so offsets line up with Medite XHTML (which never includes teiHeader).
         $contents = $this->stripTeiHeader($contents);
 
-        // Build the plaintext shadow + offset map to compute char_index the same way insertion does.
-        [$shadow, $map] = $this->buildIndexedPlaintext($contents);
-
         $markers = [];
-        $mapIndex = 0;
+        $charIndex = 0;
         $offset = 0;
         $pattern = '/<pb\b[^>]*>/i';
 
@@ -1326,15 +1324,11 @@ class PageMarkerService
             $tag = $match[0][0];
             $pos = $match[0][1];
 
-            // Advance through the map to find the plaintext index that corresponds to this tag position.
-            $mapCount = count($map);
-            while ($mapIndex < $mapCount && $map[$mapIndex] < $pos) {
-                $mapIndex++;
-            }
+            $charIndex += $this->countIndexedPlaintextChars($contents, $offset, $pos);
 
             $attrs = $this->parsePbAttributes($tag);
-            $entry = ['char_index' => $mapIndex];
-            $anchorPhrase = $this->buildMarkerAnchorPhrase($shadow, $mapIndex);
+            $entry = ['char_index' => $charIndex];
+            $anchorPhrase = $this->extractForwardPlaintext($contents, $pos + strlen($tag));
             if ($anchorPhrase !== null) {
                 $entry['phrase'] = $anchorPhrase;
             }
@@ -1364,6 +1358,127 @@ class PageMarkerService
         }
 
         return $markers;
+    }
+
+    private function countIndexedPlaintextChars(string $src, int $start, int $end): int
+    {
+        $count = 0;
+        $offset = $start;
+
+        while ($offset < $end) {
+            $char = $src[$offset];
+
+            if ($char === '<') {
+                $gt = strpos($src, '>', $offset);
+                if ($gt === false || $gt >= $end) {
+                    break;
+                }
+                $offset = $gt + 1;
+                continue;
+            }
+
+            if ($char === '&') {
+                $semi = strpos($src, ';', $offset);
+                if ($semi !== false && $semi < $end && ($semi - $offset) <= 20) {
+                    $decoded = html_entity_decode(substr($src, $offset, $semi - $offset + 1), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    if ($decoded !== '') {
+                        $count += mb_strlen($decoded, 'UTF-8');
+                        $offset = $semi + 1;
+                        continue;
+                    }
+                }
+            }
+
+            $nextTag = strpos($src, '<', $offset);
+            $nextEntity = strpos($src, '&', $offset);
+            $next = $end;
+            if ($nextTag !== false && $nextTag < $next) {
+                $next = $nextTag;
+            }
+            if ($nextEntity !== false && $nextEntity < $next) {
+                $next = $nextEntity;
+            }
+
+            if ($next <= $offset) {
+                $offset++;
+                $count++;
+                continue;
+            }
+
+            while ($offset < $next) {
+                $chunkEnd = min($next, $offset + self::INDEX_TEXT_CHUNK_BYTES);
+                if ($chunkEnd < $next) {
+                    $chunkEnd = $this->utf8SafeChunkEnd($src, $offset, $chunkEnd);
+                }
+                if ($chunkEnd <= $offset) {
+                    $chunkEnd = min($next, $offset + self::INDEX_TEXT_CHUNK_BYTES);
+                }
+
+                $count += mb_strlen(substr($src, $offset, $chunkEnd - $offset), 'UTF-8');
+                $offset = $chunkEnd;
+            }
+        }
+
+        return $count;
+    }
+
+    private function extractForwardPlaintext(string $src, int $start, int $maxChars = 90): ?string
+    {
+        $text = '';
+        $offset = $start;
+        $length = strlen($src);
+
+        while ($offset < $length && mb_strlen($text, 'UTF-8') < $maxChars) {
+            $char = $src[$offset];
+
+            if ($char === '<') {
+                $gt = strpos($src, '>', $offset);
+                if ($gt === false) {
+                    break;
+                }
+                $offset = $gt + 1;
+                continue;
+            }
+
+            if ($char === '&') {
+                $semi = strpos($src, ';', $offset);
+                if ($semi !== false && ($semi - $offset) <= 20) {
+                    $decoded = html_entity_decode(substr($src, $offset, $semi - $offset + 1), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    if ($decoded !== '') {
+                        $text .= $decoded;
+                        $offset = $semi + 1;
+                        continue;
+                    }
+                }
+            }
+
+            $nextTag = strpos($src, '<', $offset);
+            $nextEntity = strpos($src, '&', $offset);
+            $next = $length;
+            if ($nextTag !== false && $nextTag < $next) {
+                $next = $nextTag;
+            }
+            if ($nextEntity !== false && $nextEntity < $next) {
+                $next = $nextEntity;
+            }
+
+            $needed = max(1, $maxChars - mb_strlen($text, 'UTF-8'));
+            $text .= mb_substr(substr($src, $offset, $next - $offset), 0, $needed, 'UTF-8');
+            $offset = $next;
+        }
+
+        return $this->normalizeAnchorPhrase($text);
+    }
+
+    private function normalizeAnchorPhrase(string $text): ?string
+    {
+        $phrase = preg_replace('/\s+/u', ' ', $text);
+        if (!is_string($phrase)) {
+            return null;
+        }
+
+        $phrase = trim($phrase);
+        return $phrase !== '' ? $phrase : null;
     }
 
     private function markerKey(array $marker): string
@@ -1651,16 +1766,7 @@ class PageMarkerService
             return null;
         }
 
-        $phrase = preg_replace('/\s+/u', ' ', $slice);
-        if (!is_string($phrase)) {
-            return null;
-        }
-        $phrase = trim($phrase);
-        if ($phrase === '') {
-            return null;
-        }
-
-        return $phrase;
+        return $this->normalizeAnchorPhrase($slice);
     }
 
     private function candidatePaths(string $authorFolder, string $workFolder, Comparison $comparison, string $fileName, bool $preferPublished = false): array
@@ -2559,19 +2665,9 @@ class PageMarkerService
                 $next = min($next, $nextEntity);
             }
 
-            $segment = substr($src, $offset, $next - $offset);
-            if ($segment !== '') {
-                $chars = preg_split('//u', $segment, -1, PREG_SPLIT_NO_EMPTY | PREG_SPLIT_OFFSET_CAPTURE);
-                if ($chars === false) {
+            if ($next > $offset) {
+                if (! $this->appendIndexedPlaintextSegment($src, $offset, $next, $needFold, $shadow, $map, $fold)) {
                     break;
-                }
-
-                foreach ($chars as [$glyph, $glyphOffset]) {
-                    $shadow .= $glyph;
-                    if ($needFold) {
-                        $fold .= $this->foldString($glyph);
-                    }
-                    $map[] = $offset + $glyphOffset;
                 }
 
                 $offset = $next;
@@ -2592,6 +2688,55 @@ class PageMarkerService
         }
 
         return [$shadow, $map, $fold];
+    }
+
+    private function appendIndexedPlaintextSegment(
+        string $src,
+        int $start,
+        int $end,
+        bool $needFold,
+        string &$shadow,
+        array &$map,
+        string &$fold
+    ): bool {
+        $offset = $start;
+
+        while ($offset < $end) {
+            $chunkEnd = min($end, $offset + self::INDEX_TEXT_CHUNK_BYTES);
+            if ($chunkEnd < $end) {
+                $chunkEnd = $this->utf8SafeChunkEnd($src, $offset, $chunkEnd);
+            }
+            if ($chunkEnd <= $offset) {
+                $chunkEnd = min($end, $offset + self::INDEX_TEXT_CHUNK_BYTES);
+            }
+
+            $chunk = substr($src, $offset, $chunkEnd - $offset);
+            $chars = preg_split('//u', $chunk, -1, PREG_SPLIT_NO_EMPTY | PREG_SPLIT_OFFSET_CAPTURE);
+            if ($chars === false) {
+                return false;
+            }
+
+            foreach ($chars as [$glyph, $glyphOffset]) {
+                $shadow .= $glyph;
+                if ($needFold) {
+                    $fold .= $this->foldString($glyph);
+                }
+                $map[] = $offset + $glyphOffset;
+            }
+
+            $offset = $chunkEnd;
+        }
+
+        return true;
+    }
+
+    private function utf8SafeChunkEnd(string $src, int $start, int $end): int
+    {
+        while ($end > $start && (ord($src[$end]) & 0xC0) === 0x80) {
+            $end--;
+        }
+
+        return $end;
     }
 
     private function foldString(string $s): string
