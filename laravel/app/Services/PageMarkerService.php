@@ -2549,19 +2549,46 @@ class PageMarkerService
                 }
             }
 
+            $nextTag = strpos($src, '<', $offset);
+            $nextEntity = strpos($src, '&', $offset);
+            $next = $length;
+            if ($nextTag !== false) {
+                $next = min($next, $nextTag);
+            }
+            if ($nextEntity !== false) {
+                $next = min($next, $nextEntity);
+            }
+
+            $segment = substr($src, $offset, $next - $offset);
+            if ($segment !== '') {
+                $chars = preg_split('//u', $segment, -1, PREG_SPLIT_NO_EMPTY | PREG_SPLIT_OFFSET_CAPTURE);
+                if ($chars === false) {
+                    break;
+                }
+
+                foreach ($chars as [$glyph, $glyphOffset]) {
+                    $shadow .= $glyph;
+                    if ($needFold) {
+                        $fold .= $this->foldString($glyph);
+                    }
+                    $map[] = $offset + $glyphOffset;
+                }
+
+                $offset = $next;
+                continue;
+            }
+
             if (!preg_match('/./us', $src, $match, 0, $offset)) {
                 break;
             }
 
-            $glyph    = $match[0];
-            $glyphLen = strlen($glyph);
-
+            $glyph = $match[0];
             $shadow .= $glyph;
             if ($needFold) {
-                $fold   .= $this->foldString($glyph);
+                $fold .= $this->foldString($glyph);
             }
             $map[] = $offset;
-            $offset += $glyphLen;
+            $offset += strlen($glyph);
         }
 
         return [$shadow, $map, $fold];
