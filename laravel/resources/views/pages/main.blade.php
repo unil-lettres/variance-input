@@ -617,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!worksRes.ok) throw new Error(`HTTP ${worksRes.status}`);
             const works = await worksRes.json();
 
-            if (requestId !== authorOverviewRequest) return;
+            if (requestId !== authorOverviewRequest || currentWorkId) return;
 
             if (!Array.isArray(works) || works.length === 0) {
                 historyList.innerHTML = '<li class="editorial-history-empty">Aucune oeuvre pour cet auteur.</li>';
@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }));
 
-            if (requestId !== authorOverviewRequest) return;
+            if (requestId !== authorOverviewRequest || currentWorkId) return;
 
             historyList.innerHTML = entries.map(({ work, comparisons, failed }) => {
                 const count = comparisons.length;
