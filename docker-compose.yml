@@ -156,7 +156,8 @@ services:
     env_file:
       - ./variance/.env
   variance-app:
-    image: unillett/variance:latest
+    # Integrated legacy runtime for variance-input; do not use/push the standalone unillett/variance image here.
+    image: variance-input-legacy:local
     build:
       context: ./variance/docker
       dockerfile: Dockerfile

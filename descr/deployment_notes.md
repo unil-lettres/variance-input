@@ -118,6 +118,10 @@ Guidance for running the Variance stack outside the default development setup.
 
 ## Legacy (PHP) setup checklist
 
+- The integrated legacy PHP runtime inside `variance-input` is not the standalone
+  `variance.unil.ch` artifact. VM deployments should use the dedicated
+  `unillett/variance-input-legacy` image for `variance-app`; do not publish the
+  adapted `variance-input/variance` code to `unillett/variance`.
 - Copy the legacy `settings.inc.example.php` to `settings.inc.php` on the
   deployment host. This file is git-ignored and required by public comparison
   pages.

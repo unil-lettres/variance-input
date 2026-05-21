@@ -120,7 +120,8 @@ services:
       - ./var/uploads_pdf:/var/www/uploads/pdf
 
   variance-app:
-    image: unillett/variance:latest
+    # Integrated legacy runtime for variance-input; kept separate from standalone variance.unil.ch image.
+    image: unillett/variance-input-legacy:stage-latest
     restart: unless-stopped
     env_file:
       - ./variance/.env
