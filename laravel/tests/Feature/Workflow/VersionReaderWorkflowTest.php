@@ -443,6 +443,52 @@ HTML,
             ->assertJsonPath('pages.3.image.name', 'img_reader-explicit-sidecar-v1_004.jpg');
     }
 
+    public function test_reader_handles_multibyte_text_when_refining_sidecar_markers(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-multibyte-v1',
+        ]);
+
+        $text = str_repeat('€', 100) . 'FIN';
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            $text
+        );
+
+        $this->writeFacsimilePair($version, '001');
+        $this->writeFacsimilePair($version, '002');
+
+        File::put(
+            storage_path("app/private/pagination/{$version->id}.json"),
+            json_encode([
+                'version_id' => $version->id,
+                'version_folder' => $version->folder,
+                'work_id' => $version->work_id,
+                'origin' => 'lignes',
+                'marker_count' => 1,
+                'missed_count' => 0,
+                'markers' => [
+                    [
+                        'char_index' => 0,
+                        'image' => '2',
+                        'image_code' => '002',
+                        'page' => '2',
+                        'phrase' => 'FIN',
+                        'line' => 1,
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR)
+        );
+
+        $this->getJson("/api/versions/{$version->id}/reader")
+            ->assertOk()
+            ->assertJsonPath('pagination.available', true)
+            ->assertJsonPath('pages.0.label', '2')
+            ->assertJsonPath('pages.0.image.name', 'img_reader-multibyte-v1_002.jpg');
+    }
+
     public function test_convert_text_to_utf8_requires_authenticated_session(): void
     {
         $user = $this->signInEditor();

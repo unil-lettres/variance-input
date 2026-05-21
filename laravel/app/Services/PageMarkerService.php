@@ -2358,13 +2358,20 @@ class PageMarkerService
 
     private function refineResolvedMarkerIndex(array $marker, string $fold, int $resolved): int
     {
+        $foldLength = mb_strlen($fold, 'UTF-8');
+        if ($foldLength === 0) {
+            return 0;
+        }
+
+        $resolved = max(0, min($resolved, $foldLength - 1));
+
         $phrase = trim((string) ($marker['phrase'] ?? ''));
         if ($phrase === '') {
             return $resolved;
         }
 
         $windowStart = max(0, $resolved - 160);
-        $windowEnd = min(mb_strlen($fold, 'UTF-8'), $resolved + 48);
+        $windowEnd = min($foldLength, $resolved + 48);
 
         foreach ($this->phraseVariants($phrase) as $variant) {
             $needle = $this->foldString($variant);
