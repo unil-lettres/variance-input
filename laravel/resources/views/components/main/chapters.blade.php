@@ -245,7 +245,7 @@
 
       if (scroll) {
         const card = document.getElementById('chapters-card');
-        card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        card?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
 
       pendingComparisonId = null;
@@ -568,7 +568,7 @@
       refreshTargetsForEvent(currentWorkId);
     });
 
-    document.addEventListener('comparisonChaptersRequested', (event) => {
+    document.addEventListener('comparisonChaptersRequested', async (event) => {
       const requestedWorkId = (event?.detail?.workId ?? '').toString().trim();
       const comparisonId = (event?.detail?.comparisonId ?? '').toString().trim();
       if (!comparisonId) {
@@ -577,7 +577,15 @@
       if (requestedWorkId && currentWorkId && requestedWorkId !== currentWorkId) {
         return;
       }
-      selectComparisonTarget(comparisonId, { scroll: true });
+      if (!currentWorkId && requestedWorkId) {
+        currentWorkId = requestedWorkId;
+        await loadTargets(currentWorkId);
+      }
+      if (!selectComparisonTarget(comparisonId, { scroll: true }) && requestedWorkId) {
+        currentWorkId = requestedWorkId;
+        await loadTargets(currentWorkId);
+        selectComparisonTarget(comparisonId, { scroll: true });
+      }
     });
   })();
 </script>

@@ -248,11 +248,13 @@ function initComparisonsTable() {
   function openChaptersPanel(comparisonId) {
     const id = Number(comparisonId);
     if (!Number.isFinite(id)) return;
+    const comp = comparisonData.get(id) || {};
 
     document.dispatchEvent(new CustomEvent('comparisonChaptersRequested', {
       detail: {
         comparisonId: id,
         workId: currentWorkId,
+        chapterCount: Number(comp.chapter_count ?? 0),
       }
     }));
   }
@@ -2284,6 +2286,8 @@ function initComparisonsTable() {
 
     const chaptersBtn = event.target.closest('[data-comparison-chapters="1"]');
     if (chaptersBtn) {
+      event.preventDefault();
+      event.stopPropagation();
       const comparisonId = chaptersBtn.dataset.id;
       if (!comparisonId) return;
       openChaptersPanel(comparisonId);
