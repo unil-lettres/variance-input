@@ -569,13 +569,13 @@ Draft artifact now exists in the repository:
 docker-compose.prod.yml
 ```
 
-It is not yet executable for production. It still contains placeholder image
-references such as:
+It was updated after the first successful production image publication to pin
+image references by digest:
 
 ```text
-unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
-unillett/variance-input:medite-REPLACE_WITH_RELEASE_TAG
-unillett/variance-input-legacy:prod-REPLACE_WITH_GIT_SHA
+unillett/variance-input:laravel-latest@sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
+unillett/variance-input:medite-latest@sha256:a7fb345f5d883e360fda26b0b18a6c3ed364e8d5338650a6d648371be36564e8
+unillett/variance-input-legacy:prod-6399f506f73ad3446372fc2fe8f09df94846299c@sha256:1df7a5fdf4c70ba603d60830cd3d7e53e253b9049e920f0a0f9ad1b02a5322e4
 ```
 
 Local `docker compose -f docker-compose.prod.yml config --quiet` reached compose
@@ -718,10 +718,34 @@ unillett/variance-input-legacy
     sha256:55feb4b83aa7acbad8c0a89201af6e9f080fa8e7e87790923166b13d1145a4af
 ```
 
-No production Laravel, Medite, or integrated legacy tags were observed in the
-Docker Hub tag inventory. The final production release therefore still needs to
-publish prod tags before `docker-compose.prod.yml` can be made executable for
-cutover.
+No production Laravel, Medite, or integrated legacy tags were observed before
+the release merge.
+
+Production image publication on 2026-05-22:
+
+```text
+Source Git commit on main:
+  6399f506f73ad3446372fc2fe8f09df94846299c
+
+GitHub Actions:
+  docker-prod run 26292757030: success
+  docker-legacy-prod run 26292757227: success
+  Laravel tests run 26292757210: success
+  Code scanning run 26292756012: success
+
+Published Docker Hub tags:
+  unillett/variance-input:laravel-latest
+    sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
+  unillett/variance-input:medite-latest
+    sha256:a7fb345f5d883e360fda26b0b18a6c3ed364e8d5338650a6d648371be36564e8
+  unillett/variance-input-legacy:prod-6399f506f73ad3446372fc2fe8f09df94846299c
+    sha256:1df7a5fdf4c70ba603d60830cd3d7e53e253b9049e920f0a0f9ad1b02a5322e4
+  unillett/variance-input-legacy:prod-latest
+    sha256:1df7a5fdf4c70ba603d60830cd3d7e53e253b9049e920f0a0f9ad1b02a5322e4
+```
+
+`docker-compose.prod.yml` now uses tag-plus-digest image references. The tag
+names remain useful for readability, but Docker resolves the immutable digest.
 
 Shared `docker-merge-prod` behavior checked on 2026-05-22 from
 `unil-lettres/actions/main/docker-merge-prod/action.yml`:
@@ -741,8 +765,8 @@ tag push, for example v2026.06.01:
 ```
 
 `docker-compose.prod.yml` placeholders were aligned with this convention on
-2026-05-22. They still must be replaced with exact production tags or digests
-before execution.
+2026-05-22 and later replaced with exact digest-pinned image references from
+the successful production image publication.
 
 Recommended release convention:
 
@@ -770,20 +794,29 @@ Workflow follow-up:
 - Prefer deploying by immutable tags or digests, not by `latest` or
   `prod-latest`.
 
-Before cutover, record:
+Recorded production image inputs:
 
 ```text
 Laravel image tag:
+  unillett/variance-input:laravel-latest
 Laravel image digest:
+  sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
 Medite image tag:
+  unillett/variance-input:medite-latest
 Medite image digest:
+  sha256:a7fb345f5d883e360fda26b0b18a6c3ed364e8d5338650a6d648371be36564e8
 Integrated legacy image tag:
+  unillett/variance-input-legacy:prod-6399f506f73ad3446372fc2fe8f09df94846299c
 Integrated legacy image digest:
+  sha256:1df7a5fdf4c70ba603d60830cd3d7e53e253b9049e920f0a0f9ad1b02a5322e4
 Source Git commit:
+  6399f506f73ad3446372fc2fe8f09df94846299c
 GitHub Actions run IDs:
+  docker-prod 26292757030
+  docker-legacy-prod 26292757227
 ```
 
-Then update `docker-compose.prod.yml` to replace all image placeholders.
+`docker-compose.prod.yml` has been updated with these image references.
 
 CI validation follow-up:
 
