@@ -573,8 +573,8 @@ It was updated after the first successful production image publication to pin
 image references by digest:
 
 ```text
-unillett/variance-input:laravel-latest@sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
-unillett/variance-input:medite-latest@sha256:a7fb345f5d883e360fda26b0b18a6c3ed364e8d5338650a6d648371be36564e8
+unillett/variance-input:laravel-v2026.06.10-rc1@sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
+unillett/variance-input:medite-v2026.06.10-rc1@sha256:4573b588559a65d676aae86159e84811714ad7c69e8741b36d1b28bec9877598
 unillett/variance-input-legacy:prod-6399f506f73ad3446372fc2fe8f09df94846299c@sha256:1df7a5fdf4c70ba603d60830cd3d7e53e253b9049e920f0a0f9ad1b02a5322e4
 ```
 
@@ -747,6 +747,27 @@ Published Docker Hub tags:
 `docker-compose.prod.yml` now uses tag-plus-digest image references. The tag
 names remain useful for readability, but Docker resolves the immutable digest.
 
+Release-candidate tag `v2026.06.10-rc1` was created on 2026-05-22 from commit
+`c3d3f64946862fe34db16bc69565d2b818306396`.
+
+```text
+GitHub Actions:
+  docker-prod tag run 26294850560: success
+  Laravel tests tag run 26294850559: success
+  docker-legacy-prod tag run 26294850558: still in progress at last check
+
+Published Docker Hub RC tags:
+  unillett/variance-input:laravel-v2026.06.10-rc1
+    sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
+  unillett/variance-input:medite-v2026.06.10-rc1
+    sha256:4573b588559a65d676aae86159e84811714ad7c69e8741b36d1b28bec9877598
+```
+
+The integrated legacy source did not change between `6399f50` and the RC tag
+commit. Until the tag-triggered legacy workflow finishes, keep using the
+already published digest-pinned legacy image from the successful `6399f50`
+production build.
+
 Shared `docker-merge-prod` behavior checked on 2026-05-22 from
 `unil-lettres/actions/main/docker-merge-prod/action.yml`:
 
@@ -798,13 +819,13 @@ Recorded production image inputs:
 
 ```text
 Laravel image tag:
-  unillett/variance-input:laravel-latest
+  unillett/variance-input:laravel-v2026.06.10-rc1
 Laravel image digest:
-  sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
+  sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
 Medite image tag:
-  unillett/variance-input:medite-latest
+  unillett/variance-input:medite-v2026.06.10-rc1
 Medite image digest:
-  sha256:a7fb345f5d883e360fda26b0b18a6c3ed364e8d5338650a6d648371be36564e8
+  sha256:4573b588559a65d676aae86159e84811714ad7c69e8741b36d1b28bec9877598
 Integrated legacy image tag:
   unillett/variance-input-legacy:prod-6399f506f73ad3446372fc2fe8f09df94846299c
 Integrated legacy image digest:
