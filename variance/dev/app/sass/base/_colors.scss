@@ -1,0 +1,49 @@
+//Global Colors
+$grey-100: rgb(255, 255, 255);
+$grey-95: darken( $grey-100, 5% );
+$grey-90: darken( $grey-100, 10% );
+$grey-85: darken( $grey-100, 15% );
+$grey-80: darken( $grey-100, 20% );
+$grey-75: darken( $grey-100, 25% );
+$grey-70: darken( $grey-100, 30% );
+$grey-65: darken( $grey-100, 35% );
+$grey-60: darken( $grey-100, 40% );
+$grey-55: darken( $grey-100, 45% );
+$grey-50: darken( $grey-100, 50% );
+$grey-45: darken( $grey-100, 55% );
+$grey-40: darken( $grey-100, 60% );
+$grey-35: darken( $grey-100, 65% );
+$grey-30: darken( $grey-100, 70% );
+$grey-25: darken( $grey-100, 75% );
+$grey-20: darken( $grey-100, 80% );
+$grey-15: darken( $grey-100, 85% );
+$grey-10: darken( $grey-100, 90% );
+$grey-5: darken( $grey-100, 95% );
+$grey-0: rgb(0, 0, 0);
+
+$white: $grey-100;
+$black: $grey-0;
+
+$base-font-color: rgb(66, 71, 74);
+
+$primary: rgb(110, 173, 110);
+$primary-light: lighten( $primary, 10% );
+$primary-dark: darken( $primary, 10% );
+
+$secondary: rgb(205, 109, 105);
+$secondary-light: lighten( $secondary, 10% );
+$secondary-dark: darken( $secondary, 10% );
+
+$tertiary: rgb(98, 147, 178);
+$tertiary-light: lighten( $tertiary, 10% );
+$tertiary-dark: darken( $tertiary, 10% );
+
+$quaternary: rgb(178, 177, 98);
+$quaternary-light: lighten( $tertiary, 10% );
+$quaternary-dark: darken( $tertiary, 10% );
+
+$grey-variance-color: rgb(66, 71, 74);
+$grey-variance-color-light: lighten( $grey-variance-color, 10% );
+$grey-variance-color-dark: darken( $grey-variance-color, 10% );
+
+

@@ -1,21 +1,55 @@
-FROM php:8.2-fpm
+############################################################
+#  Laravel PHP-FPM + Node 22 image, ready for MariaDB
+############################################################
+FROM php:8.3-fpm
 
+# 1) System packages + Node + PHP extensions
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libzip-dev \
-    && docker-php-ext-install pdo pdo_mysql zip
+      git unzip curl mariadb-client \
+      libzip-dev libjpeg-dev libpng-dev libfreetype6-dev \
+      libmagickwand-dev imagemagick \
+  # Node 22.x
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get install -y nodejs \
+  # PHP GD + Zip + MySQL drivers
+  && docker-php-ext-configure gd --with-freetype --with-jpeg \
+  && docker-php-ext-install gd zip pdo pdo_mysql \
+  && pecl install imagick \
+  && docker-php-ext-enable imagick
 
+# 2) Composer (copied from official image)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www/html/app
+# 3) Project files -----------------------------------------
+WORKDIR /var/www/html
 
-RUN mkdir -p /var/www/html/app/storage \
-    && mkdir -p /var/www/html/app/bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html/app \
-    && chmod -R 775 /var/www/html/app/storage /var/www/html/app/bootstrap/cache
+# copy .env early so composer scripts using env vars work
+COPY example.env .env
 
-EXPOSE 8000
+# 4) PHP dependencies (no scripts yet – artisan not present)
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
 
-#CMD ["tail", "-f", "/dev/null"]
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+# 5) Node dependencies
+COPY package*.json ./
+RUN npm install
+
+# 6) Copy full source + entrypoint
+COPY . .
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# 7) Composer post-install scripts, package discovery
+RUN composer dump-autoload --optimize \
+ && php artisan package:discover --ansi
+
+# 8) Build Vite / front-end assets
+RUN npm run build
+
+# 9) Storage link
+RUN php artisan storage:link
+
+# 10) Serve application
+EXPOSE 9000
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["php-fpm", "-F"]

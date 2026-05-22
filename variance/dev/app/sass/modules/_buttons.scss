@@ -1,0 +1,75 @@
+.dia_btn {
+  a, input{
+  background: $grey-80;
+  border: none;
+  color: $grey-100;
+  font-size: ms(0);
+  padding: ms(-2) ms(2) ms(-1);
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  @include transition(all, 0.2s, ease);
+    &:hover{
+      color: $grey-100;
+      text-decoration: none!important;
+      background: $grey-70;
+    }
+  }
+
+  &.primary{
+    a{
+      background: $primary;
+      &:hover{
+        background: $primary-dark;
+      }
+    }
+  }
+
+  &.secondary{
+    a{
+      background: $secondary;
+      &:hover{
+        background: $secondary-dark;
+      }
+    }
+  }
+
+  &.tertiary{
+    a{
+      background: $tertiary;
+      &:hover{
+        background: $tertiary;
+      }
+    }
+  }
+
+  &.big{
+    a{
+      font-size: ms(2);
+    }
+  }
+
+  &.small{
+    a{
+      font-size: ms(-1);
+    }
+  }
+
+  &.align-center {
+    text-align: center;
+  }
+
+  &.align-right {
+    text-align: right;
+  }
+
+  &.padded{
+    padding: 15px 0;
+  }
+
+  &.rounded{
+    a{
+      border-radius: 0.5em;
+    }
+  }
+}

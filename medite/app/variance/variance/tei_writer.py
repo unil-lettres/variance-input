@@ -1,0 +1,363 @@
+# tei_writer.py
+# ==============
+# Utilities that turn the delta stream into:
+#
+#  * a TEI <body> with <anchor>/<metamark> tags
+#  * <listDeletion>, <listAddition>, <listTranspose>, <listSubstitution>
+#    under <mediteData>
+#  * XHTML snippet lists and “main” files for the viewer
+#
+# The heavy lifting of *looping through* deltas still lives in
+# processing.py; we just provide the helper functions and template maps
+# used there.
+
+from __future__ import annotations
+import html
+import re
+import xml.etree.ElementTree as ET
+from typing import Dict, List, Optional
+
+from variance.canon import newline
+from variance.io_helpers import Output
+from variance import operations as op
+
+# ----------------------------------------------------------------------
+# Shared template data
+# ----------------------------------------------------------------------
+#
+# We keep an ops → (href‐prefix, old‐id‐prefix, file‐suffix) map,
+# purely for TEI and for reference in processing.py.  But when we
+# actually build the XHTML list entries (add_list_xhtml) or the inline
+# spans/anchors (add_main_xhtml), we will *override* the old “l…”
+# prefixes and drop them in favor of “a…”.
+#
+ops2xhtml: Dict[str, dict] = {
+    "deletion":     dict(href="#as", id="lbs", file="s"),  # “lbs” → old id; we override later
+    "addition":     dict(href="#bi", id="lai", file="i"),
+    "transpose":    dict(href="#ad", id="lbd", file="d"),
+    "substitution": dict(href="#ar", id="lbr", file="r"),
+    "bc":           dict(href="#bc", id="ac", file="bc"),
+}
+
+_LIST_NEWLINE_MARKER = "¶"
+_LINE_BREAK_TAG_RE = re.compile(r"<\s*(?:br|lb)\s*/?\s*>", re.IGNORECASE)
+_TAG_RE = re.compile(r"<[^>]+>")
+_EM_TAG_RE = re.compile(r"</?em>")
+_SPACE_ONLY_RE = re.compile(r"^[\s\u00a0\u202f]*$")
+
+# For generating the *final* XHTML IDs, we want these exact prefixes:
+#
+#   operation → desired XHTML‐ID prefix
+#
+_ID_COUNTERS: Dict[str, int] = {name: 0 for name in ops2xhtml.keys()}
+_ID_MAP: Dict[str, Dict[str, int]] = {name: {} for name in ops2xhtml.keys()}
+
+
+def reset_numbering_state() -> None:
+    """
+    Reset ID counters so each comparison starts from 00000 again.
+    """
+    for name in _ID_COUNTERS:
+        _ID_COUNTERS[name] = 0
+        _ID_MAP[name].clear()
+
+
+def _next_index(name: str, tei_id: str, counterpart_id: Optional[str] = None) -> int:
+    """
+    Return the legacy sequential index for *tei_id*, sharing the same value
+    with *counterpart_id* when relevant (e.g. source ↔ target pairs).
+    """
+    mapping = _ID_MAP[name]
+    if tei_id in mapping:
+        return mapping[tei_id]
+
+    if counterpart_id and counterpart_id in mapping:
+        index = mapping[counterpart_id]
+    else:
+        index = _ID_COUNTERS[name]
+        _ID_COUNTERS[name] += 1
+
+    mapping[tei_id] = index
+    if counterpart_id:
+        mapping[counterpart_id] = index
+
+    return index
+
+
+def render_inline_tei_for_xhtml(txt: str) -> str:
+    """
+    Convert inline TEI tags that are meaningful in the final XHTML snippets.
+    """
+    rendered = (
+        txt
+        .replace("<emph>", "<em>")
+        .replace("</emph>", "</em>")
+        .replace("&lt;emph&gt;", "<em>")
+        .replace("&lt;/emph&gt;", "</em>")
+    )
+    return balance_emphasis_for_xhtml(rendered)
+
+
+def balance_emphasis_for_xhtml(txt: str) -> str:
+    """
+    Make a Medite XHTML fragment self-contained for italic rendering.
+
+    Medite can split one TEI <emph> range across several anchors. In the final
+    XHTML each anchor/list item must still be valid on its own, otherwise the
+    browser keeps italics open until a later sibling happens to close them.
+    """
+    balance = 0
+    needed_prefixes = 0
+
+    for match in _EM_TAG_RE.finditer(txt):
+        if match.group(0) == "<em>":
+            balance += 1
+            continue
+
+        if balance > 0:
+            balance -= 1
+        else:
+            needed_prefixes += 1
+
+    return ("<em>" * needed_prefixes) + txt + ("</em>" * balance)
+
+
+def render_substitution_label_for_xhtml(old_txt: str, new_txt: str) -> str:
+    """
+    Render an XHTML substitution label without letting emphasis cross the arrow.
+    """
+    old_label = render_list_label_for_xhtml(old_txt)
+    new_label = render_list_label_for_xhtml(new_txt)
+
+    if not old_label and not new_label:
+        return ""
+
+    if not old_label and new_label == _LIST_NEWLINE_MARKER:
+        return _LIST_NEWLINE_MARKER
+
+    if old_label == _LIST_NEWLINE_MARKER and not new_label:
+        return _LIST_NEWLINE_MARKER
+
+    if not old_label:
+        return new_label
+
+    if not new_label:
+        return old_label
+
+    return f"{old_label} → {new_label}"
+
+
+def _normalize_list_label_spacing(label: str) -> str:
+    """
+    Remove spacing artefacts at label boundaries without touching inline tags.
+    """
+    label = label.strip()
+    label = re.sub(r"\s+([,.)\]}])", r"\1", label)
+    label = re.sub(r"([(\[{])\s+", r"\1", label)
+    return label
+
+
+def render_list_label_for_xhtml(txt: str) -> str:
+    """
+    Render a short XHTML list label, keeping invisible transformations legible.
+    """
+    rendered = render_inline_tei_for_xhtml(txt)
+    rendered = _LINE_BREAK_TAG_RE.sub("\n", rendered)
+    label = _normalize_list_label_spacing(rendered.replace("\n", _LIST_NEWLINE_MARKER))
+
+    visible_text = html.unescape(_TAG_RE.sub("", label))
+    if visible_text.replace(_LIST_NEWLINE_MARKER, "").strip():
+        return label
+    if _LIST_NEWLINE_MARKER in visible_text:
+        return _LIST_NEWLINE_MARKER
+
+    raw_text = html.unescape(_TAG_RE.sub("", rendered))
+    if "\n" in raw_text:
+        return _LIST_NEWLINE_MARKER
+    if raw_text and _SPACE_ONLY_RE.match(raw_text):
+        return ""
+    return "[transformation invisible]"
+
+
+# ----------------------------------------------------------------------
+# TEI header builder
+# ----------------------------------------------------------------------
+
+def build_header(z1: Output, z2: Output) -> ET.Element:
+    """
+    Return a <TEI> element pre‐filled with `xml:id`, `corresp` and
+    the <teiHeader> copied from *z1*.
+    """
+    root = ET.Element(
+        "{http://www.tei-c.org/ns/1.0}TEI",
+        {"xml:id": z1.id, "corresp": z2.id},
+    )
+    root.append(ET.fromstring(str(z1.soup.find("teiHeader"))))
+    return root
+
+
+# ----------------------------------------------------------------------
+# List helpers
+# ----------------------------------------------------------------------
+
+def add_list_xml(
+    ops2xml: dict,
+    z: Output,
+    start: int,
+    end: int,
+    attributes: dict,
+    name: str
+) -> None:
+    """
+    Append one <deletion|addition|transpose|substitution> element under <mediteData>.
+    """
+    txt = op.extract(z.rchanges, start, end)
+    ET.SubElement(ops2xml[name], name, attributes).text = txt
+
+
+def add_list_xhtml(
+    xhtml_lists: Dict[str, List[str]],
+    z: Output,
+    start: int,
+    end: int,
+    name: str,
+    id_suffix,                # str or tuple for substitutions
+) -> None:
+    """
+    Append one <li><a …> element into xhtml_lists[name].
+
+    • For deletions:
+        href = "#as_<id_suffix>"   id = "lbs_<id_suffix>"
+    • For substitutions:
+        href = "#ar_src,#ar_tgt"   id = "lbr_src"
+    • All others keep the same prefix for href and id.
+    """
+    # 1) slice raw text, normalize structural tags, keep line breaks visible
+    txt = op.extract(z.rchanges, start, end)
+    for a, b in (("<p/>", "\n"), ("<p>", ""), ("</p>", "\n"), ("</div>", "")):
+        txt = txt.replace(a, b)
+
+    # 2) build href / id / label using legacy numbering ----------------
+    o = ops2xhtml[name]   # e.g. {"href":"#as", "id":"lbs", "file":"s"}
+
+    link_classes = {
+        "addition": "sync",
+        "deletion": "sync",
+        "substitution": "sync sync-twice",
+        "transpose": "sync sync-twice",
+        "bc": "sync",
+    }
+
+    if name == "substitution" and isinstance(id_suffix, tuple):
+        if len(id_suffix) == 4:
+            src_id, tgt_id, old_label, new_label = id_suffix
+            link_text = render_substitution_label_for_xhtml(old_label, new_label)
+        else:
+            src_id, tgt_id, label = id_suffix
+            link_text = render_list_label_for_xhtml(label)
+        if not link_text:
+            return
+        index = _next_index(name, src_id, tgt_id)
+        num = f"{index:05d}"
+        href = f"#ar_{num}"
+        lid = f"lbr_{num}"
+
+    elif name == "transpose" and isinstance(id_suffix, tuple):
+        src_id, tgt_id, _label = id_suffix
+        link_text = render_list_label_for_xhtml(txt)
+        if not link_text:
+            return
+        index = _next_index(name, src_id, tgt_id)
+        num = f"{index:05d}"
+        href = f"#ad_{num}"
+        lid = f"lbd_{num}"
+
+    else:
+        tei_id: str
+        if isinstance(id_suffix, tuple):
+            tei_id = id_suffix[0]
+        else:
+            tei_id = id_suffix
+        link_text = render_list_label_for_xhtml(txt)
+        if not link_text:
+            return
+        index = _next_index(name, tei_id)
+        num = f"{index:05d}"
+        href = f"{o['href']}_{num}"
+        lid = f"{o['id']}_{num}"
+
+    xhtml_lists[name].append(
+        f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
+    )
+
+def add_main_xhtml(
+    xhtml_mains: Dict[str, List[str]],
+    txt: str,
+    name: str,
+    main: str,
+    id_suffix: str,
+    counterpart_id: Optional[str] = None,
+) -> None:
+    """
+    Inject the inline synced element into *xhtml_mains[main]* using the legacy
+    “ac_00000” / “bc_00000” style identifiers.
+    """
+
+    # ── 1. clean snippet text ─────────────────────────────────────────
+    txt = txt.replace("\n", "")
+    for a, b in (
+        ("<p/>", "<br></br>"), ("<p>", ""), ("</p>", "<br></br>"),
+        ("</div>", ""), ("<div>", "")
+    ):
+        txt = txt.replace(a, b)
+    txt = render_inline_tei_for_xhtml(txt)
+
+    index = _next_index(name, id_suffix, counterpart_id)
+    num = f"{index:05d}"
+    prefix_letter = "a" if main == "source" else "b"
+
+    if name == "bc":
+        el = "a"
+        cls = "span_c sync sync-single"
+        if main == "source":
+            element_id = f"ac_{num}"
+            href = f"#bc_{num}"
+        else:
+            element_id = f"bc_{num}"
+            href = f"#ac_{num}"
+    elif name == "deletion":
+        el = "span"
+        cls = "span_s"
+        element_id = f"{prefix_letter}s_{num}"
+        href = None
+    elif name == "addition":
+        el = "span"
+        cls = "span_i"
+        element_id = f"{prefix_letter}i_{num}"
+        href = None
+    elif name == "substitution":
+        el = "a"
+        cls = "span_r sync sync-single"
+        if main == "source":
+            element_id = f"ar_{num}"
+            href = f"#br_{num}"
+        else:
+            element_id = f"br_{num}"
+            href = f"#ar_{num}"
+    elif name == "transpose":
+        el = "a"
+        cls = "span_d sync sync-single"
+        if main == "source":
+            element_id = f"ad_{num}"
+            href = f"#bd_{num}"
+        else:
+            element_id = f"bd_{num}"
+            href = f"#ad_{num}"
+    else:
+        raise ValueError(f"Unhandled operation type: {name}")
+
+    attrs = [f'class="{cls}"', f'id="{element_id}"', 'data-tags=""']
+    if href:
+        attrs.insert(1, f'href="{href}"')
+
+    xhtml_mains[main].append(f'<{el} {" ".join(attrs)}>{txt}</{el}>')

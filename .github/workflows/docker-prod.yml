@@ -1,0 +1,93 @@
+name: docker-prod
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - '*'
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.service }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { service: laravel, arch: linux/amd64, os: ubuntu-latest }
+          - { service: laravel, arch: linux/arm64, os: ubuntu-24.04-arm }
+          - { service: medite, arch: linux/amd64, os: ubuntu-latest }
+          - { service: medite, arch: linux/arm64, os: ubuntu-24.04-arm }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Write Laravel build revision
+        if: matrix.service == 'laravel'
+        run: |
+          mkdir -p laravel/bootstrap/cache
+          cat > laravel/bootstrap/cache/build_revision.json <<EOF
+          {
+            "sha": "${{ github.sha }}",
+            "ref": "${{ github.ref_name }}",
+            "built_at": "${{ github.run_id }}"
+          }
+          EOF
+
+      - name: Build image
+        uses: unil-lettres/actions/docker-build@main
+        with:
+          dockerfile: ./${{ matrix.service }}/Dockerfile
+          platform: ${{ matrix.arch }}
+          image_repository: ${{ vars.DOCKERHUB_REPOSITORY }}
+          name_prefix: ${{ matrix.service }}
+          dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+          context: ./${{ matrix.service }}
+
+  merge:
+    name: Merge
+    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      matrix:
+        service: [laravel, medite]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Merge service
+        id: merge
+        uses: unil-lettres/actions/docker-merge-prod@main
+        with:
+          service: ${{ matrix.service }}
+          image_repository: ${{ vars.DOCKERHUB_REPOSITORY }}
+          dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  update-description:
+    name: Update Description
+    runs-on: ubuntu-latest
+    needs: [merge]
+    if: success()
+    continue-on-error: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Update description
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ vars.DOCKERHUB_REPOSITORY }}

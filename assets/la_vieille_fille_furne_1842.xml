@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:id="v1lvf" xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Version 1</title></titleStmt>
+      <publicationStmt><p>Test</p></publicationStmt>
+      <sourceDesc><p>Generated for testing</p></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div>
+        <p>
+          Mademoiselle Cormon se leva tôt ce matin-là, décidée à ranger le grand salon.  
+          Elle ouvrit les rideaux d’un geste vif et la lumière inonda la pièce.  
+          Sur le buffet, une pile de lettres anciennes attirait son attention.
+        </p>
+      </div>
+    </body>
+  </text>
+</TEI>

@@ -1,0 +1,247 @@
+html {
+  font-size: $base-font-size;
+  -webkit-font-smoothing: $font-smoothing-true;
+  color: $base-font-color;
+
+  @include breakpoint($xxl) {
+    font-size: ms(1);
+  }
+
+
+  @include breakpoint($xl) {
+    font-size: ms(0);
+  }
+
+  @include breakpoint($lg) {
+    font-size: $base-font-size;
+  }
+
+  @include breakpoint($md) {
+    font-size: ms(-1);
+  }
+
+  @include breakpoint($sm) {
+    font-size: ms(-2);
+  }
+  @include breakpoint($xs) {
+
+  }
+}
+
+h1, h2, h3, h4, h5{
+
+}
+
+h1{
+  font-size: ms(10);
+  margin: ms(0) 0;
+}
+
+h2{
+  font-size: ms(8);
+  margin: ms(0)*0.8 0 ms(0);
+}
+
+h3{
+  font-size: ms(6);
+  margin: ms(0)*0.6 0 ms(0)*0.8;
+}
+
+h4{
+  font-size: ms(4);
+  margin: ms(0)*0.4 0 ms(0)*0.6;
+}
+
+h5{
+  font-size: ms(2);
+  margin: ms(0)*0.2 0 ms(0)*0.4;
+}
+
+table{
+
+}
+
+
+b,
+strong {
+  font-weight: $font-weight-bold;
+}
+
+
+small {
+  font-size: ms(0)*0.8;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: monospace, monospace;
+  font-size: ms(0);
+  background: $grey-95;
+  padding: 0.3em 0.7em;
+  border-radius: 0.5em;
+}
+
+a {
+  color: $primary;
+  text-decoration: none;
+  cursor: pointer;
+}
+a:hover,
+a:focus {
+  color: $primary-dark;
+}
+
+.bigger-5 {
+  font-size: ms(10);
+}
+
+.bigger-4 {
+  font-size: ms(8);
+}
+
+.bigger-3 {
+  font-size: ms(6);
+}
+
+.bigger-2 {
+  font-size: ms(4);
+}
+
+.bigger-1 {
+  font-size: ms(2);
+}
+
+.smaller-1 {
+  font-size: ms(-1);
+}
+
+.smaller-2 {
+  font-size: ms(-2);
+}
+
+
+//Txt color
+
+.primary {
+  color: $primary;
+}
+
+.primary-light{
+  color: $primary-light;
+}
+
+.primary-dark{
+  color: $primary-dark;
+}
+
+.secondary {
+  color: $secondary;
+}
+
+.secondary-light {
+  color: $secondary-light;
+}
+
+.secondary-dark {
+  color: $secondary-dark;
+}
+
+.tertiary{
+  color: $tertiary;
+}
+
+.tertiary-light{
+  color: $tertiary-light;
+}
+
+.tertiary-dark{
+  color: $tertiary-dark;
+}
+
+.grey-0{
+  color: $grey-0;
+}
+
+.grey-5{
+  color: $grey-5;
+}
+
+.grey-10{
+  color: $grey-10;
+}
+
+.grey-15{
+  color: $grey-15;
+}
+
+.grey-20{
+  color: $grey-20;
+}
+
+.grey-25{
+  color: $grey-25;
+}
+
+.grey-30{
+  color: $grey-30;
+}
+
+.grey-35{
+  color: $grey-35;
+}
+
+.grey-40{
+  color: $grey-40;
+}
+
+.grey-45{
+  color: $grey-40;
+}
+
+.grey-50{
+  color: $grey-50;
+}
+
+.grey-55{
+  color: $grey-55;
+}
+
+.grey-60{
+  color: $grey-60;
+}
+
+.grey-65{
+  color: $grey-65;
+}
+
+.grey-70{
+  color: $grey-70;
+}
+
+.grey-75{
+  color: $grey-75;
+}
+
+.grey-80{
+  color: $grey-80;
+}
+
+.grey-85{
+  color: $grey-85;
+}
+
+.grey-90{
+  color: $grey-90;
+}
+
+.grey-95{
+  color: $grey-95;
+}
+
+.grey-100{
+  color: $grey-100;
+}
+
+

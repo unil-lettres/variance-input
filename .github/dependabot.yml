@@ -1,0 +1,145 @@
+version: 2
+
+multi-ecosystem-groups:
+  application:
+    schedule:
+      interval: "monthly"
+      time: "05:00"
+      timezone: "Europe/Zurich"
+    target-branch: "development"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+  infrastructure:
+    schedule:
+      interval: "monthly"
+      time: "05:30"
+      timezone: "Europe/Zurich"
+    target-branch: "development"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+updates:
+  - package-ecosystem: "composer"
+    directory: "/laravel"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "application"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "php"
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "npm"
+    directory: "/laravel"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "application"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "pip"
+    directory: "/medite/app/variance"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "application"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "python"
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "composer"
+    directory: "/variance"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "application"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "php"
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "docker"
+    directory: "/laravel"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "infrastructure"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "docker"
+    directory: "/medite"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "infrastructure"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "docker"
+    directory: "/variance/docker"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "infrastructure"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "infrastructure"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/variance"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "infrastructure"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "infrastructure"
+    open-pull-requests-limit: 1
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"

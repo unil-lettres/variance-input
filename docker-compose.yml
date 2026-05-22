@@ -1,19 +1,82 @@
 # -------------------------------------------
 # Projet Variance - Serveur de développement
 # -------------------------------------------
+name: variance
 services:
-
   laravel:
     build:
       context: ./laravel
     container_name: laravel
     volumes:
-      - ./laravel/app:/var/www/html
+      - ./laravel:/var/www/html
+      - ./laravel/storage/app/public:/var/www/html/storage/app/public
+      - uploads:/var/www/html/public/uploads
+      - uploads_images:/var/www/html/public/uploads_images
+      - ./variance/uploads_images:/var/www/variance/uploads_images
+      - ./variance/uploads/pdf:/var/www/variance/uploads/pdf
+      - ./variance/uploads:/var/www/variance/uploads
+      - ./variance/partials:/var/www/variance/partials:ro
+      - ./variance_data:/var/www/html/storage/app/private/variance_data
     working_dir: /var/www/html
     environment:
       - PHP_MEMORY_LIMIT=512M
-    ports:
-      - "8000:8000"
+      - APP_GIT_SHA=${APP_GIT_SHA:-}
+      - VARIANCE_VERSION_EDITOR_LAZY_LOAD=${VARIANCE_VERSION_EDITOR_LAZY_LOAD:-false}
+      - LARAVEL_RUN_MIGRATIONS_ON_BOOT=false
+    expose:
+      - "9000"
+    networks:
+      - variance
+
+  laravel-queue:
+    build:
+      context: ./laravel
+    container_name: laravel-queue
+    volumes:
+      - ./laravel:/var/www/html
+      - ./laravel/storage/app/public:/var/www/html/storage/app/public
+      - uploads:/var/www/html/public/uploads
+      - uploads_images:/var/www/html/public/uploads_images
+      - ./variance/uploads_images:/var/www/variance/uploads_images
+      - ./variance/uploads/pdf:/var/www/variance/uploads/pdf
+      - ./variance/uploads:/var/www/variance/uploads
+      - ./variance_data:/var/www/html/storage/app/private/variance_data
+    working_dir: /var/www/html
+    environment:
+      - PHP_MEMORY_LIMIT=512M
+      - QUEUE_WORKERS=5
+      - APP_GIT_SHA=${APP_GIT_SHA:-}
+      - LARAVEL_RUN_MIGRATIONS_ON_BOOT=false
+    command: ./scripts/run-queue-workers.sh
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+    networks:
+      - variance
+
+  laravel-scheduler:
+    build:
+      context: ./laravel
+    container_name: laravel-scheduler
+    volumes:
+      - ./laravel:/var/www/html
+      - ./laravel/storage/app/public:/var/www/html/storage/app/public
+      - uploads:/var/www/html/public/uploads
+      - uploads_images:/var/www/html/public/uploads_images
+      - ./variance/uploads_images:/var/www/variance/uploads_images
+      - ./variance/uploads/pdf:/var/www/variance/uploads/pdf
+      - ./variance/uploads:/var/www/variance/uploads
+      - ./variance_data:/var/www/html/storage/app/private/variance_data
+    working_dir: /var/www/html
+    environment:
+      - PHP_MEMORY_LIMIT=512M
+      - APP_GIT_SHA=${APP_GIT_SHA:-}
+      - LARAVEL_RUN_MIGRATIONS_ON_BOOT=false
+    command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
+    depends_on:
+      - mariadb
+      - redis
+    restart: unless-stopped
     networks:
       - variance
 
@@ -27,23 +90,96 @@ services:
       MYSQL_PASSWORD: variance_password
     volumes:
       - dbdata:/var/lib/mysql
+    ports:
+      - "3306:3306"
     networks:
       - variance
 
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
+  medite:
+    build:
+      context: ./medite
+    container_name: medite
+    mem_limit: 20g
+    mem_reservation: 10g
+    volumes:
+      - ./medite/app/flask_app.py:/app/flask_app.py
+      - ./medite/app/variance:/app/variance
+      - ./laravel/storage/app/public:/app/storage_public
+      - ./variance_data:/app/variance_data
+      - ./variance/uploads:/app/uploads
+    working_dir: /app
     environment:
-      PMA_HOST: mariadb
-      MYSQL_ROOT_PASSWORD: rootpassword
+      - FLASK_ENV=development
+      - FLASK_APP=flask_app.py
+      - NLTK_DATA=/app/assets/nltk_data
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+    networks:
+      - variance
+
+  redis:
+    image: redis:7.0
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - variance
+
+  variance-proxy:
+    image: nginx:1.27
+    container_name: variance-proxy
+    depends_on:
+      - variance-web
+      - laravel
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./laravel/public:/var/www/html/public:ro
+      - ./laravel/storage/app/public:/var/www/html/storage/app/public:ro
     ports:
       - "8080:80"
     networks:
       - variance
 
-volumes:
-  dbdata:
+  variance-web:
+    image: httpd:2.4
+    working_dir: /var/www
+    volumes:
+      - ./variance/:/var/www
+      - ./variance/docker/config/variance.conf:/usr/local/apache2/conf/httpd.conf
+    ports:
+      - "127.0.0.1:8282:80"
+    networks:
+      - variance
+    container_name: variance-web
+    env_file:
+      - ./variance/.env
+  variance-app:
+    # Integrated legacy runtime for variance-input; do not use/push the standalone unillett/variance image here.
+    image: variance-input-legacy:local
+    build:
+      context: ./variance/docker
+      dockerfile: Dockerfile
+    env_file:
+      - ./variance/.env
+    volumes:
+      - ./variance/uploads:/var/www/uploads
+      - ./variance/uploads:/app/uploads
+      - ./variance/:/var/www
+      - ./variance/docker/config/variance.ini:/usr/local/etc/php/conf.d/php.ini
+    working_dir: /var/www
+    expose:
+      - "9000"
+    networks:
+      - variance
+    container_name: variance-app
 
 networks:
   variance:
     name: variance
+
+volumes:
+  dbdata:
+  uploads:
+  uploads_images:

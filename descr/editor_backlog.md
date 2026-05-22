@@ -1,0 +1,268 @@
+# Editor Backlog
+
+Ce document regroupe les chantiers encore ouverts autour de l’éditeur Laravel :
+- éditeur de version
+- pagination `<pb>` / sidecar
+- ergonomie éditoriale
+- tests de non-régression
+
+Il remplace l’ancien document de “plan” pagination, qui mélangeait état courant,
+intentions et implémentation désormais partielle.
+
+## État actuel
+
+Ce qui existe déjà dans le code :
+- l’éditeur de version Laravel existe
+- `EditorController::versionUpdate()` réécrit le XML et appelle `syncSidecarWithPb()`
+- `PageMarkerService` sait :
+  - lire des balises `<pb>`
+  - créer un sidecar depuis `<pb>`
+  - fusionner `<pb>` vers un sidecar existant
+  - matérialiser des `<pb>` dans le XML éditeur
+- les routes suivantes existent déjà :
+  - `POST /api/versions/{version}/pagination/from-pb`
+  - `POST /api/versions/{version}/pagination/merge-from-pb`
+- les tests couvrent déjà une partie du comportement :
+  - cache d’éditeur
+  - lazy loading du document
+  - invalidation du cache lecteur après `merge-from-pb`
+
+Ce qui n’est pas encore clairement bouclé :
+- l’ergonomie de l’éditeur autour des balises `<pb>`
+- la cohérence de bout en bout entre édition, sidecar, comparaison et rendu final
+- plusieurs outils éditoriaux encore absents
+
+## Priorité haute — retours Maxime à traiter en premier
+
+### 1. Accès restreint à l’éditeur de versions
+
+Objectif :
+- permettre à des éditeurs scientifiques externes de poser ou corriger les
+  balises d’images / repères éditoriaux dans les versions sans leur donner
+  accès au reste de l’interface Variance
+
+Contexte :
+- Joël et Rudolf apprécient l’ajout manuel de balises d’images depuis l’éditeur
+- cette tâche relève des éditeurs scientifiques
+- ces personnes ne doivent pas pouvoir interférer avec :
+  - création / suppression d’œuvres
+  - lancement Medite
+  - publication
+  - édition des comparaisons
+  - gestion des utilisateurs
+
+À faire :
+- définir une permission dédiée, par exemple `version_editor`, limitée à une
+  œuvre ou à un auteur
+- protéger explicitement les routes nécessaires :
+  - `GET /version/{version}/editor`
+  - `GET /api/versions/{version}/editor-document`
+  - `PUT /version/{version}/editor`
+  - actions strictement nécessaires aux balises images / fac-similés
+- fournir une entrée d’interface restreinte listant uniquement les versions
+  autorisées
+- masquer ou interdire tous les autres panneaux pour ce rôle
+- ajouter des tests d’autorisation `200/403` pour admin, chercheur courant et
+  éditeur restreint
+
+## Priorité haute — pagination
+
+### 2. Clarifier le flux éditorial pagination
+
+Objectif :
+- faire des balises `<pb>` la représentation éditoriale claire dans la version
+- laisser le sidecar et les jobs gérer les marqueurs visuels de comparaison
+
+À faire :
+- vérifier exactement quels gestes UI de l’éditeur créent aujourd’hui des marqueurs de pagination
+- supprimer toute ambiguïté entre :
+  - balise TEI éditoriale `<pb .../>`
+  - marqueur XHTML injecté `<span class="page-marker">...`
+- documenter explicitement le flux recommandé dans `descr/workflow.md`
+
+### 3. Outil d’insertion/édition de `<pb>` dans l’éditeur
+
+Objectif :
+- offrir un vrai geste éditorial pour poser un repère de pagination TEI
+
+À faire :
+- ajouter ou corriger un outil d’insertion de balise `<pb .../>`
+- définir les attributs réellement pris en charge par le code :
+  - `facs`
+  - `pagination`
+  - éventuellement `n`
+- afficher une aide courte dans l’éditeur sur le format attendu
+
+### 4. Vérification bout en bout `<pb>` → sidecar → comparaison
+
+Objectif :
+- figer le workflow réel par des tests et une recette manuelle simple
+
+À faire :
+- test fonctionnel :
+  1. insertion de `<pb>` dans une version
+  2. sauvegarde de la version
+  3. fusion ou création du sidecar depuis `<pb>`
+  4. comparaison
+  5. injection de pagination
+- confirmer que les comparaisons affichent bien les marqueurs attendus sans conflit
+
+## Priorité moyenne
+
+### 5. Signalement UI de l’état pagination dans l’éditeur
+
+Objectif :
+- mieux montrer à l’éditeur ce qui est déjà aligné ou non
+
+Pistes :
+- nombre de balises `<pb>` détectées
+- présence/absence du sidecar
+- divergence éventuelle entre XML et sidecar
+- action explicite :
+  - “Créer sidecar depuis `<pb>`”
+  - “Fusionner `<pb>` vers sidecar”
+
+### 6. Nettoyage d’anciens marqueurs incohérents
+
+Objectif :
+- éviter les cas hybrides où des versions ou comparaisons anciennes portent encore des marqueurs historiques ambigus
+
+À faire :
+- auditer les contenus qui contiennent encore des `page-marker` là où on attend du TEI
+- décider s’il faut :
+  - nettoyer automatiquement
+  - ou seulement documenter les cas legacy
+
+### 7. Tests Medite autour des `<pb>`
+
+Objectif :
+- confirmer que le passage par Medite ne casse pas la stratégie pagination
+
+À faire :
+- ajouter des tests de non-régression sur des versions contenant `<pb>`
+- vérifier ce qui survit dans les sorties intermédiaires utiles au pipeline
+
+## Priorité moyenne / basse
+
+### 8. Recherche / remplacement dans l’éditeur de version
+
+Origine :
+- demande Maxime, 8 mai 2026
+
+Objectif :
+- ajouter un outil de recherche / remplacement dans l’éditeur XML de version,
+  adapté au travail de correction éditoriale.
+
+À préciser :
+- portée : document entier ou sélection
+- remplacement simple ou expressions régulières
+- prévisualisation / confirmation des occurrences
+- interaction avec la sauvegarde, le rechargement et les contrôles XML
+
+### 9. Export des fichiers `_lignes`
+
+Origine :
+- demande Maxime, 8 mai 2026
+
+Objectif :
+- permettre l’export / téléchargement du fichier `_lignes` associé à une
+  version quand il existe.
+
+Contexte :
+- les fichiers sont stockés côté Laravel dans
+  `storage/app/private/lignes/{version_id}.txt`
+- une route de téléchargement existe déjà côté API admin, mais l’ergonomie UI
+  doit être vérifiée / exposée explicitement.
+
+À faire :
+- vérifier le comportement actuel du bouton / endpoint de téléchargement
+- rendre l’action visible et compréhensible dans le tableau des versions
+- tester les cas :
+  - fichier présent
+  - fichier absent
+  - utilisateur sans droit complet sur l’œuvre
+
+### 10. Outil exposant dans l’éditeur de version
+
+Objectif :
+- gérer les exposants sans conventions ad hoc de type `^...^`
+
+À faire :
+- définir la représentation XML cible
+- ajouter l’UI
+- tester l’aller-retour sauvegarde/rechargement
+
+### 11. Insertion d’image in-texte
+
+Objectif :
+- permettre un ancrage éditorial explicite d’image dans le flux de texte
+
+À faire :
+- définir la balise / attributs cibles
+- préciser le lien avec les fac-similés déjà gérés ailleurs
+- éviter toute convention `[Image]` dans les sources TXT
+
+### 12. Gestion des appels de notes
+
+Objectif :
+- fournir une édition propre des appels et de leur contenu associé
+
+À faire :
+- choisir la structure XML cible
+- ajouter l’outil d’insertion/édition
+- couvrir au moins un cas de sauvegarde et de réouverture
+
+## Tests backlog complémentaires
+
+### 13. Test d’import de version enrichi
+
+Objectif :
+- figer toutes les normalisations actuellement faites lors de l’import
+
+À couvrir :
+- alinéas
+- doubles espaces
+- fins de ligne
+- bords de fichier
+- caractères invisibles
+- normalisations legacy d’encodage et de ponctuation
+
+### 14. Recette manuelle éditeur
+
+Maintenir une recette simple pour les évolutions de l’éditeur :
+1. ouvrir une version
+2. modifier le XML
+3. sauvegarder
+4. rouvrir
+5. vérifier pagination / fac-similés / comparaison selon le cas
+
+### 15. Test end-to-end du workflow éditorial
+
+Priorité :
+- basse, à traiter dans un prochain cycle
+
+Objectif :
+- figer par un test unique le parcours éditorial principal présenté dans la
+  documentation
+
+Périmètre visé :
+1. création d’une version
+2. import `_lignes`
+3. création d’une comparaison
+4. publication ou export
+5. vérification minimale des artefacts attendus
+
+Remarque :
+- ce test doit rester ciblé et robuste ; il ne doit pas devenir une suite UI
+  lourde ni fragile.
+
+## Décision documentaire
+
+Ce document est un **backlog** :
+- pas une description de l’architecture actuelle
+- pas une spec figée
+
+Les documents de référence sur l’état réel doivent rester :
+- [workflow.md](/Users/jganivet/Développement/variance2/descr/workflow.md:1)
+- [facsimiles.md](/Users/jganivet/Développement/variance2/descr/facsimiles.md:1)
+- [laravel_current_code_map.md](/Users/jganivet/Développement/variance2/descr/laravel_current_code_map.md:1)

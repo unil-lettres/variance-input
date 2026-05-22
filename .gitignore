@@ -1,0 +1,78 @@
+############################################
+#  OS / Editor noise                       #
+############################################
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+############################################
+#  Logs & runtime PIDs                     #
+############################################
+*.log
+*.pid
+
+############################################
+#  Docker bind-mounts / volumes            #
+############################################
+# MariaDB volume
+dbdata/
+# Medite & back-office runtime data
+variance_data/
+
+############################################
+#  Uploads (generated at runtime)          #
+############################################
+variance/uploads/
+
+############################################
+#  Test / archive data                     #
+############################################
+assets/
+demo_pda_partie1/
+protocole/
+
+############################################
+#  Python / Medite build artefacts         #
+############################################
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/*.egg
+**/*.egg-info/
+**/build/
+**/dist/
+**/venv/
+**/.venv/
+**/assets/nltk_data/
+!medite/app/variance/assets/
+!medite/app/variance/assets/nltk_data/
+!medite/app/variance/assets/nltk_data/tokenizers/
+!medite/app/variance/assets/nltk_data/tokenizers/punkt_tab/
+!medite/app/variance/assets/nltk_data/tokenizers/punkt_tab/**
+
+############################################
+#  Node / front-end                        #
+############################################
+**/node_modules/
+
+############################################
+#  Laravel / PHP runtime files             #
+############################################
+laravel/storage/*.key
+laravel/storage/logs/
+laravel/bootstrap/cache/*.php
+laravel/bootstrap/cache/build_revision.json
+
+############################################
+#  Local scripts / uploads / sidecars      #
+############################################
+/scripts/
+descr/internal/
+laravel/storage/app/public/uploads/
+laravel/storage/app/private/
+laravel/storage/app/tmp/
+laravel/public/uploads/
+laravel/public/uploads_images/
+laravel/public/uploads/pdf/

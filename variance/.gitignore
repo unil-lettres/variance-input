@@ -1,0 +1,27 @@
+# Laravel & PHP
+/vendor/
+/node_modules/
+/.env                # real credentials
+/php/settings.inc.php
+
+# Logs, PIDs
+supervisord.log
+supervisord.pid
+log.txt
+
+# Built uploads (but keep the .gitkeep so folder stays in repo)
+/uploads/*
+!/uploads/.gitkeep
+/uploads_images/*
+!/uploads_images/.gitkeep
+
+# Ignore any DB dumps you generate here
+docker/db/
+
+# Editor configs
+/.idea/
+/.DS_Store
+
+# Local override files
+docker-compose.override.yml
+.htpasswd

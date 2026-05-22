@@ -1,0 +1,30 @@
+# Keep Docker build context small: ignore local data, deps and IDE cruft.
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+
+# Host-installed dependencies (Docker builds them from manifests instead).
+node_modules
+vendor
+npm-debug.log*
+yarn-error.log*
+
+# Huge runtime data – volumes mount them at runtime, no need during build.
+storage/*
+!storage/framework
+!storage/framework/**
+!storage/logs
+!storage/logs/**
+
+public/storage
+public/uploads
+public/uploads_images
+uploads
+uploads_images
+
+# Local secrets and artifacts that shouldn't ship in the image.
+.env
+.env.*
+database.sqlite

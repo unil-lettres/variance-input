@@ -1,0 +1,61 @@
+networks:
+  variance:
+    driver: bridge
+
+name: variance
+
+services:
+  variance-web:
+    image: httpd:2.4
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/config/variance.conf:/usr/local/apache2/conf/httpd.conf
+    ports:
+      - "127.0.0.1:8282:80"
+    networks:
+      - variance
+    container_name: variance-web
+  variance-app:
+    # Integrated legacy runtime for variance-input; do not use/push the standalone unillett/variance image here.
+    image: variance-input-legacy:local
+    build:
+      context: ./docker
+      dockerfile: ./Dockerfile
+    env_file:
+      - ./.env
+    volumes:
+      - ./:/var/www
+      - ./docker/config/variance.ini:/usr/local/etc/php/conf.d/php.ini
+    working_dir: /var/www
+    expose:
+      - "9000"
+    networks:
+      - variance
+    container_name: variance-app
+  variance-mysql-prod:
+    image: mysql:8
+    env_file:
+      - ./.env
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3305:3306"
+    networks:
+      - variance
+    container_name: variance-mysql-prod
+  variance-mysql-dev:
+    image: mysql:8
+    env_file:
+      - ./.env
+    volumes:
+      - mysql-data-dev:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3304:3306"
+    networks:
+      - variance
+    container_name: variance-mysql-dev
+
+volumes:
+  mysql-data:
+  mysql-data-dev:

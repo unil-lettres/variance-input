@@ -1,0 +1,183 @@
+name: Dependency checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/dependabot.yml"
+      - ".github/workflows/dependency-checks.yml"
+      - "docker-compose.yml"
+      - "docker-compose.vm.yml"
+      - "docker-compose.prod.yml"
+      - "laravel/Dockerfile"
+      - "laravel/composer.json"
+      - "laravel/composer.lock"
+      - "laravel/package.json"
+      - "laravel/package-lock.json"
+      - "laravel.prod.env.example"
+      - "medite/Dockerfile"
+      - "medite/app/variance/pyproject.toml"
+      - "medite/app/variance/poetry.lock"
+      - "variance/composer.json"
+      - "variance/composer.lock"
+      - "variance/docker-compose.yml"
+      - "variance/docker/Dockerfile"
+      - "variance/prod.env.example"
+
+permissions:
+  contents: read
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Validate root compose files
+        run: |
+          docker compose config >/dev/null
+          cp variance/.env variance/.env.ci-backup
+          trap 'rm -f laravel.env; mv variance/.env.ci-backup variance/.env' EXIT
+          cp laravel.env.example laravel.env
+          docker compose -f docker-compose.vm.yml config >/dev/null
+          cp laravel.prod.env.example laravel.env
+          cp variance/prod.env.example variance/.env
+          docker compose -f docker-compose.prod.yml config >/dev/null
+
+      - name: Validate legacy compose file
+        working-directory: variance
+        run: docker compose config >/dev/null
+
+  laravel-tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: laravel
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, sqlite3, pdo_sqlite, dom, fileinfo
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: |
+          composer --version
+          composer install --no-interaction --prefer-dist
+
+      - name: Prepare environment file
+        run: php -r "file_exists('.env') || copy('example.env', '.env');"
+
+      - name: Prepare app key
+        run: php artisan key:generate --ansi
+
+      - name: Run PHPUnit
+        run: |
+          composer --version
+          composer test
+
+  laravel-frontend-build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: laravel
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: laravel/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build front-end assets
+        run: npm run build
+
+  medite-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: medite/app/variance
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry==2.3.4
+
+      - name: Install Medite dependencies
+        run: |
+          poetry config virtualenvs.create false
+          poetry install --with dev --no-interaction --no-ansi
+
+      - name: Build suffix-tree extension
+        run: python setup.py build_ext --inplace
+
+      - name: Run Medite tests
+        run: pytest
+
+  legacy-composer-validate:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: variance
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          coverage: none
+
+      - name: Validate legacy Composer manifest
+        run: |
+          composer --version
+          composer validate --no-check-publish
+
+  docker-builds:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: laravel
+            dockerfile: ./laravel/Dockerfile
+            context: ./laravel
+          - name: medite
+            dockerfile: ./medite/Dockerfile
+            context: ./medite
+          - name: variance-app
+            dockerfile: ./variance/docker/Dockerfile
+            context: ./variance/docker
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Build ${{ matrix.name }}
+        run: docker build -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"

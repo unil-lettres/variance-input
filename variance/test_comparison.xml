@@ -1,0 +1,14 @@
+<root>
+  <auteur>
+    <prenom>Test</prenom>
+    <nom>Author</nom>
+  </auteur>
+  <oeuvre>
+    <titre>Sample Work</titre>
+  </oeuvre>
+  <arbre>
+    <version id="v1"/>
+<version id="v2"/>
+  </arbre>
+  <informations vsource="v1" vcible="v2"/>
+</root>

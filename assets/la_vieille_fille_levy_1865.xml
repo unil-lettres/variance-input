@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:id="v2lvf" xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Version 2</title></titleStmt>
+      <publicationStmt><p>Test</p></publicationStmt>
+      <sourceDesc><p>Generated for testing</p></sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div>
+        <p>
+          Ce matin-là, Mlle Cormon s’éveilla avec l’intention de faire un peu de ménage.  
+          D’un geste brusque, elle tira les rideaux : le soleil envahit aussitôt la pièce.  
+          Elle remarqua un tas de vieux courriers posés sur la commode.
+        </p>
+      </div>
+    </body>
+  </text>
+</TEI>
