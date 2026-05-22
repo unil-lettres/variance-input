@@ -1,0 +1,48 @@
+name: docker-legacy-prod
+
+on:
+  push:
+    branches:
+      - "main"
+    tags:
+      - "*"
+    paths:
+      - ".github/workflows/docker-legacy-prod.yml"
+      - "variance/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build integrated legacy variance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./variance/docker
+          file: ./variance/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            unillett/variance-input-legacy:prod-latest
+            unillett/variance-input-legacy:prod-${{ github.sha }}

@@ -1,0 +1,165 @@
+# Production draft for variance-input on plett.
+#
+# This file is intentionally separate from docker-compose.vm.yml so production
+# can use pinned release images while staging continues to use stage tags.
+# Do not deploy this draft until image references, env files, NAS mounts, and
+# rollback steps have been validated in the cutover plan.
+
+name: variance-input
+
+services:
+  mariadb:
+    image: mariadb:11.5.2
+    restart: unless-stopped
+    env_file:
+      - ./variance/.env
+    volumes:
+      - ./var/dbdata:/var/lib/mysql
+
+  redis:
+    image: redis:7.0
+    restart: unless-stopped
+
+  laravel:
+    # Replace with a pinned production tag or digest before deployment.
+    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    restart: unless-stopped
+    env_file:
+      - ./laravel.env
+    environment:
+      - PHP_MEMORY_LIMIT=512M
+      - LARAVEL_RUN_MIGRATIONS_ON_BOOT=false
+    volumes:
+      - ./laravel.env:/var/www/html/.env
+      - ./var/laravel_storage:/var/www/html/storage
+      - ./var/variance_data:/var/www/html/storage/app/private/variance_data
+      - ./var/uploads:/var/www/html/public/uploads
+      - ./var/uploads_images:/var/www/html/public/uploads_images
+      - ./var/uploads:/var/www/variance/uploads
+      - ./var/uploads_images:/var/www/variance/uploads_images
+      # Production decision: make ./var/uploads_pdf resolve to ./var/uploads/pdf
+      # if PDFs should remain inside the NAS-backed uploads tree.
+      - ./var/uploads_pdf:/var/www/variance/uploads/pdf
+    depends_on:
+      - mariadb
+      - redis
+    expose:
+      - "9000"
+
+  laravel-queue:
+    # Replace with the same pinned Laravel production image as laravel.
+    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    restart: unless-stopped
+    command: ./scripts/run-queue-workers.sh
+    env_file:
+      - ./laravel.env
+    environment:
+      - PHP_MEMORY_LIMIT=512M
+      - QUEUE_WORKERS=5
+      - LARAVEL_RUN_MIGRATIONS_ON_BOOT=false
+    volumes:
+      - ./laravel.env:/var/www/html/.env
+      - ./var/laravel_storage:/var/www/html/storage
+      - ./var/variance_data:/var/www/html/storage/app/private/variance_data
+      - ./var/uploads:/var/www/html/public/uploads
+      - ./var/uploads_images:/var/www/html/public/uploads_images
+      - ./var/uploads:/var/www/variance/uploads
+      - ./var/uploads_images:/var/www/variance/uploads_images
+      - ./var/uploads_pdf:/var/www/variance/uploads/pdf
+    depends_on:
+      - mariadb
+      - redis
+
+  laravel-scheduler:
+    # Replace with the same pinned Laravel production image as laravel.
+    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    restart: unless-stopped
+    command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
+    env_file:
+      - ./laravel.env
+    environment:
+      - PHP_MEMORY_LIMIT=512M
+      - LARAVEL_RUN_MIGRATIONS_ON_BOOT=false
+    volumes:
+      - ./laravel.env:/var/www/html/.env
+      - ./var/laravel_storage:/var/www/html/storage
+      - ./var/variance_data:/var/www/html/storage/app/private/variance_data
+      - ./var/uploads:/var/www/html/public/uploads
+      - ./var/uploads_images:/var/www/html/public/uploads_images
+      - ./var/uploads:/var/www/variance/uploads
+      - ./var/uploads_images:/var/www/variance/uploads_images
+      - ./var/uploads_pdf:/var/www/variance/uploads/pdf
+    depends_on:
+      - mariadb
+      - redis
+
+  laravel-assets:
+    # Replace with the same pinned Laravel production image as laravel.
+    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    restart: "no"
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - "find /build-output -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && cp -a /var/www/html/public/build/. /build-output/"
+    volumes:
+      - vite_build:/build-output
+
+  medite:
+    # Replace with a pinned production tag or digest before deployment.
+    image: unillett/variance-input:medite-REPLACE_WITH_RELEASE_TAG
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - FLASK_APP=flask_app.py
+      - NLTK_DATA=/app/assets/nltk_data
+    volumes:
+      - ./var/uploads:/app/uploads
+      - ./var/variance_data:/app/variance_data
+      - ./var/laravel_storage/app/public:/app/storage_public
+    depends_on:
+      - redis
+
+  variance-web:
+    image: httpd:2.4
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./variance:/var/www
+      - ./variance/docker/config/variance.conf:/usr/local/apache2/conf/httpd.conf
+      - ./var/uploads:/var/www/uploads
+      - ./var/uploads_images:/var/www/uploads_images
+      - ./var/uploads_pdf:/var/www/uploads/pdf
+
+  variance-app:
+    # Integrated legacy runtime for variance-input; do not use the standalone
+    # legacy variance.unil.ch image here.
+    # Replace with a pinned production tag or digest before deployment.
+    image: unillett/variance-input-legacy:prod-REPLACE_WITH_GIT_SHA
+    restart: unless-stopped
+    env_file:
+      - ./variance/.env
+    volumes:
+      - ./variance:/var/www
+      - ./var/uploads:/var/www/uploads
+      - ./var/uploads:/app/uploads
+      - ./var/uploads_images:/var/www/uploads_images
+      - ./var/uploads_pdf:/var/www/uploads/pdf
+      - ./variance/docker/config/variance.ini:/usr/local/etc/php/conf.d/php.ini
+    expose:
+      - "9000"
+
+  variance-proxy:
+    image: nginx:1.27
+    restart: unless-stopped
+    depends_on:
+      - variance-web
+      - laravel
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./laravel/public:/var/www/html/public:ro
+      - vite_build:/var/www/html/public/build:ro
+      - ./var/laravel_storage/app/public:/var/www/html/storage/app/public:ro
+    ports:
+      - 127.0.0.1:8081:80
+
+volumes:
+  vite_build:

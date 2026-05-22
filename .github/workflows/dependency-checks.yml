@@ -7,11 +7,13 @@ on:
       - ".github/workflows/dependency-checks.yml"
       - "docker-compose.yml"
       - "docker-compose.vm.yml"
+      - "docker-compose.prod.yml"
       - "laravel/Dockerfile"
       - "laravel/composer.json"
       - "laravel/composer.lock"
       - "laravel/package.json"
       - "laravel/package-lock.json"
+      - "laravel.prod.env.example"
       - "medite/Dockerfile"
       - "medite/app/variance/pyproject.toml"
       - "medite/app/variance/poetry.lock"
@@ -19,6 +21,7 @@ on:
       - "variance/composer.lock"
       - "variance/docker-compose.yml"
       - "variance/docker/Dockerfile"
+      - "variance/prod.env.example"
 
 permissions:
   contents: read
@@ -34,9 +37,13 @@ jobs:
       - name: Validate root compose files
         run: |
           docker compose config >/dev/null
+          cp variance/.env variance/.env.ci-backup
+          trap 'rm -f laravel.env; mv variance/.env.ci-backup variance/.env' EXIT
           cp laravel.env.example laravel.env
-          trap 'rm -f laravel.env' EXIT
           docker compose -f docker-compose.vm.yml config >/dev/null
+          cp laravel.prod.env.example laravel.env
+          cp variance/prod.env.example variance/.env
+          docker compose -f docker-compose.prod.yml config >/dev/null
 
       - name: Validate legacy compose file
         working-directory: variance
