@@ -21,8 +21,8 @@ services:
     restart: unless-stopped
 
   laravel:
-    # Replace with a pinned production tag or digest before deployment.
-    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    # Pinned to the first production image publication on 2026-05-22.
+    image: unillett/variance-input:laravel-latest@sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
     restart: unless-stopped
     env_file:
       - ./laravel.env
@@ -47,8 +47,8 @@ services:
       - "9000"
 
   laravel-queue:
-    # Replace with the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    # Use the same pinned Laravel production image as laravel.
+    image: unillett/variance-input:laravel-latest@sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
     restart: unless-stopped
     command: ./scripts/run-queue-workers.sh
     env_file:
@@ -71,8 +71,8 @@ services:
       - redis
 
   laravel-scheduler:
-    # Replace with the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    # Use the same pinned Laravel production image as laravel.
+    image: unillett/variance-input:laravel-latest@sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
     restart: unless-stopped
     command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     env_file:
@@ -94,8 +94,8 @@ services:
       - redis
 
   laravel-assets:
-    # Replace with the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-REPLACE_WITH_RELEASE_TAG
+    # Use the same pinned Laravel production image as laravel.
+    image: unillett/variance-input:laravel-latest@sha256:f3f11727f56dadc960a2e2c6bc9cbad895823149ab0e1a52d17479a28b09c9e5
     restart: "no"
     entrypoint: ["/bin/sh", "-lc"]
     command:
@@ -104,8 +104,8 @@ services:
       - vite_build:/build-output
 
   medite:
-    # Replace with a pinned production tag or digest before deployment.
-    image: unillett/variance-input:medite-REPLACE_WITH_RELEASE_TAG
+    # Pinned to the first production image publication on 2026-05-22.
+    image: unillett/variance-input:medite-latest@sha256:a7fb345f5d883e360fda26b0b18a6c3ed364e8d5338650a6d648371be36564e8
     restart: unless-stopped
     environment:
       - FLASK_ENV=production
@@ -132,8 +132,8 @@ services:
   variance-app:
     # Integrated legacy runtime for variance-input; do not use the standalone
     # legacy variance.unil.ch image here.
-    # Replace with a pinned production tag or digest before deployment.
-    image: unillett/variance-input-legacy:prod-REPLACE_WITH_GIT_SHA
+    # Pinned to the first production image publication on 2026-05-22.
+    image: unillett/variance-input-legacy:prod-6399f506f73ad3446372fc2fe8f09df94846299c@sha256:1df7a5fdf4c70ba603d60830cd3d7e53e253b9049e920f0a0f9ad1b02a5322e4
     restart: unless-stopped
     env_file:
       - ./variance/.env
