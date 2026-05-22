@@ -1881,3 +1881,76 @@ Assuming today is 2026-05-22:
 - 2026-06-03 to 2026-06-05: stakeholder validation and cutover decision.
 - 2026-06-08 to 2026-06-10: production cutover window if rehearsal is clean.
   Target cutover deadline: 2026-06-10 or before.
+
+## Continuation Note 2026-05-22
+
+Stopping point:
+
+- Release PR merged to `main`:
+  - PR #17: `https://github.com/unil-lettres/variance-input/pull/17`
+  - squash commit: `6399f506f73ad3446372fc2fe8f09df94846299c`
+- Digest follow-up merged to `main`:
+  - PR #18: `https://github.com/unil-lettres/variance-input/pull/18`
+  - squash commit: `c3d3f64946862fe34db16bc69565d2b818306396`
+- RC tag created and pushed:
+  - `v2026.06.10-rc1`
+  - points to `c3d3f64946862fe34db16bc69565d2b818306396`
+- RC image pin follow-up merged to `main`:
+  - PR #19: `https://github.com/unil-lettres/variance-input/pull/19`
+  - squash commit: `25efaf6c2f2cdb8d19bc09588dc229eaa89716c8`
+
+Published and pinned RC images:
+
+```text
+unillett/variance-input:laravel-v2026.06.10-rc1
+  sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
+unillett/variance-input:medite-v2026.06.10-rc1
+  sha256:4573b588559a65d676aae86159e84811714ad7c69e8741b36d1b28bec9877598
+```
+
+Legacy image currently remains pinned to the successful production build from
+`6399f50`:
+
+```text
+unillett/variance-input-legacy:prod-6399f506f73ad3446372fc2fe8f09df94846299c
+  sha256:1df7a5fdf4c70ba603d60830cd3d7e53e253b9049e920f0a0f9ad1b02a5322e4
+```
+
+Outstanding check:
+
+- The tag-triggered `docker-legacy-prod` run for `v2026.06.10-rc1`
+  (`26294850558`) was still in progress at last check, stuck in the Docker
+  `Build and push` step. Before rehearsal, check whether it finished and whether
+  a newer legacy tag should replace the pinned `6399f50` digest. If it did not
+  finish, it is acceptable for rehearsal to keep the pinned `6399f50` legacy
+  image because legacy source did not change between `6399f50` and the RC tag
+  commit.
+
+Next session should start with read-only checks:
+
+```bash
+git fetch origin main --tags
+git log --oneline -3 origin/main
+git tag --points-at c3d3f64946862fe34db16bc69565d2b818306396
+```
+
+Then verify the legacy RC workflow and Docker Hub state:
+
+```text
+GitHub Actions run:
+  https://github.com/unil-lettres/variance-input/actions/runs/26294850558
+
+Expected legacy RC tag if the workflow succeeds:
+  unillett/variance-input-legacy:prod-c3d3f64946862fe34db16bc69565d2b818306396
+```
+
+Next operational phase:
+
+- Prod-like rehearsal beside legacy on `plett`, still without Apache cutover.
+- Target path: `/var/www/variance-input`.
+- Target local port: `127.0.0.1:8081`.
+- Current live legacy route stays unchanged:
+  `variance.unil.ch -> 127.0.0.1:8282`.
+- Actual cutover will later rewire only the `variance.unil.ch` Apache proxy
+  target from `127.0.0.1:8282` to `127.0.0.1:8081`, keeping legacy available
+  for rollback.
