@@ -630,16 +630,20 @@
         border: 2px solid #f4efe8;
     }
     .facsimile-reader-anchor {
-        display: inline-block;
-        margin: 0 0.35rem 0.35rem 0;
-        padding: 0.08rem 0.48rem;
-        border-radius: 999px;
-        background: #d7e5ff;
-        color: #294a7a;
-        font-size: 0.78rem;
+        display: block;
+        width: fit-content;
+        max-width: 100%;
+        margin: 0 0 0.75rem;
+        padding: 0.25rem 0.65rem;
+        border-left: 3px solid #0d6efd;
+        border-radius: 0.35rem;
+        background: #eaf2ff;
+        color: #23446f;
+        font-size: 0.8rem;
         font-weight: 600;
-        line-height: 1.4;
-        vertical-align: middle;
+        line-height: 1.35;
+        text-align: left;
+        white-space: normal;
     }
     @media (max-width: 991.98px) {
         .facsimile-reader-toolbar {
