@@ -90,6 +90,15 @@ class EditorController extends Controller
 
         $existingContent = file_get_contents($path);
         $originalEncoding = $this->detectEncoding($existingContent);
+
+        [$dom, $xmlErrors] = $this->loadXmlAttempt($newXml);
+        if (!$dom) {
+            return response()->json([
+                'error' => "XML invalide: le fichier n'a pas été sauvegardé.",
+                'details' => $xmlErrors,
+            ], 422);
+        }
+
         $contentToWrite = $originalEncoding === 'UTF-8'
             ? $newXml
             : mb_convert_encoding($newXml, $originalEncoding, 'UTF-8');

@@ -158,6 +158,36 @@ XML;
             ->assertJsonPath('ignored', true);
     }
 
+    public function test_version_editor_rejects_invalid_xml_without_overwriting_file(): void
+    {
+        $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
+        $work = $this->createEditableWork($this->signInAdmin());
+        $version = Version::factory()->for($work)->create(['folder' => 'rvev-invalid']);
+        $originalPath = $this->writeVersionXml($version, '<p>Original payload</p>');
+        $this->grantWorkVersionEditorPermission($user, $work);
+        $this->actingAs($user);
+
+        $invalidXml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body></emph><p>Broken payload</p></body></text></TEI>
+XML;
+
+        $this->call(
+            'PUT',
+            route('version.editor.update', $version),
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/xml'],
+            $invalidXml
+        )->assertStatus(422)
+            ->assertJsonPath('error', "XML invalide: le fichier n'a pas été sauvegardé.");
+
+        $savedXml = file_get_contents($originalPath);
+        $this->assertStringContainsString('Original payload', $savedXml);
+        $this->assertStringNotContainsString('Broken payload', $savedXml);
+    }
+
     public function test_restricted_version_editor_is_denied_unassigned_versions_and_full_editor_actions(): void
     {
         $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));

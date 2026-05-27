@@ -11,7 +11,7 @@ from os.path import join, dirname, exists
 import textwrap as tw
 import itertools as it
 
-from variance.processing import calc_revisions
+from variance.processing import calc_revisions, process
 
 
 Block = namedtuple("Block", "a b")
@@ -168,3 +168,26 @@ def test_texts_without_common_blocks_do_not_crash_evaluation():
     )
 
     assert appli.bbl is not None
+
+
+def test_process_rejects_empty_text_after_xml_extraction(tmp_path):
+    source = tmp_path / "source.xml"
+    target = tmp_path / "target.xml"
+    output = tmp_path / "comparison.xml"
+    xhtml_dir = tmp_path / "xhtml"
+
+    source.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:id="source"><text><body></body></text></TEI>
+""",
+        encoding="utf-8",
+    )
+    target.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:id="target"><text><body><p>Target payload</p></body></text></TEI>
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="source text is empty after XML extraction"):
+        process(source, target, md.DEFAULT_PARAMETERS, output, xhtml_dir)

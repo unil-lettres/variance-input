@@ -70,6 +70,10 @@ def process(
     # 0. Load & sanity‑check
     # --------------------------------------------------------------
     z1, z2 = xml2txt(source_filepath), xml2txt(target_filepath)
+    if not z1.txt.strip():
+        raise ValueError(f"source text is empty after XML extraction: {source_filepath}")
+    if not z2.txt.strip():
+        raise ValueError(f"target text is empty after XML extraction: {target_filepath}")
     if z1.txt == z2.txt:
         raise IdenticalFilesException("source and target are identical")
 
