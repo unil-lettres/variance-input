@@ -1091,7 +1091,7 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
             state.clearMarkersBtn.disabled = inProgress;
             state.clearMarkersBtn.title = inProgress
                 ? 'Traitement en cours — veuillez patienter'
-                : 'Supprimer tous les marqueurs de pagination';
+                : 'Supprimer les données de pagination';
         }
     }
     if (versionsCache.has(id)) {
@@ -2561,11 +2561,11 @@ async function fetchVersions(workId, force = false){
             clearMarkersBtn.type = 'button';
             clearMarkersBtn.className = 'btn btn-outline-danger versions-icon-btn';
             clearMarkersBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-            clearMarkersBtn.title = 'Supprimer tous les marqueurs de pagination';
-            clearMarkersBtn.setAttribute('aria-label', 'Supprimer tous les marqueurs de pagination');
+            clearMarkersBtn.title = 'Supprimer les données de pagination';
+            clearMarkersBtn.setAttribute('aria-label', 'Supprimer les données de pagination');
             clearMarkersBtn.addEventListener('click', () => {
                 if (v.is_legacy) return;
-                clearVersionPageMarkers(v.id);
+                deleteLignesFile(v.id);
             });
             lignesActions.appendChild(clearMarkersBtn);
             lignesWrap.appendChild(lignesActions);
