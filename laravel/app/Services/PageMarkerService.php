@@ -1817,7 +1817,7 @@ class PageMarkerService
 
         $entries = [];
 
-        if ($hits > 10) {
+        if ($hits > 0) {
             foreach ($rawLines as $idx => $line) {
                 if (!preg_match($oneLineRegex, $line ?? '', $match)) {
                     continue;

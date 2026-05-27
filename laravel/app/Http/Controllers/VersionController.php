@@ -227,7 +227,7 @@ class VersionController extends Controller
 
     public function togglePaginationDone(Request $request, Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $data = $request->validate([
             'done' => 'required|boolean',
         ]);
@@ -364,7 +364,7 @@ class VersionController extends Controller
 
     public function cancelLignes(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $version->loadMissing('work.author');
         $this->pageMarkerService->markCancelled($version->id, 'Annulé par l\'utilisateur');
         $this->pageMarkerService->resetProgress($version->id);
@@ -385,7 +385,7 @@ class VersionController extends Controller
 
     public function deleteLignesFile(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
         $status = strtolower((string) ($progress['status'] ?? ''));
         if (in_array($status, ['queued', 'running'], true)) {
@@ -592,7 +592,7 @@ class VersionController extends Controller
 
     public function applyPageMarkers(Request $request, Version $version)
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $validated = $request->validate([
             'lignes' => 'required|file|max:4096',
             'clear_existing' => 'sometimes|boolean',
@@ -639,7 +639,7 @@ class VersionController extends Controller
 
     public function uploadLignes(Request $request, Version $version)
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $request->validate([
             'lignes' => 'required|file|max:4096',
         ]);
@@ -831,7 +831,7 @@ class VersionController extends Controller
 
     public function clearPageMarkers(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
 
         $path = $version->getXMLFilePath();
         if (! is_file($path)) {
@@ -874,7 +874,7 @@ class VersionController extends Controller
     /** Build pagination sidecar from <pb> tags present in the version TEI. */
     public function createPaginationFromPb(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $result = $this->pageMarkerService->createSidecarFromPb($version);
         $this->versionReaderService->clearCache($version);
 
@@ -896,7 +896,7 @@ class VersionController extends Controller
     /** Merge <pb> markers from the editor into the pagination sidecar. */
     public function mergePaginationFromPb(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $result = $this->pageMarkerService->mergeSidecarFromPb($version);
 
         if (($result['count'] ?? 0) === 0) {
@@ -1340,6 +1340,14 @@ class VersionController extends Controller
         $user = auth()->user();
         if (! $user || ! $user->canUseVersionEditor($version)) {
             abort(403, 'Accès limité aux versions assignées.');
+        }
+    }
+
+    private function assertVersionPaginationAllowed(Version $version): void
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->canUseVersionEditor($version)) {
+            abort(403, 'Cette version est en lecture seule ou non assignée.');
         }
     }
 

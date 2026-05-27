@@ -4,6 +4,7 @@ namespace Tests\Feature\Workflow;
 
 use App\Models\Version;
 use App\Models\Comparison;
+use App\Services\PageMarkerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -441,6 +442,34 @@ HTML,
             ->assertJsonPath('pages.2.image.name', 'img_reader-explicit-sidecar-v1_003.jpg')
             ->assertJsonPath('pages.3.label', '1c')
             ->assertJsonPath('pages.3.image.name', 'img_reader-explicit-sidecar-v1_004.jpg');
+    }
+
+    public function test_short_one_line_lignes_file_generates_pagination_sidecar(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-short-lignes-v1',
+        ]);
+
+        $this->writeVersionXml(
+            $version,
+            '<p>Mon cher docteur, je me mets entre vos mains.</p><p>Notre machine nous aurait fait une autre intelligence.</p>'
+        );
+
+        $lignesPath = storage_path('app/private/short-one-line-lignes.txt');
+        File::put(
+            $lignesPath,
+            "0002\t1a\tMon cher docteur, je me mets entre vos\n"
+            . "0003\t1b\tNotre machine nous aurait fait une\n"
+        );
+
+        $result = app(PageMarkerService::class)->generatePaginationSidecar($version, $lignesPath);
+
+        $this->assertSame(2, $result['payload']['marker_count']);
+        $this->assertSame('lignes', $result['payload']['origin']);
+        $this->assertSame('002', $result['payload']['markers'][0]['image_code']);
+        $this->assertSame('003', $result['payload']['markers'][1]['image_code']);
     }
 
     public function test_reader_handles_multibyte_text_when_refining_sidecar_markers(): void
