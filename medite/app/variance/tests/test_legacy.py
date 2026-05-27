@@ -158,3 +158,13 @@ def test_separator(case):
     #     fb = f(b)
     #     breakpoint()
     # to examine manually
+
+
+def test_texts_without_common_blocks_do_not_crash_evaluation():
+    appli = md.DiffTexts(
+        chaine1="abcdefg",
+        chaine2="HIJKLMN",
+        parameters=md.DEFAULT_PARAMETERS,
+    )
+
+    assert appli.bbl is not None
