@@ -149,7 +149,7 @@ if (!empty($_COOKIE['viewer_params'])) {
 
                                         $foldersSql = '"' . implode('","', $folders) . '"';
 
-                                        $foldersStatement = $cnx->prepare('SELECT c.number as c_number, c.folder as c_folder, c.prefix_label as c_prefix_label, v.name as name, v.folder folder FROM versions v, comparisons c WHERE v.folder IN (' . $foldersSql . ') AND work_id = :workid AND c.folder LIKE :folder ORDER BY c.number ASC');
+                                        $foldersStatement = $cnx->prepare('SELECT c.number as c_number, c.folder as c_folder, c.prefix_label as c_prefix_label, v.name as name, v.folder folder FROM versions v, comparisons c WHERE v.folder IN (' . $foldersSql . ') AND work_id = :workid AND c.folder LIKE :folder ORDER BY CASE WHEN COALESCE(c.sort_order, c.number) IS NULL THEN 1 ELSE 0 END, COALESCE(c.sort_order, c.number) ASC, c.id ASC');
                                         $foldersStatement->execute(array('workid' => $work['id'], 'folder' => $comparisonName));
 
 

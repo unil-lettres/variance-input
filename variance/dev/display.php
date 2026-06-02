@@ -201,7 +201,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                                      INNER JOIN versions s ON c.source_id = s.id
                                      INNER JOIN versions t ON c.target_id = t.id
                                      WHERE s.work_id = :work_id
-                                     ORDER BY c.number ASC'
+                                     ORDER BY CASE WHEN COALESCE(c.sort_order, c.number) IS NULL THEN 1 ELSE 0 END, COALESCE(c.sort_order, c.number) ASC, c.id ASC'
                                 );
                                 $comparisonsStatement->execute(['work_id' => $work['id']]);
 

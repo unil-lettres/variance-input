@@ -78,7 +78,7 @@ require_once 'php/settings.inc.php';
             <div class="col-lg-10 col-lg-offset-1 col-md-12 catalogue">
                 <?php
                 $publishedWorkIds = array_map('intval', getWorkIdsWithPublishedComparisons());
-                $comparisonQuery = 'SELECT c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
+                $comparisonQuery = 'SELECT c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY CASE WHEN COALESCE(c.sort_order, c.number) IS NULL THEN 1 ELSE 0 END, COALESCE(c.sort_order, c.number) ASC, c.id ASC';
                 $comparisonFilter = static function (array $comparison, array $element): bool {
                     return comparisonIsPublished($element['a_folder'], $element['w_folder'], $comparison['c_folder']);
                 };

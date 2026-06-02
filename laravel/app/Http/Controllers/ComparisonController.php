@@ -77,8 +77,8 @@ class ComparisonController extends Controller
         $this->scopeComparisonsToUser($comparisonsQuery, $user, $work);
 
         $comparisons = $comparisonsQuery
-            ->orderByRaw('CASE WHEN number IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('number')
+            ->orderByRaw('CASE WHEN COALESCE(sort_order, number) IS NULL THEN 1 ELSE 0 END')
+            ->orderByRaw('COALESCE(sort_order, number)')
             ->orderBy('id')
             ->get()
             ->map(function (Comparison $cmp) use ($destBase, $required, $authorFolder, $workFolder, $light, $chapterCounts, $user) {
@@ -153,6 +153,41 @@ class ComparisonController extends Controller
             'comparison_id' => $comparison->id,
             'comments' => $comparison->comments,
             'has_comments' => $comparison->comments !== null,
+        ]);
+    }
+
+    public function updateMetadata(Request $request, Comparison $comparison)
+    {
+        $this->assertComparisonOwnership($comparison);
+
+        $validated = $request->validate([
+            'number' => ['nullable', 'numeric', 'min:0', 'max:9999'],
+            'prefix_label' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (array_key_exists('number', $validated)) {
+            $comparison->number = $validated['number'] !== null
+                ? (float) $validated['number']
+                : null;
+        }
+        if (array_key_exists('prefix_label', $validated)) {
+            $prefixLabel = trim((string) ($validated['prefix_label'] ?? ''));
+            $comparison->prefix_label = $prefixLabel !== '' ? $prefixLabel : null;
+        }
+        $comparison->save();
+
+        $this->audit('comparison.metadata_updated', [
+            'comparison_id' => $comparison->id,
+            'comparison_folder' => $comparison->folder,
+            'number' => $comparison->number,
+            'has_prefix_label' => $comparison->prefix_label !== null,
+        ]);
+
+        return response()->json([
+            'status' => 'ok',
+            'comparison_id' => $comparison->id,
+            'number' => $comparison->number,
+            'prefix_label' => $comparison->prefix_label,
         ]);
     }
 
@@ -487,8 +522,8 @@ class ComparisonController extends Controller
                     $query->whereHas('sourceVersion', fn ($q) => $q->where('work_id', $workId))
                         ->orWhereHas('targetVersion', fn ($q) => $q->where('work_id', $workId));
                 })
-                ->orderByRaw('CASE WHEN number IS NULL THEN 1 ELSE 0 END')
-                ->orderBy('number')
+                ->orderByRaw('CASE WHEN COALESCE(sort_order, number) IS NULL THEN 1 ELSE 0 END')
+                ->orderByRaw('COALESCE(sort_order, number)')
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
@@ -497,15 +532,15 @@ class ComparisonController extends Controller
                 return false;
             }
 
-            foreach ($ordered->values() as $index => $item) {
+            $ordered = $ordered->values();
+            foreach ($ordered as $index => $item) {
                 $expected = $index + 1;
-                if ((int) round((float) ($item->number ?? 0)) !== $expected) {
-                    $item->number = $expected;
+                if ((float) ($item->sort_order ?? 0) !== (float) $expected) {
+                    $item->sort_order = $expected;
                     $item->save();
                 }
             }
 
-            $ordered = $ordered->values();
             $currentIndex = $ordered->search(fn ($item) => (int) $item->id === (int) $comparison->id);
             if ($currentIndex === false) {
                 return false;
@@ -518,10 +553,10 @@ class ComparisonController extends Controller
 
             $current = $ordered[$currentIndex];
             $other = $ordered[$swapIndex];
-            $currentNumber = $current->number;
-            $otherNumber = $other->number;
-            $current->number = $otherNumber;
-            $other->number = $currentNumber;
+            $currentSortOrder = $current->sort_order;
+            $otherSortOrder = $other->sort_order;
+            $current->sort_order = $otherSortOrder;
+            $other->sort_order = $currentSortOrder;
             $current->save();
             $other->save();
 

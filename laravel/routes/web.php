@@ -200,6 +200,9 @@ Route::get('/comparisons/{comparison}/details', [ComparisonController::class, 'd
 Route::patch('/comparisons/{comparison}/comments', [ComparisonController::class, 'updateComments'])
     ->middleware('auth')
     ->name('comparisons.comments.update');
+Route::patch('/comparisons/{comparison}/metadata', [ComparisonController::class, 'updateMetadata'])
+    ->middleware('auth')
+    ->name('comparisons.metadata.update');
 Route::post('/comparisons/{comparison}/reorder', [ComparisonController::class, 'reorder'])
     ->middleware('auth')
     ->name('comparisons.reorder');

@@ -141,19 +141,30 @@ $hasResults = !empty($elements);
                     <?php $displayIndex = 1; ?>
                     <?php foreach ($comparisons as $version): ?>
                         <?php
-                        $prefix = isset($version['c_prefix_label']) ? trim($version['c_prefix_label']) : '';
-                        if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
-                            $prefix = '';
+                        $isLegacyWork = (bool) ($element['w_is_legacy'] ?? false);
+                        if ($isLegacyWork) {
+                            $numberPrefix = isset($version['c_number']) ? $version['c_number'] . '. ' : '';
+                            $prefix = (string) ($version['c_prefix_label'] ?? '');
+                            if ($prefix !== '' && !preg_match('/\s$/u', $prefix)) {
+                                $prefix .= ' ';
+                            }
+                            $sourceLabel = $numberPrefix . $prefix . $version['s_name'];
+                        } else {
+                            $prefix = isset($version['c_prefix_label']) ? trim($version['c_prefix_label']) : '';
+                            if ($prefix !== '' && stripos($prefix, 'auto') === 0) {
+                                $prefix = '';
+                            }
+                            if ($prefix !== '' && substr($prefix, -1) !== ' ') {
+                                $prefix .= ' ';
+                            }
+                            $numberPrefix = isset($version['c_number']) ? $version['c_number'] . '. ' : $displayIndex . '. ';
+                            $sourceLabel = $numberPrefix . trim($prefix . $version['s_name']);
                         }
-                        if ($prefix !== '' && substr($prefix, -1) !== ' ') {
-                            $prefix .= ' ';
-                        }
-                        $sourceLabel = trim($prefix . $version['s_name']);
                         $versionHref = $catalogComparisonUrlBuilder($version, $element);
                         ?>
                         <a class="wrapper_menu_a" title="cliquez pour comparer" href="<?php echo htmlspecialchars($versionHref, ENT_QUOTES, 'UTF-8'); ?>">
                             <div class="wrapper_flex">
-                                <div style="white-space: nowrap;"><?php echo $displayIndex . '. ' . htmlspecialchars($sourceLabel, ENT_QUOTES, 'UTF-8'); ?></div>
+                                <div style="white-space: nowrap;"><?php echo htmlspecialchars($sourceLabel, ENT_QUOTES, 'UTF-8'); ?></div>
                                 <div style="text-align: center"><span class="arrow-versions">&rarr;</span></div>
                                 <div style="text-align: right; white-space: nowrap;"><?php echo htmlspecialchars($version['t_name'], ENT_QUOTES, 'UTF-8'); ?></div>
                             </div>

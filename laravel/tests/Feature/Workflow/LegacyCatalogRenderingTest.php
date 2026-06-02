@@ -104,6 +104,147 @@ class LegacyCatalogRenderingTest extends TestCase
         $this->assertStringNotContainsString('>Notice</a>', $html);
     }
 
+    public function test_legacy_catalog_preserves_stored_comparison_numbering(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [
+            'name' => 'Charles Perrault',
+            'folder' => 'charles_perrault',
+            'order' => 1,
+        ], [
+            'title' => 'Histoires ou contes du temps passé',
+            'folder' => 'histoires',
+            'short_title' => 'hist',
+            'catalog_group' => 'main',
+            'image_url' => 'perrault.jpg',
+            'is_legacy' => true,
+        ]);
+
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Manuscrit',
+            'folder' => '01ms',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Mercure Galant',
+            'folder' => '02mg',
+        ]);
+        Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '01ms-02mg',
+            'number' => 0.1,
+            'prefix_label' => '« La Belle au bois dormant »,',
+            'publication_scope' => 'dev',
+            'created_by' => $user->id,
+        ]);
+
+        $html = $this->renderLegacyCatalogSection('main', [$work->id]);
+
+        $this->assertStringContainsString('0.1. « La Belle au bois dormant », Manuscrit', $html);
+        $this->assertStringNotContainsString('>1. « La Belle au bois dormant », Manuscrit', $html);
+    }
+
+    public function test_catalog_uses_custom_numbering_for_editable_comparisons(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [
+            'name' => 'Auteur test',
+            'folder' => 'auteur_test',
+            'order' => 1,
+        ], [
+            'title' => 'Œuvre test',
+            'folder' => 'oeuvre_test',
+            'short_title' => 'oct',
+            'catalog_group' => 'main',
+            'image_url' => 'oeuvre.jpg',
+            'is_legacy' => false,
+        ]);
+
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Source',
+            'folder' => '1oct',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Cible',
+            'folder' => '2oct',
+        ]);
+        Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1oct-2oct',
+            'number' => 0.2,
+            'prefix_label' => 'Fragment',
+            'publication_scope' => 'dev',
+            'created_by' => $user->id,
+        ]);
+
+        $html = $this->renderLegacyCatalogSection('main', [$work->id]);
+
+        $this->assertStringContainsString('0.2. Fragment Source', $html);
+        $this->assertStringNotContainsString('1. Fragment Source', $html);
+    }
+
+    public function test_catalog_order_uses_admin_sort_order_not_public_number(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [
+            'name' => 'Auteur ordre',
+            'folder' => 'auteur_ordre',
+            'order' => 1,
+        ], [
+            'title' => 'Œuvre ordre',
+            'folder' => 'oeuvre_ordre',
+            'short_title' => 'ord',
+            'catalog_group' => 'main',
+            'image_url' => 'ordre.jpg',
+        ]);
+
+        $sourceA = Version::factory()->for($work)->create([
+            'name' => 'Source A',
+            'folder' => '1ord',
+        ]);
+        $targetA = Version::factory()->for($work)->create([
+            'name' => 'Cible A',
+            'folder' => '2ord',
+        ]);
+        $sourceB = Version::factory()->for($work)->create([
+            'name' => 'Source B',
+            'folder' => '3ord',
+        ]);
+        $targetB = Version::factory()->for($work)->create([
+            'name' => 'Cible B',
+            'folder' => '4ord',
+        ]);
+
+        Comparison::factory()->create([
+            'source_id' => $sourceA->id,
+            'target_id' => $targetA->id,
+            'folder' => '1ord-2ord',
+            'number' => 1,
+            'sort_order' => 2,
+            'publication_scope' => 'dev',
+            'created_by' => $user->id,
+        ]);
+        Comparison::factory()->create([
+            'source_id' => $sourceB->id,
+            'target_id' => $targetB->id,
+            'folder' => '3ord-4ord',
+            'number' => 2,
+            'sort_order' => 1,
+            'publication_scope' => 'dev',
+            'created_by' => $user->id,
+        ]);
+
+        $html = $this->renderLegacyCatalogSection('main', [$work->id]);
+
+        $firstPosition = strpos($html, '2. Source B');
+        $secondPosition = strpos($html, '1. Source A');
+
+        $this->assertIsInt($firstPosition);
+        $this->assertIsInt($secondPosition);
+        $this->assertLessThan($secondPosition, $firstPosition);
+    }
+
     private function createCatalogWorkWithDevComparison($user, string $title, string $shortTitle, string $catalogGroup)
     {
         $work = $this->createEditableWork($user, [
@@ -147,7 +288,7 @@ class LegacyCatalogRenderingTest extends TestCase
         $catalogHideWhenEmpty = false;
         $catalogPerPage = 40;
         $catalogEmptyMessage = 'Aucune comparaison en cours pour le moment.';
-        $catalogComparisonQuery = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
+        $catalogComparisonQuery = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY CASE WHEN COALESCE(c.sort_order, c.number) IS NULL THEN 1 ELSE 0 END, COALESCE(c.sort_order, c.number) ASC, c.id ASC';
         $catalogComparisonFilter = static fn (array $comparison, array $element): bool => true;
         $catalogComparisonUrlBuilder = static fn (array $comparison, array $element): string => '/dev/' . $comparison['c_id'];
 

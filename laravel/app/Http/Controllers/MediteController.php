@@ -52,7 +52,7 @@ class MediteController extends Controller
         }
 
         /* ─── 2. Insert a new row (fill every NOT-NULL col) ──────────────── */
-        [ $folder, $sequence ] = $this->nextFolderAndNumber(
+        [ $folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
             $data['folder'],
             (int) $data['source_id'],
             (int) $data['target_id']
@@ -72,6 +72,7 @@ class MediteController extends Controller
             /* house-keeping */
             'prefix_label'     => 'Auto',
             'number'           => $sequence,
+            'sort_order'       => $sortOrder,
         ];
 
         if (Schema::hasColumn('comparisons', 'created_by')) {
@@ -148,7 +149,7 @@ class MediteController extends Controller
             $cmp->fill($comparisonPayload);
 
             if (empty($cmp->folder)) {
-                [ $folder, $sequence ] = $this->nextFolderAndNumber(
+                [ $folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
                     $comparisonShort,
                     (int) $validated['source_version'],
                     (int) $validated['target_version'],
@@ -156,6 +157,7 @@ class MediteController extends Controller
                 );
                 $cmp->folder = $folder;
                 $cmp->number = $sequence;
+                $cmp->sort_order = $sortOrder;
             }
 
             if (!$cmp->prefix_label) {
@@ -163,18 +165,19 @@ class MediteController extends Controller
             }
 
             if (!$cmp->number) {
-                [ $_folder, $sequence ] = $this->nextFolderAndNumber(
+                [ $_folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
                     $comparisonShort,
                     (int) $validated['source_version'],
                     (int) $validated['target_version'],
                     $cmp->id
                 );
                 $cmp->number = $sequence;
+                $cmp->sort_order = $cmp->sort_order ?? $sortOrder;
             }
 
             $cmp->save();
         } else {
-            [ $folder, $sequence ] = $this->nextFolderAndNumber(
+            [ $folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
                 $comparisonShort,
                 (int) $validated['source_version'],
                 (int) $validated['target_version']
@@ -184,6 +187,7 @@ class MediteController extends Controller
                 'folder'       => $folder,
                 'prefix_label' => 'Auto Run',
                 'number'       => $sequence,
+                'sort_order'   => $sortOrder,
             ];
 
             if (Schema::hasColumn('comparisons', 'created_by')) {
@@ -396,7 +400,7 @@ class MediteController extends Controller
         return null;
     }
 
-    private function nextFolderAndNumber(string $base, int $sourceId, int $targetId, ?int $excludeId = null): array
+    private function nextFolderNumberAndSortOrder(string $base, int $sourceId, int $targetId, ?int $excludeId = null): array
     {
         $slug = Str::slug($base, '-');
         if ($slug === '') {
@@ -430,11 +434,17 @@ class MediteController extends Controller
             $orderQuery->where('id', '!=', $excludeId);
         }
 
-        $number = (int) $orderQuery->max('number');
+        $number = (int) (clone $orderQuery)->max('number');
         if ($number <= 0) {
-            $number = (int) $orderQuery->count();
+            $number = (int) (clone $orderQuery)->count();
         }
         $number += 1;
+
+        $sortOrder = (int) (clone $orderQuery)->max('sort_order');
+        if ($sortOrder <= 0) {
+            $sortOrder = (int) (clone $orderQuery)->count();
+        }
+        $sortOrder += 1;
 
         $suffix = "run{$pairSequence}";
         $separator = '-';
@@ -467,7 +477,7 @@ class MediteController extends Controller
             }
         }
 
-        return [$folder, $number];
+        return [$folder, $number, $sortOrder];
     }
 
     private function assertVersionsEditable(int $sourceId, int $targetId, ?int $workId = null): void

@@ -47,7 +47,7 @@
                                 <i class="bi bi-list-ul"></i>
                             </span>
                         </th>
-                        <th class="comparison-folder-col">Désignation</th>
+                        <th class="comparison-folder-col">Nr</th>
                         <th class="comparison-source-col">Source</th>
                         <th class="comparison-target-col">Cible</th>
                         <th class="comparison-params-col">Paramètres Medite</th>
@@ -152,8 +152,6 @@
   .comparison-details-toggle .form-check-label {
     cursor: pointer;
   }
-  .comparisons-table.compact-details th:nth-child(4),
-  .comparisons-table.compact-details td:nth-child(4),
   .comparisons-table.compact-details th:nth-child(7),
   .comparisons-table.compact-details td:nth-child(7) {
     display: none;
@@ -213,10 +211,28 @@
     width: 11.8rem;
     min-width: 11.8rem;
   }
+  .comparisons-table.compact-details .comparison-folder-col,
+  .comparisons-table.compact-details .comparison-folder-cell {
+    width: 4.25rem;
+    min-width: 4.25rem;
+  }
   .comparisons-table:not(.compact-details) .comparison-folder-col,
   .comparisons-table:not(.compact-details) .comparison-folder-cell {
-    width: 12%;
+    width: 4.25rem;
     min-width: 0;
+  }
+  .comparison-public-label-editor {
+    display: block;
+  }
+  .comparison-public-label-editor .form-control-sm {
+    width: 100%;
+    min-height: 1.8rem;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.78rem;
+    text-align: center;
+  }
+  .comparison-number-input--saving {
+    opacity: 0.65;
   }
   .comparisons-table:not(.compact-details) .comparison-source-col,
   .comparisons-table:not(.compact-details) .comparison-source-cell,
@@ -247,8 +263,8 @@
   }
   .comparisons-table:not(.compact-details) .comparison-action-col,
   .comparisons-table:not(.compact-details) .comparison-action-cell {
-    width: 7%;
-    min-width: 0;
+    width: 10.25rem;
+    min-width: 10.25rem;
   }
   .comparisons-table td:nth-child(9),
   .comparisons-table td:nth-child(10),
@@ -417,10 +433,12 @@
     margin: 0 !important;
   }
   .comparison-action-bar {
-    display: flex;
-    flex-wrap: wrap;
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: center;
     gap: 0.25rem;
+    white-space: nowrap;
   }
   .comparison-action-btn {
     width: 1.95rem;
@@ -676,7 +694,7 @@
     }
     .comparisons-table:not(.compact-details) .comparison-folder-col,
     .comparisons-table:not(.compact-details) .comparison-folder-cell {
-      width: 14%;
+      width: 4rem;
     }
     .comparisons-table:not(.compact-details) .comparison-source-col,
     .comparisons-table:not(.compact-details) .comparison-source-cell,
@@ -685,10 +703,13 @@
       width: 14%;
     }
     .comparisons-table:not(.compact-details) .comparison-publish-col,
-    .comparisons-table:not(.compact-details) .comparison-publish-cell,
+    .comparisons-table:not(.compact-details) .comparison-publish-cell {
+      width: 9%;
+    }
     .comparisons-table:not(.compact-details) .comparison-action-col,
     .comparisons-table:not(.compact-details) .comparison-action-cell {
-      width: 9%;
+      width: 9.75rem;
+      min-width: 9.75rem;
     }
     .comparisons-table:not(.compact-details) .comparison-manage-col,
     .comparisons-table:not(.compact-details) .comparison-manage-cell {
@@ -700,8 +721,6 @@
     .comparisons-table td {
       font-size: 0.76rem;
     }
-    .comparisons-table th:nth-child(4),
-    .comparisons-table td:nth-child(4),
     .comparisons-table th:nth-child(14),
     .comparisons-table td:nth-child(14) {
       display: none;
@@ -736,10 +755,13 @@
       width: 16%;
     }
     .comparisons-table:not(.compact-details) .comparison-publish-col,
-    .comparisons-table:not(.compact-details) .comparison-publish-cell,
+    .comparisons-table:not(.compact-details) .comparison-publish-cell {
+      width: 11%;
+    }
     .comparisons-table:not(.compact-details) .comparison-action-col,
     .comparisons-table:not(.compact-details) .comparison-action-cell {
-      width: 11%;
+      width: 9rem;
+      min-width: 9rem;
     }
   }
 </style>

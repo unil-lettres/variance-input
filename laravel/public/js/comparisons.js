@@ -89,6 +89,20 @@ function initComparisonsTable() {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed.toLocaleString('fr-FR') : '0';
   };
+  const formatComparisonNumberInput = value => {
+    if (value === null || value === undefined || value === '') return '';
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? String(parsed) : String(value);
+  };
+  const normalizeComparisonNumberInput = value => {
+    const raw = String(value ?? '').trim();
+    if (raw === '') return null;
+    const normalized = raw.replace(',', '.');
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) {
+      throw new Error('Le numéro public doit être vide ou numérique, par exemple 1 ou 0.1.');
+    }
+    return normalized;
+  };
   const formatBytes = size => {
     if (!Number.isFinite(size) || size <= 0) return '0 o';
     const units = ['o','Ko','Mo','Go'];
@@ -351,14 +365,14 @@ function initComparisonsTable() {
     });
   }
 
-  function swapComparisonNumbers(firstId, secondId) {
+  function swapComparisonSortOrders(firstId, secondId) {
     const first = comparisonData.get(Number(firstId));
     const second = comparisonData.get(Number(secondId));
     if (!first || !second) return;
 
-    const firstNumber = first.number ?? null;
-    first.number = second.number ?? null;
-    second.number = firstNumber;
+    const firstSortOrder = first.sort_order ?? null;
+    first.sort_order = second.sort_order ?? null;
+    second.sort_order = firstSortOrder;
     comparisonData.set(Number(firstId), first);
     comparisonData.set(Number(secondId), second);
   }
@@ -385,7 +399,7 @@ function initComparisonsTable() {
       tbody.insertBefore(sibling, row);
     }
 
-    swapComparisonNumbers(id, siblingId);
+    swapComparisonSortOrders(id, siblingId);
     refreshComparisonReorderButtons();
     return true;
   }
@@ -1748,10 +1762,26 @@ function initComparisonsTable() {
     const targetName = comp.target_version?.name ?? `Version ${comp.target_id}`;
     const counts = getMediteComponentCounts(comp);
     const runningPlaceholder = '<span class="text-muted">-</span>';
-    const folderText = comp.folder || '';
-    const folderHtml = folderText
-      ? `<strong>${folderText}</strong>`
-      : '<span class="text-muted">—</span>';
+    const metadataDisabled = ownershipBlocked || isPublicationPending || isRunning;
+    const metadataTitle = ownershipBlocked
+      ? manageDisabledNote
+      : (isPublicationPending ? 'Publication en cours.' : 'Numéro affiché dans le catalogue public. Enregistré automatiquement.');
+    const numberInputId = `comparison-number-${comp.id}`;
+    const folderHtml = `
+      <div class="comparison-public-label-editor" data-comparison-metadata-editor="${comp.id}">
+        <label class="visually-hidden" for="${numberInputId}">Numéro public</label>
+        <input type="text"
+               class="form-control form-control-sm comparison-number-input"
+               id="${numberInputId}"
+               data-comparison-number-input="1"
+               inputmode="decimal"
+               data-id="${comp.id}"
+               data-saved-number="${escapeHtml(formatComparisonNumberInput(comp.number))}"
+               value="${escapeHtml(formatComparisonNumberInput(comp.number))}"
+               placeholder="N° public"
+               title="${escapeHtml(metadataTitle)}"
+               ${metadataDisabled ? 'disabled aria-disabled="true"' : ''}>
+      </div>`;
 
     comparisonData.set(comp.id, comp);
     const mediteParamsHtml = renderMediteParams(comp, { detailsLoaded });
@@ -2274,6 +2304,68 @@ function initComparisonsTable() {
     if (input) input.checked = true;
   };
 
+  async function saveComparisonNumberInput(numberInput) {
+    if (!numberInput || numberInput.disabled || numberInput.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
+
+    const comparisonId = Number(numberInput.dataset.id);
+    if (!Number.isFinite(comparisonId)) return;
+
+    let number = null;
+    try {
+      number = normalizeComparisonNumberInput(numberInput.value ?? '');
+    } catch (err) {
+      numberInput.classList.add('is-invalid');
+      alert(err?.message || 'Numéro public invalide.');
+      numberInput.focus();
+      return;
+    }
+
+    const displayValue = number === null ? '' : String(number);
+    if (displayValue === (numberInput.dataset.savedNumber ?? '')) {
+      numberInput.classList.remove('is-invalid');
+      return;
+    }
+
+    if (numberInput.dataset.saving === '1') return;
+    numberInput.dataset.saving = '1';
+    numberInput.classList.remove('is-invalid', 'is-valid');
+    numberInput.classList.add('comparison-number-input--saving');
+
+    try {
+      const res = await fetch(withBasePath(`/comparisons/${comparisonId}/metadata`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {}),
+        },
+        body: JSON.stringify({ number }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== 'ok') {
+        throw new Error(data?.message || `HTTP ${res.status}`);
+      }
+
+      const savedNumber = formatComparisonNumberInput(data.number ?? null);
+      numberInput.dataset.savedNumber = savedNumber;
+      numberInput.value = savedNumber;
+      updateComparisonRow(comparisonId, {
+        number: data.number ?? null,
+        prefix_label: data.prefix_label ?? null,
+      });
+    } catch (err) {
+      console.error('Erreur lors de l’enregistrement du numéro public:', err);
+      numberInput.classList.add('is-invalid');
+      alert(err?.message || 'Impossible d’enregistrer le numéro public.');
+    } finally {
+      delete numberInput.dataset.saving;
+      numberInput.classList.remove('comparison-number-input--saving');
+    }
+  }
+
   document.addEventListener('click', async event => {
     const commentBtn = event.target.closest('[data-comparison-comment="1"]');
     if (commentBtn) {
@@ -2662,6 +2754,26 @@ function initComparisonsTable() {
     } finally {
       rowButtons.forEach((btn) => { btn.disabled = false; });
     }
+  });
+
+  document.addEventListener('change', event => {
+    const numberInput = event.target.closest?.('[data-comparison-number-input="1"]');
+    if (!numberInput) return;
+    saveComparisonNumberInput(numberInput);
+  });
+
+  document.addEventListener('blur', event => {
+    const numberInput = event.target.closest?.('[data-comparison-number-input="1"]');
+    if (!numberInput) return;
+    saveComparisonNumberInput(numberInput);
+  }, true);
+
+  document.addEventListener('keydown', event => {
+    const numberInput = event.target.closest?.('[data-comparison-number-input="1"]');
+    if (!numberInput || event.key !== 'Enter') return;
+    event.preventDefault();
+    saveComparisonNumberInput(numberInput);
+    numberInput.blur();
   });
 
   // Delete comparison (event delegation)
