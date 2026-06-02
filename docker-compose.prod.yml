@@ -21,8 +21,8 @@ services:
     restart: unless-stopped
 
   laravel:
-    # Pinned to release-candidate tag v2026.06.10-rc1.
-    image: unillett/variance-input:laravel-v2026.06.10-rc1@sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
+    # Pinned to release-candidate tag v2026.06.05-rc1.
+    image: unillett/variance-input:laravel-v2026.06.05-rc1@sha256:5d78dd8d12d0d8249c88dd5300ed1c269185c62c7b20395119f3ea906b4091d8
     restart: unless-stopped
     env_file:
       - ./laravel.env
@@ -48,7 +48,7 @@ services:
 
   laravel-queue:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.10-rc1@sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
+    image: unillett/variance-input:laravel-v2026.06.05-rc1@sha256:5d78dd8d12d0d8249c88dd5300ed1c269185c62c7b20395119f3ea906b4091d8
     restart: unless-stopped
     command: ./scripts/run-queue-workers.sh
     env_file:
@@ -72,7 +72,7 @@ services:
 
   laravel-scheduler:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.10-rc1@sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
+    image: unillett/variance-input:laravel-v2026.06.05-rc1@sha256:5d78dd8d12d0d8249c88dd5300ed1c269185c62c7b20395119f3ea906b4091d8
     restart: unless-stopped
     command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     env_file:
@@ -95,7 +95,7 @@ services:
 
   laravel-assets:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.10-rc1@sha256:d60d4a7e6fb01a703966b80cb60ee71847ccb457840da370c62122d4fd2b1d9c
+    image: unillett/variance-input:laravel-v2026.06.05-rc1@sha256:5d78dd8d12d0d8249c88dd5300ed1c269185c62c7b20395119f3ea906b4091d8
     restart: "no"
     entrypoint: ["/bin/sh", "-lc"]
     command:
@@ -104,8 +104,8 @@ services:
       - vite_build:/build-output
 
   medite:
-    # Pinned to release-candidate tag v2026.06.10-rc1.
-    image: unillett/variance-input:medite-v2026.06.10-rc1@sha256:4573b588559a65d676aae86159e84811714ad7c69e8741b36d1b28bec9877598
+    # Pinned to release-candidate tag v2026.06.05-rc1.
+    image: unillett/variance-input:medite-v2026.06.05-rc1@sha256:951cfb07c817408646b2e2fe142af6dcc399fd0b7ad78af977f30b44f40b8656
     restart: unless-stopped
     environment:
       - FLASK_ENV=production
