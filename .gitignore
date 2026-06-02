@@ -43,6 +43,7 @@ protocole/
 **/*.egg-info/
 **/build/
 !laravel/public/build/
+laravel/public/build/*
 !laravel/public/build/.gitkeep
 **/dist/
 **/venv/
