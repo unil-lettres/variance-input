@@ -2,6 +2,8 @@
 /vendor/
 /node_modules/
 /public/build/
+!/public/build/
+!/public/build/.gitkeep
 /public/hot/
 /public/storage/
 /storage/*.key
