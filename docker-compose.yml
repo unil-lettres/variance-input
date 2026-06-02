@@ -111,6 +111,7 @@ services:
     environment:
       - FLASK_ENV=development
       - FLASK_APP=flask_app.py
+      - PYTHONHASHSEED=0
       - NLTK_DATA=/app/assets/nltk_data
     ports:
       - "5000:5000"
