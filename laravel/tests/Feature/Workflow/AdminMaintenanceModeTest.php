@@ -145,7 +145,7 @@ class AdminMaintenanceModeTest extends TestCase
 
         $this->get('/')
             ->assertOk()
-            ->assertSee('Maintenance annoncée')
+            ->assertDontSee('Maintenance annoncée')
             ->assertSee('Déploiement prévu demain matin.')
             ->assertSee('Début')
             ->assertSee('Fin');
@@ -170,7 +170,7 @@ class AdminMaintenanceModeTest extends TestCase
 
         $this->get("/select/{$author->folder}/{$work->folder}")
             ->assertOk()
-            ->assertSee('Maintenance annoncée')
+            ->assertDontSee('Maintenance annoncée')
             ->assertSee('Maintenance prévue vendredi matin.');
     }
 

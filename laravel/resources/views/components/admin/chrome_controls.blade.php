@@ -103,7 +103,6 @@
 
     @if($plannedMaintenance['enabled'] ?? false)
         <div class="admin-chrome-announcement" role="status" aria-live="polite">
-            <span class="admin-chrome-announcement__badge">Maintenance annoncée</span>
             <span class="admin-chrome-announcement__text">{{ $plannedMaintenance['message'] }}</span>
             @if($plannedStartsAt || $plannedUntil)
                 <span class="admin-chrome-announcement__meta">
@@ -202,18 +201,6 @@
                 background: linear-gradient(180deg, rgba(191, 145, 56, 0.08), rgba(191, 145, 56, 0.03));
                 color: #6a5530;
                 box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
-            }
-            .admin-chrome-announcement__badge {
-                display: inline-flex;
-                align-items: center;
-                padding: 0.14rem 0.5rem;
-                border-radius: 999px;
-                background: rgba(191, 145, 56, 0.18);
-                font-size: 0.72rem;
-                font-weight: 700;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-                white-space: nowrap;
             }
             .admin-chrome-announcement__text {
                 min-width: 0;
