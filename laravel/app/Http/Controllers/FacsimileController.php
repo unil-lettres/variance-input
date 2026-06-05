@@ -345,7 +345,7 @@ class FacsimileController extends Controller
         $required = (int) $request->query('required_bytes', 0);
         $required = max(0, $required);
 
-        $path = storage_path('app');
+        $path = public_path('uploads');
         $free = @disk_free_space($path);
         $total = @disk_total_space($path);
 

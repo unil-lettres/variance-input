@@ -71,4 +71,16 @@ class FacsimileWorkflowTest extends TestCase
 
         Queue::assertNothingPushed();
     }
+
+    public function test_facsimile_space_check_uses_public_uploads_path(): void
+    {
+        $this->signInEditor();
+
+        $response = $this->getJson('/api/facsimiles/space?required_bytes=1024');
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('path', public_path('uploads'))
+            ->assertJsonPath('required_bytes', 1024);
+    }
 }

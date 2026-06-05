@@ -89,9 +89,11 @@ Route::get('/select/{authorSlug}/{workSlug?}', function (string $authorSlug, ?st
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
-Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
-Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
-Route::post('/register', [RegisterController::class, 'register']);
+Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth')->name('logout');
+Route::middleware(['auth', 'admin'])->group(function () {
+    Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
+    Route::post('/register', [RegisterController::class, 'register']);
+});
 
 Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/users', [UserManagementController::class, 'index'])->name('admin.users.index');
@@ -120,6 +122,8 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // MAIN PAGE COMPONENTS
+
+Route::middleware(['auth'])->group(function () {
 
 // Route pour déterminer la permission de l'utilisateur relativement à cette oeuvre
 Route::get('/works/{id}/can-edit', [WorkController::class, 'canEdit'])->name('works.canEdit');
@@ -244,3 +248,5 @@ Route::get('/comparison/{comparison}/editor/consistency', [EditorController::cla
 
 // TEI to XHTML conversion
 // Route::post('/api/run_xhtml', [XhtmlController::class, 'run']);
+
+});

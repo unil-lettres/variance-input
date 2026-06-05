@@ -506,6 +506,7 @@
             @php
                 $diskStatus = data_get($checks, 'storage.disk_status');
                 $diskClass = $statusTone($diskStatus);
+                $diskChecks = data_get($checks, 'storage.disks', []);
                 $publicOk = (bool) data_get($checks, 'public.ok', true);
                 $publicClass = $publicOk ? $okText : $badText;
             @endphp
@@ -524,6 +525,39 @@
                     <div class="{{ $publicClass }}">{{ data_get($checks, 'public.path') }}</div>
                 </div>
             </div>
+            @if(!empty($diskChecks))
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th>Stockage</th>
+                            <th>Chemin</th>
+                            <th>Espace</th>
+                            <th>Statut</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach($diskChecks as $diskCheck)
+                            @php
+                                $targetStatus = data_get($diskCheck, 'disk_status');
+                                $targetClass = $statusTone($targetStatus);
+                            @endphp
+                            <tr>
+                                <td>{{ data_get($diskCheck, 'label') }}</td>
+                                <td><code>{{ data_get($diskCheck, 'path') }}</code></td>
+                                <td>
+                                    {{ data_get($diskCheck, 'free_human') ?? 'n/a' }}
+                                    @if(data_get($diskCheck, 'total_human'))
+                                        / {{ data_get($diskCheck, 'total_human') }}
+                                    @endif
+                                </td>
+                                <td class="{{ $targetClass }}">{{ $targetStatus ?? 'n/a' }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
             <table class="table table-sm mb-0">
                 <thead>
                 <tr>

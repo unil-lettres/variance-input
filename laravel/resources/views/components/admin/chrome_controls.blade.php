@@ -36,67 +36,69 @@
             </div>
         @endif
 
-        <div class="dropdown">
-            <button class="admin-user-toggle dropdown-toggle"
-                    type="button"
-                    id="admin-public-sites-menu"
-                    data-bs-toggle="dropdown"
-                    data-bs-auto-close="outside"
-                    aria-expanded="false">
-                Site public
-            </button>
-            <div class="dropdown-menu py-1 admin-user-menu admin-public-menu" aria-labelledby="admin-public-sites-menu">
-                <div class="admin-public-menu-section">
-                    <a class="dropdown-item admin-public-menu-heading-link" href="{{ $devSiteUrl }}" target="_blank" rel="noopener">
-                        <span class="admin-public-menu-heading">
-                            <span class="admin-public-menu-heading-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                                    <defs>
-                                        <linearGradient id="publicMenuGlobeGradientDev" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stop-color="#66b7ff" />
-                                            <stop offset="100%" stop-color="#2f7fd8" />
-                                        </linearGradient>
-                                    </defs>
-                                    <circle cx="12" cy="12" r="9" fill="url(#publicMenuGlobeGradientDev)" />
-                                    <path d="M12 3c2.1 2.2 3.3 5.5 3.3 9S14.1 18.8 12 21c-2.1-2.2-3.3-5.5-3.3-9S9.9 5.2 12 3Z" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M4.3 9.2h15.4M4.3 14.8h15.4" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
-                                    <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(39, 77, 128, 0.35)" stroke-width="1" />
-                                </svg>
+        @auth
+            <div class="dropdown">
+                <button class="admin-user-toggle dropdown-toggle"
+                        type="button"
+                        id="admin-public-sites-menu"
+                        data-bs-toggle="dropdown"
+                        data-bs-auto-close="outside"
+                        aria-expanded="false">
+                    Site public
+                </button>
+                <div class="dropdown-menu py-1 admin-user-menu admin-public-menu" aria-labelledby="admin-public-sites-menu">
+                    <div class="admin-public-menu-section">
+                        <a class="dropdown-item admin-public-menu-heading-link" href="{{ $devSiteUrl }}" target="_blank" rel="noopener">
+                            <span class="admin-public-menu-heading">
+                                <span class="admin-public-menu-heading-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                        <defs>
+                                            <linearGradient id="publicMenuGlobeGradientDev" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#66b7ff" />
+                                                <stop offset="100%" stop-color="#2f7fd8" />
+                                            </linearGradient>
+                                        </defs>
+                                        <circle cx="12" cy="12" r="9" fill="url(#publicMenuGlobeGradientDev)" />
+                                        <path d="M12 3c2.1 2.2 3.3 5.5 3.3 9S14.1 18.8 12 21c-2.1-2.2-3.3-5.5-3.3-9S9.9 5.2 12 3Z" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M4.3 9.2h15.4M4.3 14.8h15.4" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
+                                        <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(39, 77, 128, 0.35)" stroke-width="1" />
+                                    </svg>
+                                </span>
+                                Site de travail ({{ $devSiteUrl }})
                             </span>
-                            Site de travail ({{ $devSiteUrl }})
-                        </span>
-                    </a>
-                    <div class="admin-public-menu-list" data-public-scope="dev">
-                        <div class="admin-public-empty">Chargement…</div>
+                        </a>
+                        <div class="admin-public-menu-list" data-public-scope="dev">
+                            <div class="admin-public-empty">Chargement…</div>
+                        </div>
                     </div>
-                </div>
-                <div><hr class="dropdown-divider"></div>
-                <div class="admin-public-menu-section">
-                    <a class="dropdown-item admin-public-menu-heading-link" href="{{ $publicSiteUrl }}" target="_blank" rel="noopener">
-                        <span class="admin-public-menu-heading">
-                            <span class="admin-public-menu-heading-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                                    <defs>
-                                        <linearGradient id="publicMenuGlobeGradientProd" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stop-color="#7fd0ff" />
-                                            <stop offset="100%" stop-color="#3f8de3" />
-                                        </linearGradient>
-                                    </defs>
-                                    <circle cx="12" cy="12" r="9" fill="url(#publicMenuGlobeGradientProd)" />
-                                    <path d="M12 3c2.1 2.2 3.3 5.5 3.3 9S14.1 18.8 12 21c-2.1-2.2-3.3-5.5-3.3-9S9.9 5.2 12 3Z" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M4.3 9.2h15.4M4.3 14.8h15.4" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
-                                    <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(39, 77, 128, 0.35)" stroke-width="1" />
-                                </svg>
+                    <div><hr class="dropdown-divider"></div>
+                    <div class="admin-public-menu-section">
+                        <a class="dropdown-item admin-public-menu-heading-link" href="{{ $publicSiteUrl }}" target="_blank" rel="noopener">
+                            <span class="admin-public-menu-heading">
+                                <span class="admin-public-menu-heading-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                        <defs>
+                                            <linearGradient id="publicMenuGlobeGradientProd" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#7fd0ff" />
+                                                <stop offset="100%" stop-color="#3f8de3" />
+                                            </linearGradient>
+                                        </defs>
+                                        <circle cx="12" cy="12" r="9" fill="url(#publicMenuGlobeGradientProd)" />
+                                        <path d="M12 3c2.1 2.2 3.3 5.5 3.3 9S14.1 18.8 12 21c-2.1-2.2-3.3-5.5-3.3-9S9.9 5.2 12 3Z" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M4.3 9.2h15.4M4.3 14.8h15.4" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
+                                        <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(39, 77, 128, 0.35)" stroke-width="1" />
+                                    </svg>
+                                </span>
+                                Site public ({{ $publicSiteUrl }})
                             </span>
-                            Site public ({{ $publicSiteUrl }})
-                        </span>
-                    </a>
-                    <div class="admin-public-menu-list" data-public-scope="prod">
-                        <div class="admin-public-empty">Chargement…</div>
+                        </a>
+                        <div class="admin-public-menu-list" data-public-scope="prod">
+                            <div class="admin-public-empty">Chargement…</div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        @endauth
     </div>
 
     @if($plannedMaintenance['enabled'] ?? false)

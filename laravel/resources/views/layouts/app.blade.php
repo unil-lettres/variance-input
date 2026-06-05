@@ -712,14 +712,15 @@
     @stack('scripts')
 
     <script>
-	        (function () {
-	            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-	            tooltipTriggerList.forEach((tooltipTriggerEl) => {
-	                new bootstrap.Tooltip(tooltipTriggerEl);
-	            });
-	        })();
+        (function () {
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach((tooltipTriggerEl) => {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })();
 
-            (function () {
+        @auth
+        (function () {
                 const HISTORY_KEY = 'variance:history:v1';
                 const listEl = document.getElementById('admin-history-list');
 
@@ -793,12 +794,12 @@
                         return;
                     }
                 });
-            })();
-	
-	        (function () {
-	            const buildLabel = (base, count) => {
-	                const total = Number(count) || 0;
-	                const suffix = total === 1 ? ' comparaison' : ' comparaisons';
+        })();
+
+        (function () {
+            const buildLabel = (base, count) => {
+                const total = Number(count) || 0;
+                const suffix = total === 1 ? ' comparaison' : ' comparaisons';
                 return `${base} (${total}${suffix})`;
             };
 
@@ -1018,6 +1019,7 @@
                 loadMenu();
             }
         })();
+        @endauth
 
         (function () {
             const dot = document.getElementById('system-status-dot');

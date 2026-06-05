@@ -2457,7 +2457,8 @@ function initComparisonsTable() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
           },
           body: JSON.stringify({
             comparison_id: comparisonId,
@@ -2510,7 +2511,10 @@ function initComparisonsTable() {
         });
         const res = await fetch(withBasePath(`/api/publish_xhtml/${comparisonId}`), {
           method: 'DELETE',
-          headers: { 'Accept': 'application/json' }
+          headers: {
+            'Accept': 'application/json',
+            ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+          }
         });
 
         const text = await res.text();
@@ -2578,7 +2582,8 @@ function initComparisonsTable() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
         },
         body: JSON.stringify({ comparison_id: comparisonId, destination: nextScope })
       });

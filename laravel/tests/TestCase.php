@@ -110,6 +110,8 @@ abstract class TestCase extends BaseTestCase
             storage_path('app/tmp/pager'),
             storage_path('framework/views'),
             public_path('uploads'),
+            public_path('uploads_images'),
+            public_path('uploads/pdf'),
             base_path('../variance/uploads'),
             '/var/www/variance/uploads',
         ];

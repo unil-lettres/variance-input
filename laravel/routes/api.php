@@ -6,6 +6,7 @@ use App\Http\Controllers\FacsimileController;
 use App\Http\Controllers\VersionController;
 use App\Http\Controllers\ComparisonController;
 
+Route::middleware(['web', 'auth'])->group(function () {
 Route::post('/publish_xhtml', [PublishController::class, 'publish']);
 Route::delete('/publish_xhtml/{comparison}', [PublishController::class, 'unpublish']);
 Route::post('/upload_facsimiles', [FacsimileController::class, 'store']);
@@ -27,3 +28,4 @@ Route::get('/comparisons/{comparison}/manifests/{role}', [ComparisonController::
     ->name('comparisons.manifest');
 Route::get('/comparisons/publication-counts', [ComparisonController::class, 'publicationCounts']);
 Route::get('/comparisons/public-menu', [ComparisonController::class, 'publicMenu']);
+});
