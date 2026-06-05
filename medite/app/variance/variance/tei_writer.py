@@ -222,7 +222,7 @@ def add_list_xhtml(
     end: int,
     name: str,
     id_suffix,                # str or tuple for substitutions
-) -> None:
+) -> bool:
     """
     Append one <li><a …> element into xhtml_lists[name].
 
@@ -256,7 +256,7 @@ def add_list_xhtml(
             src_id, tgt_id, label = id_suffix
             link_text = render_list_label_for_xhtml(label)
         if not link_text:
-            return
+            return False
         index = _next_index(name, src_id, tgt_id)
         num = f"{index:05d}"
         href = f"#ar_{num}"
@@ -266,7 +266,7 @@ def add_list_xhtml(
         src_id, tgt_id, _label = id_suffix
         link_text = render_list_label_for_xhtml(txt)
         if not link_text:
-            return
+            return False
         index = _next_index(name, src_id, tgt_id)
         num = f"{index:05d}"
         href = f"#ad_{num}"
@@ -280,7 +280,7 @@ def add_list_xhtml(
             tei_id = id_suffix
         link_text = render_list_label_for_xhtml(txt)
         if not link_text:
-            return
+            return False
         index = _next_index(name, tei_id)
         num = f"{index:05d}"
         href = f"{o['href']}_{num}"
@@ -289,6 +289,31 @@ def add_list_xhtml(
     xhtml_lists[name].append(
         f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
     )
+    return True
+
+
+def render_main_text_for_xhtml(txt: str) -> str:
+    """
+    Render a text fragment for source/target XHTML without adding sync markup.
+    """
+    txt = txt.replace("\n", "")
+    for a, b in (
+        ("<p/>", "<br></br>"), ("<p>", ""), ("</p>", "<br></br>"),
+        ("</div>", ""), ("<div>", "")
+    ):
+        txt = txt.replace(a, b)
+    return render_inline_tei_for_xhtml(txt)
+
+
+def add_plain_main_xhtml(
+    xhtml_mains: Dict[str, List[str]],
+    txt: str,
+    main: str,
+) -> None:
+    """
+    Append source/target text without creating a transformation id.
+    """
+    xhtml_mains[main].append(render_main_text_for_xhtml(txt))
 
 def add_main_xhtml(
     xhtml_mains: Dict[str, List[str]],
@@ -304,13 +329,7 @@ def add_main_xhtml(
     """
 
     # ── 1. clean snippet text ─────────────────────────────────────────
-    txt = txt.replace("\n", "")
-    for a, b in (
-        ("<p/>", "<br></br>"), ("<p>", ""), ("</p>", "<br></br>"),
-        ("</div>", ""), ("<div>", "")
-    ):
-        txt = txt.replace(a, b)
-    txt = render_inline_tei_for_xhtml(txt)
+    txt = render_main_text_for_xhtml(txt)
 
     index = _next_index(name, id_suffix, counterpart_id)
     num = f"{index:05d}"

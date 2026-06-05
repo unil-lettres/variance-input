@@ -141,6 +141,58 @@ class ComparisonMetadataWorkflowTest extends TestCase
         $this->assertEquals(1, $second->sort_order);
     }
 
+    public function test_deleting_comparison_compacts_sort_order_without_changing_public_numbers(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Ordre après suppression',
+            'short_title' => 'oas',
+        ]);
+        $firstSource = Version::factory()->for($work)->create(['folder' => '1oas']);
+        $firstTarget = Version::factory()->for($work)->create(['folder' => '2oas']);
+        $secondSource = Version::factory()->for($work)->create(['folder' => '3oas']);
+        $secondTarget = Version::factory()->for($work)->create(['folder' => '4oas']);
+        $thirdSource = Version::factory()->for($work)->create(['folder' => '5oas']);
+        $thirdTarget = Version::factory()->for($work)->create(['folder' => '6oas']);
+
+        $first = Comparison::factory()->create([
+            'source_id' => $firstSource->id,
+            'target_id' => $firstTarget->id,
+            'folder' => '1oas-2oas',
+            'created_by' => $user->id,
+            'number' => 0.1,
+            'sort_order' => 1,
+        ]);
+        $second = Comparison::factory()->create([
+            'source_id' => $secondSource->id,
+            'target_id' => $secondTarget->id,
+            'folder' => '3oas-4oas',
+            'created_by' => $user->id,
+            'number' => 1,
+            'sort_order' => 2,
+        ]);
+        $third = Comparison::factory()->create([
+            'source_id' => $thirdSource->id,
+            'target_id' => $thirdTarget->id,
+            'folder' => '5oas-6oas',
+            'created_by' => $user->id,
+            'number' => 2,
+            'sort_order' => 3,
+        ]);
+
+        $this->deleteJson("/comparisons/{$first->id}")
+            ->assertOk()
+            ->assertJsonPath('message', 'Comparison deleted');
+
+        $second->refresh();
+        $third->refresh();
+
+        $this->assertEquals(1, $second->number);
+        $this->assertEquals(2, $third->number);
+        $this->assertEquals(1, $second->sort_order);
+        $this->assertEquals(2, $third->sort_order);
+    }
+
     private function createComparisonForUser(User $user, array $comparisonAttributes = []): Comparison
     {
         $work = $this->createEditableWork($user, [], [

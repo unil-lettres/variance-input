@@ -4,6 +4,7 @@ from variance import operations as op
 from variance.tei_writer import (
     add_list_xhtml,
     add_main_xhtml,
+    add_plain_main_xhtml,
     render_substitution_label_for_xhtml,
     render_inline_tei_for_xhtml,
     render_list_label_for_xhtml,
@@ -94,6 +95,15 @@ def test_add_list_xhtml_does_not_emit_space_only_change():
     rchanges = op.Text(" ", (), ())
     output = SimpleNamespace(rchanges=rchanges)
 
-    add_list_xhtml(xhtml_lists, output, 0, len(rchanges.text), "addition", "v2_0_1")
+    emitted = add_list_xhtml(xhtml_lists, output, 0, len(rchanges.text), "addition", "v2_0_1")
 
+    assert emitted is False
     assert xhtml_lists["addition"] == []
+
+
+def test_add_plain_main_xhtml_preserves_space_without_transformation_id():
+    xhtml_mains = {"target": []}
+
+    add_plain_main_xhtml(xhtml_mains, " ", "target")
+
+    assert xhtml_mains["target"] == [" "]

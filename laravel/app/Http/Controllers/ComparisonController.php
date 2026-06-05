@@ -638,7 +638,9 @@ class ComparisonController extends Controller
         $comparisonFolder = $comparison->folder;
         $sourceVersionId = $comparison->source_id;
         $targetVersionId = $comparison->target_id;
+        $workId = $comparison->sourceVersion?->work_id ?? $comparison->targetVersion?->work_id;
         $comparison->delete();
+        $this->compactComparisonSortOrder($workId);
 
         $this->audit('comparison.deleted', [
             'comparison_id' => $comparisonId,
@@ -649,6 +651,35 @@ class ComparisonController extends Controller
         ]);
 
         return response()->json(['message' => 'Comparison deleted']);
+    }
+
+    private function compactComparisonSortOrder(?int $workId): void
+    {
+        if (!$workId) {
+            return;
+        }
+
+        DB::transaction(function () use ($workId) {
+            $ordered = Comparison::query()
+                ->where(function ($query) use ($workId) {
+                    $query->whereHas('sourceVersion', fn ($q) => $q->where('work_id', $workId))
+                        ->orWhereHas('targetVersion', fn ($q) => $q->where('work_id', $workId));
+                })
+                ->orderByRaw('CASE WHEN COALESCE(sort_order, number) IS NULL THEN 1 ELSE 0 END')
+                ->orderByRaw('COALESCE(sort_order, number)')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->values();
+
+            foreach ($ordered as $index => $comparison) {
+                $expected = $index + 1;
+                if ((float) ($comparison->sort_order ?? 0) !== (float) $expected) {
+                    $comparison->sort_order = $expected;
+                    $comparison->save();
+                }
+            }
+        });
     }
 
     private function deleteTransientComparisonInputs(int $comparisonId): void
