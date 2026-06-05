@@ -88,11 +88,10 @@ class AuthorController extends Controller
         ]);
 
         $author = Author::findOrFail($id);
-        if ($author->is_legacy) {
-            return response()->json([
-                'error' => 'Les auteurs legacy sont en lecture seule.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($author)) {
+            return $forbidden;
         }
+
         $author->name = $request->input('name');
         $author->save();
 
@@ -103,10 +102,8 @@ class AuthorController extends Controller
     {
         $author = Author::findOrFail($id);
 
-        if ($author->is_legacy) {
-            return response()->json([
-                'error' => 'Les auteurs legacy ne peuvent pas être supprimés.',
-            ], 403);
+        if ($forbidden = $this->forbidIfCannotEdit($author)) {
+            return $forbidden;
         }
 
         if ($author->works()->exists()) {
@@ -137,6 +134,40 @@ class AuthorController extends Controller
         ]);
 
         return response()->json(['success' => true]);
+    }
+
+    private function forbidIfCannotEdit(Author $author)
+    {
+        if ($author->is_legacy) {
+            return response()->json([
+                'error' => 'Les auteurs legacy sont en lecture seule.',
+            ], 403);
+        }
+
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json([
+                'error' => 'Vous devez être connecté pour modifier cet auteur.',
+            ], 403);
+        }
+
+        if ($user->is_admin) {
+            return null;
+        }
+
+        $canEditAuthor = Permission::query()
+            ->where('user_id', $user->id)
+            ->where('author_id', $author->id)
+            ->where('permission_type', 'edit')
+            ->exists();
+
+        if (!$canEditAuthor) {
+            return response()->json([
+                'error' => 'Vous n’avez pas la permission de modifier cet auteur.',
+            ], 403);
+        }
+
+        return null;
     }
 
 }

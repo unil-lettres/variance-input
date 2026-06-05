@@ -38,6 +38,10 @@ class FacsimileController extends Controller
         $version = Version::with('work.author')->find($validated['version_id']);
         $work    = $version->work;
         $author  = $work->author;
+        if ($forbidden = $this->forbidIfCannotEditVersion($version)) {
+            return $forbidden;
+        }
+
         if ($version->is_legacy || $work->is_legacy) {
             return response()->json([
                 'error' => 'Les versions legacy sont en lecture seule.',
@@ -203,6 +207,10 @@ class FacsimileController extends Controller
     {
         $version->loadMissing('work.author');
         $work = $version->work;
+        if ($forbidden = $this->forbidIfCannotEditVersion($version)) {
+            return $forbidden;
+        }
+
         if ($version->is_legacy || ($work && $work->is_legacy)) {
             return response()->json([
                 'status' => 'forbidden',
@@ -485,6 +493,30 @@ class FacsimileController extends Controller
     private function hasCancelMarker(int $versionId): bool
     {
         return is_file($this->cancelMarkerPath($versionId));
+    }
+
+    private function forbidIfCannotEditVersion(Version $version)
+    {
+        $version->loadMissing('work');
+        $work = $version->work;
+
+        if (!$work) {
+            return response()->json([
+                'error' => 'Œuvre introuvable pour cette version.',
+            ], 422);
+        }
+
+        if ($version->is_legacy || $work->is_legacy) {
+            return null;
+        }
+
+        if (!auth()->check() || !auth()->user()->can('edit', $work)) {
+            return response()->json([
+                'error' => 'Vous n’avez pas la permission de modifier les facsimilés de cette œuvre.',
+            ], 403);
+        }
+
+        return null;
     }
 
     private function detectSourcePageCount(UploadedFile $file, bool $isTiff): int

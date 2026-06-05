@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -80,5 +82,25 @@ class SecurityRouteAccessTest extends TestCase
             $this->assertContains('web', $middleware);
             $this->assertContains('auth', $middleware);
         }
+    }
+
+    public function test_login_attempts_are_rate_limited(): void
+    {
+        User::factory()->create([
+            'email' => 'limited@example.test',
+            'password' => Hash::make('correct-password'),
+        ]);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->from('/login')->post('/login', [
+                'email' => 'limited@example.test',
+                'password' => 'wrong-password',
+            ])->assertRedirect('/login');
+        }
+
+        $this->postJson('/login', [
+            'email' => 'limited@example.test',
+            'password' => 'wrong-password',
+        ])->assertStatus(429);
     }
 }
