@@ -98,6 +98,56 @@ def render_inline_tei_for_xhtml(txt: str) -> str:
     return balance_emphasis_for_xhtml(rendered)
 
 
+def _inside_emphasis_at(rchanges, offset: int) -> bool:
+    """
+    Return whether a Medite text offset is inside a TEI <emph> range.
+
+    Medite sees <emph> boundaries as backslash marker characters. A delta that
+    starts in the middle of an emphasized range may therefore extract only the
+    text content, with no <emph> tag left in the fragment. This helper recovers
+    that context from the reversible replacement table.
+    """
+    if offset < 0 or not rchanges:
+        return False
+
+    depth = 0
+    for replacement in sorted(getattr(rchanges, "replacements", ()), key=lambda item: item.start):
+        if replacement.start >= offset:
+            break
+        if replacement.new == "<emph>":
+            depth += 1
+        elif replacement.new == "</emph>" and depth > 0:
+            depth -= 1
+
+    return depth > 0
+
+
+def apply_emphasis_context_for_xhtml(
+    txt: str,
+    rchanges=None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
+) -> str:
+    """
+    Re-add TEI emphasis context for a Medite fragment before XHTML rendering.
+
+    op.extract() only returns tags that fall inside the requested range. If a
+    replacement/identity fragment is wholly inside one <emph> range, no tag is
+    present in the slice, but the final public XHTML must still show it in
+    italics.
+    """
+    if not txt or rchanges is None or start is None or end is None or start >= end:
+        return txt
+
+    contextual = txt
+    if _inside_emphasis_at(rchanges, start) and not re.match(r"^\s*<emph>", contextual):
+        contextual = "<emph>" + contextual
+    if _inside_emphasis_at(rchanges, end) and not re.search(r"</emph>\s*$", contextual):
+        contextual += "</emph>"
+
+    return contextual
+
+
 def balance_emphasis_for_xhtml(txt: str) -> str:
     """
     Make a Medite XHTML fragment self-contained for italic rendering.
@@ -234,6 +284,7 @@ def add_list_xhtml(
     """
     # 1) slice raw text, normalize structural tags, keep line breaks visible
     txt = op.extract(z.rchanges, start, end)
+    txt = apply_emphasis_context_for_xhtml(txt, z.rchanges, start, end)
     for a, b in (("<p/>", "\n"), ("<p>", ""), ("</p>", "\n"), ("</div>", "")):
         txt = txt.replace(a, b)
 
@@ -309,10 +360,14 @@ def add_plain_main_xhtml(
     xhtml_mains: Dict[str, List[str]],
     txt: str,
     main: str,
+    rchanges=None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
 ) -> None:
     """
     Append source/target text without creating a transformation id.
     """
+    txt = apply_emphasis_context_for_xhtml(txt, rchanges, start, end)
     xhtml_mains[main].append(render_main_text_for_xhtml(txt))
 
 def add_main_xhtml(
@@ -322,6 +377,9 @@ def add_main_xhtml(
     main: str,
     id_suffix: str,
     counterpart_id: Optional[str] = None,
+    rchanges=None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
 ) -> None:
     """
     Inject the inline synced element into *xhtml_mains[main]* using the legacy
@@ -329,6 +387,7 @@ def add_main_xhtml(
     """
 
     # ── 1. clean snippet text ─────────────────────────────────────────
+    txt = apply_emphasis_context_for_xhtml(txt, rchanges, start, end)
     txt = render_main_text_for_xhtml(txt)
 
     index = _next_index(name, id_suffix, counterpart_id)
