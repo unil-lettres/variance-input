@@ -1905,6 +1905,7 @@ class PageMarkerService
     private function normalizeLignesPhraseForMatching(string $txt): string
     {
         $txt = $this->stripInvisibleCharactersForMatching($txt);
+        $txt = $this->stripLegacyEmphasisMarkersForMatching($txt);
         $txt = $this->applyTypographicNormalisationForMatching($txt);
         $txt = str_replace("\t", '', $txt);
         $txt = preg_replace('/^[ \t]+/u', '', $txt) ?? $txt;
@@ -1914,12 +1915,32 @@ class PageMarkerService
         return trim($txt);
     }
 
+    private function markerPhraseForMatching(array $marker): string
+    {
+        $phrase = trim((string) ($marker['normalized_phrase'] ?? ''));
+        if ($phrase !== '') {
+            return $phrase;
+        }
+
+        $phrase = trim((string) ($marker['match_phrase'] ?? $marker['phrase'] ?? ''));
+        if ($phrase === '') {
+            return '';
+        }
+
+        return $this->normalizeLignesPhraseForMatching($phrase);
+    }
+
     private function stripInvisibleCharactersForMatching(string $txt): string
     {
         $txt = str_replace(["\u{FEFF}", "\u{200B}", "\u{200C}", "\u{200D}"], '', $txt);
         $txt = preg_replace('/[\x{2060}\x{00AD}]/u', '', $txt) ?? $txt;
 
         return $txt;
+    }
+
+    private function stripLegacyEmphasisMarkersForMatching(string $txt): string
+    {
+        return str_replace('\\', '', $txt);
     }
 
     private function applyTypographicNormalisationForMatching(string $txt): string
@@ -2171,7 +2192,14 @@ class PageMarkerService
 
         foreach ($normalized as $marker) {
             $charIndex = (int) ($marker['char_index'] ?? -1);
-            $resolvedIndex = $this->resolveMarkerIndex($marker, $shadow, $fold, $map, $charIndex);
+            $resolvedIndex = $this->resolveMarkerIndex(
+                $marker,
+                $shadow,
+                $fold,
+                $map,
+                $charIndex,
+                allowHintFallback: false
+            );
             if ($resolvedIndex === null || !array_key_exists($resolvedIndex, $map)) {
                 $misses[] = ['marker' => $marker, 'reason' => 'index_introuvable'];
                 continue;
@@ -2310,7 +2338,14 @@ class PageMarkerService
         return str_pad($code, 3, '0', STR_PAD_LEFT);
     }
 
-    private function resolveMarkerIndex(array $marker, string $shadow, string $fold, array $map, int $hint): ?int
+    private function resolveMarkerIndex(
+        array $marker,
+        string $shadow,
+        string $fold,
+        array $map,
+        int $hint,
+        bool $allowHintFallback = true
+    ): ?int
     {
         $total = count($map);
         if ($total === 0) {
@@ -2322,7 +2357,7 @@ class PageMarkerService
             $hint = $total - 1;
         }
 
-        $phrase = trim((string) ($marker['phrase'] ?? ''));
+        $phrase = $this->markerPhraseForMatching($marker);
         if ($phrase === '') {
             return $hint;
         }
@@ -2353,7 +2388,7 @@ class PageMarkerService
             }
         }
 
-        return $hint;
+        return $allowHintFallback ? $hint : null;
     }
 
     private function refineResolvedMarkerIndex(array $marker, string $fold, int $resolved): int
@@ -2365,7 +2400,7 @@ class PageMarkerService
 
         $resolved = max(0, min($resolved, $foldLength - 1));
 
-        $phrase = trim((string) ($marker['phrase'] ?? ''));
+        $phrase = $this->markerPhraseForMatching($marker);
         if ($phrase === '') {
             return $resolved;
         }
@@ -2773,10 +2808,13 @@ class PageMarkerService
     {
         $parts = [];
         $chars = preg_split('//u', $phrase ?? '', -1, PREG_SPLIT_NO_EMPTY);
+        $previousNonSpace = null;
 
         foreach ($chars as $ch) {
             if (preg_match('/\s/u', $ch)) {
-                $parts[] = '\\s+';
+                $parts[] = $previousNonSpace !== null && preg_match('/[.,;:!?]/u', $previousNonSpace)
+                    ? '\\s*'
+                    : '\\s+';
                 continue;
             }
 
@@ -2807,6 +2845,8 @@ class PageMarkerService
                 default:
                     $parts[] = preg_quote($ch, '/');
             }
+
+            $previousNonSpace = $ch;
         }
 
         $pattern = implode('', $parts);
@@ -2902,31 +2942,59 @@ class PageMarkerService
 
     private function findMatch(string $pattern, string $subject, int $offset): ?array
     {
-        if (!preg_match($pattern, $subject, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+        $byteOffset = $this->byteOffsetForCharOffset($subject, $offset);
+        if (!preg_match($pattern, $subject, $matches, PREG_OFFSET_CAPTURE, $byteOffset)) {
             return null;
         }
 
-        return [$matches[0][0], $matches[0][1]];
+        return [$matches[0][0], $this->charOffsetFromByteOffset($subject, $matches[0][1])];
     }
 
     private function findMatchWindow(string $pattern, string $subject, int $offset, int $window = 200000): ?array
     {
-        $len = strlen($subject);
+        $len = mb_strlen($subject, 'UTF-8');
         if ($offset >= $len) {
             return null;
         }
 
-        $slice = substr($subject, $offset, $window);
+        $slice = mb_substr($subject, $offset, $window, 'UTF-8');
         if ($slice === '') {
             return null;
         }
 
         if (preg_match($pattern, $slice, $matches, PREG_OFFSET_CAPTURE)) {
-            return [$matches[0][0], $offset + $matches[0][1]];
+            return [$matches[0][0], $offset + $this->charOffsetFromByteOffset($slice, $matches[0][1])];
         }
 
         // Fallback once on the full tail if not found in window
         return $this->findMatch($pattern, $subject, $offset);
+    }
+
+    private function byteOffsetForCharOffset(string $subject, int $charOffset): int
+    {
+        if ($charOffset <= 0) {
+            return 0;
+        }
+
+        $charLength = mb_strlen($subject, 'UTF-8');
+        if ($charOffset >= $charLength) {
+            return strlen($subject);
+        }
+
+        return strlen(mb_substr($subject, 0, $charOffset, 'UTF-8'));
+    }
+
+    private function charOffsetFromByteOffset(string $subject, int $byteOffset): int
+    {
+        if ($byteOffset <= 0) {
+            return 0;
+        }
+
+        if ($byteOffset >= strlen($subject)) {
+            return mb_strlen($subject, 'UTF-8');
+        }
+
+        return mb_strlen(substr($subject, 0, $byteOffset), 'UTF-8');
     }
 
     private function moveBeforeOpeningChain(string $html, int $idx): int
