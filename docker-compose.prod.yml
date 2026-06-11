@@ -21,8 +21,8 @@ services:
     restart: unless-stopped
 
   laravel:
-    # Pinned to authenticated-write security hotfix v2026.06.05-authz1.
-    image: unillett/variance-input:laravel-v2026.06.05-authz1@sha256:ba83d7c59661e674131eaf06e770b34b766395b0d72853b4d330b49a2a7d5f6b
+    # Pinned to Melmoth pagination/notice hotfix v2026.06.11-melmoth1.
+    image: unillett/variance-input:laravel-v2026.06.11-melmoth1@sha256:93f7a53b63fbc7d5b506a9ce5852b68d2ab16b9691edb47ed2b309462c27630c
     restart: unless-stopped
     env_file:
       - ./laravel.env
@@ -48,7 +48,7 @@ services:
 
   laravel-queue:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.05-authz1@sha256:ba83d7c59661e674131eaf06e770b34b766395b0d72853b4d330b49a2a7d5f6b
+    image: unillett/variance-input:laravel-v2026.06.11-melmoth1@sha256:93f7a53b63fbc7d5b506a9ce5852b68d2ab16b9691edb47ed2b309462c27630c
     restart: unless-stopped
     command: ./scripts/run-queue-workers.sh
     env_file:
@@ -72,7 +72,7 @@ services:
 
   laravel-scheduler:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.05-authz1@sha256:ba83d7c59661e674131eaf06e770b34b766395b0d72853b4d330b49a2a7d5f6b
+    image: unillett/variance-input:laravel-v2026.06.11-melmoth1@sha256:93f7a53b63fbc7d5b506a9ce5852b68d2ab16b9691edb47ed2b309462c27630c
     restart: unless-stopped
     command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     env_file:
@@ -95,7 +95,7 @@ services:
 
   laravel-assets:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.05-authz1@sha256:ba83d7c59661e674131eaf06e770b34b766395b0d72853b4d330b49a2a7d5f6b
+    image: unillett/variance-input:laravel-v2026.06.11-melmoth1@sha256:93f7a53b63fbc7d5b506a9ce5852b68d2ab16b9691edb47ed2b309462c27630c
     restart: "no"
     entrypoint: ["/bin/sh", "-lc"]
     command:
