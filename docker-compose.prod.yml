@@ -104,8 +104,8 @@ services:
       - vite_build:/build-output
 
   medite:
-    # Pinned to consistency patch tag v2026.06.05-consistency1.
-    image: unillett/variance-input:medite-v2026.06.05-consistency1@sha256:08f09ecdef981893a51c16c56d42751a9a8130a3aa0bc9c997aa55f5d641c184
+    # Pinned to Melmoth pagination/italics hotfix v2026.06.11-melmoth1.
+    image: unillett/variance-input:medite-v2026.06.11-melmoth1@sha256:5dbeef9325a48084b2e9ade1dd92cd26803b25f40bcf89dcbe1aa67a5c6c2c2b
     restart: unless-stopped
     environment:
       - FLASK_ENV=production
