@@ -709,7 +709,17 @@ class EditorController extends Controller
     private function assertVersionEditorAllowed(Version $version): void
     {
         $user = auth()->user();
-        if (! $user || ! $user->canUseVersionEditor($version)) {
+        $version->loadMissing('work');
+
+        if (! $user) {
+            abort(403, 'Authentification requise.');
+        }
+
+        if ($version->is_legacy || $version->work?->is_legacy) {
+            abort(403, 'Cette version legacy est en lecture seule : l’éditeur XML est réservé aux versions créées dans la nouvelle interface.');
+        }
+
+        if (! $user->canUseVersionEditor($version)) {
             abort(403, 'Accès limité aux versions assignées.');
         }
     }

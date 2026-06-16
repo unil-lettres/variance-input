@@ -122,7 +122,7 @@ class VersionTextService
         $txt = $this->normalizeTxt2TeiCharacters($txt);
         $txt = $this->collapseTxt2TeiSpacesAndTabs($txt);
 
-        $escapedText = Txt2TeiInlineMarkup::escapeWithItalicMarkup($txt);
+        $escapedText = Txt2TeiInlineMarkup::escapeWithLegacyInlineMarkup($txt);
 
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
             ."<TEI xml:id=\"v{$versionNumber}\" xmlns=\"http://www.tei-c.org/ns/1.0\">\n"

@@ -976,7 +976,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             // Ignore history failures.
         }
-        dispatchEditorialStepChanged(options.reason || 'step-change');
+        if (parsedStep !== 0 || options.notifyStepZero === true) {
+            dispatchEditorialStepChanged(options.reason || 'step-change');
+        }
     };
 
     window.openEditorialStep = openEditorialStep;

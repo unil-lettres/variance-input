@@ -16,21 +16,6 @@
                         <select id="facsimile-reader-page" class="form-select form-select-sm"></select>
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="facsimile-reader-next">Page suivante ›</button>
                     </div>
-                    <div class="facsimile-reader-control-group">
-                        <select id="facsimile-reader-text-source" class="form-select form-select-sm" title="Choisir la source du texte affiché">
-                            <option value="auto">Source texte auto</option>
-                        </select>
-                        <select id="facsimile-reader-encoding" class="form-select form-select-sm" title="Ajuster l’encodage si le rendu du texte est visiblement incorrect">
-                            <option value="auto">Encodage auto</option>
-                            <option value="UTF-8">UTF-8</option>
-                            <option value="Windows-1252">Windows-1252</option>
-                            <option value="ISO-8859-1">ISO-8859-1</option>
-                            <option value="Mac Roman">Mac Roman</option>
-                        </select>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="facsimile-reader-rebuild" title="Reconstruire le dataset du lecteur pour cette version">Reconstruire</button>
-                        <span id="facsimile-reader-action-status" class="small text-muted facsimile-reader-action-status" aria-live="polite"></span>
-                        <button type="button" class="btn btn-sm btn-outline-success d-none" id="facsimile-reader-convert-utf8" disabled aria-hidden="true" tabindex="-1">Convertir en UTF-8</button>
-                    </div>
                 </div>
             </div>
 
@@ -275,6 +260,8 @@
         border: 0;
         border-radius: 0;
         padding: 0;
+        max-width: 100%;
+        overflow-x: clip;
     }
     .facsimile-reader-card-header .admin-card-heading {
         width: 100%;
@@ -325,20 +312,11 @@
         gap: 0.6rem;
         flex-wrap: nowrap;
     }
-    .facsimile-reader-action-status {
-        min-height: 1.25rem;
-        display: inline-flex;
-        align-items: center;
-        white-space: nowrap;
-    }
     .facsimile-reader-controls select {
         min-width: 0;
     }
     #facsimile-reader-page {
-        width: 11rem;
-    }
-    #facsimile-reader-encoding {
-        width: 10.5rem;
+        width: 13rem;
     }
     .facsimile-reader-empty {
         border: 1px dashed #d4cec3;
@@ -378,6 +356,8 @@
         border: 1px solid #ddd4c8;
         border-radius: 0.9rem;
         background: rgba(255, 255, 255, 0.72);
+        max-width: 100%;
+        overflow: hidden;
     }
     .facsimile-reader-carousel-nav {
         width: 2.25rem;
@@ -1195,35 +1175,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
     }
 
-    function describePaginationOrigin(origin, markerCount, guessed = false) {
+    function describeReaderPagination(markerCount, guessed = false) {
         if (guessed) return 'approximation sans repères';
-        if (!origin || !Number.isFinite(Number(markerCount)) || Number(markerCount) <= 0) {
-            return 'sans pagination';
+
+        const count = Number(markerCount);
+        if (!Number.isFinite(count) || count <= 0) {
+            return 'aucun repère disponible';
         }
 
-        const labels = {
-            'lignes': 'fichier _lignes',
-            'pb-tei': 'balises <pb> du TEI',
-            'pb-xhtml': 'balises de pagination du XHTML',
-            'merged': 'sources fusionnées',
-        };
-
-        const base = labels[String(origin || '')] || 'source non précisée';
-        if (!Number.isFinite(Number(markerCount)) || Number(markerCount) <= 0) {
-            return base;
-        }
-
-        return `${base} (${Number(markerCount).toLocaleString('fr-FR')} repère(s))`;
+        const plural = count > 1;
+        return `${count.toLocaleString('fr-FR')} repère${plural ? 's' : ''} disponible${plural ? 's' : ''}`;
     }
 
     function buildReaderSummary() {
         const versionLabel = currentVersionName || 'Version';
         const markerCount = Number(readerData?.pagination?.marker_count ?? readerPages.length ?? 0);
         const hasGuessedPages = readerPages.some(page => page?.guessed === true);
-        const paginationLabel = describePaginationOrigin(readerData?.pagination?.origin, markerCount, hasGuessedPages);
+        const paginationLabel = describeReaderPagination(markerCount, hasGuessedPages);
 
-        const textLabel = readerData?.text_source_label || 'source texte non précisée';
-        return `${versionLabel} · Texte : ${textLabel} · Pagination : ${paginationLabel}`;
+        return `${versionLabel} · Pagination : ${paginationLabel}`;
     }
 
     function setReaderLoading(isLoading) {
@@ -1374,7 +1344,76 @@ document.addEventListener('DOMContentLoaded', () => {
     function scrollCurrentThumbIntoView() {
         if (!readerThumbsEl) return;
         const currentThumb = readerThumbsEl.querySelector('.facsimile-reader-thumb-card.is-current');
-        currentThumb?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        if (!currentThumb) return;
+
+        const viewportWidth = readerThumbsEl.clientWidth;
+        const targetLeft = currentThumb.offsetLeft - Math.max(0, (viewportWidth - currentThumb.offsetWidth) / 2);
+        const maxLeft = Math.max(0, readerThumbsEl.scrollWidth - viewportWidth);
+        readerThumbsEl.scrollTo({
+            left: Math.max(0, Math.min(targetLeft, maxLeft)),
+            behavior: 'smooth',
+        });
+    }
+
+    function normalizeReaderAnchorPhrase(value, label = '') {
+        let phrase = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!phrase) return '';
+
+        const labelText = String(label || '').trim();
+        const labelVariants = [
+            labelText,
+            labelText.replace(/^p\.\s*/i, ''),
+            labelText.replace(/^0+(\d)/, '$1'),
+        ]
+            .map(item => item.replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+
+        for (const variant of labelVariants) {
+            const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            phrase = phrase.replace(new RegExp(`^${escaped}\\s*`, 'i'), '').trim();
+        }
+
+        phrase = phrase.replace(/^\d{1,4}\s+(?=\S)/, '').trim();
+        phrase = phrase.replace(/^\d{1,4}(?=[\p{L}«"“])/u, '').trim();
+
+        return phrase;
+    }
+
+    function formatReaderAnchorPhrase(value) {
+        const phrase = String(value || '').trim();
+        if (!phrase) return '';
+        if (phrase.endsWith('[...]')) return phrase;
+        return `${phrase}[...]`;
+    }
+
+    function buildReaderPageOptionLabel(page, index, total) {
+        const position = `${index + 1}/${Math.max(1, Number(total) || 1)}`;
+        const rawLabel = String(page?.label || '').replace(/\s+/g, ' ').trim();
+
+        if (!rawLabel) {
+            return `Repère ${position}`;
+        }
+
+        if (/^rep[eè]re\b/i.test(rawLabel)) {
+            return `${rawLabel} (${position})`;
+        }
+
+        const pageLabel = rawLabel
+            .replace(/^p\.\s*/i, '')
+            .replace(/^page\s+/i, '')
+            .trim();
+
+        return `Page ${pageLabel || rawLabel} (${position})`;
+    }
+
+    function buildReaderImageOptionLabel(image, index, total) {
+        const position = `${index + 1}/${Math.max(1, Number(total) || 1)}`;
+
+        if (image?.image_code) {
+            return `Image ${image.image_code} (${position})`;
+        }
+
+        return `${image?.name || 'Image'} (${position})`;
     }
 
     function buildReaderPages(payload) {
@@ -1556,9 +1595,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const anchorOffset = Number.isFinite(Number(page?.anchorOffset)) ? Number(page.anchorOffset) : null;
-        const anchorLabel = page?.anchorPhrase
-            ? `Repère : ${page.anchorPhrase}`
-            : `Repère ${page?.label || ''}`.trim();
+        const anchorPhrase = normalizeReaderAnchorPhrase(page?.anchorPhrase, page?.label);
+        const anchorLabel = anchorPhrase ? `Repère : "${formatReaderAnchorPhrase(anchorPhrase)}"` : 'Repère';
 
         if (anchorOffset === null || page?.guessed === true) {
             readerTextEl.textContent = rawText;
@@ -1678,7 +1716,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (page.label) textParts.push(page.label);
             if (page.line) textParts.push(`ligne ${page.line}`);
-            if (readerData?.text_source_label) textParts.push(readerData.text_source_label);
             const segmentLength = Math.max(0, page.end - page.start);
             textParts.push(`${segmentLength.toLocaleString('fr-FR')} signes`);
             readerTextMetaEl.textContent = textParts.join(' · ');
@@ -1712,15 +1749,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerPageSelect) {
             readerPageSelect.innerHTML = '';
             if (!payload?.pagination?.available && Array.isArray(payload?.facsimiles) && payload.facsimiles.length) {
+                const total = payload.facsimiles.length;
                 payload.facsimiles.forEach((image, index) => {
-                    const label = image?.image_code
-                        ? `${index + 1}. Image ${image.image_code}`
-                        : `${index + 1}. ${image?.name || 'Image'}`;
-                    readerPageSelect.appendChild(new Option(label, String(index)));
+                    readerPageSelect.appendChild(new Option(buildReaderImageOptionLabel(image, index, total), String(index)));
                 });
             } else {
+                const total = readerPages.length;
                 readerPages.forEach((page, index) => {
-                    const option = new Option(`${index + 1}. ${page.label}`, String(index));
+                    const option = new Option(buildReaderPageOptionLabel(page, index, total), String(index));
                     readerPageSelect.appendChild(option);
                 });
             }

@@ -183,7 +183,9 @@ Route::delete('/api/versions/{version}/page-markers', [VersionController::class,
 Route::post('/api/versions/{version}/lignes', [VersionController::class, 'uploadLignes']);
 Route::delete('/api/versions/{version}/lignes', [VersionController::class, 'cancelLignes'])->middleware('auth');
 Route::delete('/api/versions/{version}/lignes/file', [VersionController::class, 'deleteLignesFile'])->middleware('auth');
-Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])->name('versions.lignes.download');
+Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])
+    ->middleware('auth')
+    ->name('versions.lignes.download');
 Route::delete('/api/versions/{version}/facsimiles', [VersionController::class, 'cancelFacsimiles'])->middleware('auth');
 Route::delete('/api/versions/{version}/facsimiles/cancel-upload', [FacsimileController::class, 'cancelUpload'])->middleware('auth');
 Route::get('/versions/{version}/download', [VersionController::class, 'downloadText'])->name('versions.text.download');

@@ -83,6 +83,11 @@ class VersionController extends Controller
                 $textLength = null; // lazy-loaded via /api/versions/{id}/text-length
                 $comparisonIds = $usageByVersion[$version->id] ?? [];
 
+                $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
+                if ($lignesInfo) {
+                    $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
+                }
+
                 return [
                     'id' => $version->id,
                     'name' => $version->name,
@@ -103,7 +108,7 @@ class VersionController extends Controller
                     'text_length' => $textLength,
                     'facsimiles' => null, // lazy-loaded via /api/versions/{id}/facsimiles/progress
                     'page_marker_progress' => $pageMarkerProgress,
-                    'lignes' => null, // loaded on-demand by row actions
+                    'lignes' => $lignesInfo,
                     'pagination' => $paginationInfo,
                 ];
             })
@@ -714,6 +719,8 @@ class VersionController extends Controller
 
     public function downloadLignes(Version $version)
     {
+        $this->assertVersionLignesDownloadAllowed($version);
+
         $relative = $this->pageMarkerService->lignesRelativePath($version->id);
         if (! Storage::disk('local')->exists($relative)) {
             abort(404, 'Fichier _lignes introuvable.');
@@ -733,21 +740,30 @@ class VersionController extends Controller
             }
         }, 200, [
             'Content-Type' => 'text/plain; charset=UTF-8',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
     public function paginationInfo(Version $version)
     {
         $info = $this->pageMarkerService->getPaginationInfo($version->id);
+        $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
+        if ($lignesInfo) {
+            $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
+        }
+
         if (! $info) {
             return response()->json([
                 'status' => 'missing',
                 'version_id' => $version->id,
+                'lignes' => $lignesInfo,
             ], 404);
         }
 
-        return response()->json($info + ['version_id' => $version->id], 200);
+        return response()->json($info + [
+            'version_id' => $version->id,
+            'lignes' => $lignesInfo,
+        ], 200);
     }
 
     public function readerData(Request $request, Version $version): JsonResponse
@@ -1338,7 +1354,17 @@ class VersionController extends Controller
     private function assertVersionEditorAllowed(Version $version): void
     {
         $user = auth()->user();
-        if (! $user || ! $user->canUseVersionEditor($version)) {
+        $version->loadMissing('work');
+
+        if (! $user) {
+            abort(403, 'Authentification requise.');
+        }
+
+        if ($version->is_legacy || $version->work?->is_legacy) {
+            abort(403, 'Cette version legacy est en lecture seule : l’éditeur XML est réservé aux versions créées dans la nouvelle interface.');
+        }
+
+        if (! $user->canUseVersionEditor($version)) {
             abort(403, 'Accès limité aux versions assignées.');
         }
     }
@@ -1348,6 +1374,28 @@ class VersionController extends Controller
         $user = auth()->user();
         if (! $user || ! $user->canUseVersionEditor($version)) {
             abort(403, 'Cette version est en lecture seule ou non assignée.');
+        }
+    }
+
+    private function assertVersionLignesDownloadAllowed(Version $version): void
+    {
+        $user = auth()->user();
+        $version->loadMissing('work');
+
+        if (! $user) {
+            abort(403, 'Authentification requise.');
+        }
+
+        if ($user->is_admin) {
+            return;
+        }
+
+        if ($version->is_legacy || $version->work?->is_legacy) {
+            abort(403, 'Fichier _lignes réservé aux administrateurs pour les versions legacy.');
+        }
+
+        if (! $user->canUseVersionEditor($version)) {
+            abort(403, 'Accès limité aux versions assignées.');
         }
     }
 

@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchBtn: document.getElementById('search-btn'),
         italicOpenBtn: document.getElementById('italic-open-btn'),
         italicCloseBtn: document.getElementById('italic-close-btn'),
+        superscriptOpenBtn: document.getElementById('superscript-open-btn'),
+        superscriptCloseBtn: document.getElementById('superscript-close-btn'),
         italicReportBtn: document.getElementById('italic-report-btn'),
         previewImg: document.getElementById('facsimile-preview'),
         noPreviewText: document.getElementById('no-preview'),
@@ -144,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncInlineWidgetTooltips = () => {
         if (!bootstrapLib?.Tooltip) return;
 
-        document.querySelectorAll('.cm-italic-tag, .cm-page-number-mark').forEach((element) => {
+        document.querySelectorAll('.cm-inline-tag, .cm-page-number-mark').forEach((element) => {
             const instance = bootstrapLib.Tooltip.getInstance(element);
 
             if (!tooltipsEnabled) {
@@ -156,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (element.classList.contains('cm-italic-tag')) {
+            if (element.classList.contains('cm-inline-tag')) {
                 new bootstrapLib.Tooltip(element, {
                     title: 'Cliquez pour supprimer',
                     trigger: 'hover',
@@ -1130,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editor.toggleSearch();
     });
 
-    // Italic buttons handlers
+    // Inline formatting button handlers
     elements.italicOpenBtn.addEventListener('click', () => {
         editor.insertItalicOpenTag();
     });
@@ -1139,14 +1141,22 @@ document.addEventListener('DOMContentLoaded', () => {
         editor.insertItalicCloseTag();
     });
 
-    // Italic errors report handler
+    elements.superscriptOpenBtn.addEventListener('click', () => {
+        editor.insertSuperscriptOpenTag();
+    });
+
+    elements.superscriptCloseBtn.addEventListener('click', () => {
+        editor.insertSuperscriptCloseTag();
+    });
+
+    // Inline formatting errors report handler
     elements.italicErrorsModal.addEventListener('show.bs.modal', () => {
-        const errors = editor.validateItalicTags();
+        const errors = editor.validateInlineTags();
 
         if (errors.length === 0) {
             elements.italicErrorsList.innerHTML = `
                 <div class="alert alert-success" role="alert">
-                    <i class="bi bi-check-circle-fill"></i> Aucune erreur détectée ! Tous les tags italiques sont valides.
+                    <i class="bi bi-check-circle-fill"></i> Aucune erreur détectée ! Les balises italiques et exposants sont valides.
                 </div>
             `;
         } else {

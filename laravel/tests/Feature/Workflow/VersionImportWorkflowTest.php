@@ -22,7 +22,7 @@ class VersionImportWorkflowTest extends TestCase
             'short_title' => 'lspn',
         ]);
 
-        $sourceText = "  Bonjour\u{00A0}\u{202F}\\monde\\  \r\n\tDeux  espaces\t\r\nImpair \\orphelin\r\n";
+        $sourceText = "  Bonjour\u{00A0}\u{202F}\\monde\\  \r\n\tDeux  espaces\t\r\nLe 1^er^ rang\r\nImpair \\orphelin et ^exposant\r\n";
         $upload = UploadedFile::fake()->createWithContent('version.txt', $sourceText);
 
         $response = $this->post('/api/versions', [
@@ -49,8 +49,10 @@ class VersionImportWorkflowTest extends TestCase
 
         $this->assertStringContainsString('Bonjour <emph>monde</emph>', $xml);
         $this->assertStringContainsString('Deux espaces', $xml);
-        $this->assertStringContainsString('Impair \\orphelin', $xml);
+        $this->assertStringContainsString('Le 1<sup>er</sup> rang', $xml);
+        $this->assertStringContainsString('Impair \\orphelin et ^exposant', $xml);
         $this->assertStringNotContainsString('\\monde\\', $xml);
+        $this->assertStringNotContainsString('^er^', $xml);
         $this->assertStringNotContainsString('<lb/>', $xml);
         $this->assertStringNotContainsString("\u{00A0}", $xml);
         $this->assertStringNotContainsString("\u{202F}", $xml);
@@ -166,6 +168,34 @@ class VersionImportWorkflowTest extends TestCase
             [$comparison->id],
             $versions->firstWhere('id', $target->id)['in_use_comparison_ids'] ?? null
         );
+    }
+
+    public function test_lignes_download_requires_authentication(): void
+    {
+        $version = Version::factory()->create([
+            'folder' => 'download-lignes-v1',
+        ]);
+        Storage::disk('local')->put("lignes/{$version->id}.txt", "0001\t1\tTexte\n");
+
+        $this->get("/api/versions/{$version->id}/lignes")
+            ->assertRedirect(admin_path('login'));
+    }
+
+    public function test_admin_can_download_legacy_lignes_file(): void
+    {
+        $this->signInAdmin();
+        $version = Version::factory()->create([
+            'folder' => 'legacy-lignes-v1',
+            'is_legacy' => true,
+        ]);
+        $contents = "0001\t1\tTexte legacy\n";
+        Storage::disk('local')->put("lignes/{$version->id}.txt", $contents);
+
+        $response = $this->get("/api/versions/{$version->id}/lignes");
+
+        $response->assertOk()
+            ->assertHeader('Content-Disposition', 'attachment; filename="legacy-lignes-v1_lignes.txt"');
+        $this->assertSame($contents, $response->streamedContent());
     }
 
     public function test_deleting_version_removes_private_artifacts_and_prunes_empty_facsimile_dirs(): void

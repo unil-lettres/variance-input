@@ -166,6 +166,17 @@
         .login-page .admin-user-menu {
             font-size: 0.95rem;
         }
+        .login-page .admin-chrome--embedded {
+            justify-content: center;
+        }
+        .login-page .admin-chrome--embedded > .d-flex:first-child {
+            width: 100%;
+            justify-content: center;
+        }
+        .login-page .admin-chrome--embedded .admin-chrome-actions {
+            display: none !important;
+            margin-left: 0;
+        }
         .admin-user-toggle {
             border: 1px solid #ced4da;
             color: #495057;

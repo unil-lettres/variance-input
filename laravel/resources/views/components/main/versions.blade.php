@@ -1037,6 +1037,7 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
     const state = facsimileRowState.get(id);
     if (!state) return;
     const isLegacy = !!state.isLegacy;
+    const hasLignesFile = !!(lignesInfo && typeof lignesInfo === 'object');
 
     const paginationMarkerCount = (info) => {
         if (!info || typeof info !== 'object') return null;
@@ -1072,6 +1073,19 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
 
     if (state.markerCountPill) {
         setVersionCountPill(state.markerCountPill, markerCount, 'marqueur(s)');
+    }
+
+    if (state.lignesDownloadBtn) {
+        const href = hasLignesFile
+            ? (lignesInfo.url || withBasePath(`/api/versions/${id}/lignes`))
+            : '#';
+        state.lignesDownloadBtn.href = href;
+        state.lignesDownloadBtn.classList.toggle('disabled', !hasLignesFile);
+        state.lignesDownloadBtn.setAttribute('aria-disabled', hasLignesFile ? 'false' : 'true');
+        state.lignesDownloadBtn.tabIndex = hasLignesFile ? 0 : -1;
+        state.lignesDownloadBtn.title = hasLignesFile
+            ? 'Télécharger le fichier _lignes'
+            : 'Aucun fichier _lignes disponible';
     }
 
     if (state.lignesUploadBtn) {
@@ -2557,6 +2571,16 @@ async function fetchVersions(workId, force = false){
             lignesActions.appendChild(lignesUploadBtn);
             lignesActions.appendChild(lignesInput);
 
+            const lignesDownloadBtn = document.createElement('a');
+            lignesDownloadBtn.className = 'btn btn-outline-secondary versions-icon-btn disabled';
+            lignesDownloadBtn.href = '#';
+            lignesDownloadBtn.setAttribute('aria-label', 'Télécharger le fichier _lignes');
+            lignesDownloadBtn.setAttribute('aria-disabled', 'true');
+            lignesDownloadBtn.tabIndex = -1;
+            lignesDownloadBtn.title = 'Aucun fichier _lignes disponible';
+            lignesDownloadBtn.innerHTML = '<i class="bi bi-download"></i>';
+            lignesActions.appendChild(lignesDownloadBtn);
+
             const clearMarkersBtn = document.createElement('button');
             clearMarkersBtn.type = 'button';
             clearMarkersBtn.className = 'btn btn-outline-danger versions-icon-btn';
@@ -2606,6 +2630,7 @@ async function fetchVersions(workId, force = false){
                 lignesUploadBtn,
                 lignesUploadIcon,
                 lignesUploadSpinner,
+                lignesDownloadBtn,
                 clearMarkersBtn,
             };
 

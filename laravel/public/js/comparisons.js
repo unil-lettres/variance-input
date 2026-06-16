@@ -67,7 +67,18 @@ function initComparisonsTable() {
     missing: 'Indisponible',
   };
   const normalizeStatus = status => String(status ?? '').toLowerCase();
-  const formatTimestamp = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { hour12: false }) : null;
+  const formatTimestamp = value => {
+    if (value === null || value === undefined || value === '') return null;
+    let date = null;
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue) && String(value).trim() !== '') {
+      date = new Date(numericValue > 100000000000 ? numericValue : numericValue * 1000);
+    } else {
+      date = new Date(String(value).replace(' ', 'T'));
+    }
+    if (!date || Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString('fr-FR', { hour12: false });
+  };
   const escapeHtml = (value) => {
     return String(value)
       .replace(/&/g, '&amp;')
@@ -1230,60 +1241,74 @@ function initComparisonsTable() {
   function renderComparisonDataSummary(comp, { detailsLoaded = false } = {}) {
     const lines = [];
 
-    const pushLine = (html, variant = '') => {
-      const cls = variant ? ` comparison-results-line--${variant}` : '';
-      lines.push(`<div class="comparison-results-line${cls}">${html}</div>`);
+    const pushTextLine = (html, variant = '') => {
+      const cls = variant ? ` comparison-data-line--${variant}` : '';
+      lines.push(`<div class="comparison-data-line${cls}"><span class="comparison-data-text">${html}</span></div>`);
+    };
+
+    const pushItemsLine = (items, variant = '') => {
+      const cls = variant ? ` comparison-data-line--${variant}` : '';
+      const html = items
+        .filter(item => item && item.value !== null && item.value !== undefined && item.value !== '')
+        .map(item => `
+          <span class="comparison-data-item">
+            <span class="comparison-data-label">${item.label}</span>
+            <span class="comparison-data-value">${item.value}</span>
+          </span>
+        `)
+        .join('');
+      if (html) {
+        lines.push(`<div class="comparison-data-line${cls}">${html}</div>`);
+      }
     };
 
     if (!detailsLoaded) {
-      pushLine('Chargement…', 'muted');
+      pushTextLine('Chargement…', 'muted');
     }
 
     const creatorName = comp?.creator_name || comp?.creator?.name || null;
     const createdAt = comp?.created_at ? formatTimestamp(comp.created_at) : null;
-    const identityBits = [`<strong>ID</strong> ${comp.id}`];
-    if (createdAt) {
-      identityBits.push(`<strong>Créée</strong> ${createdAt}`);
-    }
-    if (creatorName) {
-      identityBits.push(`<strong>Par</strong> ${creatorName}`);
-    }
-    pushLine(identityBits.join(' · '));
+    pushItemsLine([
+      { label: 'ID', value: escapeHtml(comp.id) },
+      { label: 'Créée', value: createdAt ? escapeHtml(createdAt) : null },
+      { label: 'Par', value: creatorName ? escapeHtml(creatorName) : null },
+    ]);
 
-    pushLine(
-      `<strong>Versions</strong> source #${formatNumber(Number(comp?.source_id ?? 0))} · cible #${formatNumber(Number(comp?.target_id ?? 0))}`
-    );
+    pushItemsLine([
+      { label: 'Source', value: `#${formatNumber(Number(comp?.source_id ?? 0))}` },
+      { label: 'Cible', value: `#${formatNumber(Number(comp?.target_id ?? 0))}` },
+    ]);
 
     if (comp?.pagination && typeof comp.pagination === 'object') {
       const sourceLignesFile = describeLignesFile(comp.pagination?.source || {});
       const targetLignesFile = describeLignesFile(comp.pagination?.target || {});
       if (sourceLignesFile || targetLignesFile) {
-        const parts = [];
-        if (sourceLignesFile) parts.push(`<strong>_lignes source</strong> ${sourceLignesFile}`);
-        if (targetLignesFile) parts.push(`<strong>_lignes cible</strong> ${targetLignesFile}`);
-        pushLine(parts.join(' · '));
+        pushItemsLine([
+          { label: '_lignes source', value: sourceLignesFile ? escapeHtml(sourceLignesFile) : null },
+          { label: '_lignes cible', value: targetLignesFile ? escapeHtml(targetLignesFile) : null },
+        ]);
       }
     }
 
     const runtime = formatDuration(comp.medite_runtime_ms);
     if (runtime) {
-      pushLine(`<strong>Durée Medite</strong> ${runtime}`);
+      pushItemsLine([{ label: 'Durée Medite', value: escapeHtml(runtime) }]);
     }
 
     const peakKb = Number(comp.medite_peak_rss_kb);
     if (Number.isFinite(peakKb) && peakKb > 0) {
-      pushLine(`<strong>Pic mémoire</strong> ${formatBytes(peakKb * 1024)}`);
+      pushItemsLine([{ label: 'Pic mémoire', value: escapeHtml(formatBytes(peakKb * 1024)) }]);
     }
 
-    pushLine(`<strong>Export legacy</strong> ${describeExportStatus(comp)}`);
+    pushItemsLine([{ label: 'Export legacy', value: escapeHtml(describeExportStatus(comp)) }]);
 
     if (detailsLoaded) {
       const missing = Array.isArray(comp?.publish_missing) ? comp.publish_missing : [];
       const availableComponents = Math.max(0, 6 - missing.length);
-      pushLine(`<strong>Fichiers XHTML</strong> ${formatNumber(availableComponents)}/6`);
+      pushItemsLine([{ label: 'Fichiers XHTML', value: `${formatNumber(availableComponents)}/6` }]);
     }
 
-    return `<div class="comparison-results comparison-data-col">${lines.join('')}</div>`;
+    return `<div class="comparison-data-summary">${lines.join('')}</div>`;
   }
 
   function renderResultsSummary(comp, { isRunning = false, detailsLoaded = false } = {}) {
@@ -1925,10 +1950,10 @@ function initComparisonsTable() {
       </td>
       <td class="align-top comparison-params-cell">${mediteParamsHtml}</td>
       <td class="align-top comparison-data-col comparison-data-cell">${dataSummaryHtml}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.s)}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.i)}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.r)}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.d)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.s)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.i)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.r)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.d)}</td>
       <td class="text-center comparison-publish-cell">
         ${publishStatusHtml}
       </td>

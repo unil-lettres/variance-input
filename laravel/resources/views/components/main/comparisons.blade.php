@@ -180,6 +180,20 @@
   .comparisons-table:not(.compact-details) .comparison-results-compact {
     display: none !important;
   }
+  .comparisons-table:not(.compact-details) .comparison-order-col,
+  .comparisons-table:not(.compact-details) .comparison-order-cell,
+  .comparisons-table:not(.compact-details) .comparison-comment-col,
+  .comparisons-table:not(.compact-details) .comparison-comment-cell,
+  .comparisons-table:not(.compact-details) .comparison-chapters-col,
+  .comparisons-table:not(.compact-details) .comparison-chapters-cell,
+  .comparisons-table:not(.compact-details) .comparison-metric-col,
+  .comparisons-table:not(.compact-details) .comparison-metric-count-cell,
+  .comparisons-table:not(.compact-details) .comparison-manage-col,
+  .comparisons-table:not(.compact-details) .comparison-manage-cell,
+  .comparisons-table:not(.compact-details) .comparison-action-col,
+  .comparisons-table:not(.compact-details) .comparison-action-cell {
+    display: none !important;
+  }
   .comparisons-table .comparison-order-col,
   .comparisons-table .comparison-order-cell {
     width: 2rem;
@@ -238,22 +252,22 @@
   .comparisons-table:not(.compact-details) .comparison-source-cell,
   .comparisons-table:not(.compact-details) .comparison-target-col,
   .comparisons-table:not(.compact-details) .comparison-target-cell {
-    width: 12%;
+    width: 16%;
     min-width: 0;
   }
   .comparisons-table:not(.compact-details) .comparison-params-col,
   .comparisons-table:not(.compact-details) .comparison-params-cell {
-    width: 10%;
+    width: 18%;
     min-width: 0;
   }
   .comparisons-table:not(.compact-details) .comparison-data-col,
   .comparisons-table:not(.compact-details) .comparison-data-cell {
-    width: 12%;
+    width: 36%;
     min-width: 0;
   }
   .comparisons-table:not(.compact-details) .comparison-publish-col,
   .comparisons-table:not(.compact-details) .comparison-publish-cell {
-    width: 7%;
+    width: 10%;
     min-width: 0;
   }
   .comparisons-table:not(.compact-details) .comparison-manage-col,
@@ -382,10 +396,64 @@
   .comparisons-table:not(.compact-details) .comparison-data-col .comparison-results {
     gap: 0.2rem;
   }
+  .comparisons-table:not(.compact-details) .comparison-data-cell {
+    overflow: visible;
+    text-align: left;
+    white-space: normal;
+  }
+  .comparison-data-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.32rem;
+    width: 100%;
+    min-width: 0;
+    color: #44566c;
+    font-size: 0.78rem;
+    line-height: 1.25;
+  }
+  .comparison-data-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.18rem 0.85rem;
+    width: 100%;
+    min-width: 0;
+  }
+  .comparison-data-line--muted {
+    color: #6c757d;
+  }
+  .comparison-data-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+  }
+  .comparison-data-label {
+    flex: 0 0 auto;
+    color: #1d2340;
+    font-weight: 700;
+  }
+  .comparison-data-value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .comparison-data-text {
+    display: block;
+    min-width: 0;
+  }
   .comparison-data-col .comparison-results-line {
     justify-content: flex-start;
     text-align: left;
     white-space: nowrap;
+  }
+  .comparisons-table:not(.compact-details) .comparison-data-col .comparison-results-line {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
   .comparison-results-line strong {
     color: #1d2340;
@@ -686,10 +754,10 @@
     .comparisons-table td {
       font-size: 0.82rem;
     }
-    .comparisons-table th:nth-child(7),
-    .comparisons-table td:nth-child(7),
-    .comparisons-table th:nth-child(8),
-    .comparisons-table td:nth-child(8) {
+    .comparisons-table.compact-details th:nth-child(7),
+    .comparisons-table.compact-details td:nth-child(7),
+    .comparisons-table.compact-details th:nth-child(8),
+    .comparisons-table.compact-details td:nth-child(8) {
       display: none;
     }
     .comparisons-table:not(.compact-details) .comparison-folder-col,

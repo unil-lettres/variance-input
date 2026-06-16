@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Models\Author;
 use App\Models\Comparison;
 use App\Models\Permission;
 use App\Models\User;
 use App\Models\Version;
+use App\Models\Work;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -188,6 +190,25 @@ XML;
         $this->assertStringNotContainsString('Broken payload', $savedXml);
     }
 
+    public function test_version_editor_explains_legacy_versions_are_read_only(): void
+    {
+        $this->signInAdmin();
+        $author = Author::factory()->create(['is_legacy' => true]);
+        $work = Work::factory()->for($author)->create(['is_legacy' => true]);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'legacy-readonly-version',
+            'is_legacy' => true,
+        ]);
+
+        $this->get(route('version.editor', $version))
+            ->assertForbidden()
+            ->assertSee('Cette version legacy est en lecture seule');
+
+        $this->get(route('version.editor.document', $version))
+            ->assertForbidden()
+            ->assertSee('Cette version legacy est en lecture seule');
+    }
+
     public function test_restricted_version_editor_is_denied_unassigned_versions_and_full_editor_actions(): void
     {
         $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
@@ -258,6 +279,30 @@ XML;
             ->assertOk();
 
         $this->assertStringNotContainsString('<pb', File::get($version->getXMLFilePath()));
+    }
+
+    public function test_restricted_version_editor_can_download_lignes_only_for_assigned_versions(): void
+    {
+        $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
+        $assignedWork = $this->createEditableWork($this->signInAdmin(), [], ['title' => 'Assigned Lignes Work']);
+        $unassignedWork = $this->createEditableWork($this->signInAdmin(), [], ['title' => 'Unassigned Lignes Work']);
+        $assignedVersion = Version::factory()->for($assignedWork)->create(['folder' => 'assigned-lignes-v1']);
+        $unassignedVersion = Version::factory()->for($unassignedWork)->create(['folder' => 'unassigned-lignes-v1']);
+        $this->grantWorkVersionEditorPermission($user, $assignedWork);
+        $this->actingAs($user);
+
+        $contents = "0001\t1\tTexte assigné\n";
+        Storage::disk('local')->put("lignes/{$assignedVersion->id}.txt", $contents);
+        Storage::disk('local')->put("lignes/{$unassignedVersion->id}.txt", "0001\t1\tTexte interdit\n");
+
+        $response = $this->get("/api/versions/{$assignedVersion->id}/lignes");
+
+        $response->assertOk()
+            ->assertHeader('Content-Disposition', 'attachment; filename="assigned-lignes-v1_lignes.txt"');
+        $this->assertSame($contents, $response->streamedContent());
+
+        $this->get("/api/versions/{$unassignedVersion->id}/lignes")
+            ->assertForbidden();
     }
 
     public function test_restricted_version_editor_cannot_create_authors_or_works_via_api(): void
