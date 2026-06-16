@@ -29,6 +29,9 @@ services:
     environment:
       - PHP_MEMORY_LIMIT=512M
       - LARAVEL_RUN_MIGRATIONS_ON_BOOT=false
+      - SESSION_SECURE_COOKIE=true
+      - SESSION_HTTP_ONLY=true
+      - SESSION_SAME_SITE=lax
     volumes:
       - ./laravel.env:/var/www/html/.env
       - ./var/laravel_storage:/var/www/html/storage

@@ -101,6 +101,14 @@ Guidance for running the Variance stack outside the default development setup.
   URL from the current manifest. Browser caches may continue serving old
   JavaScript until their `Cache-Control` window expires, so ask testers to hard
   refresh when validating UI changes immediately after deploy.
+- Run the public security probes after deployments that touch proxy, PHP,
+  session, or legacy exposure settings:
+  ```bash
+  scripts/probe_public_security.sh https://variance.unil.ch
+  ```
+  The probes fail if private paths are publicly served, if `X-Powered-By`
+  leaks from public/admin routes, or if admin cookies miss the expected
+  production flags.
 - Persistent upload trees must remain writable by the web/PHP group after
   imports, manual copies, or container-run commands. Check for directories
   missing group write before publishing (`find var/uploads -type d ! -perm

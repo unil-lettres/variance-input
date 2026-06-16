@@ -40,6 +40,12 @@ A faire :
 - verifier que le flag `Secure` apparait bien sur `/admin/login` ;
 - conserver le fonctionnement local sans HTTPS.
 
+Etat 2026-06-16 :
+- implemente localement pour la production via `docker-compose.prod.yml` et
+  `laravel.prod.env.example` ;
+- reste a valider sur l'environnement cible apres redeploiement avec
+  `scripts/probe_public_security.sh`.
+
 #### 3. Masquer les versions runtime dans les en-tetes HTTP
 
 Constat securite :
@@ -49,6 +55,14 @@ A faire :
 - desactiver `expose_php` dans les images / configurations PHP concernees ;
 - verifier les reponses publiques et admin apres redeploiement ;
 - documenter le controle dans les probes post-deploiement.
+
+Etat 2026-06-16 :
+- implemente localement pour Laravel (`laravel/docker/php/conf.d/security.ini`)
+  et pour le legacy PHP (`variance/docker/config/variance.ini`) ;
+- le proxy Nginx masque aussi `X-Powered-By` sur les routes publiques,
+  `/health` et `/admin/*` ;
+- reste a valider sur l'environnement cible apres redeploiement avec
+  `scripts/probe_public_security.sh`.
 
 #### 4. Probes de non-regression sur les chemins publics interdits
 
@@ -69,6 +83,12 @@ A couvrir :
 - `/php/...` et `/dev/php/...` ;
 - `/.env`, `/.git/...`, listings `/uploads/`, `/uploads_images/`,
   `/uploads/pdf/`.
+
+Etat 2026-06-16 :
+- implemente localement dans `scripts/probe_public_security.sh` ;
+- le script verifie aussi l'absence de `X-Powered-By` et les flags de cookies
+  admin attendus en production ;
+- reste a lancer en post-deploiement sur `https://variance.unil.ch`.
 
 ### Urgence 2 - Securite / prochain cycle court
 
@@ -266,22 +286,6 @@ A decider :
 - ou ajouter une vraie propriete des versions (`created_by`) avec migration,
   attribution a l'import et regle de suppression.
 
-#### 18. Cas "version fantome" sur *La Cousine Bette*
-
-Origine :
-- retour Maxime apres imports / alignements sur *La Cousine Bette*.
-
-Symptomes :
-- une version supprimee / recreee peut rester visible ;
-- apres reimport, le texte peut reapparaitre en double.
-
-A faire :
-- reproduire localement ou diagnostiquer sur staging ;
-- inspecter versions, chemins XML, fac-similes, sidecars et cache editeur ;
-- decider si une version sans texte mais encore referencee doit rester visible
-  explicitement comme cas casse, etre masquee, ou etre archivee ;
-- ameliorer les messages associes.
-
 #### 19. Selection d'oeuvre reinitialisee par `Choisir l'oeuvre`
 
 Symptome :
@@ -360,14 +364,6 @@ Etat local :
   indication simplifiee du type `Pagination : 72 reperes disponibles`.
 - le selecteur central du lecteur utilise des libelles explicites, par exemple
   `Page 10a (56/72)` ou `Image 10a (1/72)`.
-
-#### 22. Email a Joel Zufferey apres correction Crisinel
-
-A faire :
-- envoyer un email a Joel pour lui indiquer que Variance est desormais en
-  production ;
-- lui preciser que sa comparaison Crisinel / *Alectone* a ete regeneree,
-  corrigee et reassignee a son compte.
 
 ### Priorite moyenne - UX / edition
 
@@ -640,6 +636,23 @@ A verifier :
 - `/health` disponible rapidement ;
 - aucune correction recursive couteuse au demarrage.
 
+### 45. Planifier l'upgrade majeur Laravel
+
+Contexte :
+- l'application Laravel est actuellement contrainte en `^11.9` ;
+- les notes de deploiement mentionnent deja la preparation des namespaces pour
+  une future migration Laravel 12/13, mais le backlog ne contenait pas encore
+  d'item explicite.
+
+A faire :
+- choisir le prochain majeur cible en fonction de la version stable au moment
+  du chantier ;
+- lire le guide officiel d'upgrade Laravel correspondant ;
+- verifier les dependances compatibles (`laravel/tinker`, dev tools,
+  PHPUnit, packages tiers) ;
+- realiser l'upgrade sur branche dediee avec tests complets, build front-end,
+  probes securite et validation locale avant staging/prod.
+
 ## Termine / Archive
 
 ### A. Cutover production `variance-input`
@@ -710,6 +723,19 @@ Etat :
 - implemente ;
 - permission `version_editor` disponible ;
 - routes et tests d'autorisation en place.
+
+### K. Cas "version fantome" sur *La Cousine Bette*
+
+Etat :
+- termine ;
+- le cas signale apres imports / alignements sur *La Cousine Bette* est clos.
+
+### L. Email a Joel Zufferey apres correction Crisinel
+
+Etat :
+- termine ;
+- Joel a ete informe de la mise en production de Variance et de la correction /
+  reassignment de sa comparaison Crisinel / *Alectone*.
 
 ## Documents associes
 
