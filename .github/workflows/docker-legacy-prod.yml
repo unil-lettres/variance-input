@@ -15,17 +15,22 @@ permissions:
 
 jobs:
   build:
-    name: Build integrated legacy variance
-    runs-on: ubuntu-latest
+    name: Build integrated legacy variance (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { platform: linux/amd64, os: ubuntu-latest, suffix: amd64 }
+          - { platform: linux/arm64, os: ubuntu-26.04-arm, suffix: arm64 }
+
+    env:
+      IMAGE: unillett/variance-input-legacy
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -41,8 +46,32 @@ jobs:
         with:
           context: ./variance/docker
           file: ./variance/docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            unillett/variance-input-legacy:prod-latest
-            unillett/variance-input-legacy:prod-${{ github.sha }}
+          tags: ${{ env.IMAGE }}:prod-${{ github.sha }}-${{ matrix.suffix }}
+
+  merge:
+    name: Merge integrated legacy variance
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    env:
+      IMAGE: unillett/variance-input-legacy
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Merge and push manifest
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:prod-latest" \
+            --tag "${IMAGE}:prod-${GITHUB_SHA}" \
+            "${IMAGE}:prod-${GITHUB_SHA}-amd64" \
+            "${IMAGE}:prod-${GITHUB_SHA}-arm64"

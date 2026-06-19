@@ -288,7 +288,7 @@
       min-width: 0;
     }
     .version-table .versions-inline-cell--facsimiles {
-      grid-template-columns: minmax(4.25rem, 1fr) auto;
+      grid-template-columns: minmax(4.25rem, 5.5rem) auto;
     }
     .version-table .versions-inline-cell--pagination {
       grid-template-columns: minmax(4.25rem, 1fr) auto auto;
@@ -946,11 +946,6 @@ function renderFacsimileStatus(versionId, facsimileData){
             state.facCountPill.textContent = '…';
             state.facCountPill.title = 'Chargement des fac-similés';
         }
-        if (state.viewBtn) {
-            state.viewBtn.disabled = false;
-            state.viewBtn.title = 'Charger les fac-similés';
-            state.viewBtn.dataset.facsimileLoading = '1';
-        }
         if (state.uploadBtn) {
             if (state.uploadBtnSpinner) state.uploadBtnSpinner.hidden = false;
             if (isLegacy) {
@@ -973,10 +968,6 @@ function renderFacsimileStatus(versionId, facsimileData){
         return;
     }
 
-    if (state.viewBtn) {
-        state.viewBtn.dataset.facsimileLoading = '';
-    }
-
     const ready = Math.max(0, Number(facsimileData?.source_count ?? 0));
     const published = Math.max(0, Number(facsimileData?.published_count ?? 0));
     const queued = Math.max(0, Number(facsimileData?.queue_count ?? 0));
@@ -988,14 +979,6 @@ function renderFacsimileStatus(versionId, facsimileData){
     if (state.facCountPill) {
         setVersionCountPill(state.facCountPill, ready, 'fac-similé(s)');
     }
-    if (state.viewBtn) {
-        const disableView = queued > 0 || ready === 0;
-        state.viewBtn.disabled = disableView;
-        state.viewBtn.title = disableView
-            ? (queued > 0 ? 'Traitement en cours — affichage indisponible' : 'Aucune image à afficher')
-            : 'Afficher la galerie de fac-similés';
-    }
-
     if (state.uploadBtn) {
         if (state.uploadBtnSpinner) state.uploadBtnSpinner.hidden = !(queued > 0);
         if (isLegacy) {
@@ -2048,9 +2031,6 @@ async function purgeFacsimiles(versionId, { reason = 'clear' } = {}){
 
     const state = facsimileRowState.get(id);
     const buttonsToDisable = [];
-    if (state?.viewBtn) {
-        buttonsToDisable.push(state.viewBtn);
-    }
     if (state?.uploadBtn) {
         buttonsToDisable.push(state.uploadBtn);
     }
@@ -2316,7 +2296,7 @@ async function fetchVersions(workId, force = false){
         return;
     }
     setVersionsLoading(true);
-    list.innerHTML='<div class="versions-empty-state text-muted">Loading versions…</div>';
+    list.innerHTML = '';
     try{
         const data = await getVersionsForWork(workId, { force });
         list.innerHTML='';
@@ -2464,21 +2444,6 @@ async function fetchVersions(workId, force = false){
             const facButtons = document.createElement('div');
             facButtons.className = 'btn-group btn-group-sm versions-action-group';
 
-            const btnFacView = document.createElement('button');
-            btnFacView.type = 'button';
-            btnFacView.className = 'btn btn-outline-secondary versions-icon-btn';
-            btnFacView.innerHTML = '<i class="bi bi-eye"></i>';
-            btnFacView.disabled = sourceCount === 0;
-            btnFacView.title = sourceCount === 0 ? 'Aucune image à afficher' : 'Afficher la galerie de fac-similés';
-            btnFacView.setAttribute('aria-label', 'Voir les fac-similés');
-            btnFacView.addEventListener('click', () => {
-                if (btnFacView.dataset.facsimileLoading === '1') {
-                    requestFacsimileProgress(v.id);
-                }
-                revealFacsimilesForVersion(v.id, v.name);
-            });
-            facButtons.appendChild(btnFacView);
-
             const btnFacUpload = document.createElement('button');
             btnFacUpload.type = 'button';
             btnFacUpload.className = 'btn btn-outline-primary versions-icon-btn';
@@ -2619,7 +2584,6 @@ async function fetchVersions(workId, force = false){
 
             const rowState = {
                 isLegacy: v.is_legacy,
-                viewBtn: btnFacView,
                 facCountPill,
                 uploadBtn: btnFacUpload,
                 uploadBtnIcon: facUploadIcon,
@@ -2778,7 +2742,7 @@ async function fetchVersions(workId, force = false){
         console.error(err);
         versionsCache = new Map();
         updateVersionsCount(null);
-        list.innerHTML='<div class="versions-empty-state text-danger">Failed to load versions</div>';
+        list.innerHTML='<div class="versions-empty-state text-danger">Impossible de charger les versions</div>';
         facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
     } finally {
         setVersionsLoading(false);

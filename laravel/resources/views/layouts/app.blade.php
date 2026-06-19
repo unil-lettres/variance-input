@@ -26,6 +26,7 @@
     <script>
         window.APP_BASE_PATH = @json($basePath);
         window.APP_BASE_URL = @json($baseUrl);
+        window.ADMIN_LOGIN_PATH = @json(admin_path('login'));
         window.ADMIN_MAINTENANCE_PATH = @json(admin_path('maintenance'));
         window.withBasePath = function (path) {
             if (typeof path !== 'string') return path;
@@ -61,6 +62,14 @@
                 var response = await originalFetch.apply(window, arguments);
 
                 try {
+                    var loginPath = window.ADMIN_LOGIN_PATH || window.withBasePath('/login');
+                    var loginPathname = loginPath;
+
+                    try {
+                        loginPathname = new URL(loginPath, window.location.origin).pathname;
+                    } catch (error) {
+                        loginPathname = loginPath;
+                    }
                     var firstArg = arguments[0];
                     var requestUrl = typeof firstArg === 'string'
                         ? firstArg
@@ -68,6 +77,28 @@
                     var sameOrigin = !requestUrl
                         || requestUrl.startsWith('/')
                         || requestUrl.startsWith(window.location.origin);
+                    var responsePath = '';
+
+                    try {
+                        responsePath = new URL(response.url, window.location.origin).pathname;
+                    } catch (error) {
+                        responsePath = '';
+                    }
+
+                    var alreadyOnLogin = window.location.pathname === loginPathname;
+                    var redirectedToLogin = response.redirected && responsePath === loginPathname;
+                    var sessionExpired = sameOrigin && !alreadyOnLogin && (
+                        response.status === 401
+                        || response.status === 419
+                        || redirectedToLogin
+                    );
+
+                    if (sessionExpired && !window.__varianceAdminLoginRedirecting) {
+                        window.__varianceAdminLoginRedirecting = true;
+                        window.location.assign(loginPath);
+
+                        return new Promise(function () {});
+                    }
 
                     if (sameOrigin && response.status === 503) {
                         var contentType = response.headers.get('content-type') || '';
