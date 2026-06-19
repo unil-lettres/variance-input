@@ -160,6 +160,48 @@ XML;
             ->assertJsonPath('ignored', true);
     }
 
+    public function test_version_editor_save_derives_txt_pagination_and_clears_reader_caches(): void
+    {
+        $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
+        $work = $this->createEditableWork($this->signInAdmin());
+        $version = Version::factory()->for($work)->create(['folder' => 'rvev-sync']);
+        $this->writeVersionXml($version, '<p>Ancien texte</p>');
+        File::put(storage_path("app/public/uploads/versions/{$version->folder}.txt"), 'Ancien texte');
+        Storage::disk('local')->put("reader_cache/{$version->id}/stale.json", '{}');
+        Storage::disk('local')->put("cache/version-editor/{$version->id}.json", '{}');
+        $this->grantWorkVersionEditorPermission($user, $work);
+        $this->actingAs($user);
+
+        $newXml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body><div><p>Un <emph>mot</emph><pb n="12" facs="img_rvev-sync_012.jpg"/> corrigé avec <sup>er</sup>.</p></div></body></text></TEI>
+XML;
+
+        $this->call(
+            'PUT',
+            route('version.editor.update', $version),
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/xml'],
+            $newXml
+        )->assertOk()
+            ->assertJsonPath('text_synced', true)
+            ->assertJsonPath('pagination.total', 1);
+
+        $this->assertSame(
+            'Un \\mot\\ corrigé avec ^er^.',
+            File::get(storage_path("app/public/uploads/versions/{$version->folder}.txt"))
+        );
+        $this->assertFalse(Storage::disk('local')->exists("reader_cache/{$version->id}/stale.json"));
+        $this->assertFalse(Storage::disk('local')->exists("cache/version-editor/{$version->id}.json"));
+
+        $sidecar = json_decode(Storage::disk('local')->get("pagination/{$version->id}.json"), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('pb-tei', $sidecar['origin'] ?? null);
+        $this->assertSame(1, $sidecar['marker_count'] ?? null);
+        $this->assertSame('12', $sidecar['markers'][0]['page'] ?? null);
+    }
+
     public function test_version_editor_rejects_invalid_xml_without_overwriting_file(): void
     {
         $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));

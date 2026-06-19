@@ -3,6 +3,10 @@
 namespace App\Services;
 
 use App\Support\Txt2TeiInlineMarkup;
+use DOMDocument;
+use DOMElement;
+use DOMNode;
+use DOMXPath;
 
 class VersionTextService
 {
@@ -133,6 +137,112 @@ class VersionTextService
             ."    </body>\n"
             ."  </text>\n"
             ."</TEI>\n";
+    }
+
+    /**
+     * Build the canonical editable TXT representation from a version TEI.
+     *
+     * The TEI remains the editorial source of truth after editor saves. The
+     * TXT is a derived artifact consumed by the version reader and by legacy
+     * workflows. Inline editorial markup is converted back to the legacy text
+     * markers understood by the application: \...\ for italics and ^...^ for
+     * superscript. Pagination markers (<pb>) are intentionally omitted because
+     * the reader consumes them through the sidecar.
+     */
+    public function buildLegacyTxtFromTeiXml(string $xml): string
+    {
+        $dom = new DOMDocument();
+        $dom->preserveWhiteSpace = true;
+        $dom->formatOutput = false;
+
+        $previous = libxml_use_internal_errors(true);
+        $loaded = $dom->loadXML($xml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        if (! $loaded) {
+            throw new \InvalidArgumentException('TEI XML invalide.');
+        }
+
+        $xpath = new DOMXPath($dom);
+        $body = $xpath->query('//*[local-name()="body"]')->item(0);
+        if (! $body instanceof DOMNode) {
+            throw new \InvalidArgumentException('TEI XML sans élément body.');
+        }
+
+        $txt = $this->renderTeiChildrenAsLegacyTxt($body);
+        $txt = str_replace(["\r\n", "\r"], "\n", $txt);
+        $txt = preg_replace("/[ \t]+\n/u", "\n", $txt) ?? $txt;
+        $txt = preg_replace("/\n[ \t]+/u", "\n", $txt) ?? $txt;
+        $txt = preg_replace("/\n{3,}/u", "\n\n", $txt) ?? $txt;
+
+        return trim($txt);
+    }
+
+    private function renderTeiChildrenAsLegacyTxt(DOMNode $node): string
+    {
+        $txt = '';
+        foreach ($node->childNodes as $child) {
+            $txt .= $this->renderTeiNodeAsLegacyTxt($child);
+        }
+
+        return $txt;
+    }
+
+    private function renderTeiNodeAsLegacyTxt(DOMNode $node): string
+    {
+        if ($node->nodeType === XML_TEXT_NODE || $node->nodeType === XML_CDATA_SECTION_NODE) {
+            return $node->nodeValue ?? '';
+        }
+
+        if (! $node instanceof DOMElement) {
+            return '';
+        }
+
+        $name = strtolower($node->localName);
+        if (in_array($name, ['teiheader', 'pb'], true)) {
+            return '';
+        }
+
+        if (in_array($name, ['lb', 'br'], true)) {
+            return "\n";
+        }
+
+        $inner = $this->renderTeiChildrenAsLegacyTxt($node);
+
+        if (in_array($name, ['emph', 'em', 'hi'], true)) {
+            $rend = strtolower((string) $node->getAttribute('rend'));
+            $style = strtolower((string) $node->getAttribute('style'));
+            if ($name !== 'hi'
+                || str_contains($rend, 'italic')
+                || str_contains($rend, 'italique')
+                || str_contains($style, 'italic')) {
+                return '\\'.$inner.'\\';
+            }
+        }
+
+        if ($name === 'sup') {
+            return '^'.$inner.'^';
+        }
+
+        if (in_array($name, ['p', 'head', 'l', 'item'], true)) {
+            return $this->withTrailingNewline($inner);
+        }
+
+        if (in_array($name, ['div', 'lg', 'list'], true)) {
+            return $this->withTrailingNewline($inner);
+        }
+
+        return $inner;
+    }
+
+    private function withTrailingNewline(string $txt): string
+    {
+        if ($txt === '' || str_ends_with($txt, "\n")) {
+            return $txt;
+        }
+
+        return $txt."\n";
     }
 
     private function convertToUtf8(string $bytes, string $sourceEncoding): string

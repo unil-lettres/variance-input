@@ -10,13 +10,17 @@ use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\PublishController;
 use App\Models\Version;
 use App\Services\PageMarkerService;
+use App\Services\VersionReaderService;
+use App\Services\VersionTextService;
 use Symfony\Component\HttpFoundation\Response;
 
 class EditorController extends Controller
 {
-    public function __construct(private PageMarkerService $pageMarkerService)
-    {
-    }
+    public function __construct(
+        private PageMarkerService $pageMarkerService,
+        private VersionReaderService $versionReaderService,
+        private VersionTextService $versionTextService,
+    ) {}
 
     private const COMPARISON_COMPONENTS = [
         'source' => ['filename' => 'source.xhtml', 'label' => 'Texte source'],
@@ -99,14 +103,35 @@ class EditorController extends Controller
             ], 422);
         }
 
+        try {
+            $derivedTxt = $this->versionTextService->buildLegacyTxtFromTeiXml($newXml);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => "XML invalide: le texte dérivé n'a pas pu être généré.",
+                'details' => [$e->getMessage()],
+            ], 422);
+        }
+
         $contentToWrite = $originalEncoding === 'UTF-8'
             ? $newXml
             : mb_convert_encoding($newXml, $originalEncoding, 'UTF-8');
 
         file_put_contents($path, $contentToWrite);
-        $this->pageMarkerService->syncSidecarWithPb($version);
+        file_put_contents($this->versionTextPath($version), $derivedTxt);
+        $pagination = $this->pageMarkerService->syncSidecarWithPb($version);
+        $this->versionReaderService->clearCache($version);
+        $this->pageMarkerService->clearVersionEditorCache($version);
 
-        return response()->json(['message' => 'Fichier mis à jour avec succès']);
+        return response()->json([
+            'message' => 'Fichier mis à jour avec succès',
+            'text_synced' => true,
+            'pagination' => $pagination,
+        ]);
+    }
+
+    private function versionTextPath(Version $version): string
+    {
+        return storage_path("app/public/uploads/versions/{$version->folder}.txt");
     }
 
     public function comparisonEditor(Comparison $comparison, Request $request)

@@ -1251,6 +1251,11 @@ class PageMarkerService
         return "cache/version-editor/{$versionId}.json";
     }
 
+    public function clearVersionEditorCache(Version|int $version): void
+    {
+        Storage::disk('local')->delete($this->versionEditorCacheRelativePath($version instanceof Version ? $version->id : $version));
+    }
+
     /** @param array{xml_mtime:int,sidecar_mtime:int,facsimiles_mtime:int} $fingerprint */
     private function loadVersionEditorCache(int $versionId, array $fingerprint): ?array
     {
