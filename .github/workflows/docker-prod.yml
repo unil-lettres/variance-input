@@ -16,13 +16,13 @@ jobs:
       matrix:
         include:
           - { service: laravel, arch: linux/amd64, os: ubuntu-latest }
-          - { service: laravel, arch: linux/arm64, os: ubuntu-24.04-arm }
+          - { service: laravel, arch: linux/arm64, os: ubuntu-26.04-arm }
           - { service: medite, arch: linux/amd64, os: ubuntu-latest }
-          - { service: medite, arch: linux/arm64, os: ubuntu-24.04-arm }
+          - { service: medite, arch: linux/arm64, os: ubuntu-26.04-arm }
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
@@ -59,7 +59,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
@@ -81,7 +81,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
