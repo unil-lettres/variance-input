@@ -5,6 +5,7 @@ import testfixtures
 import pathlib
 from pathlib import Path
 from collections import namedtuple
+from types import SimpleNamespace
 from variance.medite import medite as md
 from variance.medite import utils as ut
 import functools
@@ -205,3 +206,61 @@ def test_synthetic(v1, v2, check_function, expected_exception):
     if check_function:
         check_function(result)
     # Add assertions or other test logic as needed
+
+
+def write_synthetic_xml(path, body, version="v1"):
+    path.write_text(synthetic_xml_template.format(body=body, version=version), "utf-8")
+
+
+def test_orphan_target_transpose_is_rendered_as_plain_target_text(monkeypatch, tmp_path):
+    source = tmp_path / "source.xml"
+    target = tmp_path / "target.xml"
+    write_synthetic_xml(source, "<div><p>alpha beta</p></div>", "v1")
+    write_synthetic_xml(target, "<div><p>alpha moved beta</p></div>", "v2")
+
+    target_text = p.xml2txt(target).txt
+    start = target_text.index("moved")
+    end = start + len("moved")
+
+    monkeypatch.setattr(
+        p,
+        "calc_revisions",
+        lambda *_args, **_kwargs: SimpleNamespace(deltas=[p.DB(start, end, "moved")]),
+    )
+
+    xhtml_dir = tmp_path / "xhtml"
+    p.process(source, target, md.DEFAULT_PARAMETERS, tmp_path / "out.xml", xhtml_dir)
+
+    assert (xhtml_dir / "target_py.xhtml").read_text("utf-8") == "moved"
+    assert not (xhtml_dir / "d_py.xhtml").exists()
+
+
+def test_paired_transpose_keeps_target_sync_anchor(monkeypatch, tmp_path):
+    source = tmp_path / "source.xml"
+    target = tmp_path / "target.xml"
+    write_synthetic_xml(source, "<div><p>alpha moved beta</p></div>", "v1")
+    write_synthetic_xml(target, "<div><p>alpha beta moved</p></div>", "v2")
+
+    source_text = p.xml2txt(source).txt
+    target_text = p.xml2txt(target).txt
+    source_start = source_text.index("moved")
+    source_end = source_start + len("moved")
+    target_start = target_text.index("moved")
+    target_end = target_start + len("moved")
+
+    monkeypatch.setattr(
+        p,
+        "calc_revisions",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            deltas=[
+                p.DA(source_start, source_end),
+                p.DB(target_start, target_end, "moved"),
+            ]
+        ),
+    )
+
+    xhtml_dir = tmp_path / "xhtml"
+    p.process(source, target, md.DEFAULT_PARAMETERS, tmp_path / "out.xml", xhtml_dir)
+
+    assert 'href="#ad_00000"' in (xhtml_dir / "d_py.xhtml").read_text("utf-8")
+    assert 'id="bd_00000"' in (xhtml_dir / "target_py.xhtml").read_text("utf-8")

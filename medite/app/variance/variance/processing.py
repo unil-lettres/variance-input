@@ -92,6 +92,7 @@ def process(
     xhtml_mains: dict[str, list[str]] = defaultdict(list)
     emitted_addition_ids: set[str] = set()
     emitted_substitution_target_ids: set[str] = set()
+    emitted_transpose_target_ids: set[str] = set()
     zbody = ""  # diff‑annotated body will accumulate here
 
     reset_numbering_state()
@@ -177,6 +178,8 @@ def process(
                 list_emitted = add_list(z1, d.start, d.end, {"target": id1}, kind, id1)
 
             if list_emitted:
+                if kind == "transpose":
+                    emitted_transpose_target_ids.add(id2)
                 add_main_xhtml(
                     xhtml_mains,
                     txt,
@@ -243,16 +246,19 @@ def process(
         if isinstance(d, DB):
             tid = f"v2_{d.start}_{d.end}"
             txt = slice_fmt(z2, d.start, d.end)
-            add_main_xhtml(
-                xhtml_mains,
-                txt,
-                "transpose",
-                "target",
-                tid,
-                rchanges=z2.rchanges,
-                start=d.start,
-                end=d.end,
-            )
+            if tid in emitted_transpose_target_ids:
+                add_main_xhtml(
+                    xhtml_mains,
+                    txt,
+                    "transpose",
+                    "target",
+                    tid,
+                    rchanges=z2.rchanges,
+                    start=d.start,
+                    end=d.end,
+                )
+            else:
+                add_plain_main_xhtml(xhtml_mains, txt, "target", z2.rchanges, d.start, d.end)
         elif isinstance(d, I):
             tid = f"v2_{d.start}_{d.end}"
             txt = slice_fmt(z2, d.start, d.end)
