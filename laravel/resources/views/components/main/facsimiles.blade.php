@@ -583,15 +583,15 @@
     }
     .facsimile-reader-text {
         margin: 0;
-        padding: 1rem 1.1rem 1.3rem;
+        padding: 1.8rem clamp(2rem, 6vw, 4.25rem) 2.2rem;
         white-space: pre-wrap;
         word-break: break-word;
         overflow: auto;
-        flex: 1 1 auto;
-        max-height: min(72vh, 68rem);
+        flex: 1 1 0;
+        min-height: 0;
         background: #fffdf9;
-        font-size: 0.94rem;
-        line-height: 1.7;
+        font-size: 0.98rem;
+        line-height: 1.78;
         color: #2f2a24;
         text-align: justify;
         text-justify: inter-word;
@@ -732,6 +732,92 @@ document.addEventListener('DOMContentLoaded', () => {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
+
+    function renderReaderInlineMarkup(rawText, insertion = null) {
+        const text = String(rawText ?? '');
+        const insertionOffset = insertion && Number.isFinite(Number(insertion.offset))
+            ? Math.max(0, Math.min(text.length, Number(insertion.offset)))
+            : null;
+        const insertionHtml = insertionOffset !== null ? String(insertion.html || '') : null;
+        const parts = [];
+        const stack = [];
+        let buffer = '';
+
+        const flushBuffer = () => {
+            if (buffer === '') return;
+            parts.push({ type: 'text', value: buffer });
+            buffer = '';
+        };
+
+        const isInlineMarker = (char) => char === '\\' || char === '^';
+
+        for (let i = 0; i <= text.length; i++) {
+            if (insertionHtml !== null && i === insertionOffset) {
+                flushBuffer();
+                parts.push({ type: 'html', value: insertionHtml });
+            }
+
+            if (i >= text.length) {
+                break;
+            }
+
+            const char = text[i];
+            if (!isInlineMarker(char)) {
+                buffer += char;
+                continue;
+            }
+
+            flushBuffer();
+
+            const markerPartIndex = parts.length;
+            parts.push({
+                type: 'marker',
+                marker: char,
+                convert: false,
+                tag: null,
+            });
+
+            const top = stack.length ? stack[stack.length - 1] : null;
+            if (top && top.marker === char) {
+                stack.pop();
+                parts[top.partIndex].convert = true;
+                parts[top.partIndex].tag = 'open';
+                parts[markerPartIndex].convert = true;
+                parts[markerPartIndex].tag = 'close';
+                continue;
+            }
+
+            const crossedIndex = stack.findIndex(entry => entry.marker === char);
+            if (crossedIndex >= 0) {
+                stack.splice(crossedIndex, 1);
+                continue;
+            }
+
+            stack.push({ marker: char, partIndex: markerPartIndex });
+        }
+
+        flushBuffer();
+
+        return parts.map(part => {
+            if (part.type === 'text') {
+                return escapeHtml(part.value || '');
+            }
+            if (part.type === 'html') {
+                return part.value || '';
+            }
+            if (part.convert !== true) {
+                return escapeHtml(part.marker || '');
+            }
+            if (part.marker === '\\') {
+                return part.tag === 'open' ? '<em>' : '</em>';
+            }
+            if (part.marker === '^') {
+                return part.tag === 'open' ? '<sup>' : '</sup>';
+            }
+
+            return escapeHtml(part.marker || '');
+        }).join('');
+    }
 
     let galleryFiles      = [];
     let galleryPage       = 1;
@@ -1595,20 +1681,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const anchorOffset = Number.isFinite(Number(page?.anchorOffset)) ? Number(page.anchorOffset) : null;
-        const anchorPhrase = normalizeReaderAnchorPhrase(page?.anchorPhrase, page?.label);
-        const anchorLabel = anchorPhrase ? `Repère : "${formatReaderAnchorPhrase(anchorPhrase)}"` : 'Repère';
 
-        if (anchorOffset === null || page?.guessed === true) {
-            readerTextEl.textContent = rawText;
+        if (!readerData?.pagination?.available || anchorOffset === null || page?.guessed === true) {
+            readerTextEl.innerHTML = renderReaderInlineMarkup(rawText);
             return;
         }
 
+        const anchorPhrase = normalizeReaderAnchorPhrase(page?.anchorPhrase, page?.label);
+        const anchorLabel = anchorPhrase ? `Repère : "${formatReaderAnchorPhrase(anchorPhrase)}"` : 'Repère';
         const safeOffset = Math.max(0, Math.min(rawText.length, anchorOffset));
-        const before = escapeHtml(rawText.slice(0, safeOffset));
-        const after = escapeHtml(rawText.slice(safeOffset));
         const marker = `<span class="facsimile-reader-anchor">${escapeHtml(anchorLabel)}</span>`;
 
-        readerTextEl.innerHTML = `${before}${marker}${after}`;
+        readerTextEl.innerHTML = renderReaderInlineMarkup(rawText, {
+            offset: safeOffset,
+            html: marker,
+        });
     }
 
     async function renderReaderPage(index) {
