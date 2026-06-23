@@ -36,16 +36,8 @@
             </div>
 
             <div id="facsimile-reader-workspace" class="facsimile-reader-workspace d-none">
-                <section class="facsimile-reader-pane">
+                <section class="facsimile-reader-pane facsimile-reader-image-pane">
                     <div class="facsimile-reader-pane-heading facsimile-reader-image-heading">
-                        <div class="facsimile-reader-heading-tools">
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Ajustement de l'image">
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-auto" aria-pressed="true">Auto</button>
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-width">Largeur</button>
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-height">Hauteur</button>
-                                <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-natural">Réel</button>
-                            </div>
-                        </div>
                         <div id="facsimile-reader-image-meta" class="small text-muted"></div>
                     </div>
                     <div class="facsimile-reader-image-shell">
@@ -61,7 +53,7 @@
                     </div>
                 </section>
 
-                <section class="facsimile-reader-pane">
+                <section class="facsimile-reader-pane facsimile-reader-text-pane">
                     <div class="facsimile-reader-pane-heading facsimile-reader-text-heading">
                         <div id="facsimile-reader-anchor-heading" class="facsimile-reader-anchor-heading is-placeholder">Texte</div>
                         <div id="facsimile-reader-text-meta" class="small text-muted"></div>
@@ -471,7 +463,7 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 1rem;
-        align-items: stretch;
+        align-items: start;
     }
     .facsimile-reader-pane {
         min-width: 0;
@@ -481,7 +473,13 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        min-height: 40rem;
+        min-height: 0;
+    }
+    .facsimile-reader-image-pane {
+        height: auto;
+    }
+    .facsimile-reader-text-pane {
+        height: auto;
     }
     .facsimile-reader-pane-heading {
         display: flex;
@@ -497,34 +495,7 @@
         overflow: hidden;
     }
     .facsimile-reader-image-heading {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-        justify-content: normal;
-    }
-    .facsimile-reader-heading-tools {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        flex: 1 1 auto;
-        min-width: 0;
-        overflow-x: auto;
-        overflow-y: hidden;
-        white-space: nowrap;
-        scrollbar-width: none;
-    }
-    .facsimile-reader-heading-tools::-webkit-scrollbar {
-        display: none;
-    }
-    .facsimile-reader-image-heading .facsimile-reader-heading-tools {
-        grid-column: 2;
-        justify-self: center;
-        flex: 0 1 auto;
-        max-width: 100%;
-    }
-    .facsimile-reader-image-heading .small {
-        grid-column: 3;
-        justify-self: end;
-        max-width: 100%;
+        justify-content: flex-end;
     }
     .facsimile-reader-pane-heading .fw-semibold {
         font-size: 0.9rem;
@@ -547,31 +518,48 @@
     .facsimile-reader-text-heading .small {
         max-width: 7.5rem;
     }
-    .facsimile-reader-heading-tools .btn-group {
-        flex: 0 0 auto;
-    }
-    .facsimile-reader-heading-tools .btn-group > .btn {
-        min-width: 0;
-        padding: 0.12rem 0.48rem;
-        font-size: 0.72rem;
-        line-height: 1.25;
-    }
     .facsimile-reader-anchor-heading {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.38rem;
         flex: 1 1 auto;
         min-width: 0;
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        padding: 0.08rem 0.5rem;
+        padding: 0.1rem 0.55rem;
         border-radius: 0.35rem;
         background: #eaf2ff;
         color: #23446f;
         font-size: 0.76rem;
         font-weight: 600;
         line-height: 1.3;
+        outline: none;
+        cursor: default;
+    }
+    .facsimile-reader-anchor-heading.is-anchor-unmatched {
+        background: #f4f1eb;
+        color: #5f574c;
+    }
+    .facsimile-reader-anchor-heading.is-anchor-approx {
+        background: #fff5dc;
+        color: #6b5222;
+    }
+    .facsimile-reader-anchor-heading:not(.is-placeholder):hover,
+    .facsimile-reader-anchor-heading:not(.is-placeholder):focus-visible {
+        box-shadow: 0 0 0 0.14rem rgba(255, 213, 74, 0.32);
+    }
+    .facsimile-reader-anchor-quote {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #23446f;
     }
     .facsimile-reader-anchor-heading.is-placeholder {
+        display: block;
         padding-left: 0;
         border-left: 0;
         background: transparent;
@@ -579,20 +567,23 @@
         font-size: 0.9rem;
         letter-spacing: 0.01em;
     }
+    .facsimile-reader-anchor-heading.is-placeholder .facsimile-reader-anchor-quote {
+        display: none;
+    }
     .facsimile-reader-image-shell {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         padding: 1rem;
         display: flex;
         align-items: flex-start;
         justify-content: center;
         background: #f7f3ed;
-        overflow: auto;
+        overflow: visible;
     }
     .facsimile-reader-image {
         display: block;
         max-width: 100%;
-        max-height: 72vh;
-        width: auto;
+        max-height: none;
+        width: 100%;
         height: auto;
         object-fit: contain;
         border: 1px solid #d5cdc0;
@@ -633,67 +624,42 @@
         text-align: center;
         line-height: 1.4;
     }
-    .facsimile-reader.fit-width .facsimile-reader-image-shell,
-    .facsimile-reader.fit-height .facsimile-reader-image-shell,
-    .facsimile-reader.fit-natural .facsimile-reader-image-shell {
-        align-items: flex-start;
-        justify-content: flex-start;
-    }
-    .facsimile-reader.fit-auto .facsimile-reader-image {
-        max-width: 100%;
-        max-height: 72vh;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-    }
-    .facsimile-reader.fit-auto.auto-fit-width .facsimile-reader-image-shell {
-        align-items: flex-start;
-        justify-content: flex-start;
-    }
-    .facsimile-reader.fit-auto.auto-fit-width .facsimile-reader-image {
-        max-width: 100%;
-        max-height: none;
-        width: 100%;
-        height: auto;
-        object-fit: contain;
-    }
-    .facsimile-reader.fit-width .facsimile-reader-image {
-        max-width: 100%;
-        width: 100%;
-        height: auto;
-        max-height: none;
-        object-fit: contain;
-    }
-    .facsimile-reader.fit-height .facsimile-reader-image {
-        width: auto;
-        height: 72vh;
-        max-width: none;
-        max-height: 72vh;
-        object-fit: contain;
-    }
-    .facsimile-reader.fit-natural .facsimile-reader-image {
-        max-width: none;
-        max-height: none;
-        width: auto;
-        height: auto;
-        object-fit: initial;
-    }
     .facsimile-reader-text {
         margin: 0;
-        padding: 1.8rem clamp(2rem, 6vw, 4.25rem) 2.2rem;
+        padding: clamp(1.1rem, 3vw, 1.8rem) clamp(1.35rem, 4.5vw, 3.5rem) clamp(1.35rem, 3vw, 2rem);
         white-space: pre-wrap;
         word-break: break-word;
         overflow: auto;
         flex: 1 1 0;
         min-height: 0;
         background: #fffdf9;
-        font-size: 0.98rem;
-        line-height: 1.78;
+        font-size: var(--facsimile-reader-text-size, 0.96rem);
+        line-height: var(--facsimile-reader-text-line-height, 1.64);
         color: #2f2a24;
         text-align: justify;
         text-justify: inter-word;
         scrollbar-width: thin;
         scrollbar-color: #c0b4a6 #f4efe8;
+    }
+    .facsimile-reader-text-anchor-mark {
+        padding: 0;
+        border-radius: 0.12rem;
+        background: transparent;
+        color: inherit;
+        text-decoration-line: underline;
+        text-decoration-thickness: 0.11em;
+        text-decoration-color: transparent;
+        text-underline-offset: 0.18em;
+        transition: background-color .16s ease, box-shadow .16s ease, text-decoration-color .16s ease, text-shadow .16s ease;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+    }
+    .facsimile-reader.is-anchor-hovered .facsimile-reader-text-anchor-mark,
+    .facsimile-reader-text-anchor-mark:hover {
+        background: rgba(255, 241, 168, 0.22);
+        box-shadow: 0 0 0.45rem rgba(255, 217, 64, 0.6);
+        text-decoration-color: #f1c400;
+        text-shadow: 0 0 0.2rem rgba(255, 221, 82, 0.75);
     }
     .facsimile-reader-text::-webkit-scrollbar {
         width: 0.7rem;
@@ -726,7 +692,7 @@
             grid-template-columns: 1fr;
         }
         .facsimile-reader-pane {
-            min-height: 22rem;
+            min-height: 0;
         }
         .facsimile-reader-carousel {
             grid-template-columns: 1fr;
@@ -768,16 +734,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const readerNextBtn     = document.getElementById('facsimile-reader-next');
     const readerPageSelect  = document.getElementById('facsimile-reader-page');
     const readerImageEl     = document.getElementById('facsimile-reader-image');
+    const readerImagePaneEl = document.querySelector('.facsimile-reader-image-pane');
+    const readerTextPaneEl  = document.querySelector('.facsimile-reader-text-pane');
     const readerImageEmptyEl = document.getElementById('facsimile-reader-image-empty');
     const readerUploadPromptBtn = document.getElementById('facsimile-reader-upload-prompt');
     const readerImageMetaEl = document.getElementById('facsimile-reader-image-meta');
     const readerAnchorHeadingEl = document.getElementById('facsimile-reader-anchor-heading');
     const readerTextEl      = document.getElementById('facsimile-reader-text');
     const readerTextMetaEl  = document.getElementById('facsimile-reader-text-meta');
-    const readerFitAutoBtn  = document.getElementById('facsimile-reader-fit-auto');
-    const readerFitWidthBtn = document.getElementById('facsimile-reader-fit-width');
-    const readerFitHeightBtn = document.getElementById('facsimile-reader-fit-height');
-    const readerFitNaturalBtn = document.getElementById('facsimile-reader-fit-natural');
     const readerTextSourceSelect = document.getElementById('facsimile-reader-text-source');
     const readerEncodingSelect = document.getElementById('facsimile-reader-encoding');
     const readerRebuildBtn  = document.getElementById('facsimile-reader-rebuild');
@@ -810,12 +774,16 @@ document.addEventListener('DOMContentLoaded', () => {
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
 
-    function renderReaderInlineMarkup(rawText, insertion = null) {
+    function renderReaderInlineMarkup(rawText, insertions = []) {
         const text = String(rawText ?? '');
-        const insertionOffset = insertion && Number.isFinite(Number(insertion.offset))
-            ? Math.max(0, Math.min(text.length, Number(insertion.offset)))
-            : null;
-        const insertionHtml = insertionOffset !== null ? String(insertion.html || '') : null;
+        const insertionList = (Array.isArray(insertions) ? insertions : (insertions ? [insertions] : []))
+            .filter(insertion => Number.isFinite(Number(insertion?.offset)))
+            .map(insertion => ({
+                offset: Math.max(0, Math.min(text.length, Number(insertion.offset))),
+                html: String(insertion.html || ''),
+            }))
+            .sort((a, b) => a.offset - b.offset);
+        let insertionIndex = 0;
         const parts = [];
         const stack = [];
         let buffer = '';
@@ -829,9 +797,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const isInlineMarker = (char) => char === '\\' || char === '^';
 
         for (let i = 0; i <= text.length; i++) {
-            if (insertionHtml !== null && i === insertionOffset) {
+            while (insertionIndex < insertionList.length && insertionList[insertionIndex].offset === i) {
                 flushBuffer();
-                parts.push({ type: 'html', value: insertionHtml });
+                parts.push({ type: 'html', value: insertionList[insertionIndex].html });
+                insertionIndex++;
             }
 
             if (i >= text.length) {
@@ -926,7 +895,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let readerPages          = [];
     let readerPageIndex      = 0;
     let readerImageIndex     = 0;
-    let readerFitMode        = 'auto';
     let readerTextSource     = 'auto';
     let readerEncoding       = 'auto';
     let readerRebuildBusy    = false;
@@ -939,18 +907,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let readerPageRequestToken = 0;
     const readerPageLoadPromises = new Map();
     const readerImagePrefetchUrls = new Set();
-
-    function loadReaderFitPreference() {
-        try {
-            const stored = window.localStorage?.getItem('variance.facsimileReader.fitMode');
-            if (['auto', 'width', 'height', 'natural'].includes(String(stored))) {
-                return String(stored);
-            }
-            if (stored === '0') return 'natural';
-            if (stored === '1') return 'auto';
-        } catch (_) {}
-        return 'auto';
-    }
 
     function readerEncodingStorageKey(versionId) {
         return `variance.facsimileReader.encoding.${versionId || 'default'}`;
@@ -1088,62 +1044,79 @@ document.addEventListener('DOMContentLoaded', () => {
         readerImageEl.style.transform = '';
     }
 
-    function updateReaderAutoFitHeuristic() {
-        if (!readerRoot || !readerImageEl) return;
-        readerRoot.classList.remove('auto-fit-width');
+    function resetReaderPaneLayout() {
+        if (readerTextPaneEl) {
+            readerTextPaneEl.style.height = '';
+        }
+        if (readerTextEl) {
+            readerTextEl.style.removeProperty('--facsimile-reader-text-size');
+            readerTextEl.style.removeProperty('--facsimile-reader-text-line-height');
+        }
+    }
 
-        if (
-            readerFitMode !== 'auto'
-            || !readerImageEl.complete
-            || !readerImageEl.naturalWidth
-            || !readerImageEl.naturalHeight
-        ) {
+    function setReaderTextScale(fontSizePx, lineHeight) {
+        if (!readerTextEl) return;
+        readerTextEl.style.setProperty('--facsimile-reader-text-size', `${fontSizePx.toFixed(2)}px`);
+        readerTextEl.style.setProperty('--facsimile-reader-text-line-height', lineHeight.toFixed(2));
+    }
+
+    function fitReaderTextToPane() {
+        if (!readerTextEl || !readerTextPaneEl || readerTextPaneEl.classList.contains('d-none')) return;
+        if (!readerTextEl.textContent.trim()) {
+            readerTextEl.style.removeProperty('--facsimile-reader-text-size');
+            readerTextEl.style.removeProperty('--facsimile-reader-text-line-height');
             return;
         }
 
-        const aspectRatio = readerImageEl.naturalWidth / readerImageEl.naturalHeight;
-        readerRoot.classList.toggle('auto-fit-width', aspectRatio <= 0.42);
+        const availableHeight = readerTextEl.clientHeight;
+        const availableWidth = readerTextEl.clientWidth;
+        if (availableHeight <= 0 || availableWidth <= 0) return;
+
+        const minFontSize = 12;
+        const maxFontSize = 16;
+        const minLineHeight = 1.38;
+        const maxLineHeight = 1.66;
+        let low = minFontSize;
+        let high = maxFontSize;
+        let best = minFontSize;
+        let bestLineHeight = minLineHeight;
+
+        for (let i = 0; i < 9; i++) {
+            const next = (low + high) / 2;
+            const ratio = (next - minFontSize) / (maxFontSize - minFontSize);
+            const lineHeight = minLineHeight + ((maxLineHeight - minLineHeight) * ratio);
+            setReaderTextScale(next, lineHeight);
+
+            const fitsHeight = readerTextEl.scrollHeight <= availableHeight + 2;
+            const fitsWidth = readerTextEl.scrollWidth <= availableWidth + 2;
+            if (fitsHeight && fitsWidth) {
+                best = next;
+                bestLineHeight = lineHeight;
+                low = next;
+            } else {
+                high = next;
+            }
+        }
+
+        setReaderTextScale(best, bestLineHeight);
+    }
+
+    function syncReaderPaneLayout() {
+        if (!readerWorkspaceEl || readerWorkspaceEl.classList.contains('d-none')) return;
+        if (!readerImagePaneEl || !readerTextPaneEl || !readerTextEl) return;
+
+        resetReaderPaneLayout();
+
+        const imagePaneHeight = Math.ceil(readerImagePaneEl.getBoundingClientRect().height);
+        if (imagePaneHeight <= 0) return;
+
+        readerTextPaneEl.style.height = `${imagePaneHeight}px`;
+        window.requestAnimationFrame(fitReaderTextToPane);
     }
 
     function applyReaderImageDisplay() {
-        if (!readerRoot || !readerImageEl) return;
+        if (!readerImageEl) return;
         resetReaderImageInlineStyles();
-        updateReaderAutoFitHeuristic();
-    }
-
-    function applyReaderFitMode() {
-        if (!readerRoot) return;
-        readerRoot.classList.remove('fit-auto', 'fit-width', 'fit-height', 'fit-natural', 'auto-fit-width');
-        readerRoot.classList.add(`fit-${readerFitMode}`);
-
-        const buttons = [
-            [readerFitAutoBtn, 'auto'],
-            [readerFitWidthBtn, 'width'],
-            [readerFitHeightBtn, 'height'],
-            [readerFitNaturalBtn, 'natural'],
-        ];
-        buttons.forEach(([btn, mode]) => {
-            if (!btn) return;
-            const active = readerFitMode === mode;
-            btn.classList.toggle('btn-primary', active);
-            btn.classList.toggle('btn-outline-secondary', !active);
-            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-        });
-
-        window.requestAnimationFrame(() => {
-            updateReaderAutoFitHeuristic();
-            applyReaderImageDisplay();
-        });
-    }
-
-    function setReaderFitMode(nextValue) {
-        readerFitMode = ['auto', 'width', 'height', 'natural'].includes(String(nextValue))
-            ? String(nextValue)
-            : 'auto';
-        try {
-            window.localStorage?.setItem('variance.facsimileReader.fitMode', readerFitMode);
-        } catch (_) {}
-        applyReaderFitMode();
     }
 
     function openFacsimilesPanel() {
@@ -1160,8 +1133,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     let pendingManifestFocus = null;
 
-    readerFitMode = loadReaderFitPreference();
-    applyReaderFitMode();
     applyReaderEncodingControl();
     applyReaderRebuildControl();
 
@@ -1201,11 +1172,28 @@ document.addEventListener('DOMContentLoaded', () => {
         readerActionStatusEl.textContent = message;
     }
 
-    function setReaderAnchorHeading(label = 'Texte', isAnchor = false) {
+    function setReaderAnchorHeading(label = 'Texte', isAnchor = false, options = {}) {
         if (!readerAnchorHeadingEl) return;
-        readerAnchorHeadingEl.textContent = label || 'Texte';
-        readerAnchorHeadingEl.title = label || 'Texte';
+        const normalizedLabel = label || 'Texte';
+        const tone = ['exact', 'approx', 'unmatched'].includes(String(options.tone || ''))
+            ? String(options.tone)
+            : 'exact';
+        readerAnchorHeadingEl.classList.remove('is-anchor-exact', 'is-anchor-approx', 'is-anchor-unmatched');
         readerAnchorHeadingEl.classList.toggle('is-placeholder', !isAnchor);
+        if (!isAnchor) {
+            readerAnchorHeadingEl.title = normalizedLabel;
+            readerAnchorHeadingEl.textContent = normalizedLabel;
+            readerAnchorHeadingEl.removeAttribute('tabindex');
+            return;
+        }
+
+        readerAnchorHeadingEl.classList.add(`is-anchor-${tone}`);
+        readerAnchorHeadingEl.setAttribute('tabindex', '0');
+        readerAnchorHeadingEl.title = normalizedLabel;
+
+        readerAnchorHeadingEl.innerHTML = `
+            <span class="facsimile-reader-anchor-quote">${escapeHtml(normalizedLabel)}</span>
+        `;
     }
 
     function setWorkspaceState(hasSelection) {
@@ -1273,6 +1261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         readerPageIndex = 0;
         readerPageLoadPromises.clear();
         readerImagePrefetchUrls.clear();
+        resetReaderPaneLayout();
         setReaderActionStatus('');
         setReaderAnchorHeading('Texte', false);
         setReaderLoading(false);
@@ -1315,7 +1304,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setReaderImagePaneEmptyState(enabled) {
-        readerRoot?.classList.remove('auto-fit-width');
         if (readerImageEl) {
             readerImageEl.classList.toggle('d-none', enabled);
             if (enabled) {
@@ -1473,6 +1461,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatReaderAnchorPhrase(value) {
         return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeReaderSearchChar(char) {
+        if (/\s/u.test(char)) return ' ';
+        const quoteMap = {
+            '“': '"',
+            '”': '"',
+            '„': '"',
+            '«': '"',
+            '»': '"',
+            '‘': "'",
+            '’': "'",
+            '‚': "'",
+            '`': "'",
+            '´': "'",
+        };
+        return quoteMap[char] || char.toLocaleLowerCase('fr-FR');
+    }
+
+    function buildReaderSearchIndex(value) {
+        const source = String(value || '');
+        const chars = [];
+        const map = [];
+        let previousWasSpace = false;
+
+        for (let i = 0; i < source.length; i++) {
+            const normalized = normalizeReaderSearchChar(source[i]);
+            if (normalized === ' ') {
+                if (!previousWasSpace) {
+                    chars.push(' ');
+                    map.push(i);
+                    previousWasSpace = true;
+                }
+                continue;
+            }
+
+            chars.push(normalized);
+            map.push(i);
+            previousWasSpace = false;
+        }
+
+        while (chars.length && chars[0] === ' ') {
+            chars.shift();
+            map.shift();
+        }
+        while (chars.length && chars[chars.length - 1] === ' ') {
+            chars.pop();
+            map.pop();
+        }
+
+        return {
+            text: chars.join(''),
+            map,
+        };
+    }
+
+    function findReaderAnchorHighlight(rawText, anchorPhrase) {
+        const phrase = formatReaderAnchorPhrase(anchorPhrase)
+            .replace(/^[«"“]\s*/, '')
+            .replace(/\s*[»"”]$/, '');
+        if (phrase.length < 8) return null;
+
+        const haystack = buildReaderSearchIndex(rawText);
+        const needle = buildReaderSearchIndex(phrase);
+        if (!haystack.text || !needle.text) return null;
+
+        const index = haystack.text.indexOf(needle.text);
+        if (index < 0) return null;
+
+        const start = haystack.map[index];
+        const lastMapped = haystack.map[index + needle.text.length - 1];
+        if (!Number.isFinite(start) || !Number.isFinite(lastMapped)) return null;
+
+        return {
+            start,
+            end: Math.min(String(rawText || '').length, lastMapped + 1),
+        };
     }
 
     function readerLeadingSegmentLabel(page) {
@@ -1719,25 +1784,49 @@ document.addEventListener('DOMContentLoaded', () => {
         const anchorOffset = Number.isFinite(Number(page?.anchorOffset)) ? Number(page.anchorOffset) : null;
         const hasExactAnchor = !!readerData?.pagination?.available && anchorOffset !== null && page?.guessed !== true;
         const leadingSegmentLabel = readerLeadingSegmentLabel(page);
+        let anchorPhrase = '';
+        let anchorLabel = 'Texte';
+        let showAnchorHeading = false;
 
         if (leadingSegmentLabel) {
-            setReaderAnchorHeading(leadingSegmentLabel, true);
+            anchorLabel = leadingSegmentLabel;
+            showAnchorHeading = true;
         } else if (hasExactAnchor) {
-            const anchorPhrase = normalizeReaderAnchorPhrase(page?.anchorPhrase, page?.label);
-            const anchorLabel = anchorPhrase
+            anchorPhrase = normalizeReaderAnchorPhrase(page?.anchorPhrase, page?.label);
+            anchorLabel = anchorPhrase
                 ? `« ${formatReaderAnchorPhrase(anchorPhrase)} »`
-                : 'Texte';
-            setReaderAnchorHeading(anchorLabel, true);
-        } else {
-            setReaderAnchorHeading('Texte', false);
+                : 'Repère _lignes';
+            showAnchorHeading = true;
         }
 
         if (!rawText.trim()) {
+            setReaderAnchorHeading(anchorLabel, showAnchorHeading, { tone: 'unmatched' });
             readerTextEl.textContent = 'Aucun extrait textuel disponible pour ce repère.';
             return;
         }
 
-        readerTextEl.innerHTML = renderReaderInlineMarkup(rawText);
+        const highlightRange = anchorPhrase ? findReaderAnchorHighlight(rawText, anchorPhrase) : null;
+        if (showAnchorHeading) {
+            let tone = 'exact';
+            if (leadingSegmentLabel) {
+                tone = 'approx';
+            } else if (anchorPhrase && !highlightRange) {
+                tone = 'unmatched';
+            }
+
+            setReaderAnchorHeading(anchorLabel, true, { tone });
+        } else {
+            setReaderAnchorHeading('Texte', false);
+        }
+
+        const insertions = highlightRange
+            ? [
+                { offset: highlightRange.start, html: '<mark class="facsimile-reader-text-anchor-mark">' },
+                { offset: highlightRange.end, html: '</mark>' },
+            ]
+            : [];
+
+        readerTextEl.innerHTML = renderReaderInlineMarkup(rawText, insertions);
     }
 
     async function renderReaderPage(index) {
@@ -1799,7 +1888,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const leadingSegmentLabel = readerLeadingSegmentLabel(page);
 
         if (readerImageEl) {
-            readerRoot?.classList.remove('auto-fit-width');
             if (noFacsimilesForVersion) {
                 setReaderImagePaneEmptyState(true);
                 readerImageEl.alt = 'Aucun fac-similé pour cette version';
@@ -1807,6 +1895,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 setReaderImagePaneEmptyState(false);
                 readerImageEl.onload = () => {
                     applyReaderImageDisplay();
+                    syncReaderPaneLayout();
+                };
+                readerImageEl.onerror = () => {
+                    syncReaderPaneLayout();
                 };
                 readerImageEl.src = displayedImage.big;
                 readerImageEl.alt = displayedImage?.name || page.label;
@@ -1853,7 +1945,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderReaderText(page);
         if (readerTextEl) readerTextEl.scrollTop = 0;
-        window.requestAnimationFrame(() => applyReaderImageDisplay());
+        window.requestAnimationFrame(() => {
+            applyReaderImageDisplay();
+            syncReaderPaneLayout();
+        });
         renderReaderThumbs();
         prefetchReaderPage(independentNavigation ? readerImageIndex + 1 : readerPageIndex + 1);
     }
@@ -2710,19 +2805,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (readerFitAutoBtn) {
-        readerFitAutoBtn.addEventListener('click', () => setReaderFitMode('auto'));
-    }
-    if (readerFitWidthBtn) {
-        readerFitWidthBtn.addEventListener('click', () => setReaderFitMode('width'));
-    }
-    if (readerFitHeightBtn) {
-        readerFitHeightBtn.addEventListener('click', () => setReaderFitMode('height'));
-    }
-    if (readerFitNaturalBtn) {
-        readerFitNaturalBtn.addEventListener('click', () => setReaderFitMode('natural'));
-    }
-
     if (readerEncodingSelect) {
         readerEncodingSelect.addEventListener('change', () => {
             readerEncoding = normalizeReaderEncoding(readerEncodingSelect.value);
@@ -2859,10 +2941,22 @@ document.addEventListener('DOMContentLoaded', () => {
         readerThumbsEl.addEventListener('scroll', updateReaderThumbNavControls, { passive: true });
     }
 
+    if (readerAnchorHeadingEl) {
+        const setAnchorGlow = (enabled) => {
+            readerRoot?.classList.toggle('is-anchor-hovered', !!enabled);
+        };
+
+        readerAnchorHeadingEl.addEventListener('mouseenter', () => setAnchorGlow(true));
+        readerAnchorHeadingEl.addEventListener('mouseleave', () => setAnchorGlow(false));
+        readerAnchorHeadingEl.addEventListener('focusin', () => setAnchorGlow(true));
+        readerAnchorHeadingEl.addEventListener('focusout', () => setAnchorGlow(false));
+    }
+
     window.addEventListener('resize', () => {
         window.requestAnimationFrame(() => {
             updateReaderThumbAlignment();
             scrollCurrentThumbIntoView();
+            syncReaderPaneLayout();
         });
     }, { passive: true });
 
