@@ -136,16 +136,21 @@
                         $migrationPending = data_get($checks, 'migrations.pending_count');
                         $migrationStatus = data_get($checks, 'migrations.status');
                         $migrationClass = $migrationPending ? $warnText : ($migrationStatus === 'ok' ? $okText : $badText);
+                        $migrationStatusLabel = match ($migrationStatus) {
+                            'ok' => 'À jour',
+                            'pending' => is_numeric($migrationPending) ? $migrationPending . ' en attente' : 'Migrations en attente',
+                            'missing_repository' => 'Table migrations absente',
+                            'database_unavailable' => 'Base indisponible',
+                            'error' => 'Erreur du contrôle migrations',
+                            default => $migrationStatus ?? 'n/a',
+                        };
                     @endphp
                     <div class="{{ $migrationClass }}">
-                        @if($migrationStatus === 'ok')
-                            À jour
-                        @elseif(is_numeric($migrationPending))
-                            {{ $migrationPending }} en attente
-                        @else
-                            {{ $migrationStatus ?? 'n/a' }}
-                        @endif
+                        {{ $migrationStatusLabel }}
                     </div>
+                    @if(data_get($checks, 'migrations.error'))
+                        <div class="small text-danger">{{ data_get($checks, 'migrations.error') }}</div>
+                    @endif
                 </div>
                 <div class="col-md-4">
                     <div class="text-muted small">Cache</div>

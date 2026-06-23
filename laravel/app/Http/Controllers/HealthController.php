@@ -327,11 +327,28 @@ class HealthController extends Controller
 
         if ($dbOk) {
             try {
-                $checks['migrations'] = $this->resolveMigrationStatus(app(Migrator::class));
-                if (! ($checks['migrations']['ok'] ?? false)) {
-                    $this->markWarning($status, $httpStatus);
+                $migrator = app('migrator');
+                if (! $migrator instanceof Migrator) {
+                    throw new \RuntimeException('Laravel migrator service is unavailable.');
                 }
 
+                $checks['migrations'] = $this->resolveMigrationStatus($migrator);
+            } catch (\Throwable $e) {
+                $checks['migrations'] = [
+                    'ok' => false,
+                    'status' => 'error',
+                    'error' => $e->getMessage(),
+                    'pending_count' => null,
+                    'pending' => [],
+                    'ran_count' => null,
+                ];
+            }
+
+            if (! ($checks['migrations']['ok'] ?? false)) {
+                $this->markWarning($status, $httpStatus);
+            }
+
+            try {
                 $prodCount = Comparison::where('publication_scope', 'prod')->count();
                 $devCount = Comparison::where('publication_scope', 'dev')->count();
                 $legacyProd = Comparison::whereNull('publication_scope')
@@ -350,6 +367,14 @@ class HealthController extends Controller
                 ];
             }
         } else {
+            $checks['migrations'] = [
+                'ok' => false,
+                'status' => 'database_unavailable',
+                'error' => 'Database unavailable',
+                'pending_count' => null,
+                'pending' => [],
+                'ran_count' => null,
+            ];
             $checks['comparisons'] = [
                 'ok' => false,
                 'error' => 'Database unavailable',

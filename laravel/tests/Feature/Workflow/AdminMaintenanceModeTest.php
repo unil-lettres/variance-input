@@ -244,6 +244,18 @@ class AdminMaintenanceModeTest extends TestCase
         }
     }
 
+    public function test_health_report_marks_migrations_up_to_date(): void
+    {
+        $this->signInAdmin();
+
+        $response = $this->get('/health/report');
+
+        $this->assertContains($response->status(), [200, 503]);
+        $response
+            ->assertSee('Migrations')
+            ->assertSeeText('À jour');
+    }
+
     public function test_health_report_lists_critical_legacy_path_checks(): void
     {
         $this->signInAdmin();

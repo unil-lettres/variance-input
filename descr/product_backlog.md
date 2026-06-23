@@ -241,35 +241,6 @@ Pistes :
 
 ### Priorite haute - Produit / donnees
 
-#### 16. Nettoyage des listes de transformations XHTML
-
-Origine :
-- retour Maxime apres comparaisons sur Balzac / *Melmoth*.
-
-Symptomes decrits :
-- le libelle `[retour ligne]` doit devenir le symbole de paragraphe `¶` dans les
-  listes `d.xhtml`, `i.xhtml`, `r.xhtml`, `s.xhtml` ;
-- les transformations constituees uniquement d'espaces (`[espace]`) ne doivent
-  plus apparaitre dans ces listes ;
-- certains cas semblent correspondre a un remplacement d'espace par un retour
-  ligne / nouveau paragraphe, qui doit etre identifie de maniere specifique ;
-- certains libelles incluent des espaces indesirables en debut ou fin de mot,
-  par exemple un rendu de ponctuation du type `hello ,`.
-
-Contexte technique :
-- generation cote Medite Python, notamment
-  `medite/app/variance/variance/tei_writer.py` ;
-- les tests actuels valident encore l'ancien comportement, donc il s'agit d'un
-  changement produit a tester explicitement.
-
-A faire :
-- remplacer `[retour ligne]` par `¶` ;
-- filtrer les entrees dont le libelle normalise est uniquement espace ou espace
-  insecable ;
-- definir le libelle pour espace -> paragraphe et paragraphe -> espace ;
-- nettoyer les espaces parasites aux frontieres de mots et avant ponctuation ;
-- ajouter des tests unitaires Medite.
-
 #### 17. Suppression de version par un editeur restreint
 
 Symptome :
@@ -736,6 +707,49 @@ Etat :
 - termine ;
 - Joel a ete informe de la mise en production de Variance et de la correction /
   reassignment de sa comparaison Crisinel / *Alectone*.
+
+### M. Nettoyage des listes de transformations XHTML
+
+Etat :
+- termine localement ;
+- implementation dans `medite/app/variance/variance/tei_writer.py` ;
+- tests de regression dans `medite/app/variance/tests/test_tei_writer.py`.
+
+Controle couvert :
+- les retours ligne / paragraphes sont affiches avec `¶` dans les listes XHTML ;
+- les transformations uniquement composees d'espaces ou espaces insecables ne
+  produisent plus d'entree de liste ;
+- les substitutions espace -> retour ligne et retour ligne -> espace sont
+  rendues avec `¶` ;
+- les espaces parasites aux frontieres de libelle et avant ponctuation sont
+  nettoyes.
+
+Note 2026-06-23 :
+- verification statique faite dans le code et les tests existants ;
+- les tests Medite n'ont pas ete relances dans le conteneur local car `pytest`
+  n'est pas installe dans l'image courante.
+
+### N. Corriger le statut migrations dans le rapport sante admin
+
+Etat :
+- termine localement le 2026-06-23 ;
+- implementation dans `laravel/app/Http/Controllers/HealthController.php` et
+  `laravel/resources/views/pages/health.blade.php` ;
+- regression couverte dans
+  `laravel/tests/Feature/Workflow/AdminMaintenanceModeTest.php`.
+
+Controle couvert :
+- `HealthController` resout le migrator via `app('migrator')` ;
+- le controle migrations est separe du comptage des comparaisons ;
+- `/admin/health/report` affiche `A jour` quand les migrations sont appliquees ;
+- les erreurs du controle migrations sont affichees explicitement au lieu de
+  retomber sur `n/a`.
+
+Validation locale :
+- `docker compose exec laravel php artisan test tests/Feature/Workflow/AdminMaintenanceModeTest.php --filter=health_report` ;
+- `docker compose exec laravel php artisan test tests/Feature/Workflow/SecurityRouteAccessTest.php` ;
+- `docker compose exec laravel php artisan view:cache` ;
+- `/health` retourne `200`.
 
 ## Documents associes
 
