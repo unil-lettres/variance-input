@@ -1478,7 +1478,23 @@ document.addEventListener('DOMContentLoaded', () => {
             '`': "'",
             '´': "'",
         };
-        return quoteMap[char] || char.toLocaleLowerCase('fr-FR');
+        const foldMap = {
+            'Œ': 'Oe',
+            'œ': 'oe',
+            'Æ': 'Ae',
+            'æ': 'ae',
+            'ß': 'ss',
+            '–': '-',
+            '—': '-',
+            '‑': '-',
+            '−': '-',
+            '…': '...',
+        };
+        const normalized = quoteMap[char] || foldMap[char] || char;
+        return normalized
+            .normalize('NFD')
+            .replace(/\p{M}/gu, '')
+            .toLocaleLowerCase('fr-FR');
     }
 
     function buildReaderSearchIndex(value) {
@@ -1498,8 +1514,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 continue;
             }
 
-            chars.push(normalized);
-            map.push(i);
+            for (const normalizedChar of Array.from(normalized)) {
+                chars.push(normalizedChar);
+                map.push(i);
+            }
             previousWasSpace = false;
         }
 
