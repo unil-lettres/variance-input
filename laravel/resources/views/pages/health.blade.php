@@ -109,7 +109,9 @@
                 </div>
                 <div class="col-md-4">
                     <div class="text-muted small">Version app</div>
-                    <div>{{ data_get($checks, 'app.version') ?? 'n/a' }}</div>
+                    <div class="{{ data_get($checks, 'app.version_configured') === false ? $warnText : '' }}">
+                        {{ data_get($checks, 'app.version') ?? 'missing' }}
+                    </div>
                 </div>
                 <div class="col-md-4">
                     <div class="text-muted small">PHP</div>

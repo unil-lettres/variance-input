@@ -116,7 +116,7 @@ class AdminMaintenanceModeTest extends TestCase
         $response
             ->assertSee('État du système')
             ->assertSee('Version app')
-            ->assertSee(config('app.version'))
+            ->assertSee(config('app.version') ?: 'missing')
             ->assertSee('Déploiement en cours.');
     }
 

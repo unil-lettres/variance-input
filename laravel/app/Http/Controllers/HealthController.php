@@ -82,6 +82,7 @@ class HealthController extends Controller
         $httpStatus = 200;
         $failedWindowSeconds = $this->failedWindowSeconds($failedWindowKey);
         $git = $this->resolveGitMetadata();
+        $appVersion = $this->resolveAppVersion();
         $adminMaintenanceState = $this->adminMaintenanceMode->currentState();
         $adminAnnouncementState = $this->adminMaintenanceMode->currentAnnouncement();
 
@@ -90,13 +91,17 @@ class HealthController extends Controller
             'env' => config('app.env'),
             'debug' => (bool) config('app.debug'),
             'url' => config('app.url'),
-            'version' => config('app.version'),
+            'version' => $appVersion['label'],
+            'version_configured' => $appVersion['configured'],
             'php' => PHP_VERSION,
             'laravel' => app()->version(),
             'git_sha' => $git['sha'],
             'git_sha_short' => $git['short_sha'],
             'git_source' => $git['source'],
         ];
+        if (! $appVersion['configured'] && config('app.env') !== 'local') {
+            $this->markWarning($status, $httpStatus);
+        }
         $checks['config'] = [
             'queue_connection' => config('queue.default'),
             'cache_driver' => config('cache.default'),
@@ -522,6 +527,16 @@ class HealthController extends Controller
             'checks' => $checks,
             'failed_window' => $failedWindowKey,
         ], $httpStatus];
+    }
+
+    private function resolveAppVersion(): array
+    {
+        $version = trim((string) config('app.version', ''));
+
+        return [
+            'configured' => $version !== '',
+            'label' => $version !== '' ? $version : 'missing',
+        ];
     }
 
     private function freeSpace(string $path): ?int
