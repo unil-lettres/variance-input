@@ -43,7 +43,9 @@ _LIST_NEWLINE_MARKER = "¶"
 _LINE_BREAK_TAG_RE = re.compile(r"<\s*(?:br|lb)\s*/?\s*>", re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")
 _EM_TAG_RE = re.compile(r"</?em>")
+_SUP_TAG_RE = re.compile(r"</?sup>")
 _SPACE_ONLY_RE = re.compile(r"^[\s\u00a0\u202f]*$")
+_INLINE_TEI_TAGS = ("emph", "sup")
 
 # For generating the *final* XHTML IDs, we want these exact prefixes:
 #
@@ -94,32 +96,43 @@ def render_inline_tei_for_xhtml(txt: str) -> str:
         .replace("</emph>", "</em>")
         .replace("&lt;emph&gt;", "<em>")
         .replace("&lt;/emph&gt;", "</em>")
+        .replace("&lt;sup&gt;", "<sup>")
+        .replace("&lt;/sup&gt;", "</sup>")
     )
-    return balance_emphasis_for_xhtml(rendered)
+    rendered = balance_emphasis_for_xhtml(rendered)
+    return balance_superscript_for_xhtml(rendered)
 
 
-def _inside_emphasis_at(rchanges, offset: int) -> bool:
+def _active_inline_tags_at(rchanges, offset: int) -> List[str]:
     """
-    Return whether a Medite text offset is inside a TEI <emph> range.
+    Return TEI inline tag names active at a Medite text offset.
 
-    Medite sees <emph> boundaries as backslash marker characters. A delta that
-    starts in the middle of an emphasized range may therefore extract only the
-    text content, with no <emph> tag left in the fragment. This helper recovers
-    that context from the reversible replacement table.
+    Medite sees inline boundaries as marker characters. A delta that starts in
+    the middle of an inline range may therefore extract only the text content,
+    with no opening tag left in the fragment. This helper recovers that context
+    from the reversible replacement table.
     """
     if offset < 0 or not rchanges:
-        return False
+        return []
 
-    depth = 0
+    stack: List[str] = []
     for replacement in sorted(getattr(rchanges, "replacements", ()), key=lambda item: item.start):
         if replacement.start >= offset:
             break
-        if replacement.new == "<emph>":
-            depth += 1
-        elif replacement.new == "</emph>" and depth > 0:
-            depth -= 1
 
-    return depth > 0
+        marker = replacement.new
+        for tag in _INLINE_TEI_TAGS:
+            if marker == f"<{tag}>":
+                stack.append(tag)
+                break
+            if marker == f"</{tag}>":
+                for index in range(len(stack) - 1, -1, -1):
+                    if stack[index] == tag:
+                        del stack[index]
+                        break
+                break
+
+    return stack
 
 
 def apply_emphasis_context_for_xhtml(
@@ -140,10 +153,16 @@ def apply_emphasis_context_for_xhtml(
         return txt
 
     contextual = txt
-    if _inside_emphasis_at(rchanges, start) and not re.match(r"^\s*<emph>", contextual):
-        contextual = "<emph>" + contextual
-    if _inside_emphasis_at(rchanges, end) and not re.search(r"</emph>\s*$", contextual):
-        contextual += "</emph>"
+    start_stack = _active_inline_tags_at(rchanges, start)
+    end_stack = _active_inline_tags_at(rchanges, end)
+
+    for tag in reversed(start_stack):
+        if not re.match(rf"^\s*<{tag}>", contextual):
+            contextual = f"<{tag}>" + contextual
+
+    for tag in reversed(end_stack):
+        if not re.search(rf"</{tag}>\s*$", contextual):
+            contextual += f"</{tag}>"
 
     return contextual
 
@@ -170,6 +189,26 @@ def balance_emphasis_for_xhtml(txt: str) -> str:
             needed_prefixes += 1
 
     return ("<em>" * needed_prefixes) + txt + ("</em>" * balance)
+
+
+def balance_superscript_for_xhtml(txt: str) -> str:
+    """
+    Make a Medite XHTML fragment self-contained for superscript rendering.
+    """
+    balance = 0
+    needed_prefixes = 0
+
+    for match in _SUP_TAG_RE.finditer(txt):
+        if match.group(0) == "<sup>":
+            balance += 1
+            continue
+
+        if balance > 0:
+            balance -= 1
+        else:
+            needed_prefixes += 1
+
+    return ("<sup>" * needed_prefixes) + txt + ("</sup>" * balance)
 
 
 def render_substitution_label_for_xhtml(old_txt: str, new_txt: str) -> str:

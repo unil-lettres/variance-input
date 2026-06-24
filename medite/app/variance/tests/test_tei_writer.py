@@ -17,9 +17,18 @@ def test_render_inline_tei_for_xhtml_converts_emph_to_em():
     assert render_inline_tei_for_xhtml("Un <emph>mot</emph>.") == "Un <em>mot</em>."
 
 
+def test_render_inline_tei_for_xhtml_preserves_superscript():
+    assert render_inline_tei_for_xhtml("XVIII<sup>e</sup> siècle") == "XVIII<sup>e</sup> siècle"
+
+
 def test_render_inline_tei_for_xhtml_balances_partial_emph_fragments():
     assert render_inline_tei_for_xhtml("<emph>La") == "<em>La</em>"
     assert render_inline_tei_for_xhtml("caisse</emph>.") == "<em>caisse</em>."
+
+
+def test_render_inline_tei_for_xhtml_balances_partial_sup_fragments():
+    assert render_inline_tei_for_xhtml("<sup>e") == "<sup>e</sup>"
+    assert render_inline_tei_for_xhtml("er</sup>.") == "<sup>er</sup>."
 
 
 def test_apply_emphasis_context_wraps_fragment_inside_emph_range():
@@ -35,6 +44,29 @@ def test_apply_emphasis_context_wraps_fragment_inside_emph_range():
     )
 
 
+def test_apply_emphasis_context_wraps_fragment_inside_sup_range():
+    medite = op.xml2medite("Le XVIII<sup>e</sup> siècle.")
+    rchanges = op.reverse_transform(medite)
+    start = medite.text.index("e", medite.text.index("^"))
+    end = start + len("e")
+
+    assert op.extract(rchanges, start, end) == "e"
+    assert apply_emphasis_context_for_xhtml("e", rchanges, start, end) == "<sup>e</sup>"
+
+
+def test_apply_emphasis_context_preserves_nested_inline_ranges():
+    medite = op.xml2medite("Un <emph>mot <sup>rare</sup></emph> ici")
+    rchanges = op.reverse_transform(medite)
+    start = medite.text.index("rare")
+    end = start + len("rare")
+
+    assert op.extract(rchanges, start, end) == "rare"
+    assert (
+        apply_emphasis_context_for_xhtml("rare", rchanges, start, end)
+        == "<emph><sup>rare</sup></emph>"
+    )
+
+
 def test_add_main_xhtml_renders_emph_as_html_em():
     reset_numbering_state()
     xhtml_mains = {"source": []}
@@ -42,6 +74,15 @@ def test_add_main_xhtml_renders_emph_as_html_em():
     add_main_xhtml(xhtml_mains, "Un <emph>mot</emph>.", "deletion", "source", "v1_0_1")
 
     assert '<span class="span_s" id="as_00000" data-tags="">Un <em>mot</em>.</span>' in xhtml_mains["source"]
+
+
+def test_add_main_xhtml_renders_sup_as_html_sup():
+    reset_numbering_state()
+    xhtml_mains = {"source": []}
+
+    add_main_xhtml(xhtml_mains, "XVIII<sup>e</sup> siècle", "deletion", "source", "v1_0_1")
+
+    assert '<span class="span_s" id="as_00000" data-tags="">XVIII<sup>e</sup> siècle</span>' in xhtml_mains["source"]
 
 
 def test_add_main_xhtml_renders_italic_context_for_inner_fragment():
@@ -66,6 +107,28 @@ def test_add_main_xhtml_renders_italic_context_for_inner_fragment():
     assert '<a class="span_r sync sync-single" href="#ar_00000" id="br_00000" data-tags=""><em>ouvre-toi?</em></a>' in xhtml_mains["target"]
 
 
+def test_add_main_xhtml_renders_sup_context_for_inner_fragment():
+    reset_numbering_state()
+    xhtml_mains = {"target": []}
+    medite = op.xml2medite("Le XVIII<sup>e</sup> siècle.")
+    rchanges = op.reverse_transform(medite)
+    start = medite.text.index("e", medite.text.index("^"))
+    end = start + len("e")
+
+    add_main_xhtml(
+        xhtml_mains,
+        op.extract(rchanges, start, end),
+        "substitution",
+        "target",
+        "v2_0_1",
+        rchanges=rchanges,
+        start=start,
+        end=end,
+    )
+
+    assert '<a class="span_r sync sync-single" href="#ar_00000" id="br_00000" data-tags=""><sup>e</sup></a>' in xhtml_mains["target"]
+
+
 def test_add_list_xhtml_renders_emph_as_html_em():
     reset_numbering_state()
     xhtml_lists = {"deletion": []}
@@ -77,6 +140,17 @@ def test_add_list_xhtml_renders_emph_as_html_em():
     assert '<a class="sync" href="#as_00000" id="lbs_00000" data-tags=""><em>mot</em></a>' in xhtml_lists["deletion"][0]
 
 
+def test_add_list_xhtml_renders_sup_as_html_sup():
+    reset_numbering_state()
+    xhtml_lists = {"deletion": []}
+    rchanges = op.Text("XVIII<sup>e</sup>", (), ())
+    output = SimpleNamespace(rchanges=rchanges)
+
+    add_list_xhtml(xhtml_lists, output, 0, len(rchanges.text), "deletion", "v1_0_1")
+
+    assert '<a class="sync" href="#as_00000" id="lbs_00000" data-tags="">XVIII<sup>e</sup></a>' in xhtml_lists["deletion"][0]
+
+
 def test_render_substitution_label_for_xhtml_balances_each_side():
     assert (
         render_substitution_label_for_xhtml("<emph>la", "<emph>La")
@@ -85,6 +159,13 @@ def test_render_substitution_label_for_xhtml_balances_each_side():
     assert (
         render_substitution_label_for_xhtml("versa</emph>", "versâ</emph>. Aussitôt")
         == "<em>versa</em> → <em>versâ</em>. Aussitôt"
+    )
+
+
+def test_render_substitution_label_for_xhtml_balances_sup_sides():
+    assert (
+        render_substitution_label_for_xhtml("XVIII<sup>e", "XVIII<sup>ème")
+        == "XVIII<sup>e</sup> → XVIII<sup>ème</sup>"
     )
 
 
