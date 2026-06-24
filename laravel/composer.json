@@ -35,7 +35,7 @@
     },
     "scripts": {
         "test": [
-            "@php artisan optimize:clear --ansi",
+            "@php -r \"@unlink('bootstrap/cache/config.php');\"",
             "@php vendor/bin/phpunit --testdox"
         ],
         "post-autoload-dump": [
