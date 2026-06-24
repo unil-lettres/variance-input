@@ -93,11 +93,19 @@ class VersionReaderWorkflowTest extends TestCase
             ->assertJsonPath('text_source', 'version-tei')
             ->assertJsonPath('text_source_options.0.value', 'version-tei')
             ->assertJsonFragment(['value' => 'version-txt'])
-            ->assertJsonPath('current_page.text', "Elle murmure:\n«Corps et âme, je t'appartiens désormais.»");
+            ->assertJsonPath('current_page.text', "Elle murmure:\n«Corps et âme, je t'appartiens désormais.»")
+            ->assertJsonPath('current_page.display_text', "Elle murmure:\n\\«Corps et âme, je t'appartiens désormais.»\\");
+
+        $this->getJson("/api/versions/{$version->id}/reader/page?index=0")
+            ->assertOk()
+            ->assertJsonPath('text_source', 'version-tei')
+            ->assertJsonPath('page.text', "Elle murmure:\n«Corps et âme, je t'appartiens désormais.»")
+            ->assertJsonPath('page.display_text', "Elle murmure:\n\\«Corps et âme, je t'appartiens désormais.»\\");
 
         $this->getJson("/api/versions/{$version->id}/reader?text_source=version-txt")
             ->assertOk()
             ->assertJsonPath('text_source', 'version-txt')
+            ->assertJsonPath('current_page.display_text', "Elle murmure:\n\n\\«Corps et âme, je t'appartiens désormais.»\\")
             ->assertJsonPath('current_page.text', "Elle murmure:\n\n\\«Corps et âme, je t'appartiens désormais.»\\");
     }
 

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 class VersionReaderService
 {
-    private const READER_DATASET_SCHEMA_VERSION = 4;
+    private const READER_DATASET_SCHEMA_VERSION = 5;
 
     public function __construct(
         private PageMarkerService $pageMarkerService,
@@ -34,7 +34,9 @@ class VersionReaderService
                 'guessed' => $page['guessed'] ?? false,
             ];
         }, $pagePlans);
-        $currentPage = isset($pagePlans[0]) ? $this->materializeReaderPage($pagePlans[0], $dataset['text'] ?? null) : null;
+        $currentPage = isset($pagePlans[0])
+            ? $this->materializeReaderPage($pagePlans[0], $dataset['text'] ?? null, $dataset['display_text'] ?? null)
+            : null;
 
         return [
             'version_id' => $version->id,
@@ -101,7 +103,7 @@ class VersionReaderService
             'page_count' => count($pagePlans),
             'text_encoding' => $dataset['text_encoding'],
             'text_source' => $dataset['text_source'],
-            'page' => $this->materializeReaderPage($pagePlan, $dataset['text'] ?? null),
+            'page' => $this->materializeReaderPage($pagePlan, $dataset['text'] ?? null, $dataset['display_text'] ?? null),
         ];
     }
 
@@ -313,11 +315,13 @@ class VersionReaderService
         $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 18, 'Lecture du texte TEI de version…');
         if (is_file($xmlPath)) {
             try {
-                $teiText = $this->versionTextService->buildPlainTextFromTeiXml((string) File::get($xmlPath));
+                $teiXml = (string) File::get($xmlPath);
+                $teiText = $this->versionTextService->buildPlainTextFromTeiXml($teiXml);
                 if ($teiText !== '') {
                     $textVariants['version-tei'] = [
                         'value' => 'version-tei',
                         'text' => $teiText,
+                        'display_text' => $this->versionTextService->buildLegacyTxtFromTeiXml($teiXml),
                         'label' => 'TEI de version',
                         'origin' => null,
                         'markers' => [],
@@ -340,6 +344,7 @@ class VersionReaderService
                     $textVariants['version-txt'] = [
                         'value' => 'version-txt',
                         'text' => $versionText,
+                        'display_text' => $versionText,
                         'label' => 'TXT de version',
                         'origin' => null,
                         'markers' => [],
@@ -361,6 +366,7 @@ class VersionReaderService
             $textVariants['comparison-xhtml'] = [
                 'value' => 'comparison-xhtml',
                 'text' => $fallback['text'],
+                'display_text' => $fallback['text'],
                 'label' => (string) ($fallback['label'] ?? 'XHTML de comparaison'),
                 'origin' => (string) ($fallback['origin'] ?? 'pb-xhtml'),
                 'markers' => is_array($fallback['markers'] ?? null) ? $fallback['markers'] : [],
@@ -413,6 +419,7 @@ class VersionReaderService
         foreach ($textVariants as $sourceKey => $variant) {
             $variantDatasets[$sourceKey] = $this->assembleReaderDatasetPayload(
                 is_string($variant['text'] ?? null) ? $variant['text'] : null,
+                is_string($variant['display_text'] ?? null) ? $variant['display_text'] : null,
                 $requestedEncoding,
                 $sourceKey,
                 (string) ($variant['label'] ?? 'source texte non précisée'),
@@ -433,6 +440,7 @@ class VersionReaderService
         return [
             'selected' => $selectedDataset ?? $this->assembleReaderDatasetPayload(
                 null,
+                null,
                 $requestedEncoding,
                 null,
                 null,
@@ -450,6 +458,7 @@ class VersionReaderService
 
     private function assembleReaderDatasetPayload(
         ?string $text,
+        ?string $displayText,
         ?string $requestedEncoding,
         ?string $selectedTextSource,
         ?string $textSourceLabel,
@@ -478,6 +487,7 @@ class VersionReaderService
 
         return [
             'text' => is_string($text) ? $text : null,
+            'display_text' => is_string($displayText) ? $displayText : (is_string($text) ? $text : null),
             'text_available' => is_string($text),
             'text_length' => is_string($text) ? mb_strlen($text, 'UTF-8') : null,
             'text_encoding' => $requestedEncoding ?: 'AUTO',
@@ -937,12 +947,13 @@ class VersionReaderService
         return $pages;
     }
 
-    private function materializeReaderPage(array $pagePlan, ?string $text): array
+    private function materializeReaderPage(array $pagePlan, ?string $text, ?string $displayText = null): array
     {
         $page = $pagePlan;
         $sourceText = is_string($text) ? $text : '';
         if ($sourceText === '') {
             $page['text'] = '';
+            $page['display_text'] = '';
 
             return $page;
         }
@@ -950,16 +961,98 @@ class VersionReaderService
         $start = max(0, (int) ($pagePlan['start'] ?? 0));
         $end = max($start, (int) ($pagePlan['end'] ?? $start));
         $segment = mb_substr($sourceText, $start, max(0, $end - $start), 'UTF-8');
+        $displaySegment = $this->readerDisplaySegmentForPlainRange($displayText, $sourceText, $start, $end);
         if (($pagePlan['guessed'] ?? false) === true) {
             $trimmed = trim($segment);
             $page['text'] = $trimmed !== '' ? $trimmed : $segment;
+            $trimmedDisplay = trim($displaySegment);
+            $page['display_text'] = $trimmedDisplay !== '' ? $trimmedDisplay : $displaySegment;
 
             return $page;
         }
 
         $page['text'] = $segment;
+        $page['display_text'] = $displaySegment;
 
         return $page;
+    }
+
+    private function readerDisplaySegmentForPlainRange(?string $displayText, string $plainText, int $start, int $end): string
+    {
+        if (! is_string($displayText) || $displayText === '' || $displayText === $plainText) {
+            return mb_substr($plainText, $start, max(0, $end - $start), 'UTF-8');
+        }
+
+        $plainLength = mb_strlen($plainText, 'UTF-8');
+        $start = min(max(0, $start), $plainLength);
+        $end = min(max($start, $end), $plainLength);
+        $chars = preg_split('//u', $displayText, -1, PREG_SPLIT_NO_EMPTY);
+        if (! is_array($chars) || $chars === []) {
+            return mb_substr($plainText, $start, max(0, $end - $start), 'UTF-8');
+        }
+
+        $activeAtStart = [];
+        $plainIndex = 0;
+        foreach ($chars as $char) {
+            if ($plainIndex >= $start) {
+                break;
+            }
+
+            if ($this->isReaderInlineMarker($char)) {
+                $this->toggleReaderInlineMarker($activeAtStart, $char);
+            } else {
+                $plainIndex++;
+            }
+        }
+
+        $segment = implode('', $activeAtStart);
+        $active = $activeAtStart;
+        $plainIndex = 0;
+        foreach ($chars as $char) {
+            if ($this->isReaderInlineMarker($char)) {
+                if ($plainIndex < $start) {
+                    continue;
+                }
+
+                $isClosing = end($active) === $char;
+                if ($plainIndex >= $start && ($plainIndex < $end || ($plainIndex === $end && $isClosing))) {
+                    $segment .= $char;
+                    $this->toggleReaderInlineMarker($active, $char);
+                }
+
+                continue;
+            }
+
+            if ($plainIndex >= $start && $plainIndex < $end) {
+                $segment .= $char;
+            }
+            $plainIndex++;
+            if ($plainIndex > $end && $plainIndex >= $plainLength) {
+                break;
+            }
+        }
+
+        while (count($active) > 0) {
+            $segment .= array_pop($active);
+        }
+
+        return $segment;
+    }
+
+    private function isReaderInlineMarker(string $char): bool
+    {
+        return $char === '\\' || $char === '^';
+    }
+
+    private function toggleReaderInlineMarker(array &$stack, string $char): void
+    {
+        if (end($stack) === $char) {
+            array_pop($stack);
+
+            return;
+        }
+
+        $stack[] = $char;
     }
 
     private function readerImageCode(?string $value): ?string

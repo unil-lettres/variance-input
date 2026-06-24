@@ -1613,6 +1613,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: String(page?.label || `Repère ${index + 1}`),
                 image: page?.image || null,
                 text: String(page?.text || ''),
+                display_text: String(page?.display_text ?? page?.text ?? ''),
                 start: Number(page?.start ?? 0),
                 end: Number(page?.end ?? 0),
                 line: Number.isFinite(Number(page?.line)) ? Number(page.line) : null,
@@ -1670,6 +1671,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label,
                 image,
                 text: segment || text.slice(start, nextChar),
+                display_text: segment || text.slice(start, nextChar),
                 start,
                 end: nextChar,
                 line: marker.line,
@@ -1687,6 +1689,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const merged = {
             ...readerPages[index],
             ...pagePayload,
+            display_text: String(pagePayload?.display_text ?? pagePayload?.text ?? readerPages[index]?.display_text ?? ''),
             loaded: true,
             guessed: pagePayload?.guessed === true || readerPages[index]?.guessed === true,
         };
@@ -1781,7 +1784,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderReaderText(page) {
         if (!readerTextEl) return;
 
-        const rawText = String(page?.text || '');
+        const plainText = String(page?.text || '');
+        const rawText = String(page?.display_text ?? page?.text ?? '');
         const anchorOffset = Number.isFinite(Number(page?.anchorOffset)) ? Number(page.anchorOffset) : null;
         const hasExactAnchor = !!readerData?.pagination?.available && anchorOffset !== null && page?.guessed !== true;
         const leadingSegmentLabel = readerLeadingSegmentLabel(page);
@@ -1800,7 +1804,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showAnchorHeading = true;
         }
 
-        if (!rawText.trim()) {
+        if (!plainText.trim() && !rawText.trim()) {
             setReaderAnchorHeading(anchorLabel, showAnchorHeading, { tone: 'unmatched' });
             readerTextEl.textContent = 'Aucun extrait textuel disponible pour ce repère.';
             return;
