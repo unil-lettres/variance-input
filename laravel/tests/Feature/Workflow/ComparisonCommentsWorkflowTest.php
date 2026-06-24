@@ -216,6 +216,9 @@ class ComparisonCommentsWorkflowTest extends TestCase
 
     public function test_deleting_comparison_removes_medite_inputs_and_prunes_empty_comparison_dirs(): void
     {
+        File::deleteDirectory(storage_path('app/public/uploads/cleanup_author'));
+        File::deleteDirectory(base_path('../variance/uploads/cleanup_author'));
+
         $user = $this->signInEditor();
         $work = $this->createEditableWork($user, [
             'name' => 'Auteur test cleanup',

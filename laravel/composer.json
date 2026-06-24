@@ -35,6 +35,7 @@
     },
     "scripts": {
         "test": [
+            "@php artisan optimize:clear --ansi",
             "@php vendor/bin/phpunit --testdox"
         ],
         "post-autoload-dump": [

@@ -17,6 +17,8 @@ abstract class TestCase extends BaseTestCase
 {
     public function createApplication(): Application
     {
+        $this->clearCachedConfigBeforeTesting();
+
         $app = require __DIR__.'/../bootstrap/app.php';
         $app->useStoragePath(__DIR__.'/../storage/framework/testing');
         $app->make(Kernel::class)->bootstrap();
@@ -30,6 +32,21 @@ abstract class TestCase extends BaseTestCase
 
         $this->withoutVite();
         $this->prepareVarianceFilesystem();
+    }
+
+    private function clearCachedConfigBeforeTesting(): void
+    {
+        $environment = $_ENV['APP_ENV'] ?? $_SERVER['APP_ENV'] ?? getenv('APP_ENV');
+
+        if ($environment !== 'testing') {
+            return;
+        }
+
+        $cachedConfig = __DIR__.'/../bootstrap/cache/config.php';
+
+        if (is_file($cachedConfig)) {
+            unlink($cachedConfig);
+        }
     }
 
     protected function signInEditor(?User $user = null): User
