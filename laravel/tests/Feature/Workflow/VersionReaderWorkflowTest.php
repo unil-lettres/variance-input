@@ -68,6 +68,39 @@ class VersionReaderWorkflowTest extends TestCase
             ->assertJsonPath('page.text', 'Bonjour le monde.');
     }
 
+    public function test_reader_prefers_plain_tei_text_over_raw_txt_inline_markup(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-tei-v1',
+        ]);
+
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            "Elle murmure:\n\n\\«Corps et âme, je t'appartiens désormais.»\\"
+        );
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.xml"),
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body><p>Elle murmure:</p>'
+            .'<p><emph>«Corps et âme, je t&apos;appartiens désormais.»</emph></p></body></text></TEI>'
+        );
+        $this->writeFacsimilePair($version);
+
+        $this->getJson("/api/versions/{$version->id}/reader")
+            ->assertOk()
+            ->assertJsonPath('text_source', 'version-tei')
+            ->assertJsonPath('text_source_options.0.value', 'version-tei')
+            ->assertJsonFragment(['value' => 'version-txt'])
+            ->assertJsonPath('current_page.text', "Elle murmure:\n«Corps et âme, je t'appartiens désormais.»");
+
+        $this->getJson("/api/versions/{$version->id}/reader?text_source=version-txt")
+            ->assertOk()
+            ->assertJsonPath('text_source', 'version-txt')
+            ->assertJsonPath('current_page.text', "Elle murmure:\n\n\\«Corps et âme, je t'appartiens désormais.»\\");
+    }
+
     public function test_reader_progress_endpoint_returns_idle_without_active_load(): void
     {
         $user = $this->signInEditor();

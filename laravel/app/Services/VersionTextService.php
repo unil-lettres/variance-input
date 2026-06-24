@@ -151,6 +151,32 @@ class VersionTextService
      */
     public function buildLegacyTxtFromTeiXml(string $xml): string
     {
+        $body = $this->teiBodyNode($xml);
+
+        $txt = $this->renderTeiChildrenAsLegacyTxt($body);
+        $txt = str_replace(["\r\n", "\r"], "\n", $txt);
+        $txt = preg_replace("/[ \t]+\n/u", "\n", $txt) ?? $txt;
+        $txt = preg_replace("/\n[ \t]+/u", "\n", $txt) ?? $txt;
+        $txt = preg_replace("/\n{3,}/u", "\n\n", $txt) ?? $txt;
+
+        return trim($txt);
+    }
+
+    public function buildPlainTextFromTeiXml(string $xml): string
+    {
+        $body = $this->teiBodyNode($xml);
+
+        $txt = $this->renderTeiChildrenAsPlainText($body);
+        $txt = str_replace(["\r\n", "\r"], "\n", $txt);
+        $txt = preg_replace("/[ \t]+\n/u", "\n", $txt) ?? $txt;
+        $txt = preg_replace("/\n[ \t]+/u", "\n", $txt) ?? $txt;
+        $txt = preg_replace("/\n{3,}/u", "\n\n", $txt) ?? $txt;
+
+        return trim($txt);
+    }
+
+    private function teiBodyNode(string $xml): DOMNode
+    {
         $dom = new DOMDocument();
         $dom->preserveWhiteSpace = true;
         $dom->formatOutput = false;
@@ -170,13 +196,7 @@ class VersionTextService
             throw new \InvalidArgumentException('TEI XML sans élément body.');
         }
 
-        $txt = $this->renderTeiChildrenAsLegacyTxt($body);
-        $txt = str_replace(["\r\n", "\r"], "\n", $txt);
-        $txt = preg_replace("/[ \t]+\n/u", "\n", $txt) ?? $txt;
-        $txt = preg_replace("/\n[ \t]+/u", "\n", $txt) ?? $txt;
-        $txt = preg_replace("/\n{3,}/u", "\n\n", $txt) ?? $txt;
-
-        return trim($txt);
+        return $body;
     }
 
     private function renderTeiChildrenAsLegacyTxt(DOMNode $node): string
@@ -230,6 +250,43 @@ class VersionTextService
         }
 
         if (in_array($name, ['div', 'lg', 'list'], true)) {
+            return $this->withTrailingNewline($inner);
+        }
+
+        return $inner;
+    }
+
+    private function renderTeiChildrenAsPlainText(DOMNode $node): string
+    {
+        $txt = '';
+        foreach ($node->childNodes as $child) {
+            $txt .= $this->renderTeiNodeAsPlainText($child);
+        }
+
+        return $txt;
+    }
+
+    private function renderTeiNodeAsPlainText(DOMNode $node): string
+    {
+        if ($node->nodeType === XML_TEXT_NODE || $node->nodeType === XML_CDATA_SECTION_NODE) {
+            return $node->nodeValue ?? '';
+        }
+
+        if (! $node instanceof DOMElement) {
+            return '';
+        }
+
+        $name = strtolower($node->localName);
+        if (in_array($name, ['teiheader', 'pb'], true)) {
+            return '';
+        }
+
+        if (in_array($name, ['lb', 'br'], true)) {
+            return "\n";
+        }
+
+        $inner = $this->renderTeiChildrenAsPlainText($node);
+        if (in_array($name, ['p', 'head', 'l', 'item', 'div', 'lg', 'list'], true)) {
             return $this->withTrailingNewline($inner);
         }
 

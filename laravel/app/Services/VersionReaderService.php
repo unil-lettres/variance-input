@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 class VersionReaderService
 {
-    private const READER_DATASET_SCHEMA_VERSION = 3;
+    private const READER_DATASET_SCHEMA_VERSION = 4;
 
     public function __construct(
         private PageMarkerService $pageMarkerService,
@@ -307,9 +307,32 @@ class VersionReaderService
     {
         $version->loadMissing('work.author');
 
+        $xmlPath = storage_path("app/public/uploads/versions/{$version->folder}.xml");
         $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
         $textVariants = [];
-        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 18, 'Lecture du texte de version…');
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 18, 'Lecture du texte TEI de version…');
+        if (is_file($xmlPath)) {
+            try {
+                $teiText = $this->versionTextService->buildPlainTextFromTeiXml((string) File::get($xmlPath));
+                if ($teiText !== '') {
+                    $textVariants['version-tei'] = [
+                        'value' => 'version-tei',
+                        'text' => $teiText,
+                        'label' => 'TEI de version',
+                        'origin' => null,
+                        'markers' => [],
+                    ];
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Could not load version TEI text for reader.', [
+                    'version_id' => $version->id,
+                    'folder' => $version->folder,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 26, 'Lecture du TXT de version…');
         if (is_file($textPath)) {
             try {
                 $versionText = $this->versionTextService->readFileAsUtf8($textPath, $requestedEncoding);
@@ -346,9 +369,11 @@ class VersionReaderService
 
         $selectedTextSource = $requestedTextSource;
         if (! $selectedTextSource || ! array_key_exists($selectedTextSource, $textVariants)) {
-            $selectedTextSource = array_key_exists('version-txt', $textVariants)
-                ? 'version-txt'
-                : (array_key_first($textVariants) ?: null);
+            $selectedTextSource = array_key_exists('version-tei', $textVariants)
+                ? 'version-tei'
+                : (array_key_exists('version-txt', $textVariants)
+                    ? 'version-txt'
+                    : (array_key_first($textVariants) ?: null));
         }
 
         $textSourceOptions = array_values(array_map(function (array $variant): array {
@@ -532,7 +557,7 @@ class VersionReaderService
     {
         $value = strtolower(trim((string) $hint));
 
-        return in_array($value, ['version-txt', 'comparison-xhtml'], true) ? $value : null;
+        return in_array($value, ['version-tei', 'version-txt', 'comparison-xhtml'], true) ? $value : null;
     }
 
     private function readerDatasetCacheKey(int $versionId, ?string $requestedEncoding, ?string $requestedTextSource, array $fingerprint = [], int $nonce = 0): string
@@ -628,6 +653,7 @@ class VersionReaderService
 
     private function readerDatasetFingerprint(Version $version): array
     {
+        $xmlPath = storage_path("app/public/uploads/versions/{$version->folder}.xml");
         $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
         $sidecarRelative = $this->pageMarkerService->paginationRelativePath($version->id);
         $sidecarPath = Storage::disk('local')->exists($sidecarRelative)
@@ -642,6 +668,11 @@ class VersionReaderService
                 'path' => is_file($textPath) ? $textPath : null,
                 'mtime' => is_file($textPath) ? ((int) @filemtime($textPath)) : null,
                 'size' => is_file($textPath) ? ((int) @filesize($textPath)) : null,
+            ],
+            'xml' => [
+                'path' => is_file($xmlPath) ? $xmlPath : null,
+                'mtime' => is_file($xmlPath) ? ((int) @filemtime($xmlPath)) : null,
+                'size' => is_file($xmlPath) ? ((int) @filesize($xmlPath)) : null,
             ],
             'sidecar' => [
                 'path' => $sidecarPath,

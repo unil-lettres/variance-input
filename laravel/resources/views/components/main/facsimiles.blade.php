@@ -919,6 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function normalizeReaderTextSource(value) {
         const raw = String(value || '').trim();
         if (!raw || raw.toLowerCase() === 'auto') return 'auto';
+        if (raw === 'version-tei') return 'version-tei';
         if (raw === 'version-txt') return 'version-txt';
         if (raw === 'comparison-xhtml') return 'comparison-xhtml';
         return 'auto';
