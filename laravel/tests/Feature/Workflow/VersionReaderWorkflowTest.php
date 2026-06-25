@@ -485,6 +485,198 @@ HTML,
             ->assertJsonPath('pages.3.image.name', 'img_reader-explicit-sidecar-v1_004.jpg');
     }
 
+    public function test_reader_reanchors_pb_xhtml_sidecar_text_to_clean_anchor_phrase(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-pb-xhtml-anchor-v1',
+            'name' => 'XHTML sidecar anchor',
+        ]);
+
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            "le a sombré aux trois quarts et la nôtre plus qu'à moitié.\n\n"
+            ."Nous l'avions connu à Monaco pendant l'hiver que nous passâmes auprès de mon oncle.\n\n"
+            ."Il avait l'esprit aventureux.\n\nPage suivante commence ici."
+        );
+
+        $this->writeFacsimilePair($version, '017');
+        $this->writeFacsimilePair($version, '018');
+
+        File::ensureDirectoryExists(storage_path('app/private/pagination'));
+        File::put(
+            storage_path("app/private/pagination/{$version->id}.json"),
+            json_encode([
+                'version_id' => $version->id,
+                'version_folder' => $version->folder,
+                'work_id' => $version->work_id,
+                'origin' => 'pb-xhtml',
+                'marker_count' => 2,
+                'markers' => [
+                    [
+                        'char_index' => 0,
+                        'image' => '017',
+                        'page' => '123',
+                        'phrase' => "123Nous l’avions connu à Monaco pendant l’hiver que nous passâmes auprès de mon oncle. Il",
+                    ],
+                    [
+                        'char_index' => 135,
+                        'image' => '018',
+                        'page' => '124',
+                        'phrase' => '124Page suivante commence ici.',
+                    ],
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+
+        $response = $this->getJson("/api/versions/{$version->id}/reader")
+            ->assertOk()
+            ->assertJsonPath('pagination.origin', 'pb-xhtml')
+            ->assertJsonPath('current_page.label', '123')
+            ->assertJsonPath(
+                'current_page.anchorPhrase',
+                "Nous l’avions connu à Monaco pendant l’hiver que nous passâmes auprès de mon oncle. Il"
+            );
+
+        $text = (string) $response->json('current_page.text');
+        $this->assertStringStartsWith("Nous l'avions connu à Monaco", $text);
+        $this->assertStringNotContainsString('sombré aux trois quarts', $text);
+    }
+
+    public function test_reader_reanchors_pb_xhtml_sidecar_after_glued_roman_heading(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-pb-xhtml-roman-v1',
+            'name' => 'XHTML sidecar roman heading',
+        ]);
+
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            "Ils sont enterrés six ou sept ensemble dans l'ombre, toute la famille.\n\n"
+            ."VI\n\n"
+            ."Caille non plus n'avait pas faim, mais ce n'était pas seulement à cause de la chaleur.\n"
+            ."Il avait ôté son chapeau.\n\n"
+            ."La page suivante commence ici."
+        );
+
+        $this->writeFacsimilePair($version, '053');
+        $this->writeFacsimilePair($version, '054');
+
+        File::ensureDirectoryExists(storage_path('app/private/pagination'));
+        File::put(
+            storage_path("app/private/pagination/{$version->id}.json"),
+            json_encode([
+                'version_id' => $version->id,
+                'version_folder' => $version->folder,
+                'work_id' => $version->work_id,
+                'origin' => 'pb-xhtml',
+                'marker_count' => 2,
+                'markers' => [
+                    [
+                        'char_index' => 0,
+                        'image' => '053',
+                        'page' => '97',
+                        'phrase' => "97VICaille non plus n’avait pas faim, mais ce n’était pas seulement à cause de la chaleur.",
+                    ],
+                    [
+                        'char_index' => 150,
+                        'image' => '054',
+                        'page' => '98',
+                        'phrase' => '98La page suivante commence ici.',
+                    ],
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+
+        $response = $this->getJson("/api/versions/{$version->id}/reader")
+            ->assertOk()
+            ->assertJsonPath('pagination.origin', 'pb-xhtml')
+            ->assertJsonPath('current_page.label', '97')
+            ->assertJsonPath(
+                'current_page.anchorPhrase',
+                "Caille non plus n’avait pas faim, mais ce n’était pas seulement à cause de la chaleur."
+            );
+
+        $text = (string) $response->json('current_page.text');
+        $this->assertStringStartsWith("Caille non plus n'avait pas faim", $text);
+        $this->assertStringNotContainsString('Ils sont enterrés', $text);
+    }
+
+    public function test_reader_does_not_strip_chapitre_as_glued_roman_heading(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-pb-xhtml-chapitre-v1',
+            'name' => 'XHTML sidecar chapitre heading',
+        ]);
+
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            "il est naturel aux caractères faibles de le faire.\n\n"
+            ."CHAPITRE X.\n"
+            ."Je passai les jours suivants plus tranquille. J'avais rejeté dans le vague la nécessité d'un sacrifice.\n"
+            ."Ellénore et moi avions un obstacle que je ne pouvais franchir.\n\n"
+            ."elle-même devint moins amère."
+        );
+
+        $this->writeFacsimilePair($version, '262');
+        $this->writeFacsimilePair($version, '263');
+        $this->writeFacsimilePair($version, '264');
+
+        File::ensureDirectoryExists(storage_path('app/private/pagination'));
+        File::put(
+            storage_path("app/private/pagination/{$version->id}.json"),
+            json_encode([
+                'version_id' => $version->id,
+                'version_folder' => $version->folder,
+                'work_id' => $version->work_id,
+                'origin' => 'pb-xhtml',
+                'marker_count' => 3,
+                'markers' => [
+                    [
+                        'char_index' => 0,
+                        'image' => '262',
+                        'page' => '262',
+                        'phrase' => "262CHAPITRE X.Je passai les jours suivants plus tranquille. J’avais rejeté dans le vague",
+                    ],
+                    [
+                        'char_index' => 120,
+                        'image' => '263',
+                        'page' => '263',
+                        'phrase' => '263Ellénore et moi avions un obstacle que je ne pouvais franchir.',
+                    ],
+                    [
+                        'char_index' => 205,
+                        'image' => '264',
+                        'page' => '264',
+                        'phrase' => '264elle-même devint moins amère.',
+                    ],
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+
+        $response = $this->getJson("/api/versions/{$version->id}/reader")
+            ->assertOk()
+            ->assertJsonPath('pages.0.label', '262')
+            ->assertJsonPath('pages.0.anchorPhrase', "CHAPITRE X. Je passai les jours suivants plus tranquille. J’avais rejeté dans le vague")
+            ->assertJsonPath('pages.1.label', '263');
+
+        $page262 = $this->getJson("/api/versions/{$version->id}/reader/page?index=0")
+            ->assertOk()
+            ->json('page.text');
+        $this->assertStringContainsString('CHAPITRE X.', (string) $page262);
+        $this->assertStringContainsString('Je passai les jours suivants', (string) $page262);
+
+        $page263 = $this->getJson("/api/versions/{$version->id}/reader/page?index=1")
+            ->assertOk()
+            ->json('page.text');
+        $this->assertStringStartsWith('Ellénore et moi', (string) $page263);
+    }
+
     public function test_short_one_line_lignes_file_generates_pagination_sidecar(): void
     {
         $user = $this->signInEditor();

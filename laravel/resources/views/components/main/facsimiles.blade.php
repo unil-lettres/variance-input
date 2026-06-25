@@ -905,6 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let facsimileSelectionInFlight = false;
     let pendingFacsimileSelection = null;
     let readerPageRequestToken = 0;
+    let readerImageRequestToken = 0;
     const readerPageLoadPromises = new Map();
     const readerImagePrefetchUrls = new Set();
 
@@ -1291,6 +1292,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerPrevBtn) readerPrevBtn.disabled = true;
         if (readerNextBtn) readerNextBtn.disabled = true;
         if (readerImageEl) {
+            readerImageRequestToken++;
             readerImageEl.removeAttribute('src');
             readerImageEl.alt = 'Fac-similé synchronisé';
             readerImageEl.classList.remove('d-none');
@@ -1723,6 +1725,99 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = url;
     }
 
+    function waitForReaderImage(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.decoding = 'async';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+            if (img.complete && img.naturalWidth > 0) {
+                resolve(img);
+            }
+        }).then(async (img) => {
+            if (typeof img.decode === 'function') {
+                try {
+                    await img.decode();
+                } catch (err) {
+                    // Some browsers reject decode() for images already usable in layout.
+                }
+            }
+            return img;
+        });
+    }
+
+    async function updateReaderImage(displayedImage, page, noFacsimilesForVersion) {
+        if (!readerImageEl) return;
+
+        const requestToken = ++readerImageRequestToken;
+        readerImageEl.onload = null;
+        readerImageEl.onerror = null;
+
+        if (noFacsimilesForVersion) {
+            setReaderImagePaneEmptyState(true);
+            readerImageEl.alt = 'Aucun fac-similé pour cette version';
+            syncReaderPaneLayout();
+            return;
+        }
+
+        if (!displayedImage?.big) {
+            setReaderImagePaneEmptyState(false);
+            readerImageEl.removeAttribute('src');
+            readerImageEl.alt = 'Fac-similé manquant';
+            syncReaderPaneLayout();
+            return;
+        }
+
+        const nextSrc = displayedImage.big;
+        const currentSrc = readerImageEl.getAttribute('src') || '';
+        const placeholderSrc = displayedImage.thumb && displayedImage.thumb !== nextSrc
+            ? displayedImage.thumb
+            : null;
+        const nextAlt = displayedImage?.name || page?.label || 'Fac-similé synchronisé';
+
+        setReaderImagePaneEmptyState(false);
+        if (currentSrc === nextSrc && readerImageEl.complete && readerImageEl.naturalWidth > 0) {
+            readerImageEl.alt = nextAlt;
+            applyReaderImageDisplay();
+            syncReaderPaneLayout();
+            return;
+        }
+
+        if (!currentSrc && placeholderSrc) {
+            readerImageEl.src = placeholderSrc;
+            readerImageEl.alt = nextAlt;
+        }
+
+        try {
+            await waitForReaderImage(nextSrc);
+            if (requestToken !== readerImageRequestToken) {
+                return;
+            }
+            readerImageEl.src = nextSrc;
+            readerImageEl.alt = nextAlt;
+            window.requestAnimationFrame(() => {
+                if (requestToken !== readerImageRequestToken) {
+                    return;
+                }
+                applyReaderImageDisplay();
+                syncReaderPaneLayout();
+            });
+        } catch (err) {
+            if (requestToken !== readerImageRequestToken) {
+                return;
+            }
+            console.error('Could not load reader image', err);
+            if (placeholderSrc) {
+                readerImageEl.src = placeholderSrc;
+            } else {
+                readerImageEl.removeAttribute('src');
+            }
+            readerImageEl.alt = 'Fac-similé indisponible';
+            syncReaderPaneLayout();
+        }
+    }
+
     async function loadReaderPage(index, { silent = false, useRequestToken = true } = {}) {
         if (!currentVersionId || !readerPages[index] || readerPages[index].loaded) {
             return readerPages[index] || null;
@@ -1910,27 +2005,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const displayedImage = currentDisplayedReaderImage();
         const leadingSegmentLabel = readerLeadingSegmentLabel(page);
 
-        if (readerImageEl) {
-            if (noFacsimilesForVersion) {
-                setReaderImagePaneEmptyState(true);
-                readerImageEl.alt = 'Aucun fac-similé pour cette version';
-            } else if (displayedImage?.big) {
-                setReaderImagePaneEmptyState(false);
-                readerImageEl.onload = () => {
-                    applyReaderImageDisplay();
-                    syncReaderPaneLayout();
-                };
-                readerImageEl.onerror = () => {
-                    syncReaderPaneLayout();
-                };
-                readerImageEl.src = displayedImage.big;
-                readerImageEl.alt = displayedImage?.name || page.label;
-            } else {
-                setReaderImagePaneEmptyState(false);
-                readerImageEl.removeAttribute('src');
-                readerImageEl.alt = 'Fac-similé manquant';
-            }
-        }
+        void updateReaderImage(displayedImage, page, noFacsimilesForVersion);
 
         if (readerImageMetaEl) {
             if (noFacsimilesForVersion) {

@@ -35,6 +35,44 @@ class PageMarkerServiceTest extends TestCase
         $this->assertSame('23', $result['payload']['markers'][0]['page']);
     }
 
+    public function test_lignes_matching_ignores_legacy_caret_exponent_markers(): void
+    {
+        $version = $this->createVersionFixture('v-caret');
+        File::put(
+            storage_path('app/public/uploads/versions/v-caret.xml'),
+            '<TEI><text><body><p>Il y avait surtout un M<sup>e</sup> Mouche, notaire.</p></body></text></TEI>'
+        );
+
+        $lignesPath = storage_path('app/private/lignes/v-caret_lignes.txt');
+        File::put($lignesPath, "004 583 Il y avait surtout un M^e^\n");
+
+        $result = app(PageMarkerService::class)->generatePaginationSidecar($version, $lignesPath);
+
+        $this->assertSame([], $result['misses']);
+        $this->assertSame(1, $result['payload']['marker_count']);
+        $this->assertSame('004', $result['payload']['markers'][0]['image_code']);
+        $this->assertSame('583', $result['payload']['markers'][0]['page']);
+    }
+
+    public function test_lignes_matching_allows_facsimile_roman_heading_missing_from_text(): void
+    {
+        $version = $this->createVersionFixture('v-roman-heading');
+        File::put(
+            storage_path('app/public/uploads/versions/v-roman-heading.xml'),
+            '<TEI><text><body><p>Quand je descendis de voiture à la station de Melun, la nuit répandait sa paix.</p></body></text></TEI>'
+        );
+
+        $lignesPath = storage_path('app/private/lignes/v-roman-heading_lignes.txt');
+        File::put($lignesPath, "106 97 I Quand je descendis de voiture\n");
+
+        $result = app(PageMarkerService::class)->generatePaginationSidecar($version, $lignesPath);
+
+        $this->assertSame([], $result['misses']);
+        $this->assertSame(1, $result['payload']['marker_count']);
+        $this->assertSame('106', $result['payload']['markers'][0]['image_code']);
+        $this->assertSame('97', $result['payload']['markers'][0]['page']);
+    }
+
     public function test_comparison_injection_reanchors_phrases_and_does_not_insert_missing_phrase_at_stale_offset(): void
     {
         $author = Author::factory()->create([

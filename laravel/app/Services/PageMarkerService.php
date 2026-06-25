@@ -1945,7 +1945,10 @@ class PageMarkerService
 
     private function stripLegacyEmphasisMarkersForMatching(string $txt): string
     {
-        return str_replace('\\', '', $txt);
+        $txt = str_replace('\\', '', $txt);
+        $txt = preg_replace('/\^([^\\^\r\n]+)\^/u', '$1', $txt) ?? $txt;
+
+        return $txt;
     }
 
     private function applyTypographicNormalisationForMatching(string $txt): string
@@ -2890,6 +2893,9 @@ class PageMarkerService
         $clause = $this->clipLeadingClause($collapsed ?? '');
         $this->appendVariant($variants, $clause);
 
+        $withoutRomanHeading = $this->dropLeadingRomanHeading($collapsed ?? '');
+        $this->appendVariant($variants, $withoutRomanHeading);
+
         $leading = $this->takeLeadingWords($collapsed ?? '', 8);
         $this->appendVariant($variants, $leading);
 
@@ -2925,6 +2931,15 @@ class PageMarkerService
         }
 
         return null;
+    }
+
+    private function dropLeadingRomanHeading(string $phrase): ?string
+    {
+        if (preg_match('/^\s*(?:[IVXLCDM]{1,8})\s+(.{8,})$/u', $phrase, $matches) !== 1) {
+            return null;
+        }
+
+        return trim($matches[1]);
     }
 
     private function takeLeadingWords(string $phrase, int $maxWords): ?string

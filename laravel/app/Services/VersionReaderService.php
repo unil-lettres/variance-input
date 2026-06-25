@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 class VersionReaderService
 {
-    private const READER_DATASET_SCHEMA_VERSION = 5;
+    private const READER_DATASET_SCHEMA_VERSION = 9;
 
     public function __construct(
         private PageMarkerService $pageMarkerService,
@@ -185,11 +185,15 @@ class VersionReaderService
                 $bigUrl = $useLegacy
                     ? legacy_url($dirRel.'/'.$entry['name'])
                     : admin_url('storage/'.ltrim($entry['path'], '/'));
+                $bigUrl = $this->appendReaderImageVersion($bigUrl, $entry['absolute'] ?? null);
+
                 $thumbUrl = null;
                 if ($thumbExists) {
+                    $thumbAbsolute = $useLegacy ? $thumbPath : $disk->path($thumbPath);
                     $thumbUrl = $useLegacy
                         ? legacy_url($dirRel.'/'.$thumbName)
                         : admin_url('storage/'.ltrim($thumbPath, '/'));
+                    $thumbUrl = $this->appendReaderImageVersion($thumbUrl, $thumbAbsolute);
                 }
 
                 return [
@@ -213,6 +217,20 @@ class VersionReaderService
         }
 
         return $facsimiles;
+    }
+
+    private function appendReaderImageVersion(string $url, ?string $absolutePath): string
+    {
+        if (! $absolutePath || ! is_file($absolutePath)) {
+            return $url;
+        }
+
+        $size = @filesize($absolutePath) ?: 0;
+        $mtime = @filemtime($absolutePath) ?: 0;
+        $version = substr(sha1($size.':'.$mtime), 0, 12);
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url.$separator.'v='.$version;
     }
 
     private function readerFacsimilesCacheKey(Version $version): ?string
@@ -481,6 +499,10 @@ class VersionReaderService
             $markers = $variantMarkers;
         }
 
+        if ($paginationOrigin === 'pb-xhtml') {
+            $markers = array_map(fn (array $marker): array => $this->preparePbXhtmlReaderMarker($marker), $markers);
+        }
+
         if (is_string($text) && $text !== '' && ! empty($markers)) {
             $markers = $this->pageMarkerService->resolveMarkersForPlainText($text, $markers);
         }
@@ -503,6 +525,88 @@ class VersionReaderService
                 'updated_at' => $paginationInfo['updated_at'] ?? null,
             ],
         ];
+    }
+
+    private function preparePbXhtmlReaderMarker(array $marker): array
+    {
+        $phrase = trim((string) ($marker['phrase'] ?? ''));
+        if ($phrase === '') {
+            return $marker;
+        }
+
+        $cleaned = $this->stripLeadingPageLabelFromPbXhtmlPhrase(
+            $phrase,
+            trim((string) ($marker['page'] ?? ''))
+        );
+        $cleaned = $this->stripLeadingRomanHeadingFromPbXhtmlPhrase($cleaned);
+        $cleaned = $this->normalizePbXhtmlPhraseSpacing($cleaned);
+
+        if ($cleaned !== $phrase) {
+            $marker['phrase'] = $cleaned;
+        }
+
+        return $marker;
+    }
+
+    private function stripLeadingPageLabelFromPbXhtmlPhrase(string $phrase, string $pageLabel): string
+    {
+        $phrase = trim($phrase);
+        $pageLabel = trim($pageLabel);
+        if ($phrase === '' || $pageLabel === '') {
+            return $phrase;
+        }
+
+        $candidates = array_values(array_unique(array_filter([
+            $pageLabel,
+            preg_replace('/\s+/u', '', $pageLabel) ?: null,
+        ], static fn (?string $candidate): bool => is_string($candidate) && $candidate !== '')));
+
+        foreach ($candidates as $candidate) {
+            $length = mb_strlen($candidate, 'UTF-8');
+            if ($length === 0 || mb_substr($phrase, 0, $length, 'UTF-8') !== $candidate) {
+                continue;
+            }
+
+            $rest = trim(mb_substr($phrase, $length, null, 'UTF-8'));
+            if (mb_strlen($rest, 'UTF-8') < 8) {
+                continue;
+            }
+
+            if (preg_match('/^[\p{L}«"“‘(\\[]/u', $rest) !== 1) {
+                continue;
+            }
+
+            return $rest;
+        }
+
+        return $phrase;
+    }
+
+    private function normalizePbXhtmlPhraseSpacing(string $phrase): string
+    {
+        return preg_replace(
+            '/([.!?;:])(?=[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ])/u',
+            '$1 ',
+            $phrase
+        ) ?? $phrase;
+    }
+
+    private function stripLeadingRomanHeadingFromPbXhtmlPhrase(string $phrase): string
+    {
+        $phrase = trim($phrase);
+        if ($phrase === '') {
+            return $phrase;
+        }
+
+        if (preg_match('/^(?:[IVXLCDM]{1,8})\s+(.{8,})$/u', $phrase, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/^(?:[IVXLCDM]{2,8})(?=[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ])(.{8,})$/u', $phrase, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        return $phrase;
     }
 
     private function warmReaderDatasetArtifacts(
