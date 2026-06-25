@@ -365,6 +365,21 @@ Etat local :
     sont validees localement ;
   - production 2026-06-25 : correctifs lecteur et artefacts valides deployes
     dans la release `0.6.3`.
+- validation locale 2026-06-25 :
+  - *Histoires ou contes du temps passe* / Charles Perrault, versions 17 a 22,
+    validees visuellement par Julien ;
+  - sidecars locaux presents pour les six versions : 17 `1ms` 110 reperes,
+    18 `2barbin1` 239 reperes, 19 `01labelle_ms` 41 reperes,
+    20 `02labelle_mercure` 43 reperes, 21 `03labelle_barbin1` 46 reperes,
+    22 `3barbin2` 239 reperes ;
+  - controle technique local : echantillons lecteur sans ancre devinee,
+    longueurs de page coherentes, fac-similes disponibles en nombre suffisant ;
+  - correctif lecteur local pour la version 22 : les ancres `pb-xhtml` dont le
+    numero de page est colle a `&` sont maintenant reancrees correctement
+    (`223& m'a...`), ce qui evite l'inversion 223/224 et la troncature de la
+    page 224 ;
+  - a reporter en production avec le prochain lot valide : sidecars Perrault et
+    correctif lecteur version 22.
 - le bouton `Reconstruire` du lecteur synchronise est masque localement ; la
   route backend reste conservee temporairement comme outil technique de secours.
 - le menu de choix `TXT de version` / `Texte reconstruit` est masque localement ;

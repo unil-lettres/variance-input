@@ -677,6 +677,83 @@ HTML,
         $this->assertStringStartsWith('Ellénore et moi', (string) $page263);
     }
 
+    public function test_reader_reanchors_pb_xhtml_sidecar_when_page_label_is_followed_by_ampersand(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'reader-pb-xhtml-ampersand-v1',
+            'name' => 'XHTML sidecar ampersand anchor',
+        ]);
+
+        File::put(
+            storage_path("app/public/uploads/versions/{$version->folder}.txt"),
+            "se trouverent aussi justes à ses pieds & à ses jambes que si elles avoient esté faites pour lui.\n\n"
+            ."& m'a prié de vous venir avertir de l'estat où il est, & de vous dire de me donner tout ce que vous avez.\n\n"
+            ."pas d'estre fort bon mari, quoy qu'il mangeast les petits enfans.\n\n"
+            ."lieües, parce qu'il ne s'en servoit que pour courir aprés les petits enfans."
+        );
+
+        $this->writeFacsimilePair($version, '231');
+        $this->writeFacsimilePair($version, '232');
+        $this->writeFacsimilePair($version, '233');
+        $this->writeFacsimilePair($version, '234');
+
+        File::ensureDirectoryExists(storage_path('app/private/pagination'));
+        File::put(
+            storage_path("app/private/pagination/{$version->id}.json"),
+            json_encode([
+                'version_id' => $version->id,
+                'version_folder' => $version->folder,
+                'work_id' => $version->work_id,
+                'origin' => 'pb-xhtml',
+                'marker_count' => 4,
+                'markers' => [
+                    [
+                        'char_index' => 0,
+                        'image' => '231',
+                        'page' => '222',
+                        'phrase' => '222se trouverent aussi justes à ses pieds & à ses jambes que si elles avoient esté faites',
+                    ],
+                    [
+                        'char_index' => 120,
+                        'image' => '232',
+                        'page' => '223',
+                        'phrase' => "223& m’a prié de vous venir avertir de l’estat où il est, & de vous dire",
+                    ],
+                    [
+                        'char_index' => 240,
+                        'image' => '233',
+                        'page' => '224',
+                        'phrase' => "224pas d’estre fort bon mari, quoy qu’il mangeast les petits enfans.",
+                    ],
+                    [
+                        'char_index' => 320,
+                        'image' => '234',
+                        'page' => '225',
+                        'phrase' => "225lieües, parce qu’il ne s’en servoit que pour courir aprés les petits enfans.",
+                    ],
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+        );
+
+        $response = $this->getJson("/api/versions/{$version->id}/reader")
+            ->assertOk()
+            ->assertJsonPath('pages.1.label', '223')
+            ->assertJsonPath('pages.1.anchorPhrase', "& m’a prié de vous venir avertir de l’estat où il est, & de vous dire")
+            ->assertJsonPath('pages.2.label', '224');
+
+        $page223 = $this->getJson("/api/versions/{$version->id}/reader/page?index=1")
+            ->assertOk()
+            ->json('page.text');
+        $page224 = $this->getJson("/api/versions/{$version->id}/reader/page?index=2")
+            ->assertOk()
+            ->json('page.text');
+
+        $this->assertStringStartsWith("& m'a prié de vous venir avertir", (string) $page223);
+        $this->assertStringStartsWith("pas d'estre fort bon mari", (string) $page224);
+    }
+
     public function test_short_one_line_lignes_file_generates_pagination_sidecar(): void
     {
         $user = $this->signInEditor();

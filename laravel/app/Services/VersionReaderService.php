@@ -572,7 +572,7 @@ class VersionReaderService
                 continue;
             }
 
-            if (preg_match('/^[\p{L}«"“‘(\\[]/u', $rest) !== 1) {
+            if (preg_match('/^[\p{L}&«"“‘(\\[]/u', $rest) !== 1) {
                 continue;
             }
 
