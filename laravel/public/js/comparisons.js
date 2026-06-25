@@ -191,42 +191,8 @@ function initComparisonsTable() {
     return /^\d+$/.test(s) && Number(s) > 0;
   };
 
-  let paginationWarningModal = null;
-  let paginationWarningResolve = null;
   let commentModal = null;
   let activeCommentComparisonId = null;
-  const getPaginationWarningChoice = () => {
-    const modalEl = document.getElementById('pagination-warning-modal');
-    if (!modalEl || !window.bootstrap || !bootstrap.Modal) {
-      return Promise.resolve(null);
-    }
-    if (!paginationWarningModal) {
-      paginationWarningModal = new bootstrap.Modal(modalEl, {
-        backdrop: true,
-        keyboard: true,
-      });
-      modalEl.addEventListener('hidden.bs.modal', () => {
-        if (paginationWarningResolve) {
-          paginationWarningResolve(null);
-          paginationWarningResolve = null;
-        }
-      });
-      modalEl.querySelectorAll('[data-pagination-choice]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const choice = btn.dataset.paginationChoice || null;
-          if (paginationWarningResolve) {
-            paginationWarningResolve(choice);
-            paginationWarningResolve = null;
-          }
-          paginationWarningModal.hide();
-        });
-      });
-    }
-    return new Promise(resolve => {
-      paginationWarningResolve = resolve;
-      paginationWarningModal.show();
-    });
-  };
   const commentModalEl = document.getElementById('comparison-comment-modal');
   const commentInput = document.getElementById('comparison-comment-input');
   const commentSaveBtn = document.getElementById('comparison-comment-save-btn');
@@ -2443,24 +2409,6 @@ function initComparisonsTable() {
       return;
     }
 
-    let insertDefaultMarker = false;
-    if (shouldPublish) {
-      const comp = comparisonData.get(Number(comparisonId)) || {};
-      const sourceMarkers = Number(comp?.pagination?.source?.markers ?? 0);
-      const targetMarkers = Number(comp?.pagination?.target?.markers ?? 0);
-      if (sourceMarkers <= 0 && targetMarkers <= 0) {
-        const choice = await getPaginationWarningChoice();
-        if (choice === 'insert') {
-          insertDefaultMarker = true;
-        } else if (choice === 'continue') {
-          insertDefaultMarker = false;
-        } else {
-          actionBtn.disabled = false;
-          return;
-        }
-      }
-    }
-
     if (shouldPublish && Array.isArray(knownMissing) && knownMissing.length) {
       const proceed = confirm(
         'Certains composants Medite semblent manquants :\n- ' +
@@ -2487,8 +2435,7 @@ function initComparisonsTable() {
           },
           body: JSON.stringify({
             comparison_id: comparisonId,
-            destination: scope,
-            insert_default_marker: insertDefaultMarker
+            destination: scope
           })
         });
 
@@ -2516,12 +2463,6 @@ function initComparisonsTable() {
           );
         }
 
-        if (insertDefaultMarker && data.default_marker && Number(data.default_marker.inserted ?? 0) === 0) {
-          alert(
-            'Aucun marqueur par défaut n\'a été inséré. ' +
-            'Vérifiez que des fac-similés sont bien disponibles pour cette comparaison.'
-          );
-        }
         updateComparisonRow(comparisonId, {
           publication_scope: scope,
           published: true,
