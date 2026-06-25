@@ -21,8 +21,8 @@ services:
     restart: unless-stopped
 
   laravel:
-    # Pinned to Variance Admin 0.6.2 release v2026.06.25-0.6.2.
-    image: unillett/variance-input:laravel-v2026.06.25-0.6.2@sha256:98087d154c4dc8f6167bfb6046a4dfde62206eaddf903121db3b9b27d9d86aac
+    # Pinned to Variance Admin 0.6.3 release v2026.06.25-0.6.3.
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.3@sha256:201940be1b014bed841459504319e6a3f73ecc8567ca8206360f0788726d1014
     restart: unless-stopped
     env_file:
       - ./laravel.env
@@ -51,7 +51,7 @@ services:
 
   laravel-queue:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.25-0.6.2@sha256:98087d154c4dc8f6167bfb6046a4dfde62206eaddf903121db3b9b27d9d86aac
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.3@sha256:201940be1b014bed841459504319e6a3f73ecc8567ca8206360f0788726d1014
     restart: unless-stopped
     command: ./scripts/run-queue-workers.sh
     env_file:
@@ -75,7 +75,7 @@ services:
 
   laravel-scheduler:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.25-0.6.2@sha256:98087d154c4dc8f6167bfb6046a4dfde62206eaddf903121db3b9b27d9d86aac
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.3@sha256:201940be1b014bed841459504319e6a3f73ecc8567ca8206360f0788726d1014
     restart: unless-stopped
     command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     env_file:
@@ -98,7 +98,7 @@ services:
 
   laravel-assets:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.25-0.6.2@sha256:98087d154c4dc8f6167bfb6046a4dfde62206eaddf903121db3b9b27d9d86aac
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.3@sha256:201940be1b014bed841459504319e6a3f73ecc8567ca8206360f0788726d1014
     restart: "no"
     entrypoint: ["/bin/sh", "-lc"]
     command:
