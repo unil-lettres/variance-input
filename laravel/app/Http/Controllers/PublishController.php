@@ -828,9 +828,10 @@ class PublishController extends Controller
             $jsonPayload = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
             Storage::disk('public')->put($storagePath, $jsonPayload);
-            $legacyDir = base_path('../variance/' . $relativeDir);
-            if (!$this->legacyFacsimileMirrorIsReadOnlyWithImages($legacyDir)) {
+            try {
                 $this->mirrorToLegacy($relativeDir, $filename, $jsonPayload);
+            } catch (\Throwable $e) {
+                report($e);
             }
 
             $manifests[$type] = [
@@ -928,12 +929,23 @@ class PublishController extends Controller
     {
         $disk = Storage::disk('public');
         $prefix = "uploads/{$authorFolder}/{$workFolder}/{$versionFolder}";
-        if (!$disk->exists($prefix)) {
-            return [];
+
+        $files = $disk->exists($prefix)
+            ? collect($disk->files($prefix))->map(fn ($path) => basename($path))
+            : collect();
+
+        $fromLegacyMirror = false;
+        if ($files->isEmpty()) {
+            $legacyDir = base_path('../variance/' . $prefix);
+            if (!is_dir($legacyDir)) {
+                return [];
+            }
+
+            $files = collect(File::files($legacyDir))->map(fn (\SplFileInfo $file) => $file->getFilename());
+            $fromLegacyMirror = true;
         }
 
-        $files = collect($disk->files($prefix))
-            ->map(fn ($path) => basename($path))
+        $files = $files
             ->filter(fn ($name) => preg_match('/\.(jpe?g|png)$/i', $name))
             ->reject(fn ($name) => str_contains(strtolower($name), '_thumb'))
             ->sort(function ($a, $b) {
@@ -941,15 +953,16 @@ class PublishController extends Controller
             })
             ->values();
 
-        return $files->map(function ($file) use ($disk, $prefix, $authorFolder, $workFolder, $versionFolder) {
+        return $files->map(function ($file) use ($disk, $prefix, $authorFolder, $workFolder, $versionFolder, $fromLegacyMirror) {
             $base = pathinfo($file, PATHINFO_FILENAME);
             $ext  = pathinfo($file, PATHINFO_EXTENSION);
             $thumbName = $base . '_thumb.' . $ext;
 
             $big   = "/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}/{$file}";
-            $small = $disk->exists("{$prefix}/{$thumbName}")
-                ? "/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}/{$thumbName}"
-                : $big;
+            $thumbExists = $fromLegacyMirror
+                ? is_file(base_path('../variance/' . $prefix . '/' . $thumbName))
+                : $disk->exists("{$prefix}/{$thumbName}");
+            $small = $thumbExists ? "/uploads/{$authorFolder}/{$workFolder}/{$versionFolder}/{$thumbName}" : $big;
 
             return [
                 'small' => $small,

@@ -648,6 +648,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                 return;
             }
             viewer.load(imgObj.small || imgObj.big, imgObj.big || imgObj.small || '');
+            return true;
         }
         <?php
         }
@@ -720,6 +721,20 @@ if (!empty($_COOKIE['viewer_params'])) {
 
         $('#js-workarea-left .page-marker').first().click();
         $('#js-workarea-right .page-marker').first().click();
+        if ($('#js-workarea-left .page-marker').length === 0 && Array.isArray(imagesSource) && imagesSource.length) {
+            $('#js-workarea-left .paging-image').slideDown(400, function () {
+                if (showImage(viewerA, imagesSource, 1)) {
+                    currentSourceIdx = 1;
+                }
+            });
+        }
+        if ($('#js-workarea-right .page-marker').length === 0 && Array.isArray(imagesTarget) && imagesTarget.length) {
+            $('#js-workarea-right .paging-image').slideDown(400, function () {
+                if (showImage(viewerB, imagesTarget, 1)) {
+                    currentTargetIdx = 1;
+                }
+            });
+        }
 
         var params = {
             scrollInertia: 0
