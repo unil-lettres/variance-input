@@ -768,45 +768,63 @@ if (!empty($_COOKIE['viewer_params'])) {
             scrollInertia: 0
         };
         $('.sync').click(function (e) {
-            var target = $(e.target).attr('href');
-            if($(e.target)[0] && $(e.target)[0].nodeName === 'EM') {
-                target = $(e.target).parent().attr('href');
-            }
-            
-            var $parent;
-            if ($(e.target).is('.sync-twice')) {
-                target = $(e.target).attr('id').substr(2);
-                $parent = $('#b' + target).closest('.wrkarea');
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#b' + target).offset().top);
-                $("#b" + target).addClass("highlight-text").delay(4000).queue(function () {
-                    $(this).removeClass("highlight-text").dequeue();
-                });
-                target = '#a' + target;
-            } else if ($(this).closest('.wrkarea').length > 0) {
-                $parent = $(target).closest('.wrkarea');
-                $currentParent = $(this).closest('.wrkarea');
-                $currentParent.scrollTop($currentParent.scrollTop() - $currentParent.offset().top + $('#' + e.target.id).offset().top);
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#' + e.target.id).offset().top);
-                setTimeout(function () {
-                    $('#' + e.target.id).addClass("highlight-text").delay(4000).queue(function () {
-                        $(this).removeClass("highlight-text").dequeue();
-                    });
-                }, 800);
+            e.preventDefault();
+
+            var $link = $(this);
+            var target = $link.attr('href');
+
+            if ($link.hasClass('sync-twice')) {
+                var baseId = ($link.attr('id') || '').substr(2);
+                var $paired = $('#b' + baseId);
+                scrollContainerToElement($paired.closest('.wrkarea'), $paired);
+                highlightElement($paired, 0);
+                target = '#a' + baseId;
+            } else if ($link.closest('.wrkarea').length > 0) {
+                var linkId = $link.attr('id');
+                var $currentParent = $link.closest('.wrkarea');
+                var $linkElement = linkId ? $('#' + linkId) : $link;
+                var $targetElement = isAnchorSelector(target) ? $(target) : $();
+
+                scrollContainerToElement($currentParent, $linkElement);
+                scrollContainerToElement($targetElement.closest('.wrkarea'), $linkElement);
+                highlightElement($linkElement, 800);
             }
 
             setTimeout(function () {
-                $parent = $(target).closest('.wrkarea');
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $(target).offset().top);
-
-                setTimeout(function () {
-                    $(target).addClass("highlight-text").delay(4000).queue(function () {
-                        $(this).removeClass("highlight-text").dequeue();
-                    });
-                }, 800);
+                var $targetElement = isAnchorSelector(target) ? $(target) : $();
+                scrollContainerToElement($targetElement.closest('.wrkarea'), $targetElement);
+                highlightElement($targetElement, 800);
             }, 800);
+
             return false;
-            e.stopPropagation();
         });
+
+        function isAnchorSelector(target) {
+            return typeof target === 'string' && target.charAt(0) === '#' && target.length > 1;
+        }
+
+        function scrollContainerToElement($container, $element) {
+            if (!$container || !$container.length || !$element || !$element.length) {
+                return;
+            }
+            var containerOffset = $container.offset();
+            var elementOffset = $element.offset();
+            if (!containerOffset || !elementOffset) {
+                return;
+            }
+            $container.scrollTop($container.scrollTop() - containerOffset.top + elementOffset.top);
+        }
+
+        function highlightElement($element, delay) {
+            if (!$element || !$element.length) {
+                return;
+            }
+            setTimeout(function () {
+                $element.addClass("highlight-text").delay(4000).queue(function () {
+                    $(this).removeClass("highlight-text").dequeue();
+                });
+            }, delay || 0);
+        }
 
         $('.span_i, .span_s').click(function () {
 
