@@ -136,8 +136,8 @@ services:
   variance-app:
     # Integrated legacy runtime for variance-input; do not use the standalone
     # legacy variance.unil.ch image here.
-    # Pinned to Variance Admin 0.6.1 release v2026.06.25-0.6.1.
-    image: unillett/variance-input-legacy:prod-3499528abc0ab0228edce18b5a760512f30d9799@sha256:0ee033b1b872cfb2e8d7b29ee9441367250d37f7d115323896dc95854b013016
+    # Pinned to Variance Legacy 0.6.4 release v2026.06.25-0.6.4.
+    image: unillett/variance-input-legacy:prod-e6bf119690040d8430739c88b043d53a87179be3@sha256:053ff8681c958934838bdad8410110712ea3e0224154efc9d9e54bced2039165
     restart: unless-stopped
     env_file:
       - ./variance/.env
