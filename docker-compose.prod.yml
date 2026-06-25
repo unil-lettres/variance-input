@@ -21,8 +21,8 @@ services:
     restart: unless-stopped
 
   laravel:
-    # Pinned to Variance Admin 0.5.8 release v2026.06.24-0.5.8.
-    image: unillett/variance-input:laravel-v2026.06.24-0.5.8@sha256:acf68d4c8cdbd567d5c15d2cfd77c888d2b921711d759556e3c34848a2c39b75
+    # Pinned to Variance Admin 0.6.0 release v2026.06.25-0.6.0.
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.0@sha256:10dd78dbb07c0847eae7ecbc6fd5fcb3bf6a018e46ce4f077f009e3792bbd6ba
     restart: unless-stopped
     env_file:
       - ./laravel.env
@@ -51,7 +51,7 @@ services:
 
   laravel-queue:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.24-0.5.8@sha256:acf68d4c8cdbd567d5c15d2cfd77c888d2b921711d759556e3c34848a2c39b75
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.0@sha256:10dd78dbb07c0847eae7ecbc6fd5fcb3bf6a018e46ce4f077f009e3792bbd6ba
     restart: unless-stopped
     command: ./scripts/run-queue-workers.sh
     env_file:
@@ -75,7 +75,7 @@ services:
 
   laravel-scheduler:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.24-0.5.8@sha256:acf68d4c8cdbd567d5c15d2cfd77c888d2b921711d759556e3c34848a2c39b75
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.0@sha256:10dd78dbb07c0847eae7ecbc6fd5fcb3bf6a018e46ce4f077f009e3792bbd6ba
     restart: unless-stopped
     command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     env_file:
@@ -98,7 +98,7 @@ services:
 
   laravel-assets:
     # Use the same pinned Laravel production image as laravel.
-    image: unillett/variance-input:laravel-v2026.06.24-0.5.8@sha256:acf68d4c8cdbd567d5c15d2cfd77c888d2b921711d759556e3c34848a2c39b75
+    image: unillett/variance-input:laravel-v2026.06.25-0.6.0@sha256:10dd78dbb07c0847eae7ecbc6fd5fcb3bf6a018e46ce4f077f009e3792bbd6ba
     restart: "no"
     entrypoint: ["/bin/sh", "-lc"]
     command:
@@ -107,8 +107,8 @@ services:
       - vite_build:/build-output
 
   medite:
-    # Pinned to Variance Admin 0.5.8 release v2026.06.24-0.5.8.
-    image: unillett/variance-input:medite-v2026.06.24-0.5.8@sha256:eda129d064a1fce18de32534ee07b6d201136f5c5d660b2ba3baf08c5baf5c71
+    # Pinned to Variance Admin 0.6.0 release v2026.06.25-0.6.0.
+    image: unillett/variance-input:medite-v2026.06.25-0.6.0@sha256:7f4820fbad9c33fa76047ac0b249aae81c71036b33179052395314e8c429e9d4
     restart: unless-stopped
     environment:
       - FLASK_ENV=production
