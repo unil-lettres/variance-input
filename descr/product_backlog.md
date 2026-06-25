@@ -361,7 +361,10 @@ Etat local :
     titres romains n'enleve plus le `C` de `CHAPITRE` ;
   - controle technique : page 263 passe de 62 a 591 caracteres dans le payload
     lecteur ; tests `VersionReaderWorkflowTest` OK ;
-  - validation visuelle locale a faire pour la version 50.
+  - validation visuelle par Julien : toutes les versions *Adolphe* 46 a 50
+    sont validees localement ;
+  - production 2026-06-25 : correctifs lecteur et artefacts valides deployes
+    dans la release `0.6.3`.
 - le bouton `Reconstruire` du lecteur synchronise est masque localement ; la
   route backend reste conservee temporairement comme outil technique de secours.
 - le menu de choix `TXT de version` / `Texte reconstruit` est masque localement ;
