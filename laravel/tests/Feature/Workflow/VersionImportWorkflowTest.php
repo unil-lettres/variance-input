@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Jobs\ApplyLignesJob;
 use App\Models\Comparison;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -89,6 +91,40 @@ class VersionImportWorkflowTest extends TestCase
             ->assertJsonPath('0.id', $version->id)
             ->assertJsonPath('0.is_legacy', true)
             ->assertJsonPath('0.page_marker_progress', null);
+    }
+
+    public function test_lignes_upload_persists_file_before_queueing_job(): void
+    {
+        Queue::fake();
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Melmoth réconcilié',
+            'short_title' => 'mr',
+        ]);
+        $version = Version::factory()->for($work)->create([
+            'folder' => '1mr',
+            'name' => 'Lequien (1835)',
+        ]);
+
+        $contents = "0001\t1\tIl se rencontre parfois des hommes immenses.\n";
+        $upload = UploadedFile::fake()->createWithContent('1mr_lignes.txt', $contents);
+
+        $response = $this->postJson("/api/versions/{$version->id}/lignes", [
+            'lignes' => $upload,
+        ]);
+
+        $response->assertStatus(202)
+            ->assertJsonPath('status', 'queued');
+
+        $relative = "lignes/{$version->id}.txt";
+        $this->assertTrue(Storage::disk('local')->exists($relative));
+        $this->assertSame($contents, Storage::disk('local')->get($relative));
+
+        Queue::assertPushed(ApplyLignesJob::class, function (ApplyLignesJob $job) use ($version, $relative) {
+            return $job->versionId === $version->id
+                && $job->storagePath === $relative
+                && $job->deleteAfter === false;
+        });
     }
 
     public function test_pagination_done_toggle_records_the_validating_user(): void

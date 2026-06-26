@@ -605,6 +605,17 @@ class VersionController extends Controller
         ]);
 
         $tempPath = $request->file('lignes')->store('tmp/lignes', 'local');
+        if (! $tempPath || ! Storage::disk('local')->exists($tempPath)) {
+            Log::error('Unable to store temporary _lignes upload.', [
+                'version_id' => $version->id,
+                'path' => $tempPath,
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Impossible d’enregistrer le fichier _lignes.',
+            ], 500);
+        }
 
         $progressFile = storage_path('app/tmp/pager/'.$version->id.'.json');
         if (is_file($progressFile)) {
@@ -651,7 +662,20 @@ class VersionController extends Controller
 
         $file = $request->file('lignes');
         $relative = $this->pageMarkerService->lignesRelativePath($version->id);
-        Storage::disk('local')->putFileAs(dirname($relative), $file, basename($relative));
+        $stored = Storage::disk('local')->putFileAs(dirname($relative), $file, basename($relative));
+        if ($stored === false || ! Storage::disk('local')->exists($relative)) {
+            Log::error('Unable to store _lignes upload.', [
+                'version_id' => $version->id,
+                'expected_path' => $relative,
+                'stored_path' => $stored,
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Impossible d’enregistrer le fichier _lignes.',
+            ], 500);
+        }
+
         $this->pageMarkerService->markQueued($version->id);
 
         try {
