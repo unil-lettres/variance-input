@@ -123,7 +123,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                             <span class="label">Œuvre</span>
                             <span class="oeuvre__name"><?php
                                 if (!empty($_GET['work'])):
-                                    $workStatement = $cnx->prepare('SELECT `id`, `title` FROM works WHERE `folder` = :folder');
+                                    $workStatement = $cnx->prepare('SELECT `id`, `title`, `pdf_url`, `is_legacy` FROM works WHERE `folder` = :folder');
                                     $workStatement->execute(array('folder' => $_GET['work']));
                                     if ($work = $workStatement->fetch(PDO::FETCH_ASSOC)) {
                                         echo $work['title'];
@@ -214,11 +214,22 @@ if (!empty($_COOKIE['viewer_params'])) {
                             <?php endif; ?>
                         </div>
 
-                        <div class="book_settings__item book-info pull-left">
-                            <span class="label">Notice</span>
-                            <a href="<?php echo DIR_REL . '/workInfo.php?id=' . $work['id'] ?>" target="_blank"
-                               class="book-info__name"><img src="/img/book_info.svg"/></a>
-                        </div>
+                        <?php
+                        $noticePdf = trim((string) ($work['pdf_url'] ?? ''));
+                        if ($noticePdf === '' || !is_file(UPLOAD_ROOT . '/pdf/' . basename($noticePdf))) {
+                            $legacyNoticePdf = (int) ($work['id'] ?? 0) . '.pdf';
+                            $noticePdf = ((bool) ($work['is_legacy'] ?? false) && is_file(UPLOAD_ROOT . '/pdf/' . $legacyNoticePdf))
+                                ? $legacyNoticePdf
+                                : '';
+                        }
+                        ?>
+                        <?php if ($noticePdf !== ''): ?>
+                            <div class="book_settings__item book-info pull-left">
+                                <span class="label">Notice</span>
+                                <a href="<?php echo DIR_REL . '/workInfo.php?id=' . $work['id'] ?>" target="_blank"
+                                   class="book-info__name"><img src="/img/book_info.svg"/></a>
+                            </div>
+                        <?php endif; ?>
 
                         <a href="#" title="Cacher" class="btn_validate" data-type="comparison"><img
                                     src="/img/btn_up.svg"></a>

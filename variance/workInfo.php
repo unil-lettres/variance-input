@@ -10,7 +10,7 @@ if (!($element = $stmt->fetch(PDO::FETCH_ASSOC))):
 $pdfFile = trim((string) ($element['w_pdf'] ?? ''));
 if ($pdfFile === '' || !is_file(UPLOAD_ROOT . '/pdf/' . basename($pdfFile))) {
     $legacyPdf = (int) $element['w_id'] . '.pdf';
-    if ((bool) ($element['w_is_legacy'] ?? false) || is_file(UPLOAD_ROOT . '/pdf/' . $legacyPdf)) {
+    if ((bool) ($element['w_is_legacy'] ?? false) && is_file(UPLOAD_ROOT . '/pdf/' . $legacyPdf)) {
         $pdfFile = $legacyPdf;
     }
 }
