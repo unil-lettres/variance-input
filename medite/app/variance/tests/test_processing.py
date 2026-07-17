@@ -1,6 +1,7 @@
 from variance import operations as op
 import pytest
 from variance import processing as p
+from variance.io_helpers import read
 import testfixtures
 import pathlib
 from pathlib import Path
@@ -202,7 +203,7 @@ def test_synthetic(v1, v2, check_function, expected_exception):
         return
     Result = namedtuple("Result", "txt1 txt2 out")
     func()
-    result = Result(txt1=txt1, txt2=txt2, out=p.read(output_filepath))
+    result = Result(txt1=txt1, txt2=txt2, out=read(output_filepath))
     if check_function:
         check_function(result)
     # Add assertions or other test logic as needed
