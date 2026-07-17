@@ -113,6 +113,8 @@ services:
       - FLASK_APP=flask_app.py
       - PYTHONHASHSEED=0
       - NLTK_DATA=/app/assets/nltk_data
+      - CELERY_WORKER_CONCURRENCY=1
+      - CELERY_WORKER_MAX_TASKS_PER_CHILD=1
     ports:
       - "5000:5000"
     depends_on:
