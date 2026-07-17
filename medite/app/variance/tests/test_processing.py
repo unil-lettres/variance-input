@@ -120,8 +120,8 @@ def check_paragraph_deletion(result):
     deletions = result.out.find_all("deletion")
     # We verify we have one deletion
     assert len(deletions) == 1
-    # We verify that the deletion is of type paragraph
-    assert deletions[0]["type"] == "paragraph"
+    # We verify that the deleted fragment is the paragraph boundary.
+    assert deletions[0].text == "</p><p>"
 
 
 def check_insertion(result):
