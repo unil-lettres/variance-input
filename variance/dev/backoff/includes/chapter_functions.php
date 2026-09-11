@@ -81,7 +81,12 @@ function displayOneLevelChapter($folder, $way, $parentId)
     ini_set('display_errors', -1);
     echo '<ul>';
     global $cnx;
-    $chapters = $cnx->prepare('SELECT `id`, `folder`, `level`, `label_source`, `label_target`, `chapter_parent`, `start_line_source`, `start_line_target`, id_tome_source, id_tome_target FROM chapters WHERE `folder` = :folder AND `chapter_parent` = :parent');
+    // Imported legacy roots use NULL; newer imports use 0. Only the root
+    // lookup accepts both; recursive child lookups must retain their parent ID.
+    $parentCondition = ((string) $parentId === '0')
+        ? '(`chapter_parent` = :parent OR `chapter_parent` IS NULL)'
+        : '`chapter_parent` = :parent';
+    $chapters = $cnx->prepare('SELECT `id`, `folder`, `level`, `label_source`, `label_target`, `chapter_parent`, `start_line_source`, `start_line_target`, id_tome_source, id_tome_target FROM chapters WHERE `folder` = :folder AND ' . $parentCondition);
     $chapters->execute(array('folder' => $folder, 'parent' => $parentId));
     while ($element = $chapters->fetch(PDO::FETCH_ASSOC)):
         $aLink = 'goToPageNumber(\'' . $element['start_line_source'] . '\',\'' . $element['start_line_target'] . '\',\'' . $element['id_tome_source'] . '\',\'' . $element['id_tome_target'] . '\')';
