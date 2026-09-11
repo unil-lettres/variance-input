@@ -65,10 +65,34 @@ if ($catalogHideWhenEmpty && $total === 0) {
 $previous = ['a_id' => 0, 'w_id' => 0];
 $hasResults = !empty($elements);
 ?>
+<?php if ($catalogGroup === 'main'): ?>
+<style>
+    #General-Wrapper .catalogue .catalogue__section-title { font-size: 1.65rem; font-variant: small-caps; letter-spacing: .035em; margin: 1.5em 0 1em; padding: 0; }
+    #General-Wrapper .catalogue .catalogue__author { font-size: 1.35rem; }
+    #General-Wrapper .catalogue .catalogue__work-title { font-size: 1.15rem; padding-left: 15px; }
+    .catalogue-comparisons--compact .wrapper_flex { display: grid; grid-template-columns: minmax(0, 1fr) 1.5em minmax(0, 1fr); align-items: center; }
+    @media (min-width: 1200px) {
+        .catalogue-work--wide { width: calc(100% + 100px); }
+        .catalogue-work--wide > .img { width: 25%; }
+        .catalogue-work--wide > .col-sm-8 { width: 75%; }
+    }
+    .catalogue-comparisons--compact .wrapper_flex > div { min-width: 0; }
+    .catalogue-comparisons--compact .comparison-label-short { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .catalogue-comparisons--compact .comparison-label-target { text-align: right; }
+    .catalogue-comparisons--compact .wrapper_flex .arrow-versions,
+    .catalogue-comparisons--compact .wrapper_flex:hover .arrow-versions { animation: none; margin-left: 0; }
+    .catalogue-comparisons--compact .wrapper_menu_a { display: block; }
+    .catalogue-comparisons--compact .wrapper_menu_a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+</style>
+<?php endif; ?>
 <div class="row catalogue__title">
+    <?php if ($catalogGroup === 'main'): ?>
     <h2 class="col-sm-9" style="padding-left:0">
         <?php echo htmlspecialchars($catalogSectionTitle, ENT_QUOTES, 'UTF-8'); ?>
     </h2>
+    <?php else: ?>
+    <h3 class="catalogue__section-title"><?php echo htmlspecialchars($catalogSectionTitle, ENT_QUOTES, 'UTF-8'); ?></h3>
+    <?php endif; ?>
     <?php if ($catalogPaginate && $nbPages > 1): ?>
         <div class="catalogue__pagination pull-right">
             <span class="smaller-1">pages</span>
@@ -83,6 +107,9 @@ $hasResults = !empty($elements);
         </div>
     <?php endif; ?>
 </div>
+<?php if ($catalogGroup === 'main'): ?>
+<div class="row"><h3 class="catalogue__section-title">Réécritures autographiques</h3></div>
+<?php endif; ?>
 
 <?php foreach ($elements as $element): ?>
     <div class="catalogue__item row<?php echo (($element['a_id'] === $previous['a_id']) ? ' author_' . $element['a_id'] . '" style="display:none"' : '"'); ?>>
@@ -93,17 +120,17 @@ $hasResults = !empty($elements);
             $autorFirstName = array_shift($authorFirstNameArr);
             $autorLastName = implode($authorFirstNameArr);
             ?>
-            <h3 class="catalogue__author">
+            <h4 class="catalogue__author">
                 <a href="javascript:void(0);" onclick="$('.author_<?php echo $element['a_id']; ?>').slideToggle('slow');"><span><?php echo htmlspecialchars($autorFirstName, ENT_QUOTES, 'UTF-8'); ?></span> <?php echo htmlspecialchars($autorLastName, ENT_QUOTES, 'UTF-8'); ?></a>
-            </h3>
+            </h4>
             <div class="author_<?php echo $element['a_id']; ?>" style="display:none">
         <?php endif; ?>
 
         <?php if ($element['w_id'] !== $previous['w_id']): ?>
-            <h4 style="padding-left:15px">
+            <h5 class="catalogue__work-title">
                 <a href="javascript:void(0);" onclick="$('.work_<?php echo $element['w_id']; ?>').slideToggle('slow');"><?php echo htmlspecialchars($element['w_title'], ENT_QUOTES, 'UTF-8'); ?></a>
-            </h4>
-            <div class="work_<?php echo $element['w_id']; ?>" style="display:none">
+            </h5>
+            <div class="work_<?php echo $element['w_id']; ?> catalogue-work--wide" style="display:none">
                 <div class="img col-sm-4">
                     <img class="img-responsive"
                          src="<?= $catalogImagesBaseUrl ?>/<?= htmlspecialchars($element['w_image'], ENT_QUOTES, 'UTF-8') ?>"
@@ -134,11 +161,16 @@ $hasResults = !empty($elements);
                         .wrapper_flex > div { flex: 1; }
                         #General-Wrapper .content-cover ul.catalogue-versions { padding-bottom: 0 !important; }
                         .wrapper_flex:hover { background-color: #EEEEEE; }
-                        @keyframes changewidth { from { margin-left: 0; } to { margin-left: 30px; } }
-                        .wrapper_flex:hover .arrow-versions { animation-duration: 1s; animation-name: changewidth; animation-iteration-count: infinite; animation-direction: alternate; }
                         .dia_btn { margin-top: 1em }
                     </style>
-                    <?php $displayIndex = 1; ?>
+                    <?php
+                    $displayIndex = 1;
+                    $shortLabel = static function (string $label): string {
+                        preg_match_all('/\X/u', $label, $characters);
+                        return count($characters[0]) > 40 ? implode('', array_slice($characters[0], 0, 39)) . '…' : $label;
+                    };
+                    ?>
+                    <div class="catalogue-comparisons--compact">
                     <?php foreach ($comparisons as $version): ?>
                         <?php
                         $isLegacyWork = (bool) ($element['w_is_legacy'] ?? false);
@@ -162,15 +194,20 @@ $hasResults = !empty($elements);
                         }
                         $versionHref = $catalogComparisonUrlBuilder($version, $element);
                         ?>
-                        <a class="wrapper_menu_a" title="cliquez pour comparer" href="<?php echo htmlspecialchars($versionHref, ENT_QUOTES, 'UTF-8'); ?>">
-                            <div class="wrapper_flex">
-                                <div style="white-space: nowrap;"><?php echo htmlspecialchars($sourceLabel, ENT_QUOTES, 'UTF-8'); ?></div>
+                            <a class="wrapper_menu_a" title="<?php echo htmlspecialchars($sourceLabel . ' → ' . $version['t_name'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="<?php echo htmlspecialchars('Comparer : ' . $sourceLabel . ' → ' . $version['t_name'], ENT_QUOTES, 'UTF-8'); ?>" href="<?php echo htmlspecialchars($versionHref, ENT_QUOTES, 'UTF-8'); ?>">
+                            <div class="wrapper_flex" aria-hidden="true">
+                                <div>
+                                    <span class="comparison-label-short"><?php echo htmlspecialchars($shortLabel($sourceLabel), ENT_QUOTES, 'UTF-8'); ?></span>
+                                </div>
                                 <div style="text-align: center"><span class="arrow-versions">&rarr;</span></div>
-                                <div style="text-align: right; white-space: nowrap;"><?php echo htmlspecialchars($version['t_name'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                <div class="comparison-label-target">
+                                    <span class="comparison-label-short"><?php echo htmlspecialchars($shortLabel($version['t_name']), ENT_QUOTES, 'UTF-8'); ?></span>
+                                </div>
                             </div>
                         </a>
                         <?php $displayIndex++; ?>
                     <?php endforeach; ?>
+                    </div>
                 <?php endif; ?>
 
                 <br style="clear:both" />
