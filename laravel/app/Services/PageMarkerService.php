@@ -1812,7 +1812,52 @@ class PageMarkerService
             $rawLines[0] = ltrim($rawLines[0], "\u{FEFF}");
         }
 
-        $oneLineRegex = '/^\s*(\d{1,4})\s+([0-9]{1,4}[a-z]?|[ivxlcdm]+)(?:\s+(.+))?$/iu';
+        $pageLabelRegex = '(?:[0-9]{1,4}(?:\.[0-9]{1,4})?[a-z]?|[ivxlcdm]+)';
+        $oneLineRegex = '/^\s*(\d{1,4})\s+('.$pageLabelRegex.')(?:\s+(.+))?$/iu';
+        $tabularHits = 0;
+        foreach (array_slice($rawLines, 0, 40) as $sample) {
+            $parts = explode("\t", (string) $sample);
+            if (
+                count($parts) >= 3
+                && preg_match('/^\s*\d{1,4}\s*$/', $parts[0]) === 1
+                && preg_match('/^\s*'.$pageLabelRegex.'\s*$/iu', $parts[1]) === 1
+                && trim(implode("\t", array_slice($parts, 2))) !== ''
+            ) {
+                $tabularHits++;
+            }
+        }
+
+        if ($tabularHits > 0) {
+            $entries = [];
+            foreach ($rawLines as $idx => $line) {
+                $parts = explode("\t", (string) $line);
+                if (count($parts) < 3) {
+                    continue;
+                }
+
+                $image = trim($parts[0]);
+                $page = trim($parts[1]);
+                $phrase = trim(implode("\t", array_slice($parts, 2)));
+                if (
+                    preg_match('/^\d{1,4}$/', $image) !== 1
+                    || preg_match('/^'.$pageLabelRegex.'$/iu', $page) !== 1
+                    || $phrase === ''
+                ) {
+                    continue;
+                }
+
+                $entry = [
+                    'image'  => ltrim($image, '0') ?: '0',
+                    'page'   => $page,
+                    'phrase' => $phrase,
+                    'line'   => $idx + 1,
+                ];
+                $entries[] = $this->withNormalizedLignesPhrase($entry);
+            }
+
+            return $entries;
+        }
+
         $hits = 0;
         foreach (array_slice($rawLines, 0, 40) as $sample) {
             if (preg_match($oneLineRegex, $sample ?? '')) {
