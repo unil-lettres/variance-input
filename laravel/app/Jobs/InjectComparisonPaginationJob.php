@@ -41,17 +41,19 @@ class InjectComparisonPaginationJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(PageMarkerService $pageMarkerService): void
     {
-        $comparison = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author'])
-            ->findOrFail($this->comparisonId);
-
-        $role = $this->role ? strtolower($this->role) : null;
-
         try {
-            if ($role) {
-                $version = $role === 'target'
-                    ? $comparison->targetVersion
-                    : $comparison->sourceVersion;
+            $comparison = Comparison::with(['sourceVersion.work.author', 'targetVersion.work.author'])
+                ->find($this->comparisonId);
+            if (!$comparison) {
+                Log::info('Skipping pagination injection for deleted comparison', [
+                    'comparison_id' => $this->comparisonId,
+                ]);
+                return;
+            }
 
+            $role = $this->role ? strtolower($this->role) : null;
+
+            if ($role) {
                 $pageMarkerService->applySidecarToComparisonRoleOnly(
                     $comparison,
                     $role,

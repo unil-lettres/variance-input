@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Models\Author;
 use App\Models\Comparison;
 use App\Models\Permission;
 use App\Models\User;
 use App\Models\Version;
+use App\Models\Work;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class RestrictedVersionEditorAccessTest extends TestCase
@@ -156,6 +160,97 @@ XML;
             ->assertJsonPath('ignored', true);
     }
 
+    public function test_version_editor_save_derives_txt_pagination_and_clears_reader_caches(): void
+    {
+        $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
+        $work = $this->createEditableWork($this->signInAdmin());
+        $version = Version::factory()->for($work)->create(['folder' => 'rvev-sync']);
+        $this->writeVersionXml($version, '<p>Ancien texte</p>');
+        File::put(storage_path("app/public/uploads/versions/{$version->folder}.txt"), 'Ancien texte');
+        Storage::disk('local')->put("reader_cache/{$version->id}/stale.json", '{}');
+        Storage::disk('local')->put("cache/version-editor/{$version->id}.json", '{}');
+        $this->grantWorkVersionEditorPermission($user, $work);
+        $this->actingAs($user);
+
+        $newXml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body><div><p>Un <emph>mot</emph><pb n="12" facs="img_rvev-sync_012.jpg"/> corrigé avec <sup>er</sup>.</p></div></body></text></TEI>
+XML;
+
+        $this->call(
+            'PUT',
+            route('version.editor.update', $version),
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/xml'],
+            $newXml
+        )->assertOk()
+            ->assertJsonPath('text_synced', true)
+            ->assertJsonPath('pagination.total', 1);
+
+        $this->assertSame(
+            'Un \\mot\\ corrigé avec ^er^.',
+            File::get(storage_path("app/public/uploads/versions/{$version->folder}.txt"))
+        );
+        $this->assertFalse(Storage::disk('local')->exists("reader_cache/{$version->id}/stale.json"));
+        $this->assertFalse(Storage::disk('local')->exists("cache/version-editor/{$version->id}.json"));
+
+        $sidecar = json_decode(Storage::disk('local')->get("pagination/{$version->id}.json"), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('pb-tei', $sidecar['origin'] ?? null);
+        $this->assertSame(1, $sidecar['marker_count'] ?? null);
+        $this->assertSame('12', $sidecar['markers'][0]['page'] ?? null);
+    }
+
+    public function test_version_editor_rejects_invalid_xml_without_overwriting_file(): void
+    {
+        $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
+        $work = $this->createEditableWork($this->signInAdmin());
+        $version = Version::factory()->for($work)->create(['folder' => 'rvev-invalid']);
+        $originalPath = $this->writeVersionXml($version, '<p>Original payload</p>');
+        $this->grantWorkVersionEditorPermission($user, $work);
+        $this->actingAs($user);
+
+        $invalidXml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body></emph><p>Broken payload</p></body></text></TEI>
+XML;
+
+        $this->call(
+            'PUT',
+            route('version.editor.update', $version),
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/xml'],
+            $invalidXml
+        )->assertStatus(422)
+            ->assertJsonPath('error', "XML invalide: le fichier n'a pas été sauvegardé.");
+
+        $savedXml = file_get_contents($originalPath);
+        $this->assertStringContainsString('Original payload', $savedXml);
+        $this->assertStringNotContainsString('Broken payload', $savedXml);
+    }
+
+    public function test_version_editor_explains_legacy_versions_are_read_only(): void
+    {
+        $this->signInAdmin();
+        $author = Author::factory()->create(['is_legacy' => true]);
+        $work = Work::factory()->for($author)->create(['is_legacy' => true]);
+        $version = Version::factory()->for($work)->create([
+            'folder' => 'legacy-readonly-version',
+            'is_legacy' => true,
+        ]);
+
+        $this->get(route('version.editor', $version))
+            ->assertForbidden()
+            ->assertSee('Cette version legacy est en lecture seule');
+
+        $this->get(route('version.editor.document', $version))
+            ->assertForbidden()
+            ->assertSee('Cette version legacy est en lecture seule');
+    }
+
     public function test_restricted_version_editor_is_denied_unassigned_versions_and_full_editor_actions(): void
     {
         $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
@@ -186,6 +281,70 @@ XML;
         ]);
 
         $this->get(route('comparison.editor', $comparison))->assertForbidden();
+    }
+
+    public function test_restricted_version_editor_can_manage_pagination_artifacts_for_assigned_version(): void
+    {
+        $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
+        $work = $this->createEditableWork($this->signInAdmin());
+        $version = Version::factory()->for($work)->create(['folder' => 'rve-pagination-v1']);
+        $this->writeVersionXml($version, '<p><pb n="1"/>Assigned pagination payload</p>');
+        $this->grantWorkVersionEditorPermission($user, $work);
+        $this->actingAs($user);
+
+        Storage::disk('local')->put("lignes/{$version->id}.txt", "0001\t1\tAssigned pagination payload\n");
+        Storage::disk('local')->put("pagination/{$version->id}.json", json_encode([
+            'version_id' => $version->id,
+            'version_folder' => $version->folder,
+            'work_id' => $version->work_id,
+            'marker_count' => 1,
+            'markers' => [],
+        ], JSON_THROW_ON_ERROR));
+
+        $this->deleteJson("/api/versions/{$version->id}/lignes/file")
+            ->assertOk()
+            ->assertJsonPath('status', 'ok');
+
+        $this->assertFalse(Storage::disk('local')->exists("lignes/{$version->id}.txt"));
+        $this->assertFalse(Storage::disk('local')->exists("pagination/{$version->id}.json"));
+
+        $this->postJson("/api/versions/{$version->id}/pagination/from-pb")
+            ->assertOk()
+            ->assertJsonPath('count', 1);
+
+        $this->patchJson("/api/versions/{$version->id}/pagination/done", [
+            'done' => true,
+        ])->assertOk()
+            ->assertJsonPath('pagination_done', true);
+
+        $this->deleteJson("/api/versions/{$version->id}/page-markers")
+            ->assertOk();
+
+        $this->assertStringNotContainsString('<pb', File::get($version->getXMLFilePath()));
+    }
+
+    public function test_restricted_version_editor_can_download_lignes_only_for_assigned_versions(): void
+    {
+        $user = $this->signInEditor(User::factory()->create(['is_admin' => false]));
+        $assignedWork = $this->createEditableWork($this->signInAdmin(), [], ['title' => 'Assigned Lignes Work']);
+        $unassignedWork = $this->createEditableWork($this->signInAdmin(), [], ['title' => 'Unassigned Lignes Work']);
+        $assignedVersion = Version::factory()->for($assignedWork)->create(['folder' => 'assigned-lignes-v1']);
+        $unassignedVersion = Version::factory()->for($unassignedWork)->create(['folder' => 'unassigned-lignes-v1']);
+        $this->grantWorkVersionEditorPermission($user, $assignedWork);
+        $this->actingAs($user);
+
+        $contents = "0001\t1\tTexte assigné\n";
+        Storage::disk('local')->put("lignes/{$assignedVersion->id}.txt", $contents);
+        Storage::disk('local')->put("lignes/{$unassignedVersion->id}.txt", "0001\t1\tTexte interdit\n");
+
+        $response = $this->get("/api/versions/{$assignedVersion->id}/lignes");
+
+        $response->assertOk()
+            ->assertHeader('Content-Disposition', 'attachment; filename="assigned-lignes-v1_lignes.txt"');
+        $this->assertSame($contents, $response->streamedContent());
+
+        $this->get("/api/versions/{$unassignedVersion->id}/lignes")
+            ->assertForbidden();
     }
 
     public function test_restricted_version_editor_cannot_create_authors_or_works_via_api(): void

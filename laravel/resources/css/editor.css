@@ -143,7 +143,7 @@
     border-top-color: rgba(255, 255, 255, 0.75);
 }
 
-.cm-italic-tag {
+.cm-inline-tag {
     background-color: #9b59b6;
     color: #ffffff;
     font-weight: bold;
@@ -156,6 +156,10 @@
     margin: 0 1px;
 }
 
+.cm-superscript-tag {
+    background-color: #2f80ed;
+}
+
 .cm-readonly:not(.insert-page) {
     cursor: default;
 }
@@ -164,9 +168,16 @@
     display: none !important;
 }
 
-.cm-italic-tag:hover {
+.cm-inline-tag:hover {
     background-color: #ffffff;
+}
+
+.cm-italic-tag:hover {
     color: #9b59b6;
+}
+
+.cm-superscript-tag:hover {
+    color: #2f80ed;
 }
 
 .btn-outlined {

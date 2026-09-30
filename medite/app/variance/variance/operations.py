@@ -31,6 +31,8 @@ mapping = {
     "<p/>": newline,
     "<emph>": "\\",
     "</emph>": "\\",
+    "<sup>": "^",
+    "</sup>": "^",
 }
 
 annotation_tags = ["pb", "div"]

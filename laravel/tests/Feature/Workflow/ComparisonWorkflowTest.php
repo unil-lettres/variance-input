@@ -9,6 +9,7 @@ use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ComparisonWorkflowTest extends TestCase
@@ -77,6 +78,103 @@ class ComparisonWorkflowTest extends TestCase
 
         $this->assertTrue(File::exists($hostSourcePath));
         $this->assertTrue(File::exists($hostTargetPath));
+    }
+
+    public function test_create_comparison_rejects_a_version_over_the_medite_text_limit(): void
+    {
+        config()->set('variance.medite_max_version_characters', 20);
+        config()->set('variance.medite_max_combined_characters', 100);
+
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $source = Version::factory()->for($work)->create(['name' => 'Édition longue']);
+        $target = Version::factory()->for($work)->create(['name' => 'Édition courte']);
+        $this->writeVersionXml($source, '<p>'.str_repeat('A', 21).'</p>');
+        $this->writeVersionXml($target, '<p>'.str_repeat('B', 10).'</p>');
+        $response = $this->postJson('/api/comparisons', [
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => 'longue-courte',
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('message', 'Comparaison refusée par mesure de sécurité : la version « Édition longue » contient 21 caractères, au-delà de la limite de 20 caractères.');
+
+        $this->assertDatabaseCount('comparisons', 0);
+    }
+
+    public function test_page_marker_count_does_not_limit_comparison_creation(): void
+    {
+        config()->set('variance.medite_max_version_characters', 100);
+        config()->set('variance.medite_max_combined_characters', 200);
+
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $source = Version::factory()->for($work)->create(['name' => 'Édition très paginée']);
+        $target = Version::factory()->for($work)->create(['name' => 'Édition cible']);
+        $this->writeVersionXml($source, '<p>Texte bref</p>');
+        $this->writeVersionXml($target, '<p>Autre texte bref</p>');
+        $this->writePaginationSidecar($source, 1815);
+        $this->writePaginationSidecar($target, 2500);
+
+        $response = $this->postJson('/api/comparisons', [
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => 'pagination-elevee',
+        ]);
+
+        $response->assertCreated();
+        $this->assertDatabaseCount('comparisons', 1);
+    }
+
+    public function test_create_comparison_allows_versions_without_pagination_metadata(): void
+    {
+        config()->set('variance.medite_max_version_characters', 100);
+        config()->set('variance.medite_max_combined_characters', 200);
+
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $source = Version::factory()->for($work)->create(['name' => 'Édition sans pagination']);
+        $target = Version::factory()->for($work)->create(['name' => 'Autre édition sans pagination']);
+        $this->writeVersionXml($source, '<p>Texte bref</p>');
+        $this->writeVersionXml($target, '<p>Autre texte bref</p>');
+
+        $response = $this->postJson('/api/comparisons', [
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => 'sans-pagination',
+        ]);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseCount('comparisons', 1);
+    }
+
+    public function test_run_medite_cannot_bypass_the_combined_text_limit(): void
+    {
+        config()->set('variance.medite_max_version_characters', 100);
+        config()->set('variance.medite_max_combined_characters', 20);
+        Http::fake();
+
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user);
+        $source = Version::factory()->for($work)->create(['name' => 'Source directe']);
+        $target = Version::factory()->for($work)->create(['name' => 'Cible directe']);
+        $this->writeVersionXml($source, '<p>'.str_repeat('A', 15).'</p>');
+        $this->writeVersionXml($target, '<p>'.str_repeat('B', 15).'</p>');
+        $response = $this->postJson('/api/run_medite', [
+            'source_version' => $source->id,
+            'target_version' => $target->id,
+            'work_id' => $work->id,
+            'lg_pivot' => 7,
+            'ratio' => 15,
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('message', 'Comparaison refusée par mesure de sécurité : les deux versions totalisent 30 caractères, au-delà de la limite combinée de 20 caractères.');
+
+        $this->assertDatabaseCount('comparisons', 0);
+        Http::assertNothingSent();
     }
 
     public function test_task_status_persists_medite_metrics_on_completion(): void
@@ -205,5 +303,13 @@ class ComparisonWorkflowTest extends TestCase
         $this->assertTrue($minePayload['has_chapters'] ?? false);
         $this->assertSame(0, $legacyPayload['chapter_count'] ?? null);
         $this->assertFalse($legacyPayload['has_chapters'] ?? true);
+    }
+
+    private function writePaginationSidecar(Version $version, int $pageCount): void
+    {
+        Storage::disk('local')->put("pagination/{$version->id}.json", json_encode([
+            'version_id' => $version->id,
+            'marker_count' => $pageCount,
+        ], JSON_THROW_ON_ERROR));
     }
 }

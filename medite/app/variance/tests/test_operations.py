@@ -22,6 +22,7 @@ R = op.Replacement
         ["<p>hello</p>", "hello" + op.newline],
         ["<emph>hello</emph>", "\\hello\\"],
         ["world<emph>hello</emph>", "world\\hello\\"],
+        ["XVIII<sup>e</sup> siècle", "XVIII^e^ siècle"],
     ],
 )
 def test_xml2mdedite(text, expected):

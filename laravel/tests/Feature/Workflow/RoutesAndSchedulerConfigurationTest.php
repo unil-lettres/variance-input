@@ -14,6 +14,7 @@ class RoutesAndSchedulerConfigurationTest extends TestCase
         $this->assertRouteMatches('POST', '/api/versions/1/pagination/merge-from-pb', 'api/versions/{version}/pagination/merge-from-pb');
         $this->assertRouteMatches('POST', '/api/versions/1/reader/rebuild', 'api/versions/{version}/reader/rebuild');
         $this->assertRouteMatches('PATCH', '/comparisons/1/comments', 'comparisons/{comparison}/comments');
+        $this->assertRouteMatches('PATCH', '/comparisons/1/metadata', 'comparisons/{comparison}/metadata');
         $this->assertRouteMatches('GET', '/comparisons/1/export/status', 'comparisons/{comparison}/export/status');
         $this->assertRouteMatches('POST', '/chapters/import/preview', 'chapters/import/preview');
         $this->assertRouteMatches('POST', '/chapters/import/commit', 'chapters/import/commit');

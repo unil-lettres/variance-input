@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 class VersionReaderService
 {
-    private const READER_DATASET_SCHEMA_VERSION = 3;
+    private const READER_DATASET_SCHEMA_VERSION = 9;
 
     public function __construct(
         private PageMarkerService $pageMarkerService,
@@ -34,7 +34,9 @@ class VersionReaderService
                 'guessed' => $page['guessed'] ?? false,
             ];
         }, $pagePlans);
-        $currentPage = isset($pagePlans[0]) ? $this->materializeReaderPage($pagePlans[0], $dataset['text'] ?? null) : null;
+        $currentPage = isset($pagePlans[0])
+            ? $this->materializeReaderPage($pagePlans[0], $dataset['text'] ?? null, $dataset['display_text'] ?? null)
+            : null;
 
         return [
             'version_id' => $version->id,
@@ -101,7 +103,7 @@ class VersionReaderService
             'page_count' => count($pagePlans),
             'text_encoding' => $dataset['text_encoding'],
             'text_source' => $dataset['text_source'],
-            'page' => $this->materializeReaderPage($pagePlan, $dataset['text'] ?? null),
+            'page' => $this->materializeReaderPage($pagePlan, $dataset['text'] ?? null, $dataset['display_text'] ?? null),
         ];
     }
 
@@ -183,11 +185,15 @@ class VersionReaderService
                 $bigUrl = $useLegacy
                     ? legacy_url($dirRel.'/'.$entry['name'])
                     : admin_url('storage/'.ltrim($entry['path'], '/'));
+                $bigUrl = $this->appendReaderImageVersion($bigUrl, $entry['absolute'] ?? null);
+
                 $thumbUrl = null;
                 if ($thumbExists) {
+                    $thumbAbsolute = $useLegacy ? $thumbPath : $disk->path($thumbPath);
                     $thumbUrl = $useLegacy
                         ? legacy_url($dirRel.'/'.$thumbName)
                         : admin_url('storage/'.ltrim($thumbPath, '/'));
+                    $thumbUrl = $this->appendReaderImageVersion($thumbUrl, $thumbAbsolute);
                 }
 
                 return [
@@ -211,6 +217,20 @@ class VersionReaderService
         }
 
         return $facsimiles;
+    }
+
+    private function appendReaderImageVersion(string $url, ?string $absolutePath): string
+    {
+        if (! $absolutePath || ! is_file($absolutePath)) {
+            return $url;
+        }
+
+        $size = @filesize($absolutePath) ?: 0;
+        $mtime = @filemtime($absolutePath) ?: 0;
+        $version = substr(sha1($size.':'.$mtime), 0, 12);
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url.$separator.'v='.$version;
     }
 
     private function readerFacsimilesCacheKey(Version $version): ?string
@@ -307,9 +327,34 @@ class VersionReaderService
     {
         $version->loadMissing('work.author');
 
+        $xmlPath = storage_path("app/public/uploads/versions/{$version->folder}.xml");
         $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
         $textVariants = [];
-        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 18, 'Lecture du texte de version…');
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 18, 'Lecture du texte TEI de version…');
+        if (is_file($xmlPath)) {
+            try {
+                $teiXml = (string) File::get($xmlPath);
+                $teiText = $this->versionTextService->buildPlainTextFromTeiXml($teiXml);
+                if ($teiText !== '') {
+                    $textVariants['version-tei'] = [
+                        'value' => 'version-tei',
+                        'text' => $teiText,
+                        'display_text' => $this->versionTextService->buildLegacyTxtFromTeiXml($teiXml),
+                        'label' => 'TEI de version',
+                        'origin' => null,
+                        'markers' => [],
+                    ];
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Could not load version TEI text for reader.', [
+                    'version_id' => $version->id,
+                    'folder' => $version->folder,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $this->setReaderProgress($version->id, $requestedEncoding, $requestedTextSource, 26, 'Lecture du TXT de version…');
         if (is_file($textPath)) {
             try {
                 $versionText = $this->versionTextService->readFileAsUtf8($textPath, $requestedEncoding);
@@ -317,6 +362,7 @@ class VersionReaderService
                     $textVariants['version-txt'] = [
                         'value' => 'version-txt',
                         'text' => $versionText,
+                        'display_text' => $versionText,
                         'label' => 'TXT de version',
                         'origin' => null,
                         'markers' => [],
@@ -338,6 +384,7 @@ class VersionReaderService
             $textVariants['comparison-xhtml'] = [
                 'value' => 'comparison-xhtml',
                 'text' => $fallback['text'],
+                'display_text' => $fallback['text'],
                 'label' => (string) ($fallback['label'] ?? 'XHTML de comparaison'),
                 'origin' => (string) ($fallback['origin'] ?? 'pb-xhtml'),
                 'markers' => is_array($fallback['markers'] ?? null) ? $fallback['markers'] : [],
@@ -346,9 +393,11 @@ class VersionReaderService
 
         $selectedTextSource = $requestedTextSource;
         if (! $selectedTextSource || ! array_key_exists($selectedTextSource, $textVariants)) {
-            $selectedTextSource = array_key_exists('version-txt', $textVariants)
-                ? 'version-txt'
-                : (array_key_first($textVariants) ?: null);
+            $selectedTextSource = array_key_exists('version-tei', $textVariants)
+                ? 'version-tei'
+                : (array_key_exists('version-txt', $textVariants)
+                    ? 'version-txt'
+                    : (array_key_first($textVariants) ?: null));
         }
 
         $textSourceOptions = array_values(array_map(function (array $variant): array {
@@ -388,6 +437,7 @@ class VersionReaderService
         foreach ($textVariants as $sourceKey => $variant) {
             $variantDatasets[$sourceKey] = $this->assembleReaderDatasetPayload(
                 is_string($variant['text'] ?? null) ? $variant['text'] : null,
+                is_string($variant['display_text'] ?? null) ? $variant['display_text'] : null,
                 $requestedEncoding,
                 $sourceKey,
                 (string) ($variant['label'] ?? 'source texte non précisée'),
@@ -408,6 +458,7 @@ class VersionReaderService
         return [
             'selected' => $selectedDataset ?? $this->assembleReaderDatasetPayload(
                 null,
+                null,
                 $requestedEncoding,
                 null,
                 null,
@@ -425,6 +476,7 @@ class VersionReaderService
 
     private function assembleReaderDatasetPayload(
         ?string $text,
+        ?string $displayText,
         ?string $requestedEncoding,
         ?string $selectedTextSource,
         ?string $textSourceLabel,
@@ -447,12 +499,17 @@ class VersionReaderService
             $markers = $variantMarkers;
         }
 
+        if ($paginationOrigin === 'pb-xhtml') {
+            $markers = array_map(fn (array $marker): array => $this->preparePbXhtmlReaderMarker($marker), $markers);
+        }
+
         if (is_string($text) && $text !== '' && ! empty($markers)) {
             $markers = $this->pageMarkerService->resolveMarkersForPlainText($text, $markers);
         }
 
         return [
             'text' => is_string($text) ? $text : null,
+            'display_text' => is_string($displayText) ? $displayText : (is_string($text) ? $text : null),
             'text_available' => is_string($text),
             'text_length' => is_string($text) ? mb_strlen($text, 'UTF-8') : null,
             'text_encoding' => $requestedEncoding ?: 'AUTO',
@@ -468,6 +525,88 @@ class VersionReaderService
                 'updated_at' => $paginationInfo['updated_at'] ?? null,
             ],
         ];
+    }
+
+    private function preparePbXhtmlReaderMarker(array $marker): array
+    {
+        $phrase = trim((string) ($marker['phrase'] ?? ''));
+        if ($phrase === '') {
+            return $marker;
+        }
+
+        $cleaned = $this->stripLeadingPageLabelFromPbXhtmlPhrase(
+            $phrase,
+            trim((string) ($marker['page'] ?? ''))
+        );
+        $cleaned = $this->stripLeadingRomanHeadingFromPbXhtmlPhrase($cleaned);
+        $cleaned = $this->normalizePbXhtmlPhraseSpacing($cleaned);
+
+        if ($cleaned !== $phrase) {
+            $marker['phrase'] = $cleaned;
+        }
+
+        return $marker;
+    }
+
+    private function stripLeadingPageLabelFromPbXhtmlPhrase(string $phrase, string $pageLabel): string
+    {
+        $phrase = trim($phrase);
+        $pageLabel = trim($pageLabel);
+        if ($phrase === '' || $pageLabel === '') {
+            return $phrase;
+        }
+
+        $candidates = array_values(array_unique(array_filter([
+            $pageLabel,
+            preg_replace('/\s+/u', '', $pageLabel) ?: null,
+        ], static fn (?string $candidate): bool => is_string($candidate) && $candidate !== '')));
+
+        foreach ($candidates as $candidate) {
+            $length = mb_strlen($candidate, 'UTF-8');
+            if ($length === 0 || mb_substr($phrase, 0, $length, 'UTF-8') !== $candidate) {
+                continue;
+            }
+
+            $rest = trim(mb_substr($phrase, $length, null, 'UTF-8'));
+            if (mb_strlen($rest, 'UTF-8') < 8) {
+                continue;
+            }
+
+            if (preg_match('/^[\p{L}&«"“‘(\\[]/u', $rest) !== 1) {
+                continue;
+            }
+
+            return $rest;
+        }
+
+        return $phrase;
+    }
+
+    private function normalizePbXhtmlPhraseSpacing(string $phrase): string
+    {
+        return preg_replace(
+            '/([.!?;:])(?=[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ])/u',
+            '$1 ',
+            $phrase
+        ) ?? $phrase;
+    }
+
+    private function stripLeadingRomanHeadingFromPbXhtmlPhrase(string $phrase): string
+    {
+        $phrase = trim($phrase);
+        if ($phrase === '') {
+            return $phrase;
+        }
+
+        if (preg_match('/^(?:[IVXLCDM]{1,8})\s+(.{8,})$/u', $phrase, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/^(?:[IVXLCDM]{2,8})(?=[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ])(.{8,})$/u', $phrase, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        return $phrase;
     }
 
     private function warmReaderDatasetArtifacts(
@@ -532,7 +671,7 @@ class VersionReaderService
     {
         $value = strtolower(trim((string) $hint));
 
-        return in_array($value, ['version-txt', 'comparison-xhtml'], true) ? $value : null;
+        return in_array($value, ['version-tei', 'version-txt', 'comparison-xhtml'], true) ? $value : null;
     }
 
     private function readerDatasetCacheKey(int $versionId, ?string $requestedEncoding, ?string $requestedTextSource, array $fingerprint = [], int $nonce = 0): string
@@ -628,6 +767,7 @@ class VersionReaderService
 
     private function readerDatasetFingerprint(Version $version): array
     {
+        $xmlPath = storage_path("app/public/uploads/versions/{$version->folder}.xml");
         $textPath = storage_path("app/public/uploads/versions/{$version->folder}.txt");
         $sidecarRelative = $this->pageMarkerService->paginationRelativePath($version->id);
         $sidecarPath = Storage::disk('local')->exists($sidecarRelative)
@@ -642,6 +782,11 @@ class VersionReaderService
                 'path' => is_file($textPath) ? $textPath : null,
                 'mtime' => is_file($textPath) ? ((int) @filemtime($textPath)) : null,
                 'size' => is_file($textPath) ? ((int) @filesize($textPath)) : null,
+            ],
+            'xml' => [
+                'path' => is_file($xmlPath) ? $xmlPath : null,
+                'mtime' => is_file($xmlPath) ? ((int) @filemtime($xmlPath)) : null,
+                'size' => is_file($xmlPath) ? ((int) @filesize($xmlPath)) : null,
             ],
             'sidecar' => [
                 'path' => $sidecarPath,
@@ -906,12 +1051,13 @@ class VersionReaderService
         return $pages;
     }
 
-    private function materializeReaderPage(array $pagePlan, ?string $text): array
+    private function materializeReaderPage(array $pagePlan, ?string $text, ?string $displayText = null): array
     {
         $page = $pagePlan;
         $sourceText = is_string($text) ? $text : '';
         if ($sourceText === '') {
             $page['text'] = '';
+            $page['display_text'] = '';
 
             return $page;
         }
@@ -919,16 +1065,98 @@ class VersionReaderService
         $start = max(0, (int) ($pagePlan['start'] ?? 0));
         $end = max($start, (int) ($pagePlan['end'] ?? $start));
         $segment = mb_substr($sourceText, $start, max(0, $end - $start), 'UTF-8');
+        $displaySegment = $this->readerDisplaySegmentForPlainRange($displayText, $sourceText, $start, $end);
         if (($pagePlan['guessed'] ?? false) === true) {
             $trimmed = trim($segment);
             $page['text'] = $trimmed !== '' ? $trimmed : $segment;
+            $trimmedDisplay = trim($displaySegment);
+            $page['display_text'] = $trimmedDisplay !== '' ? $trimmedDisplay : $displaySegment;
 
             return $page;
         }
 
         $page['text'] = $segment;
+        $page['display_text'] = $displaySegment;
 
         return $page;
+    }
+
+    private function readerDisplaySegmentForPlainRange(?string $displayText, string $plainText, int $start, int $end): string
+    {
+        if (! is_string($displayText) || $displayText === '' || $displayText === $plainText) {
+            return mb_substr($plainText, $start, max(0, $end - $start), 'UTF-8');
+        }
+
+        $plainLength = mb_strlen($plainText, 'UTF-8');
+        $start = min(max(0, $start), $plainLength);
+        $end = min(max($start, $end), $plainLength);
+        $chars = preg_split('//u', $displayText, -1, PREG_SPLIT_NO_EMPTY);
+        if (! is_array($chars) || $chars === []) {
+            return mb_substr($plainText, $start, max(0, $end - $start), 'UTF-8');
+        }
+
+        $activeAtStart = [];
+        $plainIndex = 0;
+        foreach ($chars as $char) {
+            if ($plainIndex >= $start) {
+                break;
+            }
+
+            if ($this->isReaderInlineMarker($char)) {
+                $this->toggleReaderInlineMarker($activeAtStart, $char);
+            } else {
+                $plainIndex++;
+            }
+        }
+
+        $segment = implode('', $activeAtStart);
+        $active = $activeAtStart;
+        $plainIndex = 0;
+        foreach ($chars as $char) {
+            if ($this->isReaderInlineMarker($char)) {
+                if ($plainIndex < $start) {
+                    continue;
+                }
+
+                $isClosing = end($active) === $char;
+                if ($plainIndex >= $start && ($plainIndex < $end || ($plainIndex === $end && $isClosing))) {
+                    $segment .= $char;
+                    $this->toggleReaderInlineMarker($active, $char);
+                }
+
+                continue;
+            }
+
+            if ($plainIndex >= $start && $plainIndex < $end) {
+                $segment .= $char;
+            }
+            $plainIndex++;
+            if ($plainIndex > $end && $plainIndex >= $plainLength) {
+                break;
+            }
+        }
+
+        while (count($active) > 0) {
+            $segment .= array_pop($active);
+        }
+
+        return $segment;
+    }
+
+    private function isReaderInlineMarker(string $char): bool
+    {
+        return $char === '\\' || $char === '^';
+    }
+
+    private function toggleReaderInlineMarker(array &$stack, string $char): void
+    {
+        if (end($stack) === $char) {
+            array_pop($stack);
+
+            return;
+        }
+
+        $stack[] = $char;
     }
 
     private function readerImageCode(?string $value): ?string

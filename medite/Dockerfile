@@ -5,6 +5,7 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONHASHSEED=0 \
     PYTHONPATH=/app \
     NLTK_DATA=/app/assets/nltk_data \
     POETRY_HOME=/opt/poetry \

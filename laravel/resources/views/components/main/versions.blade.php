@@ -288,7 +288,7 @@
       min-width: 0;
     }
     .version-table .versions-inline-cell--facsimiles {
-      grid-template-columns: minmax(4.25rem, 1fr) auto;
+      grid-template-columns: minmax(4.25rem, 5.5rem) auto;
     }
     .version-table .versions-inline-cell--pagination {
       grid-template-columns: minmax(4.25rem, 1fr) auto auto;
@@ -946,11 +946,6 @@ function renderFacsimileStatus(versionId, facsimileData){
             state.facCountPill.textContent = '…';
             state.facCountPill.title = 'Chargement des fac-similés';
         }
-        if (state.viewBtn) {
-            state.viewBtn.disabled = false;
-            state.viewBtn.title = 'Charger les fac-similés';
-            state.viewBtn.dataset.facsimileLoading = '1';
-        }
         if (state.uploadBtn) {
             if (state.uploadBtnSpinner) state.uploadBtnSpinner.hidden = false;
             if (isLegacy) {
@@ -973,10 +968,6 @@ function renderFacsimileStatus(versionId, facsimileData){
         return;
     }
 
-    if (state.viewBtn) {
-        state.viewBtn.dataset.facsimileLoading = '';
-    }
-
     const ready = Math.max(0, Number(facsimileData?.source_count ?? 0));
     const published = Math.max(0, Number(facsimileData?.published_count ?? 0));
     const queued = Math.max(0, Number(facsimileData?.queue_count ?? 0));
@@ -988,14 +979,6 @@ function renderFacsimileStatus(versionId, facsimileData){
     if (state.facCountPill) {
         setVersionCountPill(state.facCountPill, ready, 'fac-similé(s)');
     }
-    if (state.viewBtn) {
-        const disableView = queued > 0 || ready === 0;
-        state.viewBtn.disabled = disableView;
-        state.viewBtn.title = disableView
-            ? (queued > 0 ? 'Traitement en cours — affichage indisponible' : 'Aucune image à afficher')
-            : 'Afficher la galerie de fac-similés';
-    }
-
     if (state.uploadBtn) {
         if (state.uploadBtnSpinner) state.uploadBtnSpinner.hidden = !(queued > 0);
         if (isLegacy) {
@@ -1037,6 +1020,7 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
     const state = facsimileRowState.get(id);
     if (!state) return;
     const isLegacy = !!state.isLegacy;
+    const hasLignesFile = !!(lignesInfo && typeof lignesInfo === 'object');
 
     const paginationMarkerCount = (info) => {
         if (!info || typeof info !== 'object') return null;
@@ -1074,6 +1058,19 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
         setVersionCountPill(state.markerCountPill, markerCount, 'marqueur(s)');
     }
 
+    if (state.lignesDownloadBtn) {
+        const href = hasLignesFile
+            ? (lignesInfo.url || withBasePath(`/api/versions/${id}/lignes`))
+            : '#';
+        state.lignesDownloadBtn.href = href;
+        state.lignesDownloadBtn.classList.toggle('disabled', !hasLignesFile);
+        state.lignesDownloadBtn.setAttribute('aria-disabled', hasLignesFile ? 'false' : 'true');
+        state.lignesDownloadBtn.tabIndex = hasLignesFile ? 0 : -1;
+        state.lignesDownloadBtn.title = hasLignesFile
+            ? 'Télécharger le fichier _lignes'
+            : 'Aucun fichier _lignes disponible';
+    }
+
     if (state.lignesUploadBtn) {
         const inProgress = !!(status && ['queued', 'running'].includes(status));
         if (state.lignesUploadSpinner) state.lignesUploadSpinner.hidden = !inProgress;
@@ -1091,7 +1088,7 @@ function renderLignesStatus(versionId, lignesInfo, progress, paginationInfo = nu
             state.clearMarkersBtn.disabled = inProgress;
             state.clearMarkersBtn.title = inProgress
                 ? 'Traitement en cours — veuillez patienter'
-                : 'Supprimer tous les marqueurs de pagination';
+                : 'Supprimer les données de pagination';
         }
     }
     if (versionsCache.has(id)) {
@@ -2034,9 +2031,6 @@ async function purgeFacsimiles(versionId, { reason = 'clear' } = {}){
 
     const state = facsimileRowState.get(id);
     const buttonsToDisable = [];
-    if (state?.viewBtn) {
-        buttonsToDisable.push(state.viewBtn);
-    }
     if (state?.uploadBtn) {
         buttonsToDisable.push(state.uploadBtn);
     }
@@ -2302,7 +2296,7 @@ async function fetchVersions(workId, force = false){
         return;
     }
     setVersionsLoading(true);
-    list.innerHTML='<div class="versions-empty-state text-muted">Loading versions…</div>';
+    list.innerHTML = '';
     try{
         const data = await getVersionsForWork(workId, { force });
         list.innerHTML='';
@@ -2450,21 +2444,6 @@ async function fetchVersions(workId, force = false){
             const facButtons = document.createElement('div');
             facButtons.className = 'btn-group btn-group-sm versions-action-group';
 
-            const btnFacView = document.createElement('button');
-            btnFacView.type = 'button';
-            btnFacView.className = 'btn btn-outline-secondary versions-icon-btn';
-            btnFacView.innerHTML = '<i class="bi bi-eye"></i>';
-            btnFacView.disabled = sourceCount === 0;
-            btnFacView.title = sourceCount === 0 ? 'Aucune image à afficher' : 'Afficher la galerie de fac-similés';
-            btnFacView.setAttribute('aria-label', 'Voir les fac-similés');
-            btnFacView.addEventListener('click', () => {
-                if (btnFacView.dataset.facsimileLoading === '1') {
-                    requestFacsimileProgress(v.id);
-                }
-                revealFacsimilesForVersion(v.id, v.name);
-            });
-            facButtons.appendChild(btnFacView);
-
             const btnFacUpload = document.createElement('button');
             btnFacUpload.type = 'button';
             btnFacUpload.className = 'btn btn-outline-primary versions-icon-btn';
@@ -2557,15 +2536,25 @@ async function fetchVersions(workId, force = false){
             lignesActions.appendChild(lignesUploadBtn);
             lignesActions.appendChild(lignesInput);
 
+            const lignesDownloadBtn = document.createElement('a');
+            lignesDownloadBtn.className = 'btn btn-outline-secondary versions-icon-btn disabled';
+            lignesDownloadBtn.href = '#';
+            lignesDownloadBtn.setAttribute('aria-label', 'Télécharger le fichier _lignes');
+            lignesDownloadBtn.setAttribute('aria-disabled', 'true');
+            lignesDownloadBtn.tabIndex = -1;
+            lignesDownloadBtn.title = 'Aucun fichier _lignes disponible';
+            lignesDownloadBtn.innerHTML = '<i class="bi bi-download"></i>';
+            lignesActions.appendChild(lignesDownloadBtn);
+
             const clearMarkersBtn = document.createElement('button');
             clearMarkersBtn.type = 'button';
             clearMarkersBtn.className = 'btn btn-outline-danger versions-icon-btn';
             clearMarkersBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-            clearMarkersBtn.title = 'Supprimer tous les marqueurs de pagination';
-            clearMarkersBtn.setAttribute('aria-label', 'Supprimer tous les marqueurs de pagination');
+            clearMarkersBtn.title = 'Supprimer les données de pagination';
+            clearMarkersBtn.setAttribute('aria-label', 'Supprimer les données de pagination');
             clearMarkersBtn.addEventListener('click', () => {
                 if (v.is_legacy) return;
-                clearVersionPageMarkers(v.id);
+                deleteLignesFile(v.id);
             });
             lignesActions.appendChild(clearMarkersBtn);
             lignesWrap.appendChild(lignesActions);
@@ -2595,7 +2584,6 @@ async function fetchVersions(workId, force = false){
 
             const rowState = {
                 isLegacy: v.is_legacy,
-                viewBtn: btnFacView,
                 facCountPill,
                 uploadBtn: btnFacUpload,
                 uploadBtnIcon: facUploadIcon,
@@ -2606,6 +2594,7 @@ async function fetchVersions(workId, force = false){
                 lignesUploadBtn,
                 lignesUploadIcon,
                 lignesUploadSpinner,
+                lignesDownloadBtn,
                 clearMarkersBtn,
             };
 
@@ -2753,7 +2742,7 @@ async function fetchVersions(workId, force = false){
         console.error(err);
         versionsCache = new Map();
         updateVersionsCount(null);
-        list.innerHTML='<div class="versions-empty-state text-danger">Failed to load versions</div>';
+        list.innerHTML='<div class="versions-empty-state text-danger">Impossible de charger les versions</div>';
         facsimilePollers.forEach((_, id) => stopFacsimilePolling(id));
     } finally {
         setVersionsLoading(false);

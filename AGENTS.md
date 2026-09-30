@@ -87,6 +87,11 @@ See `descr/api_endpoints.md`. Notables:
 - Version XML editor: `/version/{version}/editor` (includes facsimile ignore toggles).
 - Comparison XML editor: `/comparison/{comparison}/editor` (editable only when unpublished + manifest JSON exists).
 
+## Current local state (2026-06-23)
+- Synchronized facsimile reader: images are width-fit only; the image card grows to show the full image, and the text card height is synced to the image card. The text header shows only the `_lignes` quote. Matching text is visually quiet by default and gets a yellow underline/glow only on quote/header hover or focus.
+- Admin health report: migration status is fixed locally. `HealthController` resolves the migrator through `app('migrator')`, separates migration diagnostics from comparison counts, and the report renders `À jour` or explicit migration errors.
+- Medite XHTML transformation lists: cleanup is implemented in `medite/app/variance/variance/tei_writer.py` and covered by `medite/app/variance/tests/test_tei_writer.py` (`¶` for line breaks, whitespace-only entries suppressed, punctuation spacing cleaned). The local Medite container currently lacks `pytest`, so these tests were inspected but not rerun in-container.
+
 ## Deploy notes
 See `descr/deployment_notes.md` for TLS/proxy, volumes, legacy import, and VM recovery steps.
 See `descr/dependency_updates.md` for the regular dependency update process.

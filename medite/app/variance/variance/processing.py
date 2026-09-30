@@ -20,7 +20,7 @@ from variance.diff_core import (
 )
 from variance.tei_writer import (
     build_header, ops2xhtml, add_list_xml, add_list_xhtml, add_main_xhtml,
-    reset_numbering_state,
+    add_plain_main_xhtml, apply_emphasis_context_for_xhtml, reset_numbering_state,
 )
 from variance.xhtml_writer import (
     write_xhtml_lists, write_xhtml_mains, saxon_transform,
@@ -70,6 +70,10 @@ def process(
     # 0. Load & sanity‑check
     # --------------------------------------------------------------
     z1, z2 = xml2txt(source_filepath), xml2txt(target_filepath)
+    if not z1.txt.strip():
+        raise ValueError(f"source text is empty after XML extraction: {source_filepath}")
+    if not z2.txt.strip():
+        raise ValueError(f"target text is empty after XML extraction: {target_filepath}")
     if z1.txt == z2.txt:
         raise IdenticalFilesException("source and target are identical")
 
@@ -86,6 +90,9 @@ def process(
 
     xhtml_lists: dict[str, list[str]] = defaultdict(list)
     xhtml_mains: dict[str, list[str]] = defaultdict(list)
+    emitted_addition_ids: set[str] = set()
+    emitted_substitution_target_ids: set[str] = set()
+    emitted_transpose_target_ids: set[str] = set()
     zbody = ""  # diff‑annotated body will accumulate here
 
     reset_numbering_state()
@@ -93,7 +100,7 @@ def process(
     # wrappers -----------------------------------------------------
     def add_list(z, start, end, attr, name, suffix):
         add_list_xml(ops2xml, z, start, end, attr, name)
-        add_list_xhtml(xhtml_lists, z, start, end, name, suffix)
+        return add_list_xhtml(xhtml_lists, z, start, end, name, suffix)
 
     def slice_fmt(z, start, end):
         """Extract and lb‑ise the slice in one go."""
@@ -108,20 +115,42 @@ def process(
             tag = z1.soup.new_tag("anchor", **{"xml:id": id1, "corresp": id2, "function": "bc"})
             txt = slice_fmt(z1, d.a_start, d.a_end)
             zbody += str(tag) + txt
-            add_main_xhtml(xhtml_mains, txt, "bc", "source", id1, counterpart_id=id2)
+            add_main_xhtml(
+                xhtml_mains,
+                txt,
+                "bc",
+                "source",
+                id1,
+                counterpart_id=id2,
+                rchanges=z1.rchanges,
+                start=d.a_start,
+                end=d.a_end,
+            )
 
         elif isinstance(d, S):
             tid = f"v1_{d.start}_{d.end}"
             tag = z1.soup.new_tag("metamark", function="del", target=tid)
             txt = slice_fmt(z1, d.start, d.end)
             zbody += str(tag) + txt
-            add_list(z1, d.start, d.end, {"corresp": tid}, "deletion", tid)
-            add_main_xhtml(xhtml_mains, txt, "deletion", "source", tid)
+            if add_list(z1, d.start, d.end, {"corresp": tid}, "deletion", tid):
+                add_main_xhtml(
+                    xhtml_mains,
+                    txt,
+                    "deletion",
+                    "source",
+                    tid,
+                    rchanges=z1.rchanges,
+                    start=d.start,
+                    end=d.end,
+                )
+            else:
+                add_plain_main_xhtml(xhtml_mains, txt, "source", z1.rchanges, d.start, d.end)
 
         elif isinstance(d, I):
             tid = f"v2_{d.start}_{d.end}"
             zbody += str(z1.soup.new_tag("metamark", function="add", target=tid))
-            add_list(z2, d.start, d.end, {"corresp": tid}, "addition", tid)
+            if add_list(z2, d.start, d.end, {"corresp": tid}, "addition", tid):
+                emitted_addition_ids.add(tid)
 
         elif isinstance(d, DA):
             canon_key = canon(z1.txt[d.start : d.end])
@@ -144,18 +173,26 @@ def process(
             if kind == "transpose":
                 # pass (src_id, tgt_id, label) so the list writer emits dual hrefs
                 label = txt.strip()
-                add_list(z1, d.start, d.end, {"target": id1}, kind, (id1, id2, label))
+                list_emitted = add_list(z1, d.start, d.end, {"target": id1}, kind, (id1, id2, label))
             else:
-                add_list(z1, d.start, d.end, {"target": id1}, kind, id1)
+                list_emitted = add_list(z1, d.start, d.end, {"target": id1}, kind, id1)
 
-            add_main_xhtml(
-                xhtml_mains,
-                txt,
-                kind,
-                "source",
-                id1,
-                counterpart_id=id2 if kind == "transpose" else None,
-            )
+            if list_emitted:
+                if kind == "transpose":
+                    emitted_transpose_target_ids.add(id2)
+                add_main_xhtml(
+                    xhtml_mains,
+                    txt,
+                    kind,
+                    "source",
+                    id1,
+                    counterpart_id=id2 if kind == "transpose" else None,
+                    rchanges=z1.rchanges,
+                    start=d.start,
+                    end=d.end,
+                )
+            else:
+                add_plain_main_xhtml(xhtml_mains, txt, "source", z1.rchanges, d.start, d.end)
 
         elif isinstance(d, DB):
             zbody += str(z1.soup.new_tag("metamark", function="trans", target=f"v2_{d.start}_{d.end}"))
@@ -165,27 +202,41 @@ def process(
             src_id = f"v1_{d.a_start}_{d.a_end}"
             tgt_id = f"v2_{d.b_start}_{d.b_end}"
 
-            # 1) Inline source annotation (red span)
             tag = z1.soup.new_tag("metamark", function="subst",
                                   target=src_id, corresp=tgt_id)
             txt_src = slice_fmt(z1, d.a_start, d.a_end)
             zbody += str(tag) + txt_src
-            add_main_xhtml(
-                xhtml_mains,
-                txt_src,
-                "substitution",
-                "source",
-                src_id,
-                counterpart_id=tgt_id,
-            )
 
-            # 2) Single list entry “old → new”
-            txt_old = slice_fmt(z1, d.a_start, d.a_end).strip()
-            txt_new = slice_fmt(z2, d.b_start, d.b_end).strip()
+            txt_old = apply_emphasis_context_for_xhtml(
+                slice_fmt(z1, d.a_start, d.a_end),
+                z1.rchanges,
+                d.a_start,
+                d.a_end,
+            ).strip()
+            txt_new = apply_emphasis_context_for_xhtml(
+                slice_fmt(z2, d.b_start, d.b_end),
+                z2.rchanges,
+                d.b_start,
+                d.b_end,
+            ).strip()
             # pass a tuple so add_list_xhtml knows to emit dual-href row
             list_suffix = (src_id, tgt_id, txt_old, txt_new)
-            add_list(z1, d.a_start, d.a_end, {"corresp": src_id},
-                     "substitution", list_suffix)
+            if add_list(z1, d.a_start, d.a_end, {"corresp": src_id},
+                        "substitution", list_suffix):
+                emitted_substitution_target_ids.add(tgt_id)
+                add_main_xhtml(
+                    xhtml_mains,
+                    txt_src,
+                    "substitution",
+                    "source",
+                    src_id,
+                    counterpart_id=tgt_id,
+                    rchanges=z1.rchanges,
+                    start=d.a_start,
+                    end=d.a_end,
+                )
+            else:
+                add_plain_main_xhtml(xhtml_mains, txt_src, "source", z1.rchanges, d.a_start, d.a_end)
 
 
     # --------------------------------------------------------------
@@ -195,28 +246,68 @@ def process(
         if isinstance(d, DB):
             tid = f"v2_{d.start}_{d.end}"
             txt = slice_fmt(z2, d.start, d.end)
-            add_main_xhtml(xhtml_mains, txt, "transpose", "target", tid)
+            if tid in emitted_transpose_target_ids:
+                add_main_xhtml(
+                    xhtml_mains,
+                    txt,
+                    "transpose",
+                    "target",
+                    tid,
+                    rchanges=z2.rchanges,
+                    start=d.start,
+                    end=d.end,
+                )
+            else:
+                add_plain_main_xhtml(xhtml_mains, txt, "target", z2.rchanges, d.start, d.end)
         elif isinstance(d, I):
             tid = f"v2_{d.start}_{d.end}"
             txt = slice_fmt(z2, d.start, d.end)
-            add_main_xhtml(xhtml_mains, txt, "addition", "target", tid)
+            if tid in emitted_addition_ids:
+                add_main_xhtml(
+                    xhtml_mains,
+                    txt,
+                    "addition",
+                    "target",
+                    tid,
+                    rchanges=z2.rchanges,
+                    start=d.start,
+                    end=d.end,
+                )
+            else:
+                add_plain_main_xhtml(xhtml_mains, txt, "target", z2.rchanges, d.start, d.end)
         elif isinstance(d, BC):
-            tid = f"v2_{d.b_start}_{d.b_end}"
-            txt = slice_fmt(z2, d.b_start, d.b_end)
-            src_id = f"v1_{d.a_start}_{d.a_end}"
-            add_main_xhtml(xhtml_mains, txt, "bc", "target", tid, counterpart_id=src_id)
-        elif isinstance(d, R):
             tid = f"v2_{d.b_start}_{d.b_end}"
             txt = slice_fmt(z2, d.b_start, d.b_end)
             src_id = f"v1_{d.a_start}_{d.a_end}"
             add_main_xhtml(
                 xhtml_mains,
                 txt,
-                "substitution",
+                "bc",
                 "target",
                 tid,
                 counterpart_id=src_id,
+                rchanges=z2.rchanges,
+                start=d.b_start,
+                end=d.b_end,
             )
+        elif isinstance(d, R):
+            tid = f"v2_{d.b_start}_{d.b_end}"
+            txt = slice_fmt(z2, d.b_start, d.b_end)
+            src_id = f"v1_{d.a_start}_{d.a_end}"
+            if tid in emitted_substitution_target_ids:
+                add_main_xhtml(
+                    xhtml_mains,
+                    txt,
+                    "substitution",
+                    "target",
+                    tid,
+                    counterpart_id=src_id,
+                    rchanges=z2.rchanges,
+                    start=d.b_start,
+                    end=d.b_end,
+                )
+            else:
+                add_plain_main_xhtml(xhtml_mains, txt, "target", z2.rchanges, d.b_start, d.b_end)
 
     # --------------------------------------------------------------
     # 4. Serialize TEI diff + XHTML files

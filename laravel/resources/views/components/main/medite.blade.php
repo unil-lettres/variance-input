@@ -1,4 +1,8 @@
-@php /** components/main/medite.blade.php **/ @endphp
+@php
+    /** components/main/medite.blade.php */
+    $mediteMaxVersionCharacters = (int) config('variance.medite_max_version_characters', 1_000_000);
+    $mediteMaxCombinedCharacters = (int) config('variance.medite_max_combined_characters', 2_000_000);
+@endphp
 <div class="modal fade" id="mediteModal" tabindex="-1" aria-labelledby="mediteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content medite-modal-content">
@@ -70,6 +74,19 @@
                             </div>
                         </section>
                     </div>
+
+                    @if ($mediteMaxVersionCharacters > 0 || $mediteMaxCombinedCharacters > 0)
+                        <div class="alert alert-warning mt-3 mb-0" role="note">
+                            <strong>Limite temporaire</strong> — Nous évaluons actuellement les besoins en mémoire de Medite sur le serveur de production.
+                            @if ($mediteMaxVersionCharacters > 0 && $mediteMaxCombinedCharacters > 0)
+                                Pendant cette période, chaque version est limitée à {{ number_format($mediteMaxVersionCharacters, 0, ',', ' ') }} caractères, et les deux versions réunies à {{ number_format($mediteMaxCombinedCharacters, 0, ',', ' ') }} caractères au total.
+                            @elseif ($mediteMaxVersionCharacters > 0)
+                                Pendant cette période, chaque version est limitée à {{ number_format($mediteMaxVersionCharacters, 0, ',', ' ') }} caractères.
+                            @else
+                                Pendant cette période, les deux versions réunies sont limitées à {{ number_format($mediteMaxCombinedCharacters, 0, ',', ' ') }} caractères au total.
+                            @endif
+                        </div>
+                    @endif
 
                     <div class="medite-launch-bar">
                         <div class="medite-launch-text">Étape 3 : lancer l’alignement puis consulter le résultat dans Comparaisons textuelles.</div>

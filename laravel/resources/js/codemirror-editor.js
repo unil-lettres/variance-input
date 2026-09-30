@@ -7,6 +7,47 @@ import { search, openSearchPanel, closeSearchPanel, searchPanelOpen as getSearch
 
 const areVersionEditorTooltipsEnabled = () => window.areVersionEditorTooltipsEnabled?.() === true;
 
+const INLINE_TAG_CONFIGS = [
+  {
+    type: 'italic',
+    className: 'cm-italic-tag',
+    open: /^<(?:emph|em)\s*>$/i,
+    close: /^<\/(?:emph|em)\s*>$/i,
+    regexp: /(<emph\s*>|<\/emph\s*>|<em\s*>|<\/em\s*>)/gi,
+    openLabel: "⟨i⟩",
+    closeLabel: "⟨/i⟩",
+    openName: 'Balise italique d\'ouverture',
+    closeName: 'Balise italique de fermeture',
+    nestedMessage: 'Balises italiques imbriquées détectées',
+    containsMessage: 'Balise italique contient des balises non textuelles',
+    emptyMessage: 'Balise italique vide (pas de texte entre ouverture et fermeture)',
+  },
+  {
+    type: 'superscript',
+    className: 'cm-superscript-tag',
+    open: /^<sup\s*>$/i,
+    close: /^<\/sup\s*>$/i,
+    regexp: /(<sup\s*>|<\/sup\s*>)/gi,
+    openLabel: "⟨sup⟩",
+    closeLabel: "⟨/sup⟩",
+    openName: 'Balise exposant d\'ouverture',
+    closeName: 'Balise exposant de fermeture',
+    nestedMessage: 'Balises exposant imbriquées détectées',
+    containsMessage: 'Balise exposant contient des balises non textuelles',
+    emptyMessage: 'Balise exposant vide (pas de texte entre ouverture et fermeture)',
+  },
+];
+
+const decoratedInlineTagRegex = /^(?:<\/?(?:emph|em)\s*>|<\/?sup\s*>)$/i;
+
+function inlineTagConfig(tag) {
+  return INLINE_TAG_CONFIGS.find((config) => config.open.test(tag) || config.close.test(tag)) || null;
+}
+
+function isDecoratedInlineTag(tag) {
+  return decoratedInlineTagRegex.test(tag);
+}
+
 // Widget to replace tags with invisible content
 class InvisibleTagWidget extends WidgetType {
   constructor(tag) {
@@ -26,8 +67,8 @@ class InvisibleTagWidget extends WidgetType {
   }
 }
 
-// Widget to style italic tags
-class ItalicTagWidget extends WidgetType {
+// Widget to style inline formatting tags such as italics and superscript.
+class InlineFormatTagWidget extends WidgetType {
   constructor(tag, view) {
     super();
     this.tag = tag;
@@ -36,9 +77,13 @@ class ItalicTagWidget extends WidgetType {
   }
 
   toDOM() {
+    const config = inlineTagConfig(this.tag);
     const span = document.createElement("span");
-    span.className = "cm-italic-tag";
-    span.textContent = this.tag.startsWith("</") ? "⟨/i⟩" : "⟨i⟩";
+    span.className = `cm-inline-tag ${config?.className || ''}`.trim();
+    span.dataset.inlineTagType = config?.type || 'inline';
+    span.textContent = this.tag.startsWith("</")
+      ? (config?.closeLabel || "⟨/tag⟩")
+      : (config?.openLabel || "⟨tag⟩");
     span.style.cursor = 'pointer';
 
     const bootstrapLib = window.bootstrap;
@@ -63,7 +108,7 @@ class ItalicTagWidget extends WidgetType {
         });
         this.view.focus();
       } catch (err) {
-        console.error('Error deleting italic tag:', err);
+        console.error('Error deleting inline tag:', err);
       }
     });
 
@@ -222,10 +267,9 @@ const createHideTagsField = () => StateField.define({
         const to = from + match[0].length;
         const tag = match[0].toLowerCase();
 
-        // Skip italic tags - they have their own decoration plugin
+        // Skip inline formatting tags - they have their own decoration plugin
         const originalTag = match[0];
-        if (originalTag.match(/<emph\s*>/i) || originalTag.match(/<\/emph\s*>/i)
-            || originalTag.match(/<em\s*>/i) || originalTag.match(/<\/em\s*>/i)) {
+        if (isDecoratedInlineTag(originalTag)) {
           continue;
         }
 
@@ -296,26 +340,26 @@ function parsePageNumbers(view, getCacheFunction) {
   return pageNumbers;
 }
 
-// ViewPlugin to decorate italic tags only when tags are hidden
-const createItalicTagPlugin = (hideTagsStateField) => ViewPlugin.fromClass(class {
+// ViewPlugin to decorate inline formatting tags only when tags are hidden
+const createInlineFormatTagPlugin = (hideTagsStateField) => ViewPlugin.fromClass(class {
   constructor(view) {
     this.view = view;
-    this.italicOpenMatcher = new MatchDecorator({
-      regexp: /(<emph\s*>|<\/emph\s*>|<em\s*>|<\/em\s*>)/gi,
+    this.inlineTagMatcher = new MatchDecorator({
+      regexp: /(<emph\s*>|<\/emph\s*>|<em\s*>|<\/em\s*>|<sup\s*>|<\/sup\s*>)/gi,
       decoration: (match) => Decoration.replace({
-        widget: new ItalicTagWidget(match[1], view),
+        widget: new InlineFormatTagWidget(match[1], view),
       })
     });
     this.placeholders = this.buildDecorations(view);
   }
 
   update(update) {
-    if (
-      update.docChanged ||
-      update.startState.field(hideTagsStateField) !== update.state.field(hideTagsStateField)
-    ) {
+    if (update.startState.field(hideTagsStateField) !== update.state.field(hideTagsStateField)) {
       this.placeholders = this.buildDecorations(update.view);
+      return;
     }
+
+    this.placeholders = this.inlineTagMatcher.updateDeco(update, this.placeholders);
   }
 
   buildDecorations(view) {
@@ -323,7 +367,7 @@ const createItalicTagPlugin = (hideTagsStateField) => ViewPlugin.fromClass(class
       return Decoration.none;
     }
 
-    return this.italicOpenMatcher.createDeco(view);
+    return this.inlineTagMatcher.createDeco(view);
   }
 
 }, {
@@ -382,6 +426,118 @@ const createPageNumberPlugin = (getClickedCallback, getCacheFunction, hideTagsSt
     return view.plugin(plugin)?.decorations || Decoration.none
   })
 });
+
+function validateInlineTagPairs(content, view, config) {
+  const errors = [];
+  const processedPositions = new Set();
+  const openTagRegex = new RegExp(config.regexp.source, 'gi');
+  const closeTagRegex = new RegExp(config.regexp.source, 'gi');
+  const openTags = [];
+  const closeTags = [];
+  let match;
+
+  while ((match = openTagRegex.exec(content)) !== null) {
+    const tag = match[1] || match[0];
+    if (!config.open.test(tag)) {
+      continue;
+    }
+    openTags.push({
+      pos: match.index,
+      end: match.index + tag.length,
+      tag,
+    });
+  }
+
+  while ((match = closeTagRegex.exec(content)) !== null) {
+    const tag = match[1] || match[0];
+    if (!config.close.test(tag)) {
+      continue;
+    }
+    closeTags.push({
+      pos: match.index,
+      end: match.index + tag.length,
+      tag,
+    });
+  }
+
+  const addError = (pos, type, message) => {
+    if (processedPositions.has(pos)) {
+      return false;
+    }
+
+    processedPositions.add(pos);
+    errors.push({
+      type,
+      message,
+      pos,
+      lineNumber: view.state.doc.lineAt(pos).number,
+    });
+    return true;
+  };
+
+  const isInsideXmlTag = (pos) => {
+    const beforeTag = content.substring(0, pos);
+    return beforeTag.lastIndexOf('<') > beforeTag.lastIndexOf('>');
+  };
+
+  for (let i = 0; i < openTags.length; i++) {
+    const openTag = openTags[i];
+
+    if (isInsideXmlTag(openTag.pos)) {
+      if (addError(openTag.pos, 'inside_tag', `${config.openName} à l'intérieur d'une balise XML`)) {
+        continue;
+      }
+    }
+
+    if (i < openTags.length - 1) {
+      const nextOpen = openTags[i + 1];
+      const currentClose = closeTags[i];
+
+      if (currentClose && nextOpen.pos < currentClose.pos) {
+        if (addError(nextOpen.pos, 'nested', config.nestedMessage)) {
+          continue;
+        }
+      }
+    }
+
+    if (!closeTags[i]) {
+      if (addError(openTag.pos, 'missing_close', `${config.openName} sans balise de fermeture correspondante`)) {
+        continue;
+      }
+    }
+
+    if (closeTags[i]) {
+      const closeTag = closeTags[i];
+      const betweenTags = content.substring(openTag.end, closeTag.pos);
+      const withoutAllowedInlineTags = betweenTags.replace(/<\/?(?:emph|em|sup)\s*>/gi, '');
+
+      if (/<[^>]+>/g.test(withoutAllowedInlineTags)) {
+        if (addError(openTag.pos, 'contains_tags', config.containsMessage)) {
+          continue;
+        }
+      }
+
+      const textOnly = betweenTags.replace(/<[^>]+>/g, '').trim();
+      if (textOnly.length === 0) {
+        addError(openTag.pos, 'empty', config.emptyMessage);
+      }
+    }
+  }
+
+  if (closeTags.length > openTags.length) {
+    for (let i = openTags.length; i < closeTags.length; i++) {
+      const closeTag = closeTags[i];
+
+      if (isInsideXmlTag(closeTag.pos)) {
+        addError(closeTag.pos, 'inside_tag', `${config.closeName} à l'intérieur d'une balise XML`);
+      } else {
+        addError(closeTag.pos, 'missing_open', `${config.closeName} sans balise d'ouverture correspondante`);
+      }
+    }
+  }
+
+  return errors;
+}
 
 export default function (container, initialXml) {
 
@@ -489,7 +645,7 @@ export default function (container, initialXml) {
       EditorView.lineWrapping,
       drawSelection(),
       hideTagsField,
-      createItalicTagPlugin(hideTagsField),
+      createInlineFormatTagPlugin(hideTagsField),
       createPageNumberPlugin(
         () => onPageNumberClickedCallback,
         getCache,
@@ -808,129 +964,42 @@ export default function (container, initialXml) {
       view.focus();
     },
 
-    validateItalicTags() {
+    insertSuperscriptOpenTag() {
+      const { head } = view.state.selection.main;
+      const openingTag = '<sup>';
+
+      view.dispatch({
+        changes: { from: head, insert: openingTag },
+        selection: { anchor: head + openingTag.length }
+      });
+
+      invalidateCache();
+      view.focus();
+    },
+
+    insertSuperscriptCloseTag() {
+      const { head } = view.state.selection.main;
+      const closingTag = '</sup>';
+
+      view.dispatch({
+        changes: { from: head, insert: closingTag },
+        selection: { anchor: head + closingTag.length }
+      });
+
+      invalidateCache();
+      view.focus();
+    },
+
+    validateInlineTags() {
       const content = view.state.doc.toString();
-      const errors = [];
-      const processedPositions = new Set(); // Track positions that already have an error
-
-      // Find all italic opening and all closing tags
-      const openTagRegex = /<(?:emph|em)\s*>/gi;
-      const closeTagRegex = /<\/(?:emph|em)\s*>/gi;
-
-      const openTags = [];
-      const closeTags = [];
-
-      let match;
-
-      openTagRegex.lastIndex = 0;
-      while ((match = openTagRegex.exec(content)) !== null) {
-        openTags.push({
-          pos: match.index,
-          end: match.index + match[0].length,
-          tag: match[0]
-        });
-      }
-
-      closeTagRegex.lastIndex = 0;
-      while ((match = closeTagRegex.exec(content)) !== null) {
-        closeTags.push({
-          pos: match.index,
-          end: match.index + match[0].length,
-          tag: match[0]
-        });
-      }
-
-      // Helper function to add error only if position not already processed
-      const addError = (pos, type, message) => {
-        if (!processedPositions.has(pos)) {
-          processedPositions.add(pos);
-          errors.push({
-            type: type,
-            message: message,
-            pos: pos,
-            lineNumber: view.state.doc.lineAt(pos).number
-          });
-          return true;
-        }
-        return false;
-      };
-
-      // Process each opening tag with priority checks
-      for (let i = 0; i < openTags.length; i++) {
-        const openTag = openTags[i];
-
-        // Check 1 (priority): Tag inside XML tag
-        const beforeTag = content.substring(0, openTag.pos);
-        const lastOpenBracket = beforeTag.lastIndexOf('<');
-        const lastCloseBracket = beforeTag.lastIndexOf('>');
-
-        if (lastOpenBracket > lastCloseBracket) {
-          if (addError(openTag.pos, 'inside_tag', 'Balise italique d\'ouverture à l\'intérieur d\'une balise XML')) {
-            continue; // Skip other checks for this tag
-          }
-        }
-
-        // Check 2: Nested tags
-        if (i < openTags.length - 1) {
-          const nextOpen = openTags[i + 1];
-          const currentClose = closeTags[i];
-
-          if (currentClose && nextOpen.pos < currentClose.pos) {
-            if (addError(nextOpen.pos, 'nested', 'Balises italiques imbriquées détectées')) {
-              continue;
-            }
-          }
-        }
-
-        // Check 3: Missing closing tag
-        if (!closeTags[i]) {
-          if (addError(openTag.pos, 'missing_close', 'Balise italique d\'ouverture sans balise de fermeture correspondante')) {
-            continue;
-          }
-        }
-
-        // If we have a closing tag, check content
-        if (closeTags[i]) {
-          const closeTag = closeTags[i];
-          const betweenTags = content.substring(openTag.end, closeTag.pos);
-
-          // Check 4: Contains other tags
-          if (/<[^>]+>/g.test(betweenTags)) {
-            if (addError(openTag.pos, 'contains_tags', 'Balise italique contient d\'autres balises (seul du texte est autorisé)')) {
-              continue;
-            }
-          }
-
-          // Check 5: Empty tag
-          const textOnly = betweenTags.replace(/<[^>]+>/g, '').trim();
-          if (textOnly.length === 0) {
-            addError(openTag.pos, 'empty', 'Balise italique vide (pas de texte entre ouverture et fermeture)');
-          }
-        }
-      }
-
-      // Process orphan closing tags
-      if (closeTags.length > openTags.length) {
-        for (let i = openTags.length; i < closeTags.length; i++) {
-          const closeTag = closeTags[i];
-
-          // Check if inside XML tag
-          const beforeTag = content.substring(0, closeTag.pos);
-          const lastOpenBracket = beforeTag.lastIndexOf('<');
-          const lastCloseBracket = beforeTag.lastIndexOf('>');
-
-          if (lastOpenBracket > lastCloseBracket) {
-            addError(closeTag.pos, 'inside_tag', 'Balise italique de fermeture à l\'intérieur d\'une balise XML');
-          } else {
-            addError(closeTag.pos, 'missing_open', 'Balise italique de fermeture sans balise d\'ouverture correspondante');
-          }
-        }
-      }
-
-      // Sort errors by position
+      const errors = INLINE_TAG_CONFIGS.flatMap((config) => validateInlineTagPairs(content, view, config));
       errors.sort((a, b) => a.pos - b.pos);
 
       return errors;
+    },
+
+    validateItalicTags() {
+      return this.validateInlineTags();
     },
 
     scrollToPosition(pos) {

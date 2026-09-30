@@ -15,11 +15,14 @@ use App\Models\Comparison;
 use App\Models\Version;
 use App\Models\Work;
 use App\Services\PageMarkerService;
+use App\Services\VersionTextService;
 
 class MediteController extends Controller
 {
-    public function __construct(private PageMarkerService $pageMarkerService)
-    {
+    public function __construct(
+        private PageMarkerService $pageMarkerService,
+        private VersionTextService $versionTextService,
+    ) {
     }
 
     /**
@@ -45,6 +48,7 @@ class MediteController extends Controller
         Log::debug('createComparison payload', $data);
 
         $this->assertVersionsEditable((int) $data['source_id'], (int) $data['target_id']);
+        $this->assertMediteLaunchAllowed((int) $data['source_id'], (int) $data['target_id']);
 
         $sep = array_key_exists('sep', $data) ? $data['sep'] : null;
         if ($sep === '') {
@@ -52,7 +56,7 @@ class MediteController extends Controller
         }
 
         /* ─── 2. Insert a new row (fill every NOT-NULL col) ──────────────── */
-        [ $folder, $sequence ] = $this->nextFolderAndNumber(
+        [ $folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
             $data['folder'],
             (int) $data['source_id'],
             (int) $data['target_id']
@@ -72,6 +76,7 @@ class MediteController extends Controller
             /* house-keeping */
             'prefix_label'     => 'Auto',
             'number'           => $sequence,
+            'sort_order'       => $sortOrder,
         ];
 
         if (Schema::hasColumn('comparisons', 'created_by')) {
@@ -120,6 +125,7 @@ class MediteController extends Controller
 
         $sourceVersion = Version::with('work.author')->findOrFail((int) $validated['source_version']);
         $targetVersion = Version::with('work.author')->findOrFail((int) $validated['target_version']);
+        $this->assertMediteLaunchAllowed($sourceVersion->id, $targetVersion->id);
 
         /* ───── Short names for versions ───── */
         $sourceShort = $sourceVersion->folder;
@@ -148,7 +154,7 @@ class MediteController extends Controller
             $cmp->fill($comparisonPayload);
 
             if (empty($cmp->folder)) {
-                [ $folder, $sequence ] = $this->nextFolderAndNumber(
+                [ $folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
                     $comparisonShort,
                     (int) $validated['source_version'],
                     (int) $validated['target_version'],
@@ -156,6 +162,7 @@ class MediteController extends Controller
                 );
                 $cmp->folder = $folder;
                 $cmp->number = $sequence;
+                $cmp->sort_order = $sortOrder;
             }
 
             if (!$cmp->prefix_label) {
@@ -163,18 +170,19 @@ class MediteController extends Controller
             }
 
             if (!$cmp->number) {
-                [ $_folder, $sequence ] = $this->nextFolderAndNumber(
+                [ $_folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
                     $comparisonShort,
                     (int) $validated['source_version'],
                     (int) $validated['target_version'],
                     $cmp->id
                 );
                 $cmp->number = $sequence;
+                $cmp->sort_order = $cmp->sort_order ?? $sortOrder;
             }
 
             $cmp->save();
         } else {
-            [ $folder, $sequence ] = $this->nextFolderAndNumber(
+            [ $folder, $sequence, $sortOrder ] = $this->nextFolderNumberAndSortOrder(
                 $comparisonShort,
                 (int) $validated['source_version'],
                 (int) $validated['target_version']
@@ -184,6 +192,7 @@ class MediteController extends Controller
                 'folder'       => $folder,
                 'prefix_label' => 'Auto Run',
                 'number'       => $sequence,
+                'sort_order'   => $sortOrder,
             ];
 
             if (Schema::hasColumn('comparisons', 'created_by')) {
@@ -396,7 +405,7 @@ class MediteController extends Controller
         return null;
     }
 
-    private function nextFolderAndNumber(string $base, int $sourceId, int $targetId, ?int $excludeId = null): array
+    private function nextFolderNumberAndSortOrder(string $base, int $sourceId, int $targetId, ?int $excludeId = null): array
     {
         $slug = Str::slug($base, '-');
         if ($slug === '') {
@@ -430,11 +439,17 @@ class MediteController extends Controller
             $orderQuery->where('id', '!=', $excludeId);
         }
 
-        $number = (int) $orderQuery->max('number');
+        $number = (int) (clone $orderQuery)->max('number');
         if ($number <= 0) {
-            $number = (int) $orderQuery->count();
+            $number = (int) (clone $orderQuery)->count();
         }
         $number += 1;
+
+        $sortOrder = (int) (clone $orderQuery)->max('sort_order');
+        if ($sortOrder <= 0) {
+            $sortOrder = (int) (clone $orderQuery)->count();
+        }
+        $sortOrder += 1;
 
         $suffix = "run{$pairSequence}";
         $separator = '-';
@@ -467,7 +482,7 @@ class MediteController extends Controller
             }
         }
 
-        return [$folder, $number];
+        return [$folder, $number, $sortOrder];
     }
 
     private function assertVersionsEditable(int $sourceId, int $targetId, ?int $workId = null): void
@@ -500,6 +515,89 @@ class MediteController extends Controller
             if ($work?->is_legacy && $versions->contains(fn (Version $version) => !$this->hasMediteXmlInput($version->folder))) {
                 abort(422, 'Impossible de lancer Medite pour une œuvre legacy dont une version ne dispose pas de fichier TEI-XML.');
             }
+        }
+    }
+
+    private function assertMediteLaunchAllowed(int $sourceId, int $targetId): void
+    {
+        $maxVersionCharacters = (int) config('variance.medite_max_version_characters', 1_000_000);
+        $maxCombinedCharacters = (int) config('variance.medite_max_combined_characters', 2_000_000);
+
+        if ($maxVersionCharacters <= 0 && $maxCombinedCharacters <= 0) {
+            return;
+        }
+
+        $versions = Version::query()
+            ->whereIn('id', [$sourceId, $targetId])
+            ->get(['id', 'name', 'folder']);
+
+        $combinedCharacters = 0;
+        foreach ($versions as $version) {
+            $textCharacters = $this->mediteTextLength($version);
+            $combinedCharacters += $textCharacters;
+
+            if ($maxVersionCharacters > 0 && $textCharacters > $maxVersionCharacters) {
+                Log::warning('Medite launch blocked by per-version text limit', [
+                    'version_id' => $version->id,
+                    'text_characters' => $textCharacters,
+                    'max_version_characters' => $maxVersionCharacters,
+                ]);
+
+                abort(
+                    422,
+                    sprintf(
+                        'Comparaison refusée par mesure de sécurité : la version « %s » contient %s caractères, au-delà de la limite de %s caractères.',
+                        $version->name,
+                        number_format($textCharacters, 0, ',', ' '),
+                        number_format($maxVersionCharacters, 0, ',', ' ')
+                    )
+                );
+            }
+        }
+
+        if ($maxCombinedCharacters > 0 && $combinedCharacters > $maxCombinedCharacters) {
+            Log::warning('Medite launch blocked by combined text limit', [
+                'source_version_id' => $sourceId,
+                'target_version_id' => $targetId,
+                'combined_characters' => $combinedCharacters,
+                'max_combined_characters' => $maxCombinedCharacters,
+            ]);
+
+            abort(
+                422,
+                sprintf(
+                    'Comparaison refusée par mesure de sécurité : les deux versions totalisent %s caractères, au-delà de la limite combinée de %s caractères.',
+                    number_format($combinedCharacters, 0, ',', ' '),
+                    number_format($maxCombinedCharacters, 0, ',', ' ')
+                )
+            );
+        }
+    }
+
+    private function mediteTextLength(Version $version): int
+    {
+        $path = $this->resolveVersionXmlPath($version->folder);
+        if ($path === null) {
+            abort(422, "Comparaison refusée : le fichier TEI-XML de la version « {$version->name} » est introuvable.");
+        }
+
+        $mtime = @filemtime($path) ?: 0;
+        $size = @filesize($path) ?: 0;
+        $cacheKey = "medite:text-length:{$version->id}:{$mtime}:{$size}";
+
+        try {
+            return (int) Cache::remember($cacheKey, now()->addHours(6), function () use ($path): int {
+                $plainText = $this->versionTextService->buildPlainTextFromTeiXml(File::get($path));
+
+                return mb_strlen($plainText, 'UTF-8');
+            });
+        } catch (\Throwable $e) {
+            Log::warning('Medite launch blocked because text length could not be measured', [
+                'version_id' => $version->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            abort(422, "Comparaison refusée : impossible de mesurer le texte de la version « {$version->name} ».");
         }
     }
 

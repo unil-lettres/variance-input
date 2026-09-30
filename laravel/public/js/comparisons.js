@@ -67,7 +67,18 @@ function initComparisonsTable() {
     missing: 'Indisponible',
   };
   const normalizeStatus = status => String(status ?? '').toLowerCase();
-  const formatTimestamp = ts => ts ? new Date(ts * 1000).toLocaleString('fr-FR', { hour12: false }) : null;
+  const formatTimestamp = value => {
+    if (value === null || value === undefined || value === '') return null;
+    let date = null;
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue) && String(value).trim() !== '') {
+      date = new Date(numericValue > 100000000000 ? numericValue : numericValue * 1000);
+    } else {
+      date = new Date(String(value).replace(' ', 'T'));
+    }
+    if (!date || Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString('fr-FR', { hour12: false });
+  };
   const escapeHtml = (value) => {
     return String(value)
       .replace(/&/g, '&amp;')
@@ -88,6 +99,20 @@ function initComparisonsTable() {
     }
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed.toLocaleString('fr-FR') : '0';
+  };
+  const formatComparisonNumberInput = value => {
+    if (value === null || value === undefined || value === '') return '';
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? String(parsed) : String(value);
+  };
+  const normalizeComparisonNumberInput = value => {
+    const raw = String(value ?? '').trim();
+    if (raw === '') return null;
+    const normalized = raw.replace(',', '.');
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) {
+      throw new Error('Le numéro public doit être vide ou numérique, par exemple 1 ou 0.1.');
+    }
+    return normalized;
   };
   const formatBytes = size => {
     if (!Number.isFinite(size) || size <= 0) return '0 o';
@@ -166,42 +191,8 @@ function initComparisonsTable() {
     return /^\d+$/.test(s) && Number(s) > 0;
   };
 
-  let paginationWarningModal = null;
-  let paginationWarningResolve = null;
   let commentModal = null;
   let activeCommentComparisonId = null;
-  const getPaginationWarningChoice = () => {
-    const modalEl = document.getElementById('pagination-warning-modal');
-    if (!modalEl || !window.bootstrap || !bootstrap.Modal) {
-      return Promise.resolve(null);
-    }
-    if (!paginationWarningModal) {
-      paginationWarningModal = new bootstrap.Modal(modalEl, {
-        backdrop: true,
-        keyboard: true,
-      });
-      modalEl.addEventListener('hidden.bs.modal', () => {
-        if (paginationWarningResolve) {
-          paginationWarningResolve(null);
-          paginationWarningResolve = null;
-        }
-      });
-      modalEl.querySelectorAll('[data-pagination-choice]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const choice = btn.dataset.paginationChoice || null;
-          if (paginationWarningResolve) {
-            paginationWarningResolve(choice);
-            paginationWarningResolve = null;
-          }
-          paginationWarningModal.hide();
-        });
-      });
-    }
-    return new Promise(resolve => {
-      paginationWarningResolve = resolve;
-      paginationWarningModal.show();
-    });
-  };
   const commentModalEl = document.getElementById('comparison-comment-modal');
   const commentInput = document.getElementById('comparison-comment-input');
   const commentSaveBtn = document.getElementById('comparison-comment-save-btn');
@@ -351,14 +342,14 @@ function initComparisonsTable() {
     });
   }
 
-  function swapComparisonNumbers(firstId, secondId) {
+  function swapComparisonSortOrders(firstId, secondId) {
     const first = comparisonData.get(Number(firstId));
     const second = comparisonData.get(Number(secondId));
     if (!first || !second) return;
 
-    const firstNumber = first.number ?? null;
-    first.number = second.number ?? null;
-    second.number = firstNumber;
+    const firstSortOrder = first.sort_order ?? null;
+    first.sort_order = second.sort_order ?? null;
+    second.sort_order = firstSortOrder;
     comparisonData.set(Number(firstId), first);
     comparisonData.set(Number(secondId), second);
   }
@@ -385,7 +376,7 @@ function initComparisonsTable() {
       tbody.insertBefore(sibling, row);
     }
 
-    swapComparisonNumbers(id, siblingId);
+    swapComparisonSortOrders(id, siblingId);
     refreshComparisonReorderButtons();
     return true;
   }
@@ -1216,60 +1207,74 @@ function initComparisonsTable() {
   function renderComparisonDataSummary(comp, { detailsLoaded = false } = {}) {
     const lines = [];
 
-    const pushLine = (html, variant = '') => {
-      const cls = variant ? ` comparison-results-line--${variant}` : '';
-      lines.push(`<div class="comparison-results-line${cls}">${html}</div>`);
+    const pushTextLine = (html, variant = '') => {
+      const cls = variant ? ` comparison-data-line--${variant}` : '';
+      lines.push(`<div class="comparison-data-line${cls}"><span class="comparison-data-text">${html}</span></div>`);
+    };
+
+    const pushItemsLine = (items, variant = '') => {
+      const cls = variant ? ` comparison-data-line--${variant}` : '';
+      const html = items
+        .filter(item => item && item.value !== null && item.value !== undefined && item.value !== '')
+        .map(item => `
+          <span class="comparison-data-item">
+            <span class="comparison-data-label">${item.label}</span>
+            <span class="comparison-data-value">${item.value}</span>
+          </span>
+        `)
+        .join('');
+      if (html) {
+        lines.push(`<div class="comparison-data-line${cls}">${html}</div>`);
+      }
     };
 
     if (!detailsLoaded) {
-      pushLine('Chargement…', 'muted');
+      pushTextLine('Chargement…', 'muted');
     }
 
     const creatorName = comp?.creator_name || comp?.creator?.name || null;
     const createdAt = comp?.created_at ? formatTimestamp(comp.created_at) : null;
-    const identityBits = [`<strong>ID</strong> ${comp.id}`];
-    if (createdAt) {
-      identityBits.push(`<strong>Créée</strong> ${createdAt}`);
-    }
-    if (creatorName) {
-      identityBits.push(`<strong>Par</strong> ${creatorName}`);
-    }
-    pushLine(identityBits.join(' · '));
+    pushItemsLine([
+      { label: 'ID', value: escapeHtml(comp.id) },
+      { label: 'Créée', value: createdAt ? escapeHtml(createdAt) : null },
+      { label: 'Par', value: creatorName ? escapeHtml(creatorName) : null },
+    ]);
 
-    pushLine(
-      `<strong>Versions</strong> source #${formatNumber(Number(comp?.source_id ?? 0))} · cible #${formatNumber(Number(comp?.target_id ?? 0))}`
-    );
+    pushItemsLine([
+      { label: 'Source', value: `#${formatNumber(Number(comp?.source_id ?? 0))}` },
+      { label: 'Cible', value: `#${formatNumber(Number(comp?.target_id ?? 0))}` },
+    ]);
 
     if (comp?.pagination && typeof comp.pagination === 'object') {
       const sourceLignesFile = describeLignesFile(comp.pagination?.source || {});
       const targetLignesFile = describeLignesFile(comp.pagination?.target || {});
       if (sourceLignesFile || targetLignesFile) {
-        const parts = [];
-        if (sourceLignesFile) parts.push(`<strong>_lignes source</strong> ${sourceLignesFile}`);
-        if (targetLignesFile) parts.push(`<strong>_lignes cible</strong> ${targetLignesFile}`);
-        pushLine(parts.join(' · '));
+        pushItemsLine([
+          { label: '_lignes source', value: sourceLignesFile ? escapeHtml(sourceLignesFile) : null },
+          { label: '_lignes cible', value: targetLignesFile ? escapeHtml(targetLignesFile) : null },
+        ]);
       }
     }
 
     const runtime = formatDuration(comp.medite_runtime_ms);
     if (runtime) {
-      pushLine(`<strong>Durée Medite</strong> ${runtime}`);
+      pushItemsLine([{ label: 'Durée Medite', value: escapeHtml(runtime) }]);
     }
 
     const peakKb = Number(comp.medite_peak_rss_kb);
     if (Number.isFinite(peakKb) && peakKb > 0) {
-      pushLine(`<strong>Pic mémoire</strong> ${formatBytes(peakKb * 1024)}`);
+      pushItemsLine([{ label: 'Pic mémoire', value: escapeHtml(formatBytes(peakKb * 1024)) }]);
     }
 
-    pushLine(`<strong>Export legacy</strong> ${describeExportStatus(comp)}`);
+    pushItemsLine([{ label: 'Export legacy', value: escapeHtml(describeExportStatus(comp)) }]);
 
     if (detailsLoaded) {
       const missing = Array.isArray(comp?.publish_missing) ? comp.publish_missing : [];
       const availableComponents = Math.max(0, 6 - missing.length);
-      pushLine(`<strong>Fichiers XHTML</strong> ${formatNumber(availableComponents)}/6`);
+      pushItemsLine([{ label: 'Fichiers XHTML', value: `${formatNumber(availableComponents)}/6` }]);
     }
 
-    return `<div class="comparison-results comparison-data-col">${lines.join('')}</div>`;
+    return `<div class="comparison-data-summary">${lines.join('')}</div>`;
   }
 
   function renderResultsSummary(comp, { isRunning = false, detailsLoaded = false } = {}) {
@@ -1748,10 +1753,26 @@ function initComparisonsTable() {
     const targetName = comp.target_version?.name ?? `Version ${comp.target_id}`;
     const counts = getMediteComponentCounts(comp);
     const runningPlaceholder = '<span class="text-muted">-</span>';
-    const folderText = comp.folder || '';
-    const folderHtml = folderText
-      ? `<strong>${folderText}</strong>`
-      : '<span class="text-muted">—</span>';
+    const metadataDisabled = ownershipBlocked || isPublicationPending || isRunning;
+    const metadataTitle = ownershipBlocked
+      ? manageDisabledNote
+      : (isPublicationPending ? 'Publication en cours.' : 'Numéro affiché dans le catalogue public. Enregistré automatiquement.');
+    const numberInputId = `comparison-number-${comp.id}`;
+    const folderHtml = `
+      <div class="comparison-public-label-editor" data-comparison-metadata-editor="${comp.id}">
+        <label class="visually-hidden" for="${numberInputId}">Numéro public</label>
+        <input type="text"
+               class="form-control form-control-sm comparison-number-input"
+               id="${numberInputId}"
+               data-comparison-number-input="1"
+               inputmode="decimal"
+               data-id="${comp.id}"
+               data-saved-number="${escapeHtml(formatComparisonNumberInput(comp.number))}"
+               value="${escapeHtml(formatComparisonNumberInput(comp.number))}"
+               placeholder="N° public"
+               title="${escapeHtml(metadataTitle)}"
+               ${metadataDisabled ? 'disabled aria-disabled="true"' : ''}>
+      </div>`;
 
     comparisonData.set(comp.id, comp);
     const mediteParamsHtml = renderMediteParams(comp, { detailsLoaded });
@@ -1895,10 +1916,10 @@ function initComparisonsTable() {
       </td>
       <td class="align-top comparison-params-cell">${mediteParamsHtml}</td>
       <td class="align-top comparison-data-col comparison-data-cell">${dataSummaryHtml}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.s)}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.i)}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.r)}</td>
-      <td>${isRunning ? runningPlaceholder : renderMetricCell(counts.d)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.s)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.i)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.r)}</td>
+      <td class="comparison-metric-count-cell">${isRunning ? runningPlaceholder : renderMetricCell(counts.d)}</td>
       <td class="text-center comparison-publish-cell">
         ${publishStatusHtml}
       </td>
@@ -2274,6 +2295,68 @@ function initComparisonsTable() {
     if (input) input.checked = true;
   };
 
+  async function saveComparisonNumberInput(numberInput) {
+    if (!numberInput || numberInput.disabled || numberInput.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
+
+    const comparisonId = Number(numberInput.dataset.id);
+    if (!Number.isFinite(comparisonId)) return;
+
+    let number = null;
+    try {
+      number = normalizeComparisonNumberInput(numberInput.value ?? '');
+    } catch (err) {
+      numberInput.classList.add('is-invalid');
+      alert(err?.message || 'Numéro public invalide.');
+      numberInput.focus();
+      return;
+    }
+
+    const displayValue = number === null ? '' : String(number);
+    if (displayValue === (numberInput.dataset.savedNumber ?? '')) {
+      numberInput.classList.remove('is-invalid');
+      return;
+    }
+
+    if (numberInput.dataset.saving === '1') return;
+    numberInput.dataset.saving = '1';
+    numberInput.classList.remove('is-invalid', 'is-valid');
+    numberInput.classList.add('comparison-number-input--saving');
+
+    try {
+      const res = await fetch(withBasePath(`/comparisons/${comparisonId}/metadata`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {}),
+        },
+        body: JSON.stringify({ number }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== 'ok') {
+        throw new Error(data?.message || `HTTP ${res.status}`);
+      }
+
+      const savedNumber = formatComparisonNumberInput(data.number ?? null);
+      numberInput.dataset.savedNumber = savedNumber;
+      numberInput.value = savedNumber;
+      updateComparisonRow(comparisonId, {
+        number: data.number ?? null,
+        prefix_label: data.prefix_label ?? null,
+      });
+    } catch (err) {
+      console.error('Erreur lors de l’enregistrement du numéro public:', err);
+      numberInput.classList.add('is-invalid');
+      alert(err?.message || 'Impossible d’enregistrer le numéro public.');
+    } finally {
+      delete numberInput.dataset.saving;
+      numberInput.classList.remove('comparison-number-input--saving');
+    }
+  }
+
   document.addEventListener('click', async event => {
     const commentBtn = event.target.closest('[data-comparison-comment="1"]');
     if (commentBtn) {
@@ -2326,24 +2409,6 @@ function initComparisonsTable() {
       return;
     }
 
-    let insertDefaultMarker = false;
-    if (shouldPublish) {
-      const comp = comparisonData.get(Number(comparisonId)) || {};
-      const sourceMarkers = Number(comp?.pagination?.source?.markers ?? 0);
-      const targetMarkers = Number(comp?.pagination?.target?.markers ?? 0);
-      if (sourceMarkers <= 0 && targetMarkers <= 0) {
-        const choice = await getPaginationWarningChoice();
-        if (choice === 'insert') {
-          insertDefaultMarker = true;
-        } else if (choice === 'continue') {
-          insertDefaultMarker = false;
-        } else {
-          actionBtn.disabled = false;
-          return;
-        }
-      }
-    }
-
     if (shouldPublish && Array.isArray(knownMissing) && knownMissing.length) {
       const proceed = confirm(
         'Certains composants Medite semblent manquants :\n- ' +
@@ -2365,12 +2430,12 @@ function initComparisonsTable() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
           },
           body: JSON.stringify({
             comparison_id: comparisonId,
-            destination: scope,
-            insert_default_marker: insertDefaultMarker
+            destination: scope
           })
         });
 
@@ -2398,12 +2463,6 @@ function initComparisonsTable() {
           );
         }
 
-        if (insertDefaultMarker && data.default_marker && Number(data.default_marker.inserted ?? 0) === 0) {
-          alert(
-            'Aucun marqueur par défaut n\'a été inséré. ' +
-            'Vérifiez que des fac-similés sont bien disponibles pour cette comparaison.'
-          );
-        }
         updateComparisonRow(comparisonId, {
           publication_scope: scope,
           published: true,
@@ -2418,7 +2477,10 @@ function initComparisonsTable() {
         });
         const res = await fetch(withBasePath(`/api/publish_xhtml/${comparisonId}`), {
           method: 'DELETE',
-          headers: { 'Accept': 'application/json' }
+          headers: {
+            'Accept': 'application/json',
+            ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
+          }
         });
 
         const text = await res.text();
@@ -2486,7 +2548,8 @@ function initComparisonsTable() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...(CSRF_TOKEN ? { 'X-CSRF-TOKEN': CSRF_TOKEN } : {})
         },
         body: JSON.stringify({ comparison_id: comparisonId, destination: nextScope })
       });
@@ -2662,6 +2725,26 @@ function initComparisonsTable() {
     } finally {
       rowButtons.forEach((btn) => { btn.disabled = false; });
     }
+  });
+
+  document.addEventListener('change', event => {
+    const numberInput = event.target.closest?.('[data-comparison-number-input="1"]');
+    if (!numberInput) return;
+    saveComparisonNumberInput(numberInput);
+  });
+
+  document.addEventListener('blur', event => {
+    const numberInput = event.target.closest?.('[data-comparison-number-input="1"]');
+    if (!numberInput) return;
+    saveComparisonNumberInput(numberInput);
+  }, true);
+
+  document.addEventListener('keydown', event => {
+    const numberInput = event.target.closest?.('[data-comparison-number-input="1"]');
+    if (!numberInput || event.key !== 'Enter') return;
+    event.preventDefault();
+    saveComparisonNumberInput(numberInput);
+    numberInput.blur();
   });
 
   // Delete comparison (event delegation)

@@ -3,6 +3,7 @@ from celery import Celery
 import subprocess
 import redis
 import os
+import resource
 import sys
 import time
 import html
@@ -99,6 +100,7 @@ def run_diff_script(
             cwd=str(SCRIPT_DIFF.parent.parent),
         )
         runtime_seconds = time.perf_counter() - started_at
+        peak_rss_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
 
         stdout, stderr = result.stdout, result.stderr
         if result.returncode != 0:
@@ -246,6 +248,7 @@ def run_diff_script(
             "meta": meta,
             "metrics": {
                 "runtime_seconds": runtime_seconds,
+                "peak_rss_kb": peak_rss_kb,
                 "comparison_id": comparison_id,
             },
         }

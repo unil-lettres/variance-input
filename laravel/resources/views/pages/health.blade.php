@@ -109,7 +109,9 @@
                 </div>
                 <div class="col-md-4">
                     <div class="text-muted small">Version app</div>
-                    <div>{{ data_get($checks, 'app.version') ?? 'n/a' }}</div>
+                    <div class="{{ data_get($checks, 'app.version_configured') === false ? $warnText : '' }}">
+                        {{ data_get($checks, 'app.version') ?? 'missing' }}
+                    </div>
                 </div>
                 <div class="col-md-4">
                     <div class="text-muted small">PHP</div>
@@ -136,16 +138,21 @@
                         $migrationPending = data_get($checks, 'migrations.pending_count');
                         $migrationStatus = data_get($checks, 'migrations.status');
                         $migrationClass = $migrationPending ? $warnText : ($migrationStatus === 'ok' ? $okText : $badText);
+                        $migrationStatusLabel = match ($migrationStatus) {
+                            'ok' => 'À jour',
+                            'pending' => is_numeric($migrationPending) ? $migrationPending . ' en attente' : 'Migrations en attente',
+                            'missing_repository' => 'Table migrations absente',
+                            'database_unavailable' => 'Base indisponible',
+                            'error' => 'Erreur du contrôle migrations',
+                            default => $migrationStatus ?? 'n/a',
+                        };
                     @endphp
                     <div class="{{ $migrationClass }}">
-                        @if($migrationStatus === 'ok')
-                            À jour
-                        @elseif(is_numeric($migrationPending))
-                            {{ $migrationPending }} en attente
-                        @else
-                            {{ $migrationStatus ?? 'n/a' }}
-                        @endif
+                        {{ $migrationStatusLabel }}
                     </div>
+                    @if(data_get($checks, 'migrations.error'))
+                        <div class="small text-danger">{{ data_get($checks, 'migrations.error') }}</div>
+                    @endif
                 </div>
                 <div class="col-md-4">
                     <div class="text-muted small">Cache</div>
@@ -506,6 +513,7 @@
             @php
                 $diskStatus = data_get($checks, 'storage.disk_status');
                 $diskClass = $statusTone($diskStatus);
+                $diskChecks = data_get($checks, 'storage.disks', []);
                 $publicOk = (bool) data_get($checks, 'public.ok', true);
                 $publicClass = $publicOk ? $okText : $badText;
             @endphp
@@ -524,6 +532,39 @@
                     <div class="{{ $publicClass }}">{{ data_get($checks, 'public.path') }}</div>
                 </div>
             </div>
+            @if(!empty($diskChecks))
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th>Stockage</th>
+                            <th>Chemin</th>
+                            <th>Espace</th>
+                            <th>Statut</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach($diskChecks as $diskCheck)
+                            @php
+                                $targetStatus = data_get($diskCheck, 'disk_status');
+                                $targetClass = $statusTone($targetStatus);
+                            @endphp
+                            <tr>
+                                <td>{{ data_get($diskCheck, 'label') }}</td>
+                                <td><code>{{ data_get($diskCheck, 'path') }}</code></td>
+                                <td>
+                                    {{ data_get($diskCheck, 'free_human') ?? 'n/a' }}
+                                    @if(data_get($diskCheck, 'total_human'))
+                                        / {{ data_get($diskCheck, 'total_human') }}
+                                    @endif
+                                </td>
+                                <td class="{{ $targetClass }}">{{ $targetStatus ?? 'n/a' }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
             <table class="table table-sm mb-0">
                 <thead>
                 <tr>

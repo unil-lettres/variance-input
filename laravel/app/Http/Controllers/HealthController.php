@@ -82,6 +82,7 @@ class HealthController extends Controller
         $httpStatus = 200;
         $failedWindowSeconds = $this->failedWindowSeconds($failedWindowKey);
         $git = $this->resolveGitMetadata();
+        $appVersion = $this->resolveAppVersion();
         $adminMaintenanceState = $this->adminMaintenanceMode->currentState();
         $adminAnnouncementState = $this->adminMaintenanceMode->currentAnnouncement();
 
@@ -90,13 +91,17 @@ class HealthController extends Controller
             'env' => config('app.env'),
             'debug' => (bool) config('app.debug'),
             'url' => config('app.url'),
-            'version' => config('app.version'),
+            'version' => $appVersion['label'],
+            'version_configured' => $appVersion['configured'],
             'php' => PHP_VERSION,
             'laravel' => app()->version(),
             'git_sha' => $git['sha'],
             'git_sha_short' => $git['short_sha'],
             'git_source' => $git['source'],
         ];
+        if (! $appVersion['configured'] && config('app.env') !== 'local') {
+            $this->markWarning($status, $httpStatus);
+        }
         $checks['config'] = [
             'queue_connection' => config('queue.default'),
             'cache_driver' => config('cache.default'),
@@ -131,35 +136,35 @@ class HealthController extends Controller
             $this->markCritical($status, $httpStatus);
         }
 
-        $storagePath = storage_path();
-        $storageOk = is_dir($storagePath) && is_writable($storagePath);
-        $storageFree = $this->freeSpace($storagePath);
         $warnGb = (int) env('HEALTHCHECK_DISK_WARN_GB', 10);
         $critGb = (int) env('HEALTHCHECK_DISK_CRIT_GB', 5);
-        $warnBytes = $warnGb > 0 ? $warnGb * 1024 * 1024 * 1024 : null;
-        $critBytes = $critGb > 0 ? $critGb * 1024 * 1024 * 1024 : null;
-        $diskStatus = 'ok';
-        if ($storageFree !== null) {
-            if ($critBytes !== null && $storageFree <= $critBytes) {
-                $diskStatus = 'critical';
-            } elseif ($warnBytes !== null && $storageFree <= $warnBytes) {
-                $diskStatus = 'warning';
-            }
-        }
+        $storagePath = storage_path();
+        $storageCheck = $this->diskCheck('laravel_storage', 'Stockage Laravel local', $storagePath, $warnGb, $critGb);
+        $mediaDiskChecks = [
+            $this->diskCheck('uploads_nas', 'Médias uploads (NAS)', public_path('uploads'), $warnGb, $critGb),
+            $this->diskCheck('uploads_images_nas', 'Images de couverture (NAS)', public_path('uploads_images'), $warnGb, $critGb),
+            $this->diskCheck('uploads_pdf_nas', 'Notices PDF (NAS)', public_path('uploads/pdf'), $warnGb, $critGb),
+        ];
+        $diskChecks = [$storageCheck, ...$mediaDiskChecks];
+
         $checks['storage'] = [
-            'ok' => $storageOk,
+            'ok' => $storageCheck['ok'],
             'path' => $storagePath,
-            'free_bytes' => $storageFree,
-            'free_human' => $this->formatBytes($storageFree),
-            'disk_status' => $diskStatus,
+            'free_bytes' => $storageCheck['free_bytes'],
+            'total_bytes' => $storageCheck['total_bytes'],
+            'free_human' => $storageCheck['free_human'],
+            'total_human' => $storageCheck['total_human'],
+            'disk_status' => $storageCheck['disk_status'],
             'warn_gb' => $warnGb,
             'crit_gb' => $critGb,
+            'disks' => $diskChecks,
         ];
-        if (! $storageOk || $diskStatus === 'critical') {
-            $this->markCritical($status, $httpStatus);
-        }
-        if ($diskStatus === 'warning') {
-            $this->markWarning($status, $httpStatus);
+        foreach ($diskChecks as $diskCheck) {
+            if (! ($diskCheck['ok'] ?? false) || ($diskCheck['disk_status'] ?? null) === 'critical') {
+                $this->markCritical($status, $httpStatus);
+            } elseif (($diskCheck['disk_status'] ?? null) === 'warning') {
+                $this->markWarning($status, $httpStatus);
+            }
         }
 
         $checks['paths'] = $this->checkPaths();
@@ -327,11 +332,28 @@ class HealthController extends Controller
 
         if ($dbOk) {
             try {
-                $checks['migrations'] = $this->resolveMigrationStatus(app(Migrator::class));
-                if (! ($checks['migrations']['ok'] ?? false)) {
-                    $this->markWarning($status, $httpStatus);
+                $migrator = app('migrator');
+                if (! $migrator instanceof Migrator) {
+                    throw new \RuntimeException('Laravel migrator service is unavailable.');
                 }
 
+                $checks['migrations'] = $this->resolveMigrationStatus($migrator);
+            } catch (\Throwable $e) {
+                $checks['migrations'] = [
+                    'ok' => false,
+                    'status' => 'error',
+                    'error' => $e->getMessage(),
+                    'pending_count' => null,
+                    'pending' => [],
+                    'ran_count' => null,
+                ];
+            }
+
+            if (! ($checks['migrations']['ok'] ?? false)) {
+                $this->markWarning($status, $httpStatus);
+            }
+
+            try {
                 $prodCount = Comparison::where('publication_scope', 'prod')->count();
                 $devCount = Comparison::where('publication_scope', 'dev')->count();
                 $legacyProd = Comparison::whereNull('publication_scope')
@@ -350,6 +372,14 @@ class HealthController extends Controller
                 ];
             }
         } else {
+            $checks['migrations'] = [
+                'ok' => false,
+                'status' => 'database_unavailable',
+                'error' => 'Database unavailable',
+                'pending_count' => null,
+                'pending' => [],
+                'ran_count' => null,
+            ];
             $checks['comparisons'] = [
                 'ok' => false,
                 'error' => 'Database unavailable',
@@ -499,6 +529,16 @@ class HealthController extends Controller
         ], $httpStatus];
     }
 
+    private function resolveAppVersion(): array
+    {
+        $version = trim((string) config('app.version', ''));
+
+        return [
+            'configured' => $version !== '',
+            'label' => $version !== '' ? $version : 'missing',
+        ];
+    }
+
     private function freeSpace(string $path): ?int
     {
         if (! is_dir($path)) {
@@ -507,6 +547,55 @@ class HealthController extends Controller
 
         $free = @disk_free_space($path);
         return $free === false ? null : (int) $free;
+    }
+
+    private function totalSpace(string $path): ?int
+    {
+        if (! is_dir($path)) {
+            return null;
+        }
+
+        $total = @disk_total_space($path);
+        return $total === false ? null : (int) $total;
+    }
+
+    private function diskCheck(string $key, string $label, string $path, int $warnGb, int $critGb): array
+    {
+        $exists = is_dir($path);
+        $writable = $exists && is_writable($path);
+        $free = $this->freeSpace($path);
+        $total = $this->totalSpace($path);
+        $warnBytes = $warnGb > 0 ? $warnGb * 1024 * 1024 * 1024 : null;
+        $critBytes = $critGb > 0 ? $critGb * 1024 * 1024 * 1024 : null;
+        $diskStatus = 'ok';
+
+        if ($free !== null) {
+            if ($critBytes !== null && $free <= $critBytes) {
+                $diskStatus = 'critical';
+            } elseif ($warnBytes !== null && $free <= $warnBytes) {
+                $diskStatus = 'warning';
+            }
+        }
+
+        if (! $exists || ! $writable || $free === null) {
+            $diskStatus = 'critical';
+        }
+
+        return [
+            'key' => $key,
+            'label' => $label,
+            'ok' => $exists && $writable && $free !== null,
+            'exists' => $exists,
+            'writable' => $writable,
+            'path' => $path,
+            'free_bytes' => $free,
+            'total_bytes' => $total,
+            'free_human' => $this->formatBytes($free),
+            'total_human' => $this->formatBytes($total),
+            'disk_status' => $diskStatus,
+            'warn_gb' => $warnGb,
+            'crit_gb' => $critGb,
+        ];
     }
 
     private function formatBytes(?int $bytes): ?string

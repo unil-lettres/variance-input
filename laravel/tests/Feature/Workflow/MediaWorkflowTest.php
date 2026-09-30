@@ -72,4 +72,33 @@ class MediaWorkflowTest extends TestCase
             }
         }
     }
+
+    public function test_media_upload_requires_work_edit_permission(): void
+    {
+        $owner = $this->signInEditor();
+        $work = $this->createEditableWork($owner, [], [
+            'title' => 'Média protégé',
+            'short_title' => 'mp',
+        ]);
+
+        $otherUser = \App\Models\User::factory()->create([
+            'name' => 'other-media-editor',
+            'full_name' => 'Other Media Editor',
+            'is_admin' => false,
+        ]);
+        $this->actingAs($otherUser);
+
+        $response = $this->postJson('/api/works/' . $work->id . '/media', [
+            'vignette' => UploadedFile::fake()->image('cover.jpg', 16, 16),
+        ]);
+
+        $response->assertForbidden()
+            ->assertJsonPath('error', 'Vous n’avez pas la permission de modifier cette œuvre.');
+
+        $this->assertDatabaseHas('works', [
+            'id' => $work->id,
+            'image_url' => null,
+            'pdf_url' => null,
+        ]);
+    }
 }

@@ -48,6 +48,13 @@ markers into comparison outputs.
    - Sidecar metadata includes `marker_count`, `missed_count`, canonical text
      hash, and per‑marker context snippets.
 
+   Offset safety note: the application/editor path keeps pagination aligned
+   after text, italics, superscript, and `<pb>` edits because offsets are
+   computed on tag-stripped plain TEI text, while reader display text re-adds
+   legacy inline markers only after slicing. Direct edits to XML files on disk
+   bypass that sync path; after such edits, rebuild or resync the sidecar from
+   `<pb>` and clear/rebuild reader artifacts before trusting pagination.
+
 4. **Progress tracking**  
    Version‑level progress is written to `storage/app/tmp/pager/{version_id}.json`
    so the UI can display “sidecar ready” once the job completes.
