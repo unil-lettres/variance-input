@@ -35,3 +35,11 @@ The first PR CI run failed while downloading packages from the live Bullseye sec
 The legacy Dockerfile now uses the Debian and Debian-security snapshots at `20260901T000000Z`, with update/install in the same layer. The test download from those snapshots succeeds. Per-source `check-valid-until=no` is required for frozen historical metadata; signature and package-hash validation remain active, following [Debian snapshot guidance](https://snapshot.debian.org/). No insecure repository flag or unchecked package install is used.
 
 This restores build reproducibility on the existing PHP 7.4 compatibility line; it does not provide ongoing security support for that legacy runtime. A supported-runtime migration remains separate from this dependency-lock refresh. The standalone production fallback runtime is untouched.
+
+## Medite installer follow-up
+
+The full installed-package inventory of the staging image exposed pip 25.0.1 inherited from the Python base image, outside `poetry.lock`. Its audit reported six distinct pip advisories (some duplicated by the advisory service), in addition to the known unpatched NLTK advisory. This is broader than GitHub's repository-lock alert count.
+
+The Medite Dockerfile now pins pip 26.2.1 before any other package installation. The newest affected range found by the audit is pip <26.2.0; see [the pip advisory](https://github.com/advisories/GHSA-qwm4-qh6w-59xr). Keep the application lock unchanged and validate the complete installed inventory, including Flask/Celery/Redis installed outside Poetry. Do not install the fix interactively into running containers: rebuild and promote an immutable image through staging.
+
+The local image build passes. Its installed inventory differs from the staged image only in pip (25.0.1 → 26.2.1); a full-inventory audit reports only the known unpatched NLTK advisory. Flask/Celery imports, native extension/CLI startup and French sentence spans through Medite's `gen_token` entry point pass. A direct NLTK smoke initially omitted Medite's resource-path initialization; the application entry point loads its bundled resource successfully. Staging delivery of this supplemental image remains a separate step.
