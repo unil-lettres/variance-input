@@ -123,7 +123,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                             <span class="label">Œuvre</span>
                             <span class="oeuvre__name"><?php
                                 if (!empty($_GET['work'])):
-                                    $workStatement = $cnx->prepare('SELECT `id`, `title` FROM works WHERE `folder` = :folder');
+                                    $workStatement = $cnx->prepare('SELECT `id`, `title`, `pdf_url`, `is_legacy` FROM works WHERE `folder` = :folder');
                                     $workStatement->execute(array('folder' => $_GET['work']));
                                     if ($work = $workStatement->fetch(PDO::FETCH_ASSOC)) {
                                         echo $work['title'];
@@ -149,7 +149,7 @@ if (!empty($_COOKIE['viewer_params'])) {
 
                                         $foldersSql = '"' . implode('","', $folders) . '"';
 
-                                        $foldersStatement = $cnx->prepare('SELECT c.number as c_number, c.folder as c_folder, c.prefix_label as c_prefix_label, v.name as name, v.folder folder FROM versions v, comparisons c WHERE v.folder IN (' . $foldersSql . ') AND work_id = :workid AND c.folder LIKE :folder ORDER BY c.number ASC');
+                                        $foldersStatement = $cnx->prepare('SELECT c.number as c_number, c.folder as c_folder, c.prefix_label as c_prefix_label, v.name as name, v.folder folder FROM versions v, comparisons c WHERE v.folder IN (' . $foldersSql . ') AND work_id = :workid AND c.folder LIKE :folder ORDER BY CASE WHEN COALESCE(c.sort_order, c.number) IS NULL THEN 1 ELSE 0 END, COALESCE(c.sort_order, c.number) ASC, c.id ASC');
                                         $foldersStatement->execute(array('workid' => $work['id'], 'folder' => $comparisonName));
 
 
@@ -214,11 +214,22 @@ if (!empty($_COOKIE['viewer_params'])) {
                             <?php endif; ?>
                         </div>
 
-                        <div class="book_settings__item book-info pull-left">
-                            <span class="label">Notice</span>
-                            <a href="<?php echo DIR_REL . '/workInfo.php?id=' . $work['id'] ?>" target="_blank"
-                               class="book-info__name"><img src="/img/book_info.svg"/></a>
-                        </div>
+                        <?php
+                        $noticePdf = trim((string) ($work['pdf_url'] ?? ''));
+                        if ($noticePdf === '' || !is_file(UPLOAD_ROOT . '/pdf/' . basename($noticePdf))) {
+                            $legacyNoticePdf = (int) ($work['id'] ?? 0) . '.pdf';
+                            $noticePdf = ((bool) ($work['is_legacy'] ?? false) && is_file(UPLOAD_ROOT . '/pdf/' . $legacyNoticePdf))
+                                ? $legacyNoticePdf
+                                : '';
+                        }
+                        ?>
+                        <?php if ($noticePdf !== ''): ?>
+                            <div class="book_settings__item book-info pull-left">
+                                <span class="label">Notice</span>
+                                <a href="<?php echo DIR_REL . '/workInfo.php?id=' . $work['id'] ?>" target="_blank"
+                                   class="book-info__name"><img src="/img/book_info.svg"/></a>
+                            </div>
+                        <?php endif; ?>
 
                         <a href="#" title="Cacher" class="btn_validate" data-type="comparison"><img
                                     src="/img/btn_up.svg"></a>
@@ -648,6 +659,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                 return;
             }
             viewer.load(imgObj.small || imgObj.big, imgObj.big || imgObj.small || '');
+            return true;
         }
         <?php
         }
@@ -720,6 +732,20 @@ if (!empty($_COOKIE['viewer_params'])) {
 
         $('#js-workarea-left .page-marker').first().click();
         $('#js-workarea-right .page-marker').first().click();
+        if ($('#js-workarea-left .page-marker').length === 0 && Array.isArray(imagesSource) && imagesSource.length) {
+            $('#js-workarea-left .paging-image').slideDown(400, function () {
+                if (showImage(viewerA, imagesSource, 1)) {
+                    currentSourceIdx = 1;
+                }
+            });
+        }
+        if ($('#js-workarea-right .page-marker').length === 0 && Array.isArray(imagesTarget) && imagesTarget.length) {
+            $('#js-workarea-right .paging-image').slideDown(400, function () {
+                if (showImage(viewerB, imagesTarget, 1)) {
+                    currentTargetIdx = 1;
+                }
+            });
+        }
 
         var params = {
             scrollInertia: 0

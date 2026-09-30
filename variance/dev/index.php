@@ -78,7 +78,7 @@ require_once 'php/settings.inc.php';
             <div class="col-lg-10 col-lg-offset-1 col-md-12 catalogue">
                 <?php
                 $draftWorkIds = array_map('intval', getWorkIdsWithDraftComparisons());
-                $comparisonQuery = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY c.number ASC';
+                $comparisonQuery = 'SELECT c.id as c_id, c.number as c_number, c.prefix_label as c_prefix_label, c.folder AS c_folder, c.publication_scope AS c_scope, s.name as s_name, t.name AS t_name FROM comparisons c INNER JOIN versions s ON c.source_id = s.id INNER JOIN versions t ON c.target_id = t.id WHERE s.work_id = :id ORDER BY CASE WHEN COALESCE(c.sort_order, c.number) IS NULL THEN 1 ELSE 0 END, COALESCE(c.sort_order, c.number) ASC, c.id ASC';
                 $comparisonFilter = static function (array $comparison, array $element): bool {
                     return comparisonIsDraft(
                         $element['a_folder'],

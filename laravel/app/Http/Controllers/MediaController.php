@@ -35,7 +35,7 @@ class MediaController extends Controller
      */
     public function store(Request $request, Work $work)
     {
-        if ($forbidden = $this->forbidIfCannotEditStepOne($work)) {
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
             return $forbidden;
         }
 
@@ -95,7 +95,7 @@ class MediaController extends Controller
      */
     public function destroy(Work $work, string $type)
     {
-        if ($forbidden = $this->forbidIfCannotEditStepOne($work)) {
+        if ($forbidden = $this->forbidIfCannotEdit($work)) {
             return $forbidden;
         }
 
@@ -126,17 +126,6 @@ class MediaController extends Controller
         if (!auth()->check() || !auth()->user()->can('edit', $work)) {
             return response()->json([
                 'error' => 'Vous n’avez pas la permission de modifier cette œuvre.',
-            ], 403);
-        }
-
-        return null;
-    }
-
-    private function forbidIfCannotEditStepOne(Work $work)
-    {
-        if (!auth()->check()) {
-            return response()->json([
-                'error' => 'Vous devez être connecté pour modifier cette œuvre.',
             ], 403);
         }
 

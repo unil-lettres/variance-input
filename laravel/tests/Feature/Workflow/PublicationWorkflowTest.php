@@ -496,6 +496,56 @@ class PublicationWorkflowTest extends TestCase
         $this->assertStringContainsString('img_' . $target->folder . '_001.jpg', File::get($targetLegacyManifest));
     }
 
+    public function test_publish_dev_builds_target_manifest_from_legacy_only_facsimiles(): void
+    {
+        $user = $this->signInEditor();
+        $work = $this->createEditableWork($user, [], [
+            'title' => 'Publication dev manifestes cible legacy',
+            'short_title' => 'pdmcl',
+        ]);
+        $source = Version::factory()->for($work)->create([
+            'name' => 'Source',
+            'folder' => '1pdmcl',
+        ]);
+        $target = Version::factory()->for($work)->create([
+            'name' => 'Cible',
+            'folder' => '2pdmcl',
+        ]);
+        $comparison = Comparison::factory()->create([
+            'source_id' => $source->id,
+            'target_id' => $target->id,
+            'folder' => '1pdmcl-2pdmcl-run1',
+            'created_by' => $user->id,
+        ]);
+
+        $this->writeComparisonArtifacts($comparison);
+        $this->writeFacsimilePair($source);
+
+        $authorFolder = $work->author->folder;
+        $workFolder = $work->folder;
+        $targetStorageDir = storage_path("app/public/uploads/{$authorFolder}/{$workFolder}/{$target->folder}");
+        $targetLegacyDir = base_path("../variance/uploads/{$authorFolder}/{$workFolder}/{$target->folder}");
+        File::deleteDirectory($targetStorageDir);
+        File::ensureDirectoryExists($targetLegacyDir);
+        File::put($targetLegacyDir . '/img_' . $target->folder . '_001.jpg', 'legacy target image');
+        File::put($targetLegacyDir . '/img_' . $target->folder . '_001_thumb.jpg', 'legacy target thumb');
+
+        $manifestBase = strtolower(sprintf('%s--%s--%s', $authorFolder, $workFolder, $comparison->folder));
+        $targetStorageManifest = storage_path("app/public/uploads/{$authorFolder}/{$workFolder}/{$target->folder}/images_target_{$manifestBase}.json");
+        $targetLegacyManifest = $targetLegacyDir . "/images_target_{$manifestBase}.json";
+
+        $this->postJson('/api/publish_xhtml', [
+            'comparison_id' => $comparison->id,
+            'destination' => 'dev',
+        ])->assertOk()
+            ->assertJsonPath('status', 'ok');
+
+        $this->assertFileExists($targetStorageManifest);
+        $this->assertFileExists($targetLegacyManifest);
+        $this->assertStringContainsString('/uploads/' . $authorFolder . '/' . $workFolder . '/' . $target->folder . '/img_' . $target->folder . '_001.jpg', File::get($targetStorageManifest));
+        $this->assertStringContainsString('/uploads/' . $authorFolder . '/' . $workFolder . '/' . $target->folder . '/img_' . $target->folder . '_001_thumb.jpg', File::get($targetLegacyManifest));
+    }
+
     public function test_publish_skips_already_synced_read_only_legacy_facsimiles(): void
     {
         $user = $this->signInEditor();

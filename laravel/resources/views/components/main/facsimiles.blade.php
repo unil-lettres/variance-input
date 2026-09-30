@@ -13,36 +13,21 @@
                 <div class="facsimile-reader-controls">
                     <div class="facsimile-reader-control-group">
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="facsimile-reader-prev">‹ Page précédente</button>
-                        <select id="facsimile-reader-page" class="form-select form-select-sm"></select>
+                        <span class="facsimile-reader-page-select-wrap">
+                            <select id="facsimile-reader-page" class="form-select form-select-sm" aria-label="Choisir une page"></select>
+                        </span>
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="facsimile-reader-next">Page suivante ›</button>
-                    </div>
-                    <div class="facsimile-reader-control-group">
-                        <select id="facsimile-reader-text-source" class="form-select form-select-sm" title="Choisir la source du texte affiché">
-                            <option value="auto">Source texte auto</option>
-                        </select>
-                        <select id="facsimile-reader-encoding" class="form-select form-select-sm" title="Ajuster l’encodage si le rendu du texte est visiblement incorrect">
-                            <option value="auto">Encodage auto</option>
-                            <option value="UTF-8">UTF-8</option>
-                            <option value="Windows-1252">Windows-1252</option>
-                            <option value="ISO-8859-1">ISO-8859-1</option>
-                            <option value="Mac Roman">Mac Roman</option>
-                        </select>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="facsimile-reader-rebuild" title="Reconstruire le dataset du lecteur pour cette version">Reconstruire</button>
-                        <span id="facsimile-reader-action-status" class="small text-muted facsimile-reader-action-status" aria-live="polite"></span>
-                        <button type="button" class="btn btn-sm btn-outline-success d-none" id="facsimile-reader-convert-utf8" disabled aria-hidden="true" tabindex="-1">Convertir en UTF-8</button>
                     </div>
                 </div>
             </div>
 
             <div id="facsimile-reader-loading" class="facsimile-reader-loading d-none" aria-hidden="true">
                 <div class="facsimile-reader-loading-spinner spinner-border text-secondary" role="status" aria-hidden="true"></div>
-                <div id="facsimile-reader-loading-label" class="facsimile-reader-loading-label small text-muted">Chargement du viewer…</div>
-                <div class="visually-hidden" role="status">Chargement du viewer</div>
+                <div id="facsimile-reader-loading-label" class="facsimile-reader-loading-label small text-muted">Chargement du visualisateur…</div>
+                <div class="visually-hidden" role="status">Chargement du visualisateur</div>
             </div>
 
-            <div id="facsimile-reader-empty" class="facsimile-reader-empty text-muted small">
-                Les repères de pagination de cette version permettront d’aligner le fac-similé et le texte ici.
-            </div>
+            <div id="facsimile-reader-empty" class="facsimile-reader-empty text-muted small d-none"></div>
 
             <div id="facsimile-reader-carousel" class="facsimile-reader-carousel d-none">
                 <button type="button" class="btn btn-sm btn-outline-secondary facsimile-reader-carousel-nav" id="facsimile-reader-carousel-prev" aria-label="Miniatures précédentes">‹</button>
@@ -51,44 +36,26 @@
             </div>
 
             <div id="facsimile-reader-workspace" class="facsimile-reader-workspace d-none">
-                <section class="facsimile-reader-pane">
-                    <div class="facsimile-reader-pane-heading">
-                        <div class="fw-semibold">Fac-similé</div>
+                <section class="facsimile-reader-pane facsimile-reader-image-pane">
+                    <div class="facsimile-reader-pane-heading facsimile-reader-image-heading">
                         <div id="facsimile-reader-image-meta" class="small text-muted"></div>
                     </div>
-                    <div class="facsimile-reader-pane-toolbar">
-                        <div class="btn-group btn-group-sm" role="group" aria-label="Ajustement de l'image">
-                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-auto" aria-pressed="true">Auto</button>
-                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-width">Largeur</button>
-                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-height">Hauteur</button>
-                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-fit-natural">Réel</button>
-                        </div>
-                        <div class="btn-group btn-group-sm" role="group" aria-label="Recadrage de l'image">
-                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-crop-set">Recadrer</button>
-                            <button type="button" class="btn btn-outline-secondary" id="facsimile-reader-crop-clear" disabled>Effacer cadre</button>
-                        </div>
-                    </div>
                     <div class="facsimile-reader-image-shell">
-                        <div id="facsimile-reader-crop-viewport" class="facsimile-reader-crop-viewport">
-                            <img id="facsimile-reader-image" class="facsimile-reader-image" alt="Fac-similé synchronisé">
-                            <div id="facsimile-reader-crop-overlay" class="facsimile-reader-crop-overlay d-none">
-                                <div id="facsimile-reader-crop-rect" class="facsimile-reader-crop-rect d-none"></div>
-                            </div>
-                            <div id="facsimile-reader-image-empty" class="facsimile-reader-image-empty d-none">
-                                <button type="button" class="btn btn-link facsimile-reader-image-empty-action" id="facsimile-reader-upload-prompt">
-                                    <span class="facsimile-reader-image-empty-icon" aria-hidden="true">
-                                        <i class="bi bi-cloud-arrow-up"></i>
-                                    </span>
-                                    <span class="facsimile-reader-image-empty-text">Téléverser des fac-similés pour cette version</span>
-                                </button>
-                            </div>
+                        <img id="facsimile-reader-image" class="facsimile-reader-image" alt="Fac-similé synchronisé">
+                        <div id="facsimile-reader-image-empty" class="facsimile-reader-image-empty d-none">
+                            <button type="button" class="btn btn-link facsimile-reader-image-empty-action" id="facsimile-reader-upload-prompt">
+                                <span class="facsimile-reader-image-empty-icon" aria-hidden="true">
+                                    <i class="bi bi-cloud-arrow-up"></i>
+                                </span>
+                                <span class="facsimile-reader-image-empty-text">Téléverser des fac-similés pour cette version</span>
+                            </button>
                         </div>
                     </div>
                 </section>
 
-                <section class="facsimile-reader-pane">
-                    <div class="facsimile-reader-pane-heading">
-                        <div class="fw-semibold">Texte</div>
+                <section class="facsimile-reader-pane facsimile-reader-text-pane">
+                    <div class="facsimile-reader-pane-heading facsimile-reader-text-heading">
+                        <div id="facsimile-reader-anchor-heading" class="facsimile-reader-anchor-heading is-placeholder">Texte</div>
                         <div id="facsimile-reader-text-meta" class="small text-muted"></div>
                     </div>
                     <pre id="facsimile-reader-text" class="facsimile-reader-text"></pre>
@@ -275,6 +242,8 @@
         border: 0;
         border-radius: 0;
         padding: 0;
+        max-width: 100%;
+        overflow-x: clip;
     }
     .facsimile-reader-card-header .admin-card-heading {
         width: 100%;
@@ -325,20 +294,43 @@
         gap: 0.6rem;
         flex-wrap: nowrap;
     }
-    .facsimile-reader-action-status {
-        min-height: 1.25rem;
-        display: inline-flex;
-        align-items: center;
-        white-space: nowrap;
-    }
     .facsimile-reader-controls select {
         min-width: 0;
     }
-    #facsimile-reader-page {
-        width: 11rem;
+    .facsimile-reader-page-select-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 13rem;
+        min-width: 0;
     }
-    #facsimile-reader-encoding {
-        width: 10.5rem;
+    .facsimile-reader-page-select-wrap::after {
+        content: "";
+        position: absolute;
+        right: 0.7rem;
+        top: 50%;
+        width: 0.45rem;
+        height: 0.45rem;
+        border-right: 2px solid #6f6256;
+        border-bottom: 2px solid #6f6256;
+        pointer-events: none;
+        transform: translateY(-65%) rotate(45deg);
+    }
+    #facsimile-reader-page {
+        width: 100%;
+        padding-right: 2rem;
+        border-color: #c9bba8;
+        background-color: #fffdf9;
+        color: #43382c;
+        font-weight: 600;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: none;
+    }
+    #facsimile-reader-page:focus {
+        border-color: #8aa7d8;
+        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.15);
     }
     .facsimile-reader-empty {
         border: 1px dashed #d4cec3;
@@ -378,6 +370,8 @@
         border: 1px solid #ddd4c8;
         border-radius: 0.9rem;
         background: rgba(255, 255, 255, 0.72);
+        max-width: 100%;
+        overflow: hidden;
     }
     .facsimile-reader-carousel-nav {
         width: 2.25rem;
@@ -395,6 +389,9 @@
         overflow-y: hidden;
         scroll-behavior: smooth;
         padding-bottom: 0.2rem;
+    }
+    .facsimile-reader-thumbs.is-centered {
+        justify-content: center;
     }
     .facsimile-reader-thumb-card {
         flex: 0 0 auto;
@@ -432,17 +429,41 @@
         font-size: 0.74rem;
         line-height: 1.3;
         color: #4f4a43;
+        text-align: center;
         word-break: break-word;
+    }
+    .facsimile-reader-thumb-page-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        min-height: 1.25rem;
+        padding: 0.12rem 0.48rem;
+        border: 1px solid #d6cabd;
+        border-radius: 999px;
+        background: #fffdf9;
+        color: #4f463d;
+        font-size: 0.72rem;
+        font-weight: 600;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .facsimile-reader-thumb-card.is-current .facsimile-reader-thumb-caption {
         color: #184b96;
         font-weight: 600;
     }
+    .facsimile-reader-thumb-card.is-current .facsimile-reader-thumb-page-pill {
+        border-color: #8cb8f7;
+        background: #eaf2ff;
+        color: #184b96;
+    }
     .facsimile-reader-workspace {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 1rem;
-        align-items: stretch;
+        align-items: start;
     }
     .facsimile-reader-pane {
         min-width: 0;
@@ -452,28 +473,29 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        min-height: 40rem;
+        min-height: 0;
+    }
+    .facsimile-reader-image-pane {
+        height: auto;
+    }
+    .facsimile-reader-text-pane {
+        height: auto;
     }
     .facsimile-reader-pane-heading {
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 0.75rem;
-        padding: 0.5rem 0.85rem;
+        padding: 0.35rem 0.85rem;
         border-bottom: 1px solid #e5ded2;
         background: rgba(248, 245, 239, 0.92);
+        height: 2.5rem;
         min-height: 2.5rem;
         font-size: 0.92rem;
+        overflow: hidden;
     }
-    .facsimile-reader-pane-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: center;
-        gap: 0.45rem;
-        padding: 0.45rem 0.85rem;
-        border-bottom: 1px solid #ece4d8;
-        background: rgba(252, 249, 244, 0.92);
+    .facsimile-reader-image-heading {
+        justify-content: flex-end;
     }
     .facsimile-reader-pane-heading .fw-semibold {
         font-size: 0.9rem;
@@ -483,33 +505,85 @@
     .facsimile-reader-pane-heading .small {
         font-size: 0.76rem;
         line-height: 1.35;
+        flex: 0 0 auto;
+        text-align: right;
+        max-width: 42%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .facsimile-reader-pane-toolbar .btn-group > .btn {
-        min-width: 5.4rem;
+    .facsimile-reader-text-heading {
+        gap: 0.45rem;
+    }
+    .facsimile-reader-text-heading .small {
+        max-width: 7.5rem;
+    }
+    .facsimile-reader-anchor-heading {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.38rem;
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 0.1rem 0.55rem;
+        border-radius: 0.35rem;
+        background: #eaf2ff;
+        color: #23446f;
+        font-size: 0.76rem;
+        font-weight: 600;
+        line-height: 1.3;
+        outline: none;
+        cursor: default;
+    }
+    .facsimile-reader-anchor-heading.is-anchor-unmatched {
+        background: #f4f1eb;
+        color: #5f574c;
+    }
+    .facsimile-reader-anchor-heading.is-anchor-approx {
+        background: #fff5dc;
+        color: #6b5222;
+    }
+    .facsimile-reader-anchor-heading:not(.is-placeholder):hover,
+    .facsimile-reader-anchor-heading:not(.is-placeholder):focus-visible {
+        box-shadow: 0 0 0 0.14rem rgba(255, 213, 74, 0.32);
+    }
+    .facsimile-reader-anchor-quote {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #23446f;
+    }
+    .facsimile-reader-anchor-heading.is-placeholder {
+        display: block;
+        padding-left: 0;
+        border-left: 0;
+        background: transparent;
+        color: #43382c;
+        font-size: 0.9rem;
+        letter-spacing: 0.01em;
+    }
+    .facsimile-reader-anchor-heading.is-placeholder .facsimile-reader-anchor-quote {
+        display: none;
     }
     .facsimile-reader-image-shell {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         padding: 1rem;
         display: flex;
         align-items: flex-start;
         justify-content: center;
         background: #f7f3ed;
-        overflow: auto;
-    }
-    .facsimile-reader-crop-viewport {
-        position: relative;
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        width: 100%;
-        min-height: 100%;
-        overflow: hidden;
+        overflow: visible;
     }
     .facsimile-reader-image {
         display: block;
         max-width: 100%;
-        max-height: 72vh;
-        width: auto;
+        max-height: none;
+        width: 100%;
         height: auto;
         object-fit: contain;
         border: 1px solid #d5cdc0;
@@ -550,73 +624,42 @@
         text-align: center;
         line-height: 1.4;
     }
-    .facsimile-reader.has-user-crop .facsimile-reader-crop-viewport {
-        align-items: stretch;
-        justify-content: stretch;
-    }
-    .facsimile-reader.fit-width .facsimile-reader-image-shell,
-    .facsimile-reader.fit-height .facsimile-reader-image-shell,
-    .facsimile-reader.fit-natural .facsimile-reader-image-shell {
-        align-items: flex-start;
-        justify-content: flex-start;
-    }
-    .facsimile-reader.fit-auto .facsimile-reader-image {
-        max-width: 100%;
-        max-height: 72vh;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-    }
-    .facsimile-reader.fit-width .facsimile-reader-image {
-        max-width: 100%;
-        width: 100%;
-        height: auto;
-        max-height: none;
-        object-fit: contain;
-    }
-    .facsimile-reader.fit-height .facsimile-reader-image {
-        width: auto;
-        height: 72vh;
-        max-width: none;
-        max-height: 72vh;
-        object-fit: contain;
-    }
-    .facsimile-reader.fit-natural .facsimile-reader-image {
-        max-width: none;
-        max-height: none;
-        width: auto;
-        height: auto;
-        object-fit: initial;
-    }
-    .facsimile-reader-crop-overlay {
-        position: absolute;
-        inset: 0;
-        cursor: crosshair;
-        background: rgba(255, 255, 255, 0.08);
-    }
-    .facsimile-reader-crop-rect {
-        position: absolute;
-        border: 2px solid #0d6efd;
-        background: rgba(13, 110, 253, 0.10);
-        box-shadow: 0 0 0 9999px rgba(17, 24, 39, 0.18);
-        pointer-events: none;
-    }
     .facsimile-reader-text {
         margin: 0;
-        padding: 1rem 1.1rem 1.3rem;
+        padding: clamp(1.1rem, 3vw, 1.8rem) clamp(1.35rem, 4.5vw, 3.5rem) clamp(1.35rem, 3vw, 2rem);
         white-space: pre-wrap;
         word-break: break-word;
         overflow: auto;
-        flex: 1 1 auto;
-        max-height: min(72vh, 68rem);
+        flex: 1 1 0;
+        min-height: 0;
         background: #fffdf9;
-        font-size: 0.94rem;
-        line-height: 1.7;
+        font-size: var(--facsimile-reader-text-size, 0.96rem);
+        line-height: var(--facsimile-reader-text-line-height, 1.64);
         color: #2f2a24;
         text-align: justify;
         text-justify: inter-word;
         scrollbar-width: thin;
         scrollbar-color: #c0b4a6 #f4efe8;
+    }
+    .facsimile-reader-text-anchor-mark {
+        padding: 0;
+        border-radius: 0.12rem;
+        background: transparent;
+        color: inherit;
+        text-decoration-line: underline;
+        text-decoration-thickness: 0.11em;
+        text-decoration-color: transparent;
+        text-underline-offset: 0.18em;
+        transition: background-color .16s ease, box-shadow .16s ease, text-decoration-color .16s ease, text-shadow .16s ease;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+    }
+    .facsimile-reader.is-anchor-hovered .facsimile-reader-text-anchor-mark,
+    .facsimile-reader-text-anchor-mark:hover {
+        background: rgba(255, 241, 168, 0.22);
+        box-shadow: 0 0 0.45rem rgba(255, 217, 64, 0.6);
+        text-decoration-color: #f1c400;
+        text-shadow: 0 0 0.2rem rgba(255, 221, 82, 0.75);
     }
     .facsimile-reader-text::-webkit-scrollbar {
         width: 0.7rem;
@@ -628,18 +671,6 @@
         background: #c0b4a6;
         border-radius: 999px;
         border: 2px solid #f4efe8;
-    }
-    .facsimile-reader-anchor {
-        display: inline-block;
-        margin: 0 0.35rem 0.35rem 0;
-        padding: 0.08rem 0.48rem;
-        border-radius: 999px;
-        background: #d7e5ff;
-        color: #294a7a;
-        font-size: 0.78rem;
-        font-weight: 600;
-        line-height: 1.4;
-        vertical-align: middle;
     }
     @media (max-width: 991.98px) {
         .facsimile-reader-toolbar {
@@ -654,14 +685,14 @@
         .facsimile-reader-control-group {
             flex-wrap: wrap;
         }
-        .facsimile-reader-pane-toolbar {
-            justify-content: flex-start;
+        .facsimile-reader-page-select-wrap {
+            width: min(100%, 13rem);
         }
         .facsimile-reader-workspace {
             grid-template-columns: 1fr;
         }
         .facsimile-reader-pane {
-            min-height: 22rem;
+            min-height: 0;
         }
         .facsimile-reader-carousel {
             grid-template-columns: 1fr;
@@ -703,20 +734,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const readerNextBtn     = document.getElementById('facsimile-reader-next');
     const readerPageSelect  = document.getElementById('facsimile-reader-page');
     const readerImageEl     = document.getElementById('facsimile-reader-image');
+    const readerImagePaneEl = document.querySelector('.facsimile-reader-image-pane');
+    const readerTextPaneEl  = document.querySelector('.facsimile-reader-text-pane');
     const readerImageEmptyEl = document.getElementById('facsimile-reader-image-empty');
     const readerUploadPromptBtn = document.getElementById('facsimile-reader-upload-prompt');
-    const readerCropViewportEl = document.getElementById('facsimile-reader-crop-viewport');
-    const readerCropOverlayEl = document.getElementById('facsimile-reader-crop-overlay');
-    const readerCropRectEl  = document.getElementById('facsimile-reader-crop-rect');
     const readerImageMetaEl = document.getElementById('facsimile-reader-image-meta');
+    const readerAnchorHeadingEl = document.getElementById('facsimile-reader-anchor-heading');
     const readerTextEl      = document.getElementById('facsimile-reader-text');
     const readerTextMetaEl  = document.getElementById('facsimile-reader-text-meta');
-    const readerFitAutoBtn  = document.getElementById('facsimile-reader-fit-auto');
-    const readerFitWidthBtn = document.getElementById('facsimile-reader-fit-width');
-    const readerFitHeightBtn = document.getElementById('facsimile-reader-fit-height');
-    const readerFitNaturalBtn = document.getElementById('facsimile-reader-fit-natural');
-    const readerCropSetBtn  = document.getElementById('facsimile-reader-crop-set');
-    const readerCropClearBtn = document.getElementById('facsimile-reader-crop-clear');
     const readerTextSourceSelect = document.getElementById('facsimile-reader-text-source');
     const readerEncodingSelect = document.getElementById('facsimile-reader-encoding');
     const readerRebuildBtn  = document.getElementById('facsimile-reader-rebuild');
@@ -749,6 +774,97 @@ document.addEventListener('DOMContentLoaded', () => {
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
 
+    function renderReaderInlineMarkup(rawText, insertions = []) {
+        const text = String(rawText ?? '');
+        const insertionList = (Array.isArray(insertions) ? insertions : (insertions ? [insertions] : []))
+            .filter(insertion => Number.isFinite(Number(insertion?.offset)))
+            .map(insertion => ({
+                offset: Math.max(0, Math.min(text.length, Number(insertion.offset))),
+                html: String(insertion.html || ''),
+            }))
+            .sort((a, b) => a.offset - b.offset);
+        let insertionIndex = 0;
+        const parts = [];
+        const stack = [];
+        let buffer = '';
+
+        const flushBuffer = () => {
+            if (buffer === '') return;
+            parts.push({ type: 'text', value: buffer });
+            buffer = '';
+        };
+
+        const isInlineMarker = (char) => char === '\\' || char === '^';
+
+        for (let i = 0; i <= text.length; i++) {
+            while (insertionIndex < insertionList.length && insertionList[insertionIndex].offset === i) {
+                flushBuffer();
+                parts.push({ type: 'html', value: insertionList[insertionIndex].html });
+                insertionIndex++;
+            }
+
+            if (i >= text.length) {
+                break;
+            }
+
+            const char = text[i];
+            if (!isInlineMarker(char)) {
+                buffer += char;
+                continue;
+            }
+
+            flushBuffer();
+
+            const markerPartIndex = parts.length;
+            parts.push({
+                type: 'marker',
+                marker: char,
+                convert: false,
+                tag: null,
+            });
+
+            const top = stack.length ? stack[stack.length - 1] : null;
+            if (top && top.marker === char) {
+                stack.pop();
+                parts[top.partIndex].convert = true;
+                parts[top.partIndex].tag = 'open';
+                parts[markerPartIndex].convert = true;
+                parts[markerPartIndex].tag = 'close';
+                continue;
+            }
+
+            const crossedIndex = stack.findIndex(entry => entry.marker === char);
+            if (crossedIndex >= 0) {
+                stack.splice(crossedIndex, 1);
+                continue;
+            }
+
+            stack.push({ marker: char, partIndex: markerPartIndex });
+        }
+
+        flushBuffer();
+
+        return parts.map(part => {
+            if (part.type === 'text') {
+                return escapeHtml(part.value || '');
+            }
+            if (part.type === 'html') {
+                return part.value || '';
+            }
+            if (part.convert !== true) {
+                return escapeHtml(part.marker || '');
+            }
+            if (part.marker === '\\') {
+                return part.tag === 'open' ? '<em>' : '</em>';
+            }
+            if (part.marker === '^') {
+                return part.tag === 'open' ? '<sup>' : '</sup>';
+            }
+
+            return escapeHtml(part.marker || '');
+        }).join('');
+    }
+
     let galleryFiles      = [];
     let galleryPage       = 1;
     let currentWorkId     = null;
@@ -779,7 +895,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let readerPages          = [];
     let readerPageIndex      = 0;
     let readerImageIndex     = 0;
-    let readerFitMode        = 'auto';
     let readerTextSource     = 'auto';
     let readerEncoding       = 'auto';
     let readerRebuildBusy    = false;
@@ -790,25 +905,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let facsimileSelectionInFlight = false;
     let pendingFacsimileSelection = null;
     let readerPageRequestToken = 0;
+    let readerImageRequestToken = 0;
     const readerPageLoadPromises = new Map();
     const readerImagePrefetchUrls = new Set();
-    let readerCropMode       = false;
-    let readerCurrentCrop    = null;
-    let readerCropDraft      = null;
-    let readerCropImageRect  = null;
-    let readerCropResizeObserver = null;
-
-    function loadReaderFitPreference() {
-        try {
-            const stored = window.localStorage?.getItem('variance.facsimileReader.fitMode');
-            if (['auto', 'width', 'height', 'natural'].includes(String(stored))) {
-                return String(stored);
-            }
-            if (stored === '0') return 'natural';
-            if (stored === '1') return 'auto';
-        } catch (_) {}
-        return 'auto';
-    }
 
     function readerEncodingStorageKey(versionId) {
         return `variance.facsimileReader.encoding.${versionId || 'default'}`;
@@ -821,6 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function normalizeReaderTextSource(value) {
         const raw = String(value || '').trim();
         if (!raw || raw.toLowerCase() === 'auto') return 'auto';
+        if (raw === 'version-tei') return 'version-tei';
         if (raw === 'version-txt') return 'version-txt';
         if (raw === 'comparison-xhtml') return 'comparison-xhtml';
         return 'auto';
@@ -861,47 +961,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveReaderEncodingPreference(versionId, value) {
         try {
             window.localStorage?.setItem(readerEncodingStorageKey(versionId), normalizeReaderEncoding(value));
-        } catch (_) {}
-    }
-
-    function readerCropStorageKey(versionId, imageName) {
-        return `variance.facsimileReader.crop.${versionId || 'default'}.${imageName || 'image'}`;
-    }
-
-    function loadStoredReaderCrop(versionId, imageName) {
-        if (!versionId || !imageName) return null;
-        try {
-            const raw = window.localStorage?.getItem(readerCropStorageKey(versionId, imageName));
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            const x = Number(parsed?.x);
-            const y = Number(parsed?.y);
-            const w = Number(parsed?.w);
-            const h = Number(parsed?.h);
-            if (![x, y, w, h].every(Number.isFinite)) return null;
-            if (w <= 0 || h <= 0) return null;
-            return {
-                x: Math.max(0, Math.min(1, x)),
-                y: Math.max(0, Math.min(1, y)),
-                w: Math.max(0.01, Math.min(1, w)),
-                h: Math.max(0.01, Math.min(1, h)),
-            };
-        } catch (_) {
-            return null;
-        }
-    }
-
-    function saveStoredReaderCrop(versionId, imageName, crop) {
-        if (!versionId || !imageName || !crop) return;
-        try {
-            window.localStorage?.setItem(readerCropStorageKey(versionId, imageName), JSON.stringify(crop));
-        } catch (_) {}
-    }
-
-    function clearStoredReaderCrop(versionId, imageName) {
-        if (!versionId || !imageName) return;
-        try {
-            window.localStorage?.removeItem(readerCropStorageKey(versionId, imageName));
         } catch (_) {}
     }
 
@@ -975,37 +1034,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return readerPages[readerPageIndex]?.image || null;
     }
 
-    function currentReaderImageName() {
-        return currentDisplayedReaderImage()?.name || null;
-    }
-
-    function hideReaderCropOverlay() {
-        if (readerCropOverlayEl) {
-            readerCropOverlayEl.classList.add('d-none');
-        }
-        if (readerCropRectEl) {
-            readerCropRectEl.classList.add('d-none');
-            readerCropRectEl.style.left = '';
-            readerCropRectEl.style.top = '';
-            readerCropRectEl.style.width = '';
-            readerCropRectEl.style.height = '';
-        }
-    }
-
-    function updateReaderCropControls() {
-        const hasImage = !!currentReaderImageName();
-        const hasCrop = !!readerCurrentCrop;
-        if (readerCropSetBtn) {
-            readerCropSetBtn.disabled = !hasImage;
-            readerCropSetBtn.classList.toggle('btn-primary', readerCropMode);
-            readerCropSetBtn.classList.toggle('btn-outline-secondary', !readerCropMode);
-            readerCropSetBtn.textContent = readerCropMode ? 'Tracer le cadre…' : 'Recadrer';
-        }
-        if (readerCropClearBtn) {
-            readerCropClearBtn.disabled = !hasImage || !hasCrop || readerCropMode;
-        }
-    }
-
     function resetReaderImageInlineStyles() {
         if (!readerImageEl) return;
         readerImageEl.style.position = '';
@@ -1018,96 +1046,79 @@ document.addEventListener('DOMContentLoaded', () => {
         readerImageEl.style.transform = '';
     }
 
-    function applyReaderCropDisplay() {
-        if (!readerRoot || !readerImageEl || !readerCropViewportEl) return;
-        readerRoot.classList.remove('has-user-crop', 'crop-mode');
-        resetReaderImageInlineStyles();
+    function resetReaderPaneLayout() {
+        if (readerTextPaneEl) {
+            readerTextPaneEl.style.height = '';
+        }
+        if (readerTextEl) {
+            readerTextEl.style.removeProperty('--facsimile-reader-text-size');
+            readerTextEl.style.removeProperty('--facsimile-reader-text-line-height');
+        }
+    }
 
-        if (readerCropMode) {
-            readerRoot.classList.add('crop-mode');
-            if (readerCropOverlayEl) {
-                readerCropOverlayEl.classList.remove('d-none');
+    function setReaderTextScale(fontSizePx, lineHeight) {
+        if (!readerTextEl) return;
+        readerTextEl.style.setProperty('--facsimile-reader-text-size', `${fontSizePx.toFixed(2)}px`);
+        readerTextEl.style.setProperty('--facsimile-reader-text-line-height', lineHeight.toFixed(2));
+    }
+
+    function fitReaderTextToPane() {
+        if (!readerTextEl || !readerTextPaneEl || readerTextPaneEl.classList.contains('d-none')) return;
+        if (!readerTextEl.textContent.trim()) {
+            readerTextEl.style.removeProperty('--facsimile-reader-text-size');
+            readerTextEl.style.removeProperty('--facsimile-reader-text-line-height');
+            return;
+        }
+
+        const availableHeight = readerTextEl.clientHeight;
+        const availableWidth = readerTextEl.clientWidth;
+        if (availableHeight <= 0 || availableWidth <= 0) return;
+
+        const minFontSize = 12;
+        const maxFontSize = 16;
+        const minLineHeight = 1.38;
+        const maxLineHeight = 1.66;
+        let low = minFontSize;
+        let high = maxFontSize;
+        let best = minFontSize;
+        let bestLineHeight = minLineHeight;
+
+        for (let i = 0; i < 9; i++) {
+            const next = (low + high) / 2;
+            const ratio = (next - minFontSize) / (maxFontSize - minFontSize);
+            const lineHeight = minLineHeight + ((maxLineHeight - minLineHeight) * ratio);
+            setReaderTextScale(next, lineHeight);
+
+            const fitsHeight = readerTextEl.scrollHeight <= availableHeight + 2;
+            const fitsWidth = readerTextEl.scrollWidth <= availableWidth + 2;
+            if (fitsHeight && fitsWidth) {
+                best = next;
+                bestLineHeight = lineHeight;
+                low = next;
+            } else {
+                high = next;
             }
-            return;
         }
 
-        hideReaderCropOverlay();
-
-        if (!readerCurrentCrop || !readerImageEl.complete || !readerImageEl.naturalWidth || !readerImageEl.naturalHeight) {
-            return;
-        }
-
-        const viewportWidth = readerCropViewportEl.clientWidth;
-        const viewportHeight = readerCropViewportEl.clientHeight;
-        if (viewportWidth <= 0 || viewportHeight <= 0) {
-            return;
-        }
-
-        const naturalWidth = readerImageEl.naturalWidth;
-        const naturalHeight = readerImageEl.naturalHeight;
-        const srcX = naturalWidth * readerCurrentCrop.x;
-        const srcY = naturalHeight * readerCurrentCrop.y;
-        const srcW = naturalWidth * readerCurrentCrop.w;
-        const srcH = naturalHeight * readerCurrentCrop.h;
-
-        if (srcW <= 0 || srcH <= 0) {
-            return;
-        }
-
-        const scale = Math.min(viewportWidth / srcW, viewportHeight / srcH);
-        const displayWidth = naturalWidth * scale;
-        const displayHeight = naturalHeight * scale;
-        const offsetX = -srcX * scale + ((viewportWidth - srcW * scale) / 2);
-        const offsetY = -srcY * scale + ((viewportHeight - srcH * scale) / 2);
-
-        readerRoot.classList.add('has-user-crop');
-        readerImageEl.style.position = 'absolute';
-        readerImageEl.style.left = `${offsetX}px`;
-        readerImageEl.style.top = `${offsetY}px`;
-        readerImageEl.style.width = `${displayWidth}px`;
-        readerImageEl.style.height = `${displayHeight}px`;
-        readerImageEl.style.maxWidth = 'none';
-        readerImageEl.style.maxHeight = 'none';
+        setReaderTextScale(best, bestLineHeight);
     }
 
-    function syncReaderCropForCurrentPage() {
-        readerCropMode = false;
-        readerCropDraft = null;
-        readerCropImageRect = null;
-        readerCurrentCrop = loadStoredReaderCrop(currentVersionId, currentReaderImageName());
-        hideReaderCropOverlay();
-        updateReaderCropControls();
-        requestAnimationFrame(() => applyReaderCropDisplay());
+    function syncReaderPaneLayout() {
+        if (!readerWorkspaceEl || readerWorkspaceEl.classList.contains('d-none')) return;
+        if (!readerImagePaneEl || !readerTextPaneEl || !readerTextEl) return;
+
+        resetReaderPaneLayout();
+
+        const imagePaneHeight = Math.ceil(readerImagePaneEl.getBoundingClientRect().height);
+        if (imagePaneHeight <= 0) return;
+
+        readerTextPaneEl.style.height = `${imagePaneHeight}px`;
+        window.requestAnimationFrame(fitReaderTextToPane);
     }
 
-    function applyReaderFitMode() {
-        if (!readerRoot) return;
-        readerRoot.classList.remove('fit-auto', 'fit-width', 'fit-height', 'fit-natural');
-        readerRoot.classList.add(`fit-${readerFitMode}`);
-
-        const buttons = [
-            [readerFitAutoBtn, 'auto'],
-            [readerFitWidthBtn, 'width'],
-            [readerFitHeightBtn, 'height'],
-            [readerFitNaturalBtn, 'natural'],
-        ];
-        buttons.forEach(([btn, mode]) => {
-            if (!btn) return;
-            const active = readerFitMode === mode;
-            btn.classList.toggle('btn-primary', active);
-            btn.classList.toggle('btn-outline-secondary', !active);
-            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-        });
-    }
-
-    function setReaderFitMode(nextValue) {
-        readerFitMode = ['auto', 'width', 'height', 'natural'].includes(String(nextValue))
-            ? String(nextValue)
-            : 'auto';
-        try {
-            window.localStorage?.setItem('variance.facsimileReader.fitMode', readerFitMode);
-        } catch (_) {}
-        applyReaderFitMode();
+    function applyReaderImageDisplay() {
+        if (!readerImageEl) return;
+        resetReaderImageInlineStyles();
     }
 
     function openFacsimilesPanel() {
@@ -1124,8 +1135,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     let pendingManifestFocus = null;
 
-    readerFitMode = loadReaderFitPreference();
-    applyReaderFitMode();
     applyReaderEncodingControl();
     applyReaderRebuildControl();
 
@@ -1165,6 +1174,30 @@ document.addEventListener('DOMContentLoaded', () => {
         readerActionStatusEl.textContent = message;
     }
 
+    function setReaderAnchorHeading(label = 'Texte', isAnchor = false, options = {}) {
+        if (!readerAnchorHeadingEl) return;
+        const normalizedLabel = label || 'Texte';
+        const tone = ['exact', 'approx', 'unmatched'].includes(String(options.tone || ''))
+            ? String(options.tone)
+            : 'exact';
+        readerAnchorHeadingEl.classList.remove('is-anchor-exact', 'is-anchor-approx', 'is-anchor-unmatched');
+        readerAnchorHeadingEl.classList.toggle('is-placeholder', !isAnchor);
+        if (!isAnchor) {
+            readerAnchorHeadingEl.title = normalizedLabel;
+            readerAnchorHeadingEl.textContent = normalizedLabel;
+            readerAnchorHeadingEl.removeAttribute('tabindex');
+            return;
+        }
+
+        readerAnchorHeadingEl.classList.add(`is-anchor-${tone}`);
+        readerAnchorHeadingEl.setAttribute('tabindex', '0');
+        readerAnchorHeadingEl.title = normalizedLabel;
+
+        readerAnchorHeadingEl.innerHTML = `
+            <span class="facsimile-reader-anchor-quote">${escapeHtml(normalizedLabel)}</span>
+        `;
+    }
+
     function setWorkspaceState(hasSelection) {
         if (readerCardEl) {
             readerCardEl.classList.toggle('d-none', !hasSelection);
@@ -1191,35 +1224,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
     }
 
-    function describePaginationOrigin(origin, markerCount, guessed = false) {
+    function describeReaderPagination(markerCount, guessed = false) {
         if (guessed) return 'approximation sans repères';
-        if (!origin || !Number.isFinite(Number(markerCount)) || Number(markerCount) <= 0) {
-            return 'sans pagination';
+
+        const count = Number(markerCount);
+        if (!Number.isFinite(count) || count <= 0) {
+            return 'aucun repère disponible';
         }
 
-        const labels = {
-            'lignes': 'fichier _lignes',
-            'pb-tei': 'balises <pb> du TEI',
-            'pb-xhtml': 'balises de pagination du XHTML',
-            'merged': 'sources fusionnées',
-        };
-
-        const base = labels[String(origin || '')] || 'source non précisée';
-        if (!Number.isFinite(Number(markerCount)) || Number(markerCount) <= 0) {
-            return base;
-        }
-
-        return `${base} (${Number(markerCount).toLocaleString('fr-FR')} repère(s))`;
+        const plural = count > 1;
+        return `${count.toLocaleString('fr-FR')} repère${plural ? 's' : ''} disponible${plural ? 's' : ''}`;
     }
 
     function buildReaderSummary() {
         const versionLabel = currentVersionName || 'Version';
         const markerCount = Number(readerData?.pagination?.marker_count ?? readerPages.length ?? 0);
         const hasGuessedPages = readerPages.some(page => page?.guessed === true);
-        const paginationLabel = describePaginationOrigin(readerData?.pagination?.origin, markerCount, hasGuessedPages);
+        const paginationLabel = describeReaderPagination(markerCount, hasGuessedPages);
 
-        const textLabel = readerData?.text_source_label || 'source texte non précisée';
-        return `${versionLabel} · Texte : ${textLabel} · Pagination : ${paginationLabel}`;
+        return `${versionLabel} · Pagination : ${paginationLabel}`;
     }
 
     function setReaderLoading(isLoading) {
@@ -1229,18 +1252,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerLoadingLabelEl) {
             readerLoadingLabelEl.textContent = readerRebuildBusy
                 ? 'Reconstruction du lecteur…'
-                : 'Chargement du viewer…';
+                : 'Chargement du visualisateur…';
         }
         applyReaderRebuildControl();
     }
 
-    function resetReader(message = 'Les repères de pagination de cette version permettront d’aligner le fac-similé et le texte ici.') {
+    function resetReader(message = '') {
         readerData = null;
         readerPages = [];
         readerPageIndex = 0;
         readerPageLoadPromises.clear();
         readerImagePrefetchUrls.clear();
+        resetReaderPaneLayout();
         setReaderActionStatus('');
+        setReaderAnchorHeading('Texte', false);
         setReaderLoading(false);
         applyReaderRebuildControl();
         if (readerRoot) {
@@ -1249,7 +1274,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateReaderCardTitle();
         if (readerEmptyEl) {
             readerEmptyEl.textContent = message;
-            readerEmptyEl.classList.remove('d-none');
+            readerEmptyEl.classList.toggle('d-none', !message);
         }
         if (readerCarouselEl) {
             readerCarouselEl.classList.add('d-none');
@@ -1267,12 +1292,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerPrevBtn) readerPrevBtn.disabled = true;
         if (readerNextBtn) readerNextBtn.disabled = true;
         if (readerImageEl) {
+            readerImageRequestToken++;
             readerImageEl.removeAttribute('src');
             readerImageEl.alt = 'Fac-similé synchronisé';
             readerImageEl.classList.remove('d-none');
         }
         if (readerImageEmptyEl) readerImageEmptyEl.classList.add('d-none');
         if (readerImageMetaEl) readerImageMetaEl.textContent = '';
+        setReaderAnchorHeading('Texte', false);
         if (readerTextMetaEl) readerTextMetaEl.textContent = '';
         if (readerTextEl) readerTextEl.textContent = '';
         applyReaderTextSourceControl();
@@ -1286,11 +1313,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 readerImageEl.removeAttribute('src');
             }
         }
-        if (readerCropOverlayEl) {
-            readerCropOverlayEl.classList.add('d-none');
-        }
         if (readerImageEmptyEl) {
             readerImageEmptyEl.classList.toggle('d-none', !enabled);
+        }
+    }
+
+    function updateReaderThumbAlignment() {
+        if (!readerThumbsEl) return;
+        readerThumbsEl.classList.remove('is-centered');
+        const fitsWithoutScroll = readerThumbsEl.scrollWidth <= readerThumbsEl.clientWidth + 1;
+        readerThumbsEl.classList.toggle('is-centered', fitsWithoutScroll);
+        if (fitsWithoutScroll) {
+            readerThumbsEl.scrollLeft = 0;
+        }
+        updateReaderThumbNavControls();
+    }
+
+    function updateReaderThumbNavControls() {
+        if (!readerThumbsEl) return;
+        const maxLeft = Math.max(0, readerThumbsEl.scrollWidth - readerThumbsEl.clientWidth);
+        const canScroll = maxLeft > 1;
+        const atStart = readerThumbsEl.scrollLeft <= 1;
+        const atEnd = readerThumbsEl.scrollLeft >= maxLeft - 1;
+
+        if (readerCarouselPrevBtn) {
+            readerCarouselPrevBtn.disabled = !canScroll || atStart;
+        }
+        if (readerCarouselNextBtn) {
+            readerCarouselNextBtn.disabled = !canScroll || atEnd;
         }
     }
 
@@ -1319,6 +1369,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!previewItems.length) {
             readerThumbsEl.innerHTML = '';
+            readerThumbsEl.classList.remove('is-centered');
             if (readerCarouselEl) {
                 readerCarouselEl.classList.add('d-none');
             }
@@ -1336,15 +1387,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const meta = [];
             const targetIndex = item.targetIndex;
             const isCurrent = item.isCurrent;
-            if (item.line) meta.push(`ligne ${item.line}`);
+            const tooltipParts = [`Pagination du livre : ${label}`];
+            if (item.line) {
+                tooltipParts.push(`ligne du fichier _lignes : ${item.line}`);
+            }
+            const labelTitle = tooltipParts.join(' ; ');
             if (image.size_human) meta.push(image.size_human);
             return `
                 <article class="facsimile-reader-thumb-card ${isCurrent ? 'is-current' : ''}" data-page-index="${targetIndex}">
                     <button type="button" class="facsimile-reader-thumb-btn" data-page-index="${targetIndex}" aria-pressed="${isCurrent ? 'true' : 'false'}">
-                        <img src="${thumbSrc}" alt="${label}" class="facsimile-reader-thumb-image">
+                        <img src="${thumbSrc}" alt="${escapeHtml(label)}" class="facsimile-reader-thumb-image">
                     </button>
                     <div class="facsimile-reader-thumb-caption">
-                        <div>${label}</div>
+                        <span class="facsimile-reader-thumb-page-pill" title="${escapeHtml(labelTitle)}">${escapeHtml(label)}</span>
                         ${meta.length ? `<div class="text-muted">${meta.join(' · ')}</div>` : ''}
                     </div>
                 </article>
@@ -1364,13 +1419,211 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+        updateReaderThumbAlignment();
         scrollCurrentThumbIntoView();
     }
 
     function scrollCurrentThumbIntoView() {
         if (!readerThumbsEl) return;
         const currentThumb = readerThumbsEl.querySelector('.facsimile-reader-thumb-card.is-current');
-        currentThumb?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        if (!currentThumb) return;
+
+        const viewportWidth = readerThumbsEl.clientWidth;
+        const targetLeft = currentThumb.offsetLeft - Math.max(0, (viewportWidth - currentThumb.offsetWidth) / 2);
+        const maxLeft = Math.max(0, readerThumbsEl.scrollWidth - viewportWidth);
+        readerThumbsEl.scrollTo({
+            left: Math.max(0, Math.min(targetLeft, maxLeft)),
+            behavior: 'smooth',
+        });
+        window.requestAnimationFrame(updateReaderThumbNavControls);
+    }
+
+    function normalizeReaderAnchorPhrase(value, label = '') {
+        let phrase = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!phrase) return '';
+
+        const labelText = String(label || '').trim();
+        const labelVariants = [
+            labelText,
+            labelText.replace(/^p\.\s*/i, ''),
+            labelText.replace(/^0+(\d)/, '$1'),
+        ]
+            .map(item => item.replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+
+        for (const variant of labelVariants) {
+            const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            phrase = phrase.replace(new RegExp(`^${escaped}\\s*`, 'i'), '').trim();
+        }
+
+        phrase = phrase.replace(/^\d{1,4}\s+(?=\S)/, '').trim();
+        phrase = phrase.replace(/^\d{1,4}(?=[\p{L}«"“])/u, '').trim();
+
+        return phrase;
+    }
+
+    function formatReaderAnchorPhrase(value) {
+        return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeReaderSearchChar(char) {
+        if (/\s/u.test(char)) return ' ';
+        const quoteMap = {
+            '“': '"',
+            '”': '"',
+            '„': '"',
+            '«': '"',
+            '»': '"',
+            '‘': "'",
+            '’': "'",
+            '‚': "'",
+            '`': "'",
+            '´': "'",
+        };
+        const foldMap = {
+            'Œ': 'Oe',
+            'œ': 'oe',
+            'Æ': 'Ae',
+            'æ': 'ae',
+            'ß': 'ss',
+            '–': '-',
+            '—': '-',
+            '‑': '-',
+            '−': '-',
+            '…': '...',
+        };
+        const normalized = quoteMap[char] || foldMap[char] || char;
+        return normalized
+            .normalize('NFD')
+            .replace(/\p{M}/gu, '')
+            .toLocaleLowerCase('fr-FR');
+    }
+
+    function buildReaderSearchIndex(value) {
+        const source = String(value || '');
+        const chars = [];
+        const map = [];
+        let previousWasSpace = false;
+
+        for (let i = 0; i < source.length; i++) {
+            const normalized = normalizeReaderSearchChar(source[i]);
+            if (normalized === ' ') {
+                if (!previousWasSpace) {
+                    chars.push(' ');
+                    map.push(i);
+                    previousWasSpace = true;
+                }
+                continue;
+            }
+
+            for (const normalizedChar of Array.from(normalized)) {
+                chars.push(normalizedChar);
+                map.push(i);
+            }
+            previousWasSpace = false;
+        }
+
+        while (chars.length && chars[0] === ' ') {
+            chars.shift();
+            map.shift();
+        }
+        while (chars.length && chars[chars.length - 1] === ' ') {
+            chars.pop();
+            map.pop();
+        }
+
+        return {
+            text: chars.join(''),
+            map,
+        };
+    }
+
+    function findReaderAnchorHighlight(rawText, anchorPhrase) {
+        const phrase = formatReaderAnchorPhrase(anchorPhrase)
+            .replace(/^[«"“]\s*/, '')
+            .replace(/\s*[»"”]$/, '');
+        if (phrase.length < 8) return null;
+
+        const haystack = buildReaderSearchIndex(rawText);
+        const needle = buildReaderSearchIndex(phrase);
+        if (!haystack.text || !needle.text) return null;
+
+        const index = haystack.text.indexOf(needle.text);
+        if (index < 0) return null;
+
+        const start = haystack.map[index];
+        const lastMapped = haystack.map[index + needle.text.length - 1];
+        if (!Number.isFinite(start) || !Number.isFinite(lastMapped)) return null;
+
+        return {
+            start,
+            end: Math.min(String(rawText || '').length, lastMapped + 1),
+        };
+    }
+
+    function readerLeadingSegmentLabel(page) {
+        const label = String(page?.label || '').replace(/\s+/g, ' ').trim();
+        const match = label.match(/^Avant\s+(.+)$/i);
+        if (!match) return '';
+
+        const target = match[1].trim();
+        if (!target || /^le premier repère$/i.test(target)) {
+            return 'Texte avant le premier repère';
+        }
+
+        return `Texte avant la page ${target}`;
+    }
+
+    function buildReaderPageOptionLabel(page, index, total) {
+        const position = `${index + 1}/${Math.max(1, Number(total) || 1)}`;
+        const rawLabel = String(page?.label || '').replace(/\s+/g, ' ').trim();
+
+        if (!rawLabel) {
+            return `Repère ${position}`;
+        }
+
+        if (/^rep[eè]re\b/i.test(rawLabel)) {
+            return `${rawLabel} (${position})`;
+        }
+
+        const leadingMatch = rawLabel.match(/^Avant\s+(.+)$/i);
+        if (leadingMatch) {
+            const target = leadingMatch[1].trim();
+            return `${target ? `Avant page ${target}` : rawLabel} (${position})`;
+        }
+
+        const pageLabel = rawLabel
+            .replace(/^p\.\s*/i, '')
+            .replace(/^page\s+/i, '')
+            .trim();
+
+        return `Page ${pageLabel || rawLabel} (${position})`;
+    }
+
+    function formatReaderPageMetaLabel(value) {
+        const rawLabel = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!rawLabel) return '';
+
+        const leadingMatch = rawLabel.match(/^Avant\s+(.+)$/i);
+        if (leadingMatch) {
+            const target = leadingMatch[1].trim();
+            return target ? `Avant page ${target}` : rawLabel;
+        }
+
+        return rawLabel
+            .replace(/^p\.\s*/i, '')
+            .replace(/^page\s+/i, '')
+            .trim() || rawLabel;
+    }
+
+    function buildReaderImageOptionLabel(image, index, total) {
+        const position = `${index + 1}/${Math.max(1, Number(total) || 1)}`;
+
+        if (image?.image_code) {
+            return `Image ${image.image_code} (${position})`;
+        }
+
+        return `${image?.name || 'Image'} (${position})`;
     }
 
     function buildReaderPages(payload) {
@@ -1380,6 +1633,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: String(page?.label || `Repère ${index + 1}`),
                 image: page?.image || null,
                 text: String(page?.text || ''),
+                display_text: String(page?.display_text ?? page?.text ?? ''),
                 start: Number(page?.start ?? 0),
                 end: Number(page?.end ?? 0),
                 line: Number.isFinite(Number(page?.line)) ? Number(page.line) : null,
@@ -1437,6 +1691,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label,
                 image,
                 text: segment || text.slice(start, nextChar),
+                display_text: segment || text.slice(start, nextChar),
                 start,
                 end: nextChar,
                 line: marker.line,
@@ -1454,6 +1709,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const merged = {
             ...readerPages[index],
             ...pagePayload,
+            display_text: String(pagePayload?.display_text ?? pagePayload?.text ?? readerPages[index]?.display_text ?? ''),
             loaded: true,
             guessed: pagePayload?.guessed === true || readerPages[index]?.guessed === true,
         };
@@ -1467,6 +1723,99 @@ document.addEventListener('DOMContentLoaded', () => {
         readerImagePrefetchUrls.add(url);
         const img = new Image();
         img.src = url;
+    }
+
+    function waitForReaderImage(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.decoding = 'async';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+            if (img.complete && img.naturalWidth > 0) {
+                resolve(img);
+            }
+        }).then(async (img) => {
+            if (typeof img.decode === 'function') {
+                try {
+                    await img.decode();
+                } catch (err) {
+                    // Some browsers reject decode() for images already usable in layout.
+                }
+            }
+            return img;
+        });
+    }
+
+    async function updateReaderImage(displayedImage, page, noFacsimilesForVersion) {
+        if (!readerImageEl) return;
+
+        const requestToken = ++readerImageRequestToken;
+        readerImageEl.onload = null;
+        readerImageEl.onerror = null;
+
+        if (noFacsimilesForVersion) {
+            setReaderImagePaneEmptyState(true);
+            readerImageEl.alt = 'Aucun fac-similé pour cette version';
+            syncReaderPaneLayout();
+            return;
+        }
+
+        if (!displayedImage?.big) {
+            setReaderImagePaneEmptyState(false);
+            readerImageEl.removeAttribute('src');
+            readerImageEl.alt = 'Fac-similé manquant';
+            syncReaderPaneLayout();
+            return;
+        }
+
+        const nextSrc = displayedImage.big;
+        const currentSrc = readerImageEl.getAttribute('src') || '';
+        const placeholderSrc = displayedImage.thumb && displayedImage.thumb !== nextSrc
+            ? displayedImage.thumb
+            : null;
+        const nextAlt = displayedImage?.name || page?.label || 'Fac-similé synchronisé';
+
+        setReaderImagePaneEmptyState(false);
+        if (currentSrc === nextSrc && readerImageEl.complete && readerImageEl.naturalWidth > 0) {
+            readerImageEl.alt = nextAlt;
+            applyReaderImageDisplay();
+            syncReaderPaneLayout();
+            return;
+        }
+
+        if (!currentSrc && placeholderSrc) {
+            readerImageEl.src = placeholderSrc;
+            readerImageEl.alt = nextAlt;
+        }
+
+        try {
+            await waitForReaderImage(nextSrc);
+            if (requestToken !== readerImageRequestToken) {
+                return;
+            }
+            readerImageEl.src = nextSrc;
+            readerImageEl.alt = nextAlt;
+            window.requestAnimationFrame(() => {
+                if (requestToken !== readerImageRequestToken) {
+                    return;
+                }
+                applyReaderImageDisplay();
+                syncReaderPaneLayout();
+            });
+        } catch (err) {
+            if (requestToken !== readerImageRequestToken) {
+                return;
+            }
+            console.error('Could not load reader image', err);
+            if (placeholderSrc) {
+                readerImageEl.src = placeholderSrc;
+            } else {
+                readerImageEl.removeAttribute('src');
+            }
+            readerImageEl.alt = 'Fac-similé indisponible';
+            syncReaderPaneLayout();
+        }
     }
 
     async function loadReaderPage(index, { silent = false, useRequestToken = true } = {}) {
@@ -1489,6 +1838,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!silent && readerTextEl) {
             readerTextEl.textContent = 'Chargement du texte…';
+        }
+        if (!silent) {
+            setReaderAnchorHeading('Texte', false);
         }
         if (!silent && readerTextMetaEl) {
             readerTextMetaEl.textContent = `${readerPages[index].label} · chargement`;
@@ -1545,28 +1897,54 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderReaderText(page) {
         if (!readerTextEl) return;
 
-        const rawText = String(page?.text || '');
-        if (!rawText.trim()) {
+        const plainText = String(page?.text || '');
+        const rawText = String(page?.display_text ?? page?.text ?? '');
+        const anchorOffset = Number.isFinite(Number(page?.anchorOffset)) ? Number(page.anchorOffset) : null;
+        const hasExactAnchor = !!readerData?.pagination?.available && anchorOffset !== null && page?.guessed !== true;
+        const leadingSegmentLabel = readerLeadingSegmentLabel(page);
+        let anchorPhrase = '';
+        let anchorLabel = 'Texte';
+        let showAnchorHeading = false;
+
+        if (leadingSegmentLabel) {
+            anchorLabel = leadingSegmentLabel;
+            showAnchorHeading = true;
+        } else if (hasExactAnchor) {
+            anchorPhrase = normalizeReaderAnchorPhrase(page?.anchorPhrase, page?.label);
+            anchorLabel = anchorPhrase
+                ? `« ${formatReaderAnchorPhrase(anchorPhrase)} »`
+                : 'Repère _lignes';
+            showAnchorHeading = true;
+        }
+
+        if (!plainText.trim() && !rawText.trim()) {
+            setReaderAnchorHeading(anchorLabel, showAnchorHeading, { tone: 'unmatched' });
             readerTextEl.textContent = 'Aucun extrait textuel disponible pour ce repère.';
             return;
         }
 
-        const anchorOffset = Number.isFinite(Number(page?.anchorOffset)) ? Number(page.anchorOffset) : null;
-        const anchorLabel = page?.anchorPhrase
-            ? `Repère : ${page.anchorPhrase}`
-            : `Repère ${page?.label || ''}`.trim();
+        const highlightRange = anchorPhrase ? findReaderAnchorHighlight(rawText, anchorPhrase) : null;
+        if (showAnchorHeading) {
+            let tone = 'exact';
+            if (leadingSegmentLabel) {
+                tone = 'approx';
+            } else if (anchorPhrase && !highlightRange) {
+                tone = 'unmatched';
+            }
 
-        if (anchorOffset === null || page?.guessed === true) {
-            readerTextEl.textContent = rawText;
-            return;
+            setReaderAnchorHeading(anchorLabel, true, { tone });
+        } else {
+            setReaderAnchorHeading('Texte', false);
         }
 
-        const safeOffset = Math.max(0, Math.min(rawText.length, anchorOffset));
-        const before = escapeHtml(rawText.slice(0, safeOffset));
-        const after = escapeHtml(rawText.slice(safeOffset));
-        const marker = `<span class="facsimile-reader-anchor">${escapeHtml(anchorLabel)}</span>`;
+        const insertions = highlightRange
+            ? [
+                { offset: highlightRange.start, html: '<mark class="facsimile-reader-text-anchor-mark">' },
+                { offset: highlightRange.end, html: '</mark>' },
+            ]
+            : [];
 
-        readerTextEl.innerHTML = `${before}${marker}${after}`;
+        readerTextEl.innerHTML = renderReaderInlineMarkup(rawText, insertions);
     }
 
     async function renderReaderPage(index) {
@@ -1625,37 +2003,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const displayedImage = currentDisplayedReaderImage();
+        const leadingSegmentLabel = readerLeadingSegmentLabel(page);
 
-        if (readerImageEl) {
-            if (noFacsimilesForVersion) {
-                setReaderImagePaneEmptyState(true);
-                readerImageEl.alt = 'Aucun fac-similé pour cette version';
-            } else if (displayedImage?.big) {
-                setReaderImagePaneEmptyState(false);
-                readerImageEl.onload = () => {
-                    applyReaderCropDisplay();
-                };
-                readerImageEl.src = displayedImage.big;
-                readerImageEl.alt = displayedImage?.name || page.label;
-            } else {
-                setReaderImagePaneEmptyState(false);
-                readerImageEl.removeAttribute('src');
-                readerImageEl.alt = 'Fac-similé manquant';
-            }
-        }
+        void updateReaderImage(displayedImage, page, noFacsimilesForVersion);
 
         if (readerImageMetaEl) {
             if (noFacsimilesForVersion) {
                 readerImageMetaEl.textContent = '';
             } else if (displayedImage) {
                 const parts = [];
-                if (displayedImage.image_code) {
-                    parts.push(`image ${displayedImage.image_code}`);
-                } else if (page.label) {
-                    parts.push(page.label);
+                const pageMetaLabel = formatReaderPageMetaLabel(page?.label);
+                if (pageMetaLabel && pageMetaLabel.toLowerCase() !== 'texte complet') {
+                    const leadingSegment = /^Avant\b/i.test(String(page?.label || '').trim());
+                    parts.push(leadingSegment ? pageMetaLabel : `Page ${pageMetaLabel}`);
+                } else if (displayedImage.image_code) {
+                    parts.push(`Image ${displayedImage.image_code}`);
                 }
                 if (independentNavigation && Array.isArray(readerData?.facsimiles) && readerData.facsimiles.length > 1) {
-                    parts.push(`image ${readerImageIndex + 1}/${readerData.facsimiles.length}`);
+                    parts.push(`Image ${readerImageIndex + 1}/${readerData.facsimiles.length}`);
                 }
                 if (displayedImage.size_human) parts.push(displayedImage.size_human);
                 if (displayedImage.width && displayedImage.height) parts.push(`${displayedImage.width}×${displayedImage.height}px`);
@@ -1666,22 +2031,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (readerTextMetaEl) {
-            const textParts = [];
             if (!readerData?.pagination?.available) {
-                textParts.push('texte intégral');
+                readerTextMetaEl.textContent = 'Texte intégral';
+            } else if (leadingSegmentLabel) {
+                readerTextMetaEl.textContent = '';
             } else {
-                textParts.push(page?.guessed === true ? 'approximation' : 'extrait aligné');
+                const textParts = [];
+                textParts.push(page?.guessed === true ? 'Approximation' : 'Extrait aligné');
+                readerTextMetaEl.textContent = textParts.join(' · ');
             }
-            if (page.label) textParts.push(page.label);
-            if (page.line) textParts.push(`ligne ${page.line}`);
-            if (readerData?.text_source_label) textParts.push(readerData.text_source_label);
-            const segmentLength = Math.max(0, page.end - page.start);
-            textParts.push(`${segmentLength.toLocaleString('fr-FR')} signes`);
-            readerTextMetaEl.textContent = textParts.join(' · ');
         }
         renderReaderText(page);
         if (readerTextEl) readerTextEl.scrollTop = 0;
-        syncReaderCropForCurrentPage();
+        window.requestAnimationFrame(() => {
+            applyReaderImageDisplay();
+            syncReaderPaneLayout();
+        });
         renderReaderThumbs();
         prefetchReaderPage(independentNavigation ? readerImageIndex + 1 : readerPageIndex + 1);
     }
@@ -1708,15 +2073,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (readerPageSelect) {
             readerPageSelect.innerHTML = '';
             if (!payload?.pagination?.available && Array.isArray(payload?.facsimiles) && payload.facsimiles.length) {
+                const total = payload.facsimiles.length;
                 payload.facsimiles.forEach((image, index) => {
-                    const label = image?.image_code
-                        ? `${index + 1}. Image ${image.image_code}`
-                        : `${index + 1}. ${image?.name || 'Image'}`;
-                    readerPageSelect.appendChild(new Option(label, String(index)));
+                    readerPageSelect.appendChild(new Option(buildReaderImageOptionLabel(image, index, total), String(index)));
                 });
             } else {
+                const total = readerPages.length;
                 readerPages.forEach((page, index) => {
-                    const option = new Option(`${index + 1}. ${page.label}`, String(index));
+                    const option = new Option(buildReaderPageOptionLabel(page, index, total), String(index));
                     readerPageSelect.appendChild(option);
                 });
             }
@@ -2539,134 +2903,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (readerFitAutoBtn) {
-        readerFitAutoBtn.addEventListener('click', () => setReaderFitMode('auto'));
-    }
-    if (readerFitWidthBtn) {
-        readerFitWidthBtn.addEventListener('click', () => setReaderFitMode('width'));
-    }
-    if (readerFitHeightBtn) {
-        readerFitHeightBtn.addEventListener('click', () => setReaderFitMode('height'));
-    }
-    if (readerFitNaturalBtn) {
-        readerFitNaturalBtn.addEventListener('click', () => setReaderFitMode('natural'));
-    }
-
-    if (readerCropSetBtn) {
-        readerCropSetBtn.addEventListener('click', () => {
-            if (!currentReaderImageName() || !readerImageEl?.src) return;
-            readerCropMode = true;
-            readerCropDraft = null;
-            readerCropImageRect = null;
-            updateReaderCropControls();
-            applyReaderCropDisplay();
-        });
-    }
-
-    if (readerCropClearBtn) {
-        readerCropClearBtn.addEventListener('click', () => {
-            const imageName = currentReaderImageName();
-            if (!imageName) return;
-            clearStoredReaderCrop(currentVersionId, imageName);
-            readerCurrentCrop = null;
-            updateReaderCropControls();
-            applyReaderCropDisplay();
-        });
-    }
-
-    if (readerCropOverlayEl && readerCropViewportEl) {
-        const updateCropRect = (draft) => {
-            if (!readerCropRectEl || !draft) return;
-            readerCropRectEl.classList.remove('d-none');
-            readerCropRectEl.style.left = `${draft.left}px`;
-            readerCropRectEl.style.top = `${draft.top}px`;
-            readerCropRectEl.style.width = `${draft.width}px`;
-            readerCropRectEl.style.height = `${draft.height}px`;
-        };
-
-        const clearCropDraft = () => {
-            readerCropDraft = null;
-            readerCropImageRect = null;
-            hideReaderCropOverlay();
-            if (readerCropMode) {
-                readerCropOverlayEl?.classList.remove('d-none');
-            }
-        };
-
-        readerCropOverlayEl.addEventListener('mousedown', (event) => {
-            if (!readerCropMode || event.button !== 0 || !readerImageEl) return;
-            const imageRect = readerImageEl.getBoundingClientRect();
-            if (imageRect.width <= 0 || imageRect.height <= 0) return;
-            if (
-                event.clientX < imageRect.left || event.clientX > imageRect.right ||
-                event.clientY < imageRect.top || event.clientY > imageRect.bottom
-            ) {
-                return;
-            }
-
-            const overlayRect = readerCropOverlayEl.getBoundingClientRect();
-            readerCropImageRect = imageRect;
-            readerCropDraft = {
-                startX: event.clientX,
-                startY: event.clientY,
-                overlayLeft: overlayRect.left,
-                overlayTop: overlayRect.top,
-                left: event.clientX - overlayRect.left,
-                top: event.clientY - overlayRect.top,
-                width: 0,
-                height: 0,
-            };
-            updateCropRect(readerCropDraft);
-            event.preventDefault();
-        });
-
-        window.addEventListener('mousemove', (event) => {
-            if (!readerCropMode || !readerCropDraft || !readerCropImageRect) return;
-            const imageRect = readerCropImageRect;
-            const currentX = Math.min(Math.max(event.clientX, imageRect.left), imageRect.right);
-            const currentY = Math.min(Math.max(event.clientY, imageRect.top), imageRect.bottom);
-            const startX = Math.min(Math.max(readerCropDraft.startX, imageRect.left), imageRect.right);
-            const startY = Math.min(Math.max(readerCropDraft.startY, imageRect.top), imageRect.bottom);
-            const left = Math.min(startX, currentX) - readerCropDraft.overlayLeft;
-            const top = Math.min(startY, currentY) - readerCropDraft.overlayTop;
-            const width = Math.abs(currentX - startX);
-            const height = Math.abs(currentY - startY);
-            readerCropDraft = { ...readerCropDraft, left, top, width, height };
-            updateCropRect(readerCropDraft);
-        });
-
-        window.addEventListener('mouseup', () => {
-            if (!readerCropMode || !readerCropDraft || !readerCropImageRect) return;
-            const imageRect = readerCropImageRect;
-            const minSize = 12;
-            if (readerCropDraft.width < minSize || readerCropDraft.height < minSize) {
-                clearCropDraft();
-                updateReaderCropControls();
-                return;
-            }
-
-            const leftWithinImage = Math.max(0, (readerCropDraft.left + readerCropDraft.overlayLeft) - imageRect.left);
-            const topWithinImage = Math.max(0, (readerCropDraft.top + readerCropDraft.overlayTop) - imageRect.top);
-            const crop = {
-                x: Math.max(0, Math.min(1, leftWithinImage / imageRect.width)),
-                y: Math.max(0, Math.min(1, topWithinImage / imageRect.height)),
-                w: Math.max(0.01, Math.min(1, readerCropDraft.width / imageRect.width)),
-                h: Math.max(0.01, Math.min(1, readerCropDraft.height / imageRect.height)),
-            };
-
-            const imageName = currentReaderImageName();
-            if (imageName) {
-                saveStoredReaderCrop(currentVersionId, imageName, crop);
-                readerCurrentCrop = crop;
-            }
-
-            readerCropMode = false;
-            clearCropDraft();
-            updateReaderCropControls();
-            applyReaderCropDisplay();
-        });
-    }
-
     if (readerEncodingSelect) {
         readerEncodingSelect.addEventListener('change', () => {
             readerEncoding = normalizeReaderEncoding(readerEncodingSelect.value);
@@ -2788,14 +3024,39 @@ document.addEventListener('DOMContentLoaded', () => {
     if (readerCarouselPrevBtn) {
         readerCarouselPrevBtn.addEventListener('click', () => {
             readerThumbsEl?.scrollBy({ left: -420, behavior: 'smooth' });
+            window.requestAnimationFrame(updateReaderThumbNavControls);
         });
     }
 
     if (readerCarouselNextBtn) {
         readerCarouselNextBtn.addEventListener('click', () => {
             readerThumbsEl?.scrollBy({ left: 420, behavior: 'smooth' });
+            window.requestAnimationFrame(updateReaderThumbNavControls);
         });
     }
+
+    if (readerThumbsEl) {
+        readerThumbsEl.addEventListener('scroll', updateReaderThumbNavControls, { passive: true });
+    }
+
+    if (readerAnchorHeadingEl) {
+        const setAnchorGlow = (enabled) => {
+            readerRoot?.classList.toggle('is-anchor-hovered', !!enabled);
+        };
+
+        readerAnchorHeadingEl.addEventListener('mouseenter', () => setAnchorGlow(true));
+        readerAnchorHeadingEl.addEventListener('mouseleave', () => setAnchorGlow(false));
+        readerAnchorHeadingEl.addEventListener('focusin', () => setAnchorGlow(true));
+        readerAnchorHeadingEl.addEventListener('focusout', () => setAnchorGlow(false));
+    }
+
+    window.addEventListener('resize', () => {
+        window.requestAnimationFrame(() => {
+            updateReaderThumbAlignment();
+            scrollCurrentThumbIntoView();
+            syncReaderPaneLayout();
+        });
+    }, { passive: true });
 
     if (readerUploadPromptBtn) {
         readerUploadPromptBtn.addEventListener('click', () => {

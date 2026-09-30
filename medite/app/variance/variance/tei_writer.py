@@ -43,7 +43,9 @@ _LIST_NEWLINE_MARKER = "¶"
 _LINE_BREAK_TAG_RE = re.compile(r"<\s*(?:br|lb)\s*/?\s*>", re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")
 _EM_TAG_RE = re.compile(r"</?em>")
+_SUP_TAG_RE = re.compile(r"</?sup>")
 _SPACE_ONLY_RE = re.compile(r"^[\s\u00a0\u202f]*$")
+_INLINE_TEI_TAGS = ("emph", "sup")
 
 # For generating the *final* XHTML IDs, we want these exact prefixes:
 #
@@ -94,8 +96,75 @@ def render_inline_tei_for_xhtml(txt: str) -> str:
         .replace("</emph>", "</em>")
         .replace("&lt;emph&gt;", "<em>")
         .replace("&lt;/emph&gt;", "</em>")
+        .replace("&lt;sup&gt;", "<sup>")
+        .replace("&lt;/sup&gt;", "</sup>")
     )
-    return balance_emphasis_for_xhtml(rendered)
+    rendered = balance_emphasis_for_xhtml(rendered)
+    return balance_superscript_for_xhtml(rendered)
+
+
+def _active_inline_tags_at(rchanges, offset: int) -> List[str]:
+    """
+    Return TEI inline tag names active at a Medite text offset.
+
+    Medite sees inline boundaries as marker characters. A delta that starts in
+    the middle of an inline range may therefore extract only the text content,
+    with no opening tag left in the fragment. This helper recovers that context
+    from the reversible replacement table.
+    """
+    if offset < 0 or not rchanges:
+        return []
+
+    stack: List[str] = []
+    for replacement in sorted(getattr(rchanges, "replacements", ()), key=lambda item: item.start):
+        if replacement.start >= offset:
+            break
+
+        marker = replacement.new
+        for tag in _INLINE_TEI_TAGS:
+            if marker == f"<{tag}>":
+                stack.append(tag)
+                break
+            if marker == f"</{tag}>":
+                for index in range(len(stack) - 1, -1, -1):
+                    if stack[index] == tag:
+                        del stack[index]
+                        break
+                break
+
+    return stack
+
+
+def apply_emphasis_context_for_xhtml(
+    txt: str,
+    rchanges=None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
+) -> str:
+    """
+    Re-add TEI emphasis context for a Medite fragment before XHTML rendering.
+
+    op.extract() only returns tags that fall inside the requested range. If a
+    replacement/identity fragment is wholly inside one <emph> range, no tag is
+    present in the slice, but the final public XHTML must still show it in
+    italics.
+    """
+    if not txt or rchanges is None or start is None or end is None or start >= end:
+        return txt
+
+    contextual = txt
+    start_stack = _active_inline_tags_at(rchanges, start)
+    end_stack = _active_inline_tags_at(rchanges, end)
+
+    for tag in reversed(start_stack):
+        if not re.match(rf"^\s*<{tag}>", contextual):
+            contextual = f"<{tag}>" + contextual
+
+    for tag in reversed(end_stack):
+        if not re.search(rf"</{tag}>\s*$", contextual):
+            contextual += f"</{tag}>"
+
+    return contextual
 
 
 def balance_emphasis_for_xhtml(txt: str) -> str:
@@ -120,6 +189,26 @@ def balance_emphasis_for_xhtml(txt: str) -> str:
             needed_prefixes += 1
 
     return ("<em>" * needed_prefixes) + txt + ("</em>" * balance)
+
+
+def balance_superscript_for_xhtml(txt: str) -> str:
+    """
+    Make a Medite XHTML fragment self-contained for superscript rendering.
+    """
+    balance = 0
+    needed_prefixes = 0
+
+    for match in _SUP_TAG_RE.finditer(txt):
+        if match.group(0) == "<sup>":
+            balance += 1
+            continue
+
+        if balance > 0:
+            balance -= 1
+        else:
+            needed_prefixes += 1
+
+    return ("<sup>" * needed_prefixes) + txt + ("</sup>" * balance)
 
 
 def render_substitution_label_for_xhtml(old_txt: str, new_txt: str) -> str:
@@ -222,7 +311,7 @@ def add_list_xhtml(
     end: int,
     name: str,
     id_suffix,                # str or tuple for substitutions
-) -> None:
+) -> bool:
     """
     Append one <li><a …> element into xhtml_lists[name].
 
@@ -234,6 +323,7 @@ def add_list_xhtml(
     """
     # 1) slice raw text, normalize structural tags, keep line breaks visible
     txt = op.extract(z.rchanges, start, end)
+    txt = apply_emphasis_context_for_xhtml(txt, z.rchanges, start, end)
     for a, b in (("<p/>", "\n"), ("<p>", ""), ("</p>", "\n"), ("</div>", "")):
         txt = txt.replace(a, b)
 
@@ -256,7 +346,7 @@ def add_list_xhtml(
             src_id, tgt_id, label = id_suffix
             link_text = render_list_label_for_xhtml(label)
         if not link_text:
-            return
+            return False
         index = _next_index(name, src_id, tgt_id)
         num = f"{index:05d}"
         href = f"#ar_{num}"
@@ -266,7 +356,7 @@ def add_list_xhtml(
         src_id, tgt_id, _label = id_suffix
         link_text = render_list_label_for_xhtml(txt)
         if not link_text:
-            return
+            return False
         index = _next_index(name, src_id, tgt_id)
         num = f"{index:05d}"
         href = f"#ad_{num}"
@@ -280,7 +370,7 @@ def add_list_xhtml(
             tei_id = id_suffix
         link_text = render_list_label_for_xhtml(txt)
         if not link_text:
-            return
+            return False
         index = _next_index(name, tei_id)
         num = f"{index:05d}"
         href = f"{o['href']}_{num}"
@@ -289,6 +379,35 @@ def add_list_xhtml(
     xhtml_lists[name].append(
         f'<li><a class="{link_classes.get(name, "sync")}" href="{href}" id="{lid}" data-tags="">{link_text}</a></li>'
     )
+    return True
+
+
+def render_main_text_for_xhtml(txt: str) -> str:
+    """
+    Render a text fragment for source/target XHTML without adding sync markup.
+    """
+    txt = txt.replace("\n", "")
+    for a, b in (
+        ("<p/>", "<br></br>"), ("<p>", ""), ("</p>", "<br></br>"),
+        ("</div>", ""), ("<div>", "")
+    ):
+        txt = txt.replace(a, b)
+    return render_inline_tei_for_xhtml(txt)
+
+
+def add_plain_main_xhtml(
+    xhtml_mains: Dict[str, List[str]],
+    txt: str,
+    main: str,
+    rchanges=None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
+) -> None:
+    """
+    Append source/target text without creating a transformation id.
+    """
+    txt = apply_emphasis_context_for_xhtml(txt, rchanges, start, end)
+    xhtml_mains[main].append(render_main_text_for_xhtml(txt))
 
 def add_main_xhtml(
     xhtml_mains: Dict[str, List[str]],
@@ -297,6 +416,9 @@ def add_main_xhtml(
     main: str,
     id_suffix: str,
     counterpart_id: Optional[str] = None,
+    rchanges=None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
 ) -> None:
     """
     Inject the inline synced element into *xhtml_mains[main]* using the legacy
@@ -304,13 +426,8 @@ def add_main_xhtml(
     """
 
     # ── 1. clean snippet text ─────────────────────────────────────────
-    txt = txt.replace("\n", "")
-    for a, b in (
-        ("<p/>", "<br></br>"), ("<p>", ""), ("</p>", "<br></br>"),
-        ("</div>", ""), ("<div>", "")
-    ):
-        txt = txt.replace(a, b)
-    txt = render_inline_tei_for_xhtml(txt)
+    txt = apply_emphasis_context_for_xhtml(txt, rchanges, start, end)
+    txt = render_main_text_for_xhtml(txt)
 
     index = _next_index(name, id_suffix, counterpart_id)
     num = f"{index:05d}"

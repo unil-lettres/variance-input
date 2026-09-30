@@ -95,7 +95,7 @@
 
                 <div class="editor-toolbar-group">
                     <div class="editor-toolbar-label">Balises</div>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Editor italic buttons">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Editor inline formatting buttons">
                     <button
                         id="italic-open-btn"
                         data-bs-toggle="tooltip"
@@ -109,11 +109,23 @@
                         title="Insérer balise italique fermante"
                     ><i class="bi bi-code-slash"></i><i class="bi bi-type-italic"></i></button>
                     <button
+                        id="superscript-open-btn"
+                        data-bs-toggle="tooltip"
+                        class="btn btn-outline-primary"
+                        title="Insérer balise exposant ouvrante"
+                    ><i class="bi bi-code"></i><span aria-hidden="true">x²</span></button>
+                    <button
+                        id="superscript-close-btn"
+                        class="btn btn-outline-primary"
+                        data-bs-toggle="tooltip"
+                        title="Insérer balise exposant fermante"
+                    ><i class="bi bi-code-slash"></i><span aria-hidden="true">x²</span></button>
+                    <button
                         id="italic-report-btn"
                         class="btn btn-outline-primary"
                         data-bs-toggle="modal" 
                         data-bs-target="#italicErrorsModal"
-                        title="Rapport d'erreurs des tags italiques"
+                        title="Rapport d'erreurs des balises texte"
                     ><i class="bi bi-exclamation-triangle-fill"></i></button>
                     </div>
                 </div>
@@ -285,13 +297,13 @@
         </div>
     </div>
 
-    <!-- Modal for italic tag errors -->
+    <!-- Modal for inline tag errors -->
     <div class="modal fade" id="italicErrorsModal" tabindex="-1" aria-labelledby="italicErrorsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="italicErrorsModalLabel">
-                        <i class="bi bi-exclamation-triangle-fill"></i> Rapport d'erreurs - Tags italiques
+                        <i class="bi bi-exclamation-triangle-fill"></i> Rapport d'erreurs - Balises texte
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>

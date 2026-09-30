@@ -42,6 +42,25 @@ class AdminMaintenanceModeTest extends TestCase
             ->assertSee('Connexion');
     }
 
+    public function test_login_form_does_not_render_public_site_menu(): void
+    {
+        $this->get('/login')
+            ->assertOk()
+            ->assertSee('Connexion')
+            ->assertDontSee('Site public')
+            ->assertDontSee('admin-public-sites-menu');
+    }
+
+    public function test_authenticated_admin_shell_keeps_public_site_menu(): void
+    {
+        $this->signInAdmin();
+
+        $this->get('/account/password')
+            ->assertOk()
+            ->assertSee('Site public')
+            ->assertSee('admin-public-sites-menu');
+    }
+
     public function test_maintenance_mode_returns_json_for_admin_api_requests(): void
     {
         app(AdminMaintenanceMode::class)->activate('Déploiement en cours.');
@@ -97,7 +116,7 @@ class AdminMaintenanceModeTest extends TestCase
         $response
             ->assertSee('État du système')
             ->assertSee('Version app')
-            ->assertSee('0.4.0')
+            ->assertSee(config('app.version') ?: 'missing')
             ->assertSee('Déploiement en cours.');
     }
 
@@ -126,7 +145,7 @@ class AdminMaintenanceModeTest extends TestCase
 
         $this->get('/')
             ->assertOk()
-            ->assertSee('Maintenance annoncée')
+            ->assertDontSee('Maintenance annoncée')
             ->assertSee('Déploiement prévu demain matin.')
             ->assertSee('Début')
             ->assertSee('Fin');
@@ -151,7 +170,7 @@ class AdminMaintenanceModeTest extends TestCase
 
         $this->get("/select/{$author->folder}/{$work->folder}")
             ->assertOk()
-            ->assertSee('Maintenance annoncée')
+            ->assertDontSee('Maintenance annoncée')
             ->assertSee('Maintenance prévue vendredi matin.');
     }
 
@@ -225,6 +244,18 @@ class AdminMaintenanceModeTest extends TestCase
         }
     }
 
+    public function test_health_report_marks_migrations_up_to_date(): void
+    {
+        $this->signInAdmin();
+
+        $response = $this->get('/health/report');
+
+        $this->assertContains($response->status(), [200, 503]);
+        $response
+            ->assertSee('Migrations')
+            ->assertSeeText('À jour');
+    }
+
     public function test_health_report_lists_critical_legacy_path_checks(): void
     {
         $this->signInAdmin();
@@ -233,6 +264,10 @@ class AdminMaintenanceModeTest extends TestCase
 
         $this->assertContains($response->status(), [200, 503]);
         $response
+            ->assertSeeText('Stockage Laravel local')
+            ->assertSeeText('Médias uploads (NAS)')
+            ->assertSeeText('Images de couverture (NAS)')
+            ->assertSeeText('Notices PDF (NAS)')
             ->assertSeeText('uploads_legacy')
             ->assertSeeText('uploads_images_legacy')
             ->assertSeeText('uploads_pdf_legacy')

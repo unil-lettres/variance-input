@@ -16,7 +16,7 @@ Guidance for running the Variance stack outside the default development setup.
   `laravel.env.example` when preparing environment-specific configuration.
 - Set:
   * `APP_ENV=production`
-  * `APP_VERSION` to the deployed application version, for example `0.4.0`.
+  * `APP_VERSION` to the deployed application version, for example `0.6.0-stage` on staging or `0.6.2` on production.
   * `APP_URL` to your external URL.
   * Quote values with spaces, e.g. `APP_NAME="Variance Admin"`.
   * `APP_GIT_SHA` to the deployed commit SHA so `/admin/health` can report the running revision.
@@ -101,6 +101,14 @@ Guidance for running the Variance stack outside the default development setup.
   URL from the current manifest. Browser caches may continue serving old
   JavaScript until their `Cache-Control` window expires, so ask testers to hard
   refresh when validating UI changes immediately after deploy.
+- Run the public security probes after deployments that touch proxy, PHP,
+  session, or legacy exposure settings:
+  ```bash
+  scripts/probe_public_security.sh https://variance.unil.ch
+  ```
+  The probes fail if private paths are publicly served, if `X-Powered-By`
+  leaks from public/admin routes, or if admin cookies miss the expected
+  production flags.
 - Persistent upload trees must remain writable by the web/PHP group after
   imports, manual copies, or container-run commands. Check for directories
   missing group write before publishing (`find var/uploads -type d ! -perm

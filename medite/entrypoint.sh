@@ -67,6 +67,8 @@ build_suffix_tree_if_needed
 echo "Starting Celery worker…"
 celery -A flask_app.celery worker \
   --loglevel=info \
+  --concurrency="${CELERY_WORKER_CONCURRENCY:-1}" \
+  --max-tasks-per-child="${CELERY_WORKER_MAX_TASKS_PER_CHILD:-1}" \
   --soft-time-limit=1800 \
   --time-limit=2100 &
 

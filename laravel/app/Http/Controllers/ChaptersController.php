@@ -45,8 +45,8 @@ class ChaptersController extends Controller
                     $query->orWhereIn('folder', $chapterCounts->keys()->all());
                 }
             })
-            ->orderByRaw('CASE WHEN number IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('number')
+            ->orderByRaw('CASE WHEN COALESCE(sort_order, number) IS NULL THEN 1 ELSE 0 END')
+            ->orderByRaw('COALESCE(sort_order, number)')
             ->orderBy('id')
             ->get()
             ->map(function (Comparison $comparison) use ($chapterCounts) {

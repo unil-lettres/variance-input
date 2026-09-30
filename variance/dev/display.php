@@ -175,7 +175,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                             <span class="label">Œuvre</span>
                             <span class="oeuvre__name"><?php
                                 if (!empty($_GET['work'])):
-                                    $workStatement = $cnx->prepare('SELECT `id`, `title` FROM works WHERE `folder` = :folder');
+                                    $workStatement = $cnx->prepare('SELECT `id`, `title`, `pdf_url`, `is_legacy` FROM works WHERE `folder` = :folder');
                                     $workStatement->execute(array('folder' => $_GET['work']));
                                     if ($work = $workStatement->fetch(PDO::FETCH_ASSOC)) {
                                         echo $work['title'];
@@ -201,7 +201,7 @@ if (!empty($_COOKIE['viewer_params'])) {
                                      INNER JOIN versions s ON c.source_id = s.id
                                      INNER JOIN versions t ON c.target_id = t.id
                                      WHERE s.work_id = :work_id
-                                     ORDER BY c.number ASC'
+                                     ORDER BY CASE WHEN COALESCE(c.sort_order, c.number) IS NULL THEN 1 ELSE 0 END, COALESCE(c.sort_order, c.number) ASC, c.id ASC'
                                 );
                                 $comparisonsStatement->execute(['work_id' => $work['id']]);
 
@@ -267,11 +267,22 @@ if (!empty($_COOKIE['viewer_params'])) {
                             <?php endif; endif; ?>
                         </div>
 
-                        <div class="book_settings__item book-info pull-left">
-                            <span class="label">Notice</span>
-                            <a href="<?php echo DIR_REL . '/workInfo.php?id=' . $work['id'] ?>" target="_blank"
-                               class="book-info__name"><img src="/img/book_info.svg"/></a>
-                        </div>
+                        <?php
+                        $noticePdf = trim((string) ($work['pdf_url'] ?? ''));
+                        if ($noticePdf === '' || !is_file(UPLOAD_ROOT . '/pdf/' . basename($noticePdf))) {
+                            $legacyNoticePdf = (int) ($work['id'] ?? 0) . '.pdf';
+                            $noticePdf = ((bool) ($work['is_legacy'] ?? false) && is_file(UPLOAD_ROOT . '/pdf/' . $legacyNoticePdf))
+                                ? $legacyNoticePdf
+                                : '';
+                        }
+                        ?>
+                        <?php if ($noticePdf !== ''): ?>
+                            <div class="book_settings__item book-info pull-left">
+                                <span class="label">Notice</span>
+                                <a href="<?php echo DIR_REL . '/workInfo.php?id=' . $work['id'] ?>" target="_blank"
+                                   class="book-info__name"><img src="/img/book_info.svg"/></a>
+                            </div>
+                        <?php endif; ?>
 
                         <a href="#" title="Cacher" class="btn_validate" data-type="comparison"><img
                                     src="/img/btn_up.svg"></a>
@@ -665,8 +676,18 @@ if (!empty($_COOKIE['viewer_params'])) {
         var currentTargetIdx = 0;
 
         function showImage(viewer, imageArray, imageIndex) {
-            var imgObj = imageArray[imageIndex - 1];
-            viewer.load(imgObj.small, imgObj.big);
+            if (!Array.isArray(imageArray) || !imageArray.length) {
+                return false;
+            }
+            var idx = Number(imageIndex) || 1;
+            if (idx < 1) { idx = 1; }
+            if (idx > imageArray.length) { idx = imageArray.length; }
+            var imgObj = imageArray[idx - 1];
+            if (!imgObj) {
+                return false;
+            }
+            viewer.load(imgObj.small || imgObj.big, imgObj.big || imgObj.small || '');
+            return true;
         }
         <?php
         }
@@ -739,50 +760,82 @@ if (!empty($_COOKIE['viewer_params'])) {
 
         $('#js-workarea-left .page-marker').first().click();
         $('#js-workarea-right .page-marker').first().click();
+        if ($('#js-workarea-left .page-marker').length === 0 && Array.isArray(imagesSource) && imagesSource.length) {
+            $('#js-workarea-left .paging-image').slideDown(400, function () {
+                if (showImage(viewerA, imagesSource, 1)) {
+                    currentSourceIdx = 1;
+                }
+            });
+        }
+        if ($('#js-workarea-right .page-marker').length === 0 && Array.isArray(imagesTarget) && imagesTarget.length) {
+            $('#js-workarea-right .paging-image').slideDown(400, function () {
+                if (showImage(viewerB, imagesTarget, 1)) {
+                    currentTargetIdx = 1;
+                }
+            });
+        }
 
         var params = {
             scrollInertia: 0
         };
         $('.sync').click(function (e) {
-            var target = $(e.target).attr('href');
-            if($(e.target)[0] && $(e.target)[0].nodeName === 'EM') {
-                target = $(e.target).parent().attr('href');
-            }
-            
-            var $parent;
-            if ($(e.target).is('.sync-twice')) {
-                target = $(e.target).attr('id').substr(2);
-                $parent = $('#b' + target).closest('.wrkarea');
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#b' + target).offset().top);
-                $("#b" + target).addClass("highlight-text").delay(4000).queue(function () {
-                    $(this).removeClass("highlight-text").dequeue();
-                });
-                target = '#a' + target;
-            } else if ($(this).closest('.wrkarea').length > 0) {
-                $parent = $(target).closest('.wrkarea');
-                $currentParent = $(this).closest('.wrkarea');
-                $currentParent.scrollTop($currentParent.scrollTop() - $currentParent.offset().top + $('#' + e.target.id).offset().top);
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $('#' + e.target.id).offset().top);
-                setTimeout(function () {
-                    $('#' + e.target.id).addClass("highlight-text").delay(4000).queue(function () {
-                        $(this).removeClass("highlight-text").dequeue();
-                    });
-                }, 800);
+            e.preventDefault();
+
+            var $link = $(this);
+            var target = $link.attr('href');
+
+            if ($link.hasClass('sync-twice')) {
+                var baseId = ($link.attr('id') || '').substr(2);
+                var $paired = $('#b' + baseId);
+                scrollContainerToElement($paired.closest('.wrkarea'), $paired);
+                highlightElement($paired, 0);
+                target = '#a' + baseId;
+            } else if ($link.closest('.wrkarea').length > 0) {
+                var linkId = $link.attr('id');
+                var $currentParent = $link.closest('.wrkarea');
+                var $linkElement = linkId ? $('#' + linkId) : $link;
+                var $targetElement = isAnchorSelector(target) ? $(target) : $();
+
+                scrollContainerToElement($currentParent, $linkElement);
+                scrollContainerToElement($targetElement.closest('.wrkarea'), $linkElement);
+                highlightElement($linkElement, 800);
             }
 
             setTimeout(function () {
-                $parent = $(target).closest('.wrkarea');
-                $parent.scrollTop($parent.scrollTop() - $parent.offset().top + $(target).offset().top);
-
-                setTimeout(function () {
-                    $(target).addClass("highlight-text").delay(4000).queue(function () {
-                        $(this).removeClass("highlight-text").dequeue();
-                    });
-                }, 800);
+                var $targetElement = isAnchorSelector(target) ? $(target) : $();
+                scrollContainerToElement($targetElement.closest('.wrkarea'), $targetElement);
+                highlightElement($targetElement, 800);
             }, 800);
+
             return false;
-            e.stopPropagation();
         });
+
+        function isAnchorSelector(target) {
+            return typeof target === 'string' && target.charAt(0) === '#' && target.length > 1;
+        }
+
+        function scrollContainerToElement($container, $element) {
+            if (!$container || !$container.length || !$element || !$element.length) {
+                return;
+            }
+            var containerOffset = $container.offset();
+            var elementOffset = $element.offset();
+            if (!containerOffset || !elementOffset) {
+                return;
+            }
+            $container.scrollTop($container.scrollTop() - containerOffset.top + elementOffset.top);
+        }
+
+        function highlightElement($element, delay) {
+            if (!$element || !$element.length) {
+                return;
+            }
+            setTimeout(function () {
+                $element.addClass("highlight-text").delay(4000).queue(function () {
+                    $(this).removeClass("highlight-text").dequeue();
+                });
+            }, delay || 0);
+        }
 
         $('.span_i, .span_s').click(function () {
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\AuthorController;
 use App\Http\Controllers\WorkController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\FacsimileController;
 use App\Http\Controllers\VersionController;
 use App\Http\Controllers\MediteController;
 use App\Http\Controllers\ComparisonController;
@@ -88,9 +89,11 @@ Route::get('/select/{authorSlug}/{workSlug?}', function (string $authorSlug, ?st
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
-Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
-Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
-Route::post('/register', [RegisterController::class, 'register']);
+Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth')->name('logout');
+Route::middleware(['auth', 'admin'])->group(function () {
+    Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
+    Route::post('/register', [RegisterController::class, 'register']);
+});
 
 Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/users', [UserManagementController::class, 'index'])->name('admin.users.index');
@@ -119,6 +122,8 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // MAIN PAGE COMPONENTS
+
+Route::middleware(['auth'])->group(function () {
 
 // Route pour déterminer la permission de l'utilisateur relativement à cette oeuvre
 Route::get('/works/{id}/can-edit', [WorkController::class, 'canEdit'])->name('works.canEdit');
@@ -174,8 +179,15 @@ Route::put('/api/versions/{id}', [VersionController::class, 'update']);
 Route::patch('/api/versions/{version}/pagination/done', [VersionController::class, 'togglePaginationDone']);
 Route::delete('/api/versions/{id}', [VersionController::class, 'destroy']);
 Route::post('/api/versions/{version}/page-markers', [VersionController::class, 'applyPageMarkers']);
+Route::delete('/api/versions/{version}/page-markers', [VersionController::class, 'clearPageMarkers'])->middleware('auth');
 Route::post('/api/versions/{version}/lignes', [VersionController::class, 'uploadLignes']);
-Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])->name('versions.lignes.download');
+Route::delete('/api/versions/{version}/lignes', [VersionController::class, 'cancelLignes'])->middleware('auth');
+Route::delete('/api/versions/{version}/lignes/file', [VersionController::class, 'deleteLignesFile'])->middleware('auth');
+Route::get('/api/versions/{version}/lignes', [VersionController::class, 'downloadLignes'])
+    ->middleware('auth')
+    ->name('versions.lignes.download');
+Route::delete('/api/versions/{version}/facsimiles', [VersionController::class, 'cancelFacsimiles'])->middleware('auth');
+Route::delete('/api/versions/{version}/facsimiles/cancel-upload', [FacsimileController::class, 'cancelUpload'])->middleware('auth');
 Route::get('/versions/{version}/download', [VersionController::class, 'downloadText'])->name('versions.text.download');
 Route::get('/versions/{version}/download-xml', [VersionController::class, 'downloadXml'])->name('versions.xml.download');
 Route::post('/versions/{version}/facsimiles/toggle-ignored', [VersionController::class, 'toggleIgnoredPage'])->middleware('auth');
@@ -194,6 +206,9 @@ Route::get('/comparisons/{comparison}/details', [ComparisonController::class, 'd
 Route::patch('/comparisons/{comparison}/comments', [ComparisonController::class, 'updateComments'])
     ->middleware('auth')
     ->name('comparisons.comments.update');
+Route::patch('/comparisons/{comparison}/metadata', [ComparisonController::class, 'updateMetadata'])
+    ->middleware('auth')
+    ->name('comparisons.metadata.update');
 Route::post('/comparisons/{comparison}/reorder', [ComparisonController::class, 'reorder'])
     ->middleware('auth')
     ->name('comparisons.reorder');
@@ -235,3 +250,5 @@ Route::get('/comparison/{comparison}/editor/consistency', [EditorController::cla
 
 // TEI to XHTML conversion
 // Route::post('/api/run_xhtml', [XhtmlController::class, 'run']);
+
+});

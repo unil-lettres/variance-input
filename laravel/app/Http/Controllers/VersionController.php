@@ -83,6 +83,11 @@ class VersionController extends Controller
                 $textLength = null; // lazy-loaded via /api/versions/{id}/text-length
                 $comparisonIds = $usageByVersion[$version->id] ?? [];
 
+                $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
+                if ($lignesInfo) {
+                    $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
+                }
+
                 return [
                     'id' => $version->id,
                     'name' => $version->name,
@@ -103,7 +108,7 @@ class VersionController extends Controller
                     'text_length' => $textLength,
                     'facsimiles' => null, // lazy-loaded via /api/versions/{id}/facsimiles/progress
                     'page_marker_progress' => $pageMarkerProgress,
-                    'lignes' => null, // loaded on-demand by row actions
+                    'lignes' => $lignesInfo,
                     'pagination' => $paginationInfo,
                 ];
             })
@@ -227,7 +232,7 @@ class VersionController extends Controller
 
     public function togglePaginationDone(Request $request, Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $data = $request->validate([
             'done' => 'required|boolean',
         ]);
@@ -364,7 +369,7 @@ class VersionController extends Controller
 
     public function cancelLignes(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $version->loadMissing('work.author');
         $this->pageMarkerService->markCancelled($version->id, 'Annulé par l\'utilisateur');
         $this->pageMarkerService->resetProgress($version->id);
@@ -385,7 +390,7 @@ class VersionController extends Controller
 
     public function deleteLignesFile(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $progress = $this->pageMarkerService->getProgressSnapshot($version->id);
         $status = strtolower((string) ($progress['status'] ?? ''));
         if (in_array($status, ['queued', 'running'], true)) {
@@ -592,7 +597,7 @@ class VersionController extends Controller
 
     public function applyPageMarkers(Request $request, Version $version)
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $validated = $request->validate([
             'lignes' => 'required|file|max:4096',
             'clear_existing' => 'sometimes|boolean',
@@ -600,6 +605,17 @@ class VersionController extends Controller
         ]);
 
         $tempPath = $request->file('lignes')->store('tmp/lignes', 'local');
+        if (! $tempPath || ! Storage::disk('local')->exists($tempPath)) {
+            Log::error('Unable to store temporary _lignes upload.', [
+                'version_id' => $version->id,
+                'path' => $tempPath,
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Impossible d’enregistrer le fichier _lignes.',
+            ], 500);
+        }
 
         $progressFile = storage_path('app/tmp/pager/'.$version->id.'.json');
         if (is_file($progressFile)) {
@@ -639,14 +655,27 @@ class VersionController extends Controller
 
     public function uploadLignes(Request $request, Version $version)
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $request->validate([
             'lignes' => 'required|file|max:4096',
         ]);
 
         $file = $request->file('lignes');
         $relative = $this->pageMarkerService->lignesRelativePath($version->id);
-        Storage::disk('local')->putFileAs(dirname($relative), $file, basename($relative));
+        $stored = Storage::disk('local')->putFileAs(dirname($relative), $file, basename($relative));
+        if ($stored === false || ! Storage::disk('local')->exists($relative)) {
+            Log::error('Unable to store _lignes upload.', [
+                'version_id' => $version->id,
+                'expected_path' => $relative,
+                'stored_path' => $stored,
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Impossible d’enregistrer le fichier _lignes.',
+            ], 500);
+        }
+
         $this->pageMarkerService->markQueued($version->id);
 
         try {
@@ -714,6 +743,8 @@ class VersionController extends Controller
 
     public function downloadLignes(Version $version)
     {
+        $this->assertVersionLignesDownloadAllowed($version);
+
         $relative = $this->pageMarkerService->lignesRelativePath($version->id);
         if (! Storage::disk('local')->exists($relative)) {
             abort(404, 'Fichier _lignes introuvable.');
@@ -733,21 +764,30 @@ class VersionController extends Controller
             }
         }, 200, [
             'Content-Type' => 'text/plain; charset=UTF-8',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
     public function paginationInfo(Version $version)
     {
         $info = $this->pageMarkerService->getPaginationInfo($version->id);
+        $lignesInfo = $this->pageMarkerService->getLignesInfo($version->id);
+        if ($lignesInfo) {
+            $lignesInfo['url'] = admin_url("api/versions/{$version->id}/lignes");
+        }
+
         if (! $info) {
             return response()->json([
                 'status' => 'missing',
                 'version_id' => $version->id,
+                'lignes' => $lignesInfo,
             ], 404);
         }
 
-        return response()->json($info + ['version_id' => $version->id], 200);
+        return response()->json($info + [
+            'version_id' => $version->id,
+            'lignes' => $lignesInfo,
+        ], 200);
     }
 
     public function readerData(Request $request, Version $version): JsonResponse
@@ -831,7 +871,7 @@ class VersionController extends Controller
 
     public function clearPageMarkers(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
 
         $path = $version->getXMLFilePath();
         if (! is_file($path)) {
@@ -874,7 +914,7 @@ class VersionController extends Controller
     /** Build pagination sidecar from <pb> tags present in the version TEI. */
     public function createPaginationFromPb(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $result = $this->pageMarkerService->createSidecarFromPb($version);
         $this->versionReaderService->clearCache($version);
 
@@ -896,7 +936,7 @@ class VersionController extends Controller
     /** Merge <pb> markers from the editor into the pagination sidecar. */
     public function mergePaginationFromPb(Version $version): JsonResponse
     {
-        $this->assertVersionEditable($version);
+        $this->assertVersionPaginationAllowed($version);
         $result = $this->pageMarkerService->mergeSidecarFromPb($version);
 
         if (($result['count'] ?? 0) === 0) {
@@ -1338,7 +1378,47 @@ class VersionController extends Controller
     private function assertVersionEditorAllowed(Version $version): void
     {
         $user = auth()->user();
+        $version->loadMissing('work');
+
+        if (! $user) {
+            abort(403, 'Authentification requise.');
+        }
+
+        if ($version->is_legacy || $version->work?->is_legacy) {
+            abort(403, 'Cette version legacy est en lecture seule : l’éditeur XML est réservé aux versions créées dans la nouvelle interface.');
+        }
+
+        if (! $user->canUseVersionEditor($version)) {
+            abort(403, 'Accès limité aux versions assignées.');
+        }
+    }
+
+    private function assertVersionPaginationAllowed(Version $version): void
+    {
+        $user = auth()->user();
         if (! $user || ! $user->canUseVersionEditor($version)) {
+            abort(403, 'Cette version est en lecture seule ou non assignée.');
+        }
+    }
+
+    private function assertVersionLignesDownloadAllowed(Version $version): void
+    {
+        $user = auth()->user();
+        $version->loadMissing('work');
+
+        if (! $user) {
+            abort(403, 'Authentification requise.');
+        }
+
+        if ($user->is_admin) {
+            return;
+        }
+
+        if ($version->is_legacy || $version->work?->is_legacy) {
+            abort(403, 'Fichier _lignes réservé aux administrateurs pour les versions legacy.');
+        }
+
+        if (! $user->canUseVersionEditor($version)) {
             abort(403, 'Accès limité aux versions assignées.');
         }
     }

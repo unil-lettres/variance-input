@@ -113,8 +113,10 @@ start_worker() {
     local wp="$!"
     worker_pids[$index]="${wp}"
 
+    set +e
     wait "${wp}"
     local status=$?
+    set -e
 
     if [ "${shutdown_requested}" -eq 1 ]; then
       break
