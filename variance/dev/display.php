@@ -72,7 +72,7 @@ if (!empty($_COOKIE['viewer_params'])) {
     <meta name="description" content="description"/>
     <!--	The only one css file allowed to be in header-->
     <link rel="stylesheet" href="<?php echo DIR_REL ?>/app/js/imageviewer.css?v1">
-    <link rel="stylesheet" href="<?php echo DIR_REL ?>/dist/css/screen.min.css?v4">
+    <link rel="stylesheet" href="<?php echo DIR_REL ?>/dist/css/screen.min.css?v5">
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,300" rel="stylesheet" type="text/css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
