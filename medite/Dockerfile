@@ -3,6 +3,10 @@
 # ─────────────────────────────────────────
 FROM python:3.12-slim
 
+# Refresh the installer inherited from the base image before installing packages.
+# pip is outside poetry.lock; keep its security baseline explicit.
+RUN python -m pip install --no-cache-dir --upgrade pip==26.2.1
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONHASHSEED=0 \
