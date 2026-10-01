@@ -73,6 +73,32 @@ class PageMarkerServiceTest extends TestCase
         $this->assertSame('97', $result['payload']['markers'][0]['page']);
     }
 
+    public function test_lignes_matching_accepts_tabular_rows_with_dotted_page_labels(): void
+    {
+        $version = $this->createVersionFixture('v-dotted-labels');
+        File::put(
+            storage_path('app/public/uploads/versions/v-dotted-labels.xml'),
+            '<TEI><text><body><p>FEUILLETON DU SIÈCLE. — 29 MAI. ALBERT SAVARUS.</p><p>II. LE BARON. Monsieur le baron de Watteville.</p></body></text></TEI>'
+        );
+
+        $lignesPath = storage_path('app/private/lignes/v-dotted-labels_lignes.txt');
+        File::put(
+            $lignesPath,
+            "\u{FEFF}0001\t\t\n"
+            ."0002\t1.1a\tFEUILLETON DU SIÈCLE. – 29 MAI. ALBERT\n"
+            ."0003\t1.1b\tII. LE BARON. Monsieur le baron\n"
+        );
+
+        $result = app(PageMarkerService::class)->generatePaginationSidecar($version, $lignesPath);
+
+        $this->assertSame([], $result['misses']);
+        $this->assertSame(2, $result['payload']['marker_count']);
+        $this->assertSame('002', $result['payload']['markers'][0]['image_code']);
+        $this->assertSame('1.1a', $result['payload']['markers'][0]['page']);
+        $this->assertSame('003', $result['payload']['markers'][1]['image_code']);
+        $this->assertSame('1.1b', $result['payload']['markers'][1]['page']);
+    }
+
     public function test_comparison_injection_reanchors_phrases_and_does_not_insert_missing_phrase_at_stale_offset(): void
     {
         $author = Author::factory()->create([
