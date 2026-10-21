@@ -182,6 +182,29 @@ class PublicationWorkflowTest extends TestCase
         $this->assertInstanceOf(BinaryFileResponse::class, $response->baseResponse);
 
         $tmpZip = $response->baseResponse->getFile()->getPathname();
+        clearstatcache(true, $tmpZip);
+        $this->assertSame(0640, fileperms($tmpZip) & 0777, 'Private export must allow shared-group reads only.');
+        $this->assertSame(filegroup(storage_path()), filegroup($tmpZip));
+
+        // A root-owned worker file must also be readable by a different web UID.
+        // The root-only process check complements the portable permission checks.
+        if (function_exists('posix_getuid') && posix_getuid() === 0) {
+            $probe = <<<'PHP'
+require $argv[1];
+if (!posix_setgid((int) $argv[3]) || !posix_setuid(65534)) { exit(2); }
+clearstatcache(true, $argv[2]);
+new Symfony\Component\HttpFoundation\BinaryFileResponse($argv[2]);
+echo 'readable';
+PHP;
+            $process = new \Symfony\Component\Process\Process([
+                PHP_BINARY, '-r', $probe, base_path('vendor/autoload.php'), $tmpZip,
+                (string) filegroup(storage_path()),
+            ]);
+            $process->run();
+            $this->assertTrue($process->isSuccessful(), $process->getErrorOutput());
+            $this->assertSame('readable', $process->getOutput());
+        }
+
 
         $zip = new ZipArchive();
         $this->assertTrue($zip->open($tmpZip) === true);
