@@ -33,6 +33,10 @@ permissions:
 jobs:
   compose-config:
     runs-on: ubuntu-latest
+    # Validation-only references: this job never pulls or deploys PHP services.
+    env:
+      VARIANCE_LARAVEL_IMAGE: local/variance-laravel:php259-validation
+      VARIANCE_READER_IMAGE: local/variance-reader:php259-validation
 
     steps:
       - name: Check out repository
