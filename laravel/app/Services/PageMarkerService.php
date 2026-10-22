@@ -2197,6 +2197,8 @@ class PageMarkerService
         $inserted = 0;
         $misses   = [];
         $offsetShift = 0;
+        $lineBreakIndex = null;
+        $indexedHtml = $html;
 
         foreach ($normalized as $marker) {
             $charIndex = (int) ($marker['char_index'] ?? -1);
@@ -2208,11 +2210,28 @@ class PageMarkerService
                 $charIndex,
                 allowHintFallback: false
             );
-            if ($resolvedIndex === null || !array_key_exists($resolvedIndex, $map)) {
+            $htmlOffset = $resolvedIndex !== null ? ($map[$resolvedIndex] ?? null) : null;
+            if ($htmlOffset === null && $this->markerPhraseForMatching($marker) !== '') {
+                // Medite turns line breaks into <br/>. The canonical index omits
+                // tags, so a title and its first verse can become joined. Keep
+                // existing TEI/legacy offsets unchanged and only retry failed
+                // phrase matches against a comparison-specific whitespace view.
+                $lineBreakIndex ??= $this->buildIndexedPlaintext($indexedHtml, true, true);
+                [$lineShadow, $lineMap, $lineFold] = $lineBreakIndex;
+                $lineIndex = $this->resolveMarkerIndex(
+                    $marker,
+                    $lineShadow,
+                    $lineFold,
+                    $lineMap,
+                    $charIndex,
+                    allowHintFallback: false
+                );
+                $htmlOffset = $lineIndex !== null ? ($lineMap[$lineIndex] ?? null) : null;
+            }
+            if ($htmlOffset === null) {
                 $misses[] = ['marker' => $marker, 'reason' => 'index_introuvable'];
                 continue;
             }
-            $charIndex = $resolvedIndex;
 
             $imageCode = $this->normalizeImageCode($marker);
             if (!$imageCode) {
@@ -2236,7 +2255,7 @@ class PageMarkerService
                 $icon
             );
 
-            $htmlOffset = $map[$charIndex] + $offsetShift;
+            $htmlOffset += $offsetShift;
             $htmlOffset = $this->advanceToTextBoundary($html, $htmlOffset);
             $html = substr($html, 0, $htmlOffset) . $markerHtml . substr($html, $htmlOffset);
             $offsetShift += strlen($markerHtml);
@@ -2665,7 +2684,7 @@ class PageMarkerService
         return mb_substr($shadow, $start, $length, 'UTF-8');
     }
 
-    private function buildIndexedPlaintext(string $src, bool $needFold = true): array
+    private function buildIndexedPlaintext(string $src, bool $needFold = true, bool $preserveLineBreaks = false): array
     {
         $shadow = '';
         $fold   = '';
@@ -2680,6 +2699,13 @@ class PageMarkerService
                 $gt = strpos($src, '>', $offset);
                 if ($gt === false) {
                     break;
+                }
+                if ($preserveLineBreaks && preg_match('~^<br(?:\s|/?>)~i', substr($src, $offset, $gt - $offset + 1))) {
+                    $shadow .= ' ';
+                    if ($needFold) {
+                        $fold .= ' ';
+                    }
+                    $map[] = $offset;
                 }
                 $offset = $gt + 1;
                 continue;

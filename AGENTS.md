@@ -1,3 +1,8 @@
+> Current PHP259 boundary: read `descr/php259-runtime.md` before building or
+> deploying. Older quick deployment examples below are historical and do not
+> authorize volume removal, unqualified image pulls or database migrations.
+> Task lifecycle belongs exclusively to unil-ops Operations.
+
 # Variance — Agent Guide
 
 This file summarizes how the Variance stack is organized, where data lives, and how to operate the system. Source material comes from `descr/`.
