@@ -35,3 +35,16 @@ Dockerfile verifies the original source and patch, verifies all 17 patched files
 and rebuilds PHP/core extensions. Composer autostart stays disabled: install
 application dependencies explicitly in a qualified build, never at a PHP restart.
 Standalone legacy deployments are outside this release boundary.
+
+## Commit provenance
+
+GitHub rejected the original commit email as private. Only the operator email
+metadata and dependent commit IDs were rewritten in this publication branch;
+file trees were verified identical. Original deployment identifiers remain
+authoritative in Operations. Equivalent source trees in this repository:
+
+| Recorded source | Published equivalent |
+| --- | --- |
+| `9ef9cb804a27d741b02e2c339eac9f06ea133eb2` | `21e29bcb8483112fad5f4ca732adfb676afd3fd2` |
+| `b89a28bb79da4497e00f0a761717d05fdd792872` | `2e354e20b672d2c7fe42595f805cab1c0b060342` |
+| `44da0651107a614de7601f075217a109066b4479` | `d9e4be7b69b88f27ed103123a4180640422450d2` |
