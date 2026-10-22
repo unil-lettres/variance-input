@@ -81,4 +81,5 @@ LABEL ch.unil.ops.php-remediation="259" \
       ch.unil.ops.php-backport="712e60f9edfd03f0960fc4fc3c2c375f42b90aa2" \
       ch.unil.ops.php-support="EOL; upstream minimal mitigation only"
 RUN sha256sum /usr/src/php.tar.xz > /usr/local/share/php259/source.sha256 \
- && php -r 'exit(PHP_VERSION === "7.4.33" ? 0 : 1);' && php-fpm -v
+ && php -r 'if (PHP_VERSION !== "7.4.33") { exit(1); } foreach (["curl", "gettext", "intl", "mbstring", "mysqli", "pdo_mysql", "zip"] as $extension) { if (!extension_loaded($extension)) { fwrite(STDERR, "Missing extension: ".$extension."\n"); exit(1); } }' \
+ && php-fpm -v && php-fpm -t
