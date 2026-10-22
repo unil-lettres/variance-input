@@ -138,6 +138,14 @@ class LegacyExportService
             throw new \RuntimeException('Les dossiers publiés sont vides pour cette comparaison.');
         }
 
+        // Queue workers and PHP-FPM may run as different users. Keep the
+        // archive private, but readable by the application's shared storage group.
+        $storageGroup = filegroup(storage_path());
+        if ($storageGroup === false || !@chgrp($tmpPath, $storageGroup) || !@chmod($tmpPath, 0640)) {
+            @unlink($tmpPath);
+            throw new \RuntimeException('Impossible de sécuriser les droits de lecture de l’export.');
+        }
+
         $finalRelative = $exportDirRelative . '/' . $zipName;
         $finalAbsolute = $disk->path($finalRelative);
         File::ensureDirectoryExists(dirname($finalAbsolute));

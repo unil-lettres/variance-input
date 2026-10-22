@@ -1,7 +1,8 @@
 ############################################################
 #  Laravel PHP-FPM + Node 22 image, ready for MariaDB
 ############################################################
-FROM php:8.3-fpm
+FROM php:8.3.36-fpm@sha256:d0dea3f5d95314eac94a732469f4cf0ee658a22c2ce3f2612272b9d5b42d1a72
+RUN php -r 'exit(PHP_VERSION === "8.3.36" ? 0 : 1);'
 
 # 1) System packages + Node + PHP extensions
 RUN apt-get update && apt-get install -y \
@@ -18,7 +19,7 @@ RUN apt-get update && apt-get install -y \
   && docker-php-ext-enable imagick
 
 # 2) Composer (copied from official image)
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.9.8@sha256:b09bccd91a78fe8a9ab4b33d707b862e8fe54fec17782e32683ad2a69c46867d /usr/bin/composer /usr/bin/composer
 
 # 3) PHP runtime hardening
 COPY docker/php/conf.d/security.ini /usr/local/etc/php/conf.d/zz-variance-security.ini

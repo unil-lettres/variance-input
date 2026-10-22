@@ -2,6 +2,7 @@
 
 require_once 'php/settings.inc.php';
 require_once 'backoff/includes/chapter_functions.php';
+require_once 'php/facsimile_navigation.php';
 $authorFolder = isset($_GET['author']) ? $_GET['author'] : '';
 $workFolder = isset($_GET['work']) ? $_GET['work'] : '';
 $comparisonId = isset($_GET['comparison']) ? (int)$_GET['comparison'] : 0;
@@ -671,9 +672,22 @@ if (!empty($_COOKIE['viewer_params'])) {
         ?>
         var imagesSource = <?php echo $sourceJson; ?>;
         var imagesTarget = <?php echo $targetJson; ?>;
+        var sourceBrowsingOrder = <?php echo json_encode(sourceFacsimileBrowsingOrder(
+            $authorFolder, $workFolder, $comparisonRow, json_decode($sourceJson, true)
+        )); ?>;
 
         var currentSourceIdx = 0;
         var currentTargetIdx = 0;
+
+        function adjacentSourceIndex(current, direction) {
+            if (!sourceBrowsingOrder) {
+                return Math.max(0, Math.min(imagesSource.length, Number(current) + direction));
+            }
+            var position = sourceBrowsingOrder.indexOf(Number(current));
+            if (position < 0) { return sourceBrowsingOrder[0]; }
+            position = Math.max(0, Math.min(sourceBrowsingOrder.length - 1, position + direction));
+            return sourceBrowsingOrder[position];
+        }
 
         function showImage(viewer, imageArray, imageIndex) {
             if (!Array.isArray(imageArray) || !imageArray.length) {
@@ -716,11 +730,7 @@ if (!empty($_COOKIE['viewer_params'])) {
 
             if ($workarea.is('#js-workarea-left')) {
 
-                currentSourceIdx--;
-
-                if (currentSourceIdx < 0) {
-                    currentSourceIdx = 0;
-                }
+                currentSourceIdx = adjacentSourceIndex(currentSourceIdx, -1);
                 showImage(viewerA, imagesSource, currentSourceIdx);
             } else {
 
@@ -739,11 +749,7 @@ if (!empty($_COOKIE['viewer_params'])) {
 
             if ($workarea.is('#js-workarea-left')) {
 
-                currentSourceIdx++;
-
-                if (currentSourceIdx > imagesSource.length) {
-                    currentSourceIdx = imagesSource.length;
-                }
+                currentSourceIdx = adjacentSourceIndex(currentSourceIdx, 1);
                 showImage(viewerA, imagesSource, currentSourceIdx);
             } else {
 

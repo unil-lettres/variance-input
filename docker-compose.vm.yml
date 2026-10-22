@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 
   laravel:
-    image: unillett/variance-input:laravel-stage-latest
+    image: ${VARIANCE_LARAVEL_IMAGE:?Set VARIANCE_LARAVEL_IMAGE to a reviewed PHP 8.3.36 release}
     restart: unless-stopped
     env_file:
       - ./laravel.env
@@ -37,7 +37,7 @@ services:
       - "9000"
 
   laravel-queue:
-    image: unillett/variance-input:laravel-stage-latest
+    image: ${VARIANCE_LARAVEL_IMAGE:?Set VARIANCE_LARAVEL_IMAGE to a reviewed PHP 8.3.36 release}
     restart: unless-stopped
     command: ./scripts/run-queue-workers.sh
     env_file:
@@ -62,7 +62,7 @@ services:
       - redis
 
   laravel-scheduler:
-    image: unillett/variance-input:laravel-stage-latest
+    image: ${VARIANCE_LARAVEL_IMAGE:?Set VARIANCE_LARAVEL_IMAGE to a reviewed PHP 8.3.36 release}
     restart: unless-stopped
     command: sh -lc 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     env_file:
@@ -86,7 +86,7 @@ services:
       - redis
 
   laravel-assets:
-    image: unillett/variance-input:laravel-stage-latest
+    image: ${VARIANCE_LARAVEL_IMAGE:?Set VARIANCE_LARAVEL_IMAGE to a reviewed PHP 8.3.36 release}
     restart: "no"
     entrypoint: ["/bin/sh", "-lc"]
     command:
@@ -124,7 +124,7 @@ services:
 
   variance-app:
     # Integrated legacy runtime for variance-input; kept separate from standalone variance.unil.ch image.
-    image: unillett/variance-input-legacy:stage-latest
+    image: ${VARIANCE_READER_IMAGE:?Set VARIANCE_READER_IMAGE to a reviewed PHP259 backported reader}
     restart: unless-stopped
     env_file:
       - ./variance/.env

@@ -1,0 +1,3 @@
+
+# Preserve the verified upstream patch bytes, including diff-context whitespace.
+variance/docker/php259/upstream-712e60f.patch -whitespace
