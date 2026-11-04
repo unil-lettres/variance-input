@@ -1,0 +1,4 @@
+# Exact reviewed versions; hashes from official PyPI release metadata.
+# Install with --require-hashes --only-binary=:all:.
+pip==26.2.1 --hash=sha256:71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e
+poetry-core==2.5.0 --hash=sha256:98ee465b66f7e14bb9fbe68fb5e00d0cff184f036993ec94610ae4b5612f3add

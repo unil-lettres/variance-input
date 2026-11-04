@@ -36,7 +36,7 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-di
 
 # 6) Node dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # 7) Copy full source + entrypoint
 COPY . .
