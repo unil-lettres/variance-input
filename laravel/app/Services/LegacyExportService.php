@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Http\Controllers\PublishController;
 use App\Models\Comparison;
 use App\Models\Version;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use ZipArchive;
 
@@ -101,8 +100,7 @@ class LegacyExportService
         $zipName = ($comparison->folder ?: 'comparison_' . $comparison->id) . '_legacy.zip';
         $disk = Storage::disk('local');
         $exportDirRelative = $this->exportDirRelativePath($comparison->id);
-        $exportDirAbsolute = $disk->path($exportDirRelative);
-        File::ensureDirectoryExists($exportDirAbsolute);
+        $exportDirAbsolute = $this->ensureExportDirectory($comparison->id);
 
         $tmpPath = tempnam($exportDirAbsolute, 'legacy_');
         if ($tmpPath === false) {
@@ -148,10 +146,8 @@ class LegacyExportService
 
         $finalRelative = $exportDirRelative . '/' . $zipName;
         $finalAbsolute = $disk->path($finalRelative);
-        File::ensureDirectoryExists(dirname($finalAbsolute));
-        if (is_file($finalAbsolute)) {
-            @unlink($finalAbsolute);
-        }
+        // Replace atomically: readers keep the previous complete archive until
+        // the new one is ready, including when worker and web UIDs differ.
         if (!@rename($tmpPath, $finalAbsolute)) {
             @unlink($tmpPath);
             throw new \RuntimeException('Impossible de finaliser l’archive d’export.');
@@ -246,14 +242,65 @@ class LegacyExportService
     {
         $relative = $this->statusRelativePath($comparisonId);
         $disk = Storage::disk('local');
-        $disk->put(
-            $relative,
-            json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
-        );
+        $directory = $this->ensureExportDirectory();
+        $content = json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $temporary = tempnam($directory, 'status_');
+        if ($temporary === false) {
+            throw new \RuntimeException('Impossible de préparer le suivi de l’export.');
+        }
+        try {
+            $group = filegroup(storage_path());
+            if (file_put_contents($temporary, $content) !== strlen($content)
+                || $group === false || !@chgrp($temporary, $group) || !@chmod($temporary, 0640)
+                || !@rename($temporary, $disk->path($relative))) {
+                throw new \RuntimeException('Impossible de sécuriser et enregistrer le suivi de l’export.');
+            }
+        } finally {
+            if (is_file($temporary)) {
+                @unlink($temporary);
+            }
+        }
         $legacyRelative = $this->legacyStatusRelativePath($comparisonId);
         if ($disk->exists($legacyRelative)) {
             $disk->delete($legacyRelative);
         }
+    }
+
+    private function ensureExportDirectory(?int $comparisonId = null): string
+    {
+        $disk = Storage::disk('local');
+        $group = filegroup(storage_path());
+        if ($group === false) {
+            throw new \RuntimeException('Impossible de déterminer le groupe de stockage des exports.');
+        }
+
+        // Only these export directories are shared. Do not change the local
+        // disk's private defaults or recursively chmod unrelated storage.
+        $paths = ['exports', 'exports/comparisons'];
+        if ($comparisonId !== null) {
+            $paths[] = $this->exportDirRelativePath($comparisonId);
+        }
+        foreach ($paths as $relative) {
+            $absolute = $disk->path($relative);
+            clearstatcache(true, $absolute);
+            if (is_link($absolute)) {
+                throw new \RuntimeException('Impossible de préparer le dossier privé des exports.');
+            }
+            $created = false;
+            if (!is_dir($absolute)) {
+                $created = @mkdir($absolute, 0770);
+                if (!$created && !is_dir($absolute)) {
+                    throw new \RuntimeException('Impossible de préparer le dossier privé des exports.');
+                }
+            }
+            clearstatcache(true, $absolute);
+            if ((filegroup($absolute) !== $group && !@chgrp($absolute, $group))
+                || (($created || (fileperms($absolute) & 07777 & ~02000) !== 0770) && !@chmod($absolute, 02770))) {
+                throw new \RuntimeException('Impossible de sécuriser le dossier privé des exports.');
+            }
+        }
+
+        return $absolute;
     }
 
     private function resolvePublishedVersionFolder(?Version $version): ?string

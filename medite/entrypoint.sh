@@ -31,7 +31,7 @@ PY
     return
   fi
 
-  pip install -e /app/variance --no-deps
+  python -m pip install -e /app/variance --no-deps --no-build-isolation
 }
 
 build_suffix_tree_if_needed() {

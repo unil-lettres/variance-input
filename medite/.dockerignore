@@ -1,0 +1,14 @@
+.git
+**/.env
+**/.env.*
+**/__pycache__
+**/*.pyc
+**/*.so
+**/*.egg-info
+**/.pytest_cache
+**/.venv
+**/build
+**/.DS_Store
+app/uploads
+app/variance_data
+app/storage_public
