@@ -26,11 +26,15 @@ if (empty($catalogWorkIds)) {
 $filters[] = 'COALESCE(w.catalog_group, \'main\') = :catalog_group';
 $whereSql = 'WHERE ' . implode(' AND ', $filters);
 
-$baseQuery = 'SELECT %s a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.pdf_url as w_pdf, w.is_legacy as w_is_legacy, w.title as w_title, w.folder as w_folder, w.desc as w_desc
+// Temporary catalogue ordering until explicit editorial dates are available.
+// Only a trailing (YYYY) or (YYYY-YYYY) is a date; other title numbers are ignored.
+$catalogYearSql = "CAST(NULLIF(SUBSTRING(REGEXP_SUBSTR(w.title, '[(][0-9]{4}([[:space:]]*[-–—][[:space:]]*[0-9]{4})?[)][[:space:]]*$'), 2, 4), '') AS UNSIGNED)";
+
+$baseQuery = 'SELECT %s ' . $catalogYearSql . ' AS w_catalog_year, a.id as a_id, a.name as a_name, a.folder as a_folder, w.id as w_id, w.image_url as w_image, w.pdf_url as w_pdf, w.is_legacy as w_is_legacy, w.title as w_title, w.folder as w_folder, w.desc as w_desc
 FROM `authors` a
 INNER JOIN works w ON w.author_id = a.id
 ' . $whereSql . '
-ORDER BY a.`order` ASC, w_id ASC';
+ORDER BY a.`order` ASC, a.id ASC, w_catalog_year IS NULL ASC, w_catalog_year ASC, w_id ASC';
 
 $page = 1;
 $offset = 0;
