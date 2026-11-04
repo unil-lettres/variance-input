@@ -245,6 +245,40 @@ class LegacyCatalogRenderingTest extends TestCase
         $this->assertLessThan($secondPosition, $firstPosition);
     }
 
+    public function test_catalog_orders_works_by_trailing_year_with_stable_ties_and_undated_last(): void
+    {
+        $user = $this->signInEditor();
+        $titles = [
+            'Later work (1846-1848)',
+            'Earlier work (1830–1842)',
+            'Same year (1830)',
+            'Unknown 1799 elsewhere',
+            'Middle work (1835—1846)',
+            'Another unknown',
+        ];
+        $works = [];
+        foreach ($titles as $index => $title) {
+            $work = $this->createCatalogWorkWithDevComparison($user, $title, 'chron' . $index, 'main');
+            if ($works !== []) {
+                $work->forceFill(['author_id' => $works[0]->author_id])->save();
+            }
+            $works[] = $work;
+        }
+        $firstAuthorWork = $this->createCatalogWorkWithDevComparison($user, 'First author (1900)', 'firstauthor', 'main');
+        $firstAuthorWork->author->forceFill(['order' => 0])->save();
+        $html = $this->renderLegacyCatalogSection('main', array_merge(
+            [$firstAuthorWork->id], array_map(static fn ($work) => $work->id, $works)
+        ));
+
+        $previous = -1;
+        foreach (['First author (1900)', $titles[1], $titles[2], $titles[4], $titles[0], $titles[3], $titles[5]] as $title) {
+            $position = strpos($html, $title);
+            $this->assertIsInt($position, $title);
+            $this->assertGreaterThan($previous, $position, $title);
+            $previous = $position;
+        }
+    }
+
     private function createCatalogWorkWithDevComparison($user, string $title, string $shortTitle, string $catalogGroup)
     {
         $work = $this->createEditableWork($user, [
@@ -281,6 +315,17 @@ class LegacyCatalogRenderingTest extends TestCase
         $this->defineLegacyCatalogConstants();
 
         $cnx = DB::connection()->getPdo();
+        if ($cnx->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            // The deployed catalogue uses MariaDB's PCRE REGEXP_SUBSTR.
+            // Supply that SQL function only for the SQLite rendering fixture.
+            $cnx->sqliteCreateFunction('REGEXP_SUBSTR', static function (?string $subject, string $pattern): ?string {
+                if ($subject === null) {
+                    return null;
+                }
+                return preg_match('~' . str_replace('~', '\\~', $pattern) . '~u', $subject, $matches) === 1
+                    ? $matches[0] : '';
+            }, 2);
+        }
         $catalogSectionTitle = $catalogGroup === 'allographic' ? 'Réécritures allographiques' : 'Catalogue';
         $catalogWorkIds = $workIds;
         $catalogPageParam = 'page';
@@ -293,9 +338,12 @@ class LegacyCatalogRenderingTest extends TestCase
         $catalogComparisonUrlBuilder = static fn (array $comparison, array $element): string => '/dev/' . $comparison['c_id'];
 
         ob_start();
-        include base_path('../variance/partials/cover/catalog_section.php');
-
-        return (string) ob_get_clean();
+        try {
+            include base_path('../variance/partials/cover/catalog_section.php');
+            return (string) ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
     }
 
     private function defineLegacyCatalogConstants(): void
