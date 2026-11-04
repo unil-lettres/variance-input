@@ -79,3 +79,18 @@ laravel/storage/app/tmp/
 laravel/public/uploads/
 laravel/public/uploads_images/
 laravel/public/uploads/pdf/
+
+# Private operational history, evidence and editorial deliverables.
+# Retained locally and covered by workspace recovery; see descr/README.md.
+/descr/prod_cutover_variance_input_2026-05-22.md
+/descr/product_backlog.md
+/descr/evidence/
+/descr/laravel_13_security_upgrade_log_2026-06-24.md
+/descr/plett_variance_input_apache_cutover_2026-06-02.sh
+/descr/plett_variance_input_final_path_rehearsal_2026-06-02.sh
+/descr/plett_variance_input_root_handoff_2026-06-02.sh
+/descr/variance_comparison_scroll_205.md
+/descr/variance_input_cutover_day_checklist_2026-06-05.md
+/descr/variance_input_talk.md
+/descr/variance_pagination_119.md
+/livrables/
