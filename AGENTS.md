@@ -5,6 +5,48 @@
 
 # Variance — Agent Guide
 
+<!-- BEGIN SHARED AGENT CONTEXT -->
+## Shared agent context entry point
+
+When a conversation starts with `context variance`, `contexte variance`, or
+`../agents/kickstart.md variance`, treat it as a context-load command before answering
+project-specific questions. Do not infer project context from active IDE tabs,
+shell history, approved command prefixes, or recent conversation drift.
+
+Load the shared and project-specific rules before acting:
+
+- `../agents/kickstart.md`
+- `../agents/agents.yaml`
+- `../agents/phases.yaml`
+- stack files referenced by `../agents/CONTEXT.variance.md`
+- `../agents/CONTEXT.variance.md`
+- `../agents/projects/variance/project-policy.yaml`
+- `../unil-ops/data/inventory/projects.json` entry for `variance`
+- relevant `../unil-ops` inventory, runbooks, health cache, and backup metadata through
+  the `unil_ops` MCP server when available
+
+The context-load confirmation should be short and include:
+
+```text
+context variance loaded.
+MCP: unil_ops available
+Agent context loaded: ../agents/CONTEXT.variance.md.
+Scope: Variance Input project; worktree variance-input; docs in descr/; services variance-input prod and plett staging lane.
+Before acting, I will state the concrete target environment, host/service,
+worktree/docs root, runtime, and rollback boundary when relevant.
+```
+
+If the registered MCP tools are not visible in the current Codex session, use:
+
+```text
+MCP: unil_ops registered but not available in this session
+```
+
+Context loading is preparation, not authorization. Production writes,
+deployments, VM maintenance, restores, and rollback steps still require the
+explicit project boundary preflight and the relevant runbook or request file.
+<!-- END SHARED AGENT CONTEXT -->
+
 This file summarizes how the Variance stack is organized, where data lives, and how to operate the system. Source material comes from `descr/`.
 
 ## Architecture (containers)
@@ -19,6 +61,9 @@ This file summarizes how the Variance stack is organized, where data lives, and 
 See `descr/architecture.md` for full topology.
 
 ## Primary entry points
+- Resolve production backup locations and VM procedures through the private unil-ops inventory and Variance context.
+- Local backups are maintained for production; staging recovery requirements remain operation-specific.
+- Private evidence, operator notes and deliverables are intentionally excluded from public Git; see `descr/README.md` and the local `descr/internal/README.local-documents.md`.
 - Admin UI: `http://localhost:8080/admin` (default; configurable via `ADMIN_BASE_PATH`)
 - Legacy public: `http://localhost:8080/` (prod) and `/dev` (draft)
 - Medite debugging: `http://localhost:5000/`
@@ -92,8 +137,9 @@ See `descr/api_endpoints.md`. Notables:
 - Version XML editor: `/version/{version}/editor` (includes facsimile ignore toggles).
 - Comparison XML editor: `/comparison/{comparison}/editor` (editable only when unpublished + manifest JSON exists).
 
-## Current local state (2026-06-23)
+## Historical local observation (2026-06-23)
 - Synchronized facsimile reader: images are width-fit only; the image card grows to show the full image, and the text card height is synced to the image card. The text header shows only the `_lignes` quote. Matching text is visually quiet by default and gets a yellow underline/glow only on quote/header hover or focus.
+- Pagination offset caveat: the app/editor path keeps pagination aligned after text, italics, superscript, and `<pb>` edits because sidecar offsets are computed on plain TEI text and reader display markers are reinserted after slicing. Direct XML edits on disk bypass that sync; resync from `<pb>` and rebuild reader artifacts before trusting pagination.
 - Admin health report: migration status is fixed locally. `HealthController` resolves the migrator through `app('migrator')`, separates migration diagnostics from comparison counts, and the report renders `À jour` or explicit migration errors.
 - Medite XHTML transformation lists: cleanup is implemented in `medite/app/variance/variance/tei_writer.py` and covered by `medite/app/variance/tests/test_tei_writer.py` (`¶` for line breaks, whitespace-only entries suppressed, punctuation spacing cleaned). The local Medite container currently lacks `pytest`, so these tests were inspected but not rerun in-container.
 

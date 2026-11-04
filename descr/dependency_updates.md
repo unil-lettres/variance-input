@@ -1,6 +1,6 @@
 # Dependency Update Process
 
-This document defines the future regular dependency update process for Variance.
+This document defines the regular dependency maintenance process for Variance. Recurring work and release status are registered in unil-ops Operations.
 
 ## Scope
 
@@ -15,8 +15,8 @@ Variance currently has five dependency surfaces that need regular review:
 Important nuance for Medite:
 
 - most Python dependencies are locked in `medite/app/variance/poetry.lock`
-- but `flask`, `celery`, and `redis` are currently installed separately in `medite/Dockerfile`
-- those three are therefore an infrastructure dependency surface, not part of the Poetry lock
+- audit Flask, Celery and Redis in the deployed interpreter, whether the selected revision locks them in Poetry or installs them separately
+- pip, isolated build tooling and packages inherited from the base image also require an installed-runtime audit; a lockfile audit alone is insufficient
 
 ## Repository Automation
 
@@ -37,6 +37,9 @@ The configuration is intentionally conservative:
 Major framework/runtime upgrades stay separate on purpose. For Variance, they should be handled as dedicated requests because they can affect Laravel, Medite, container images, and staging rollout together.
 
 Current adopted Laravel runtime baseline:
+
+- Laravel framework line: `13.x`; use the selected release manifest for its exact version
+- Laravel minor/patch releases belong to the normal Composer maintenance cycle; future Laravel majors require a dedicated compatibility review
 
 - PHP runtime line: `8.3`
 - Node runtime line: `22`
@@ -74,7 +77,7 @@ Local validation commands:
 docker compose config
 docker compose -f docker-compose.vm.yml config
 docker compose exec -T laravel sh -lc 'cd /var/www/html && composer install --no-interaction --prefer-dist && composer validate --no-check-publish && composer test'
-docker compose exec -T laravel sh -lc 'cd /var/www/html && npm install && npm run build'
+docker compose exec -T laravel sh -lc 'cd /var/www/html && npm ci && npm run build'
 docker compose exec -T medite sh -lc 'cd /app/variance && poetry install --with dev --no-interaction --no-ansi && pytest'
 docker compose exec -T variance-app sh -lc 'cd /var/www && composer validate --no-check-publish'
 curl -I http://localhost:8080/
@@ -89,6 +92,17 @@ docker compose build laravel laravel-queue laravel-scheduler medite variance-app
 docker compose up -d
 ```
 
+## Recurring Operations review
+
+The authoritative cadence is in unil-ops `data/operations/schedules.json`:
+
+- `variance-dependency-triage-weekly`: review security alerts, new/stale Dependabot PRs, failed checks, paused updates and unresolved upstream advisories. Escalate urgent security fixes when discovered rather than waiting for the monthly cycle.
+- `variance-dependency-maintenance-monthly`: review the monthly update batches, Laravel 13.x releases and runtime support windows; audit Composer, npm, Poetry and the complete installed Medite package set, including pip and any Flask/Celery/Redis or tooling packages outside the selected lock. Check container and GitHub Actions changes too.
+
+These are attended review obligations displayed by Operations, not unattended merge/deployment jobs or notification subscriptions. Keep successful automated runs in their normal logs. Reuse the existing operation for unresolved work; create a later dated operation only for an actual attended release or exceptional finding. Record completion and advance the next due date only after the review is performed.
+
+A routine review with no changes needs no rebuild or deployment. For a candidate, run CI and the relevant browser/editorial checks, deploy to staging, and promote its exact tested image digests through an agreed production window with recovery prepared. Preserve service identity when reviewing internal image references: Laravel and Medite use different artifacts in the same registry repository. Never treat a digest update as proof of compatibility.
+
 ## Monthly Operating Procedure
 
 Use this sequence for the normal monthly cycle:
@@ -100,7 +114,8 @@ Use this sequence for the normal monthly cycle:
 4. Run the local validation commands if CI exposes any ambiguity, especially around Medite and container rebuilds.
 5. After merge to `development`, let the existing stage image workflows publish fresh stage images.
 6. Deploy staging from `development` using the standard VM procedure in `descr/deployment_notes.md`.
-7. Smoke test `/`, `/admin/`, and `/health` on staging before promoting the branch toward `main`.
+7. Validate staging health and representative workflows: login/editor save, facsimiles/pagination, Medite calculation, publication and comparison readers. Select tests according to the actual change, including different text lengths and panel sizes.
+8. Promote the exact accepted images to production in an agreed window using the recovery and observation procedure; merge with preserved history and fast-forward `development` to `main` after promotion. A branch merge alone is not a server deployment.
 
 ## Manual Follow-up Items
 
@@ -127,7 +142,7 @@ Laravel and legacy PHP should also keep their lockfiles committed:
 ## What Dependabot Does Not Cover Cleanly
 
 - Internal `unillett/*:*-latest` images in Compose are part of the Variance release pipeline, not third-party dependency management
-- `flask`, `celery`, and `redis` installed directly in `medite/Dockerfile`
+- Packages installed or inherited outside the selected Poetry lock, including pip and isolated build tooling
 - Host packages on the staging VM
 - Manual Laravel environment changes in `laravel.env`
 - Database engine upgrades that require dump/restore planning

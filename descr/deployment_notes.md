@@ -115,8 +115,18 @@ Guidance for running the Variance stack outside the default development setup.
   -g+w`) and repair them before editors resume work. Non-writable legacy
   facsimile directories can produce a publish warning even though the
   comparison itself is marked published.
-- Standard deployment should run `php artisan migrate --force` before
-  `php artisan optimize:clear` once the new containers are up.
+- After a deploy, restore or manual copy affecting Laravel storage, verify that
+  the effective web and worker users can create and read pagination sidecars.
+  Saved `<pb>` tags can otherwise remain in version XML without being reflected
+  in the admin UI. Use the selected release's complete Compose recipe, actual
+  UID/GID mapping and mounted storage; do not assume image defaults or one user.
+  If a permission defect is confirmed, preserve the original metadata and repair
+  only the affected paths under the current VM procedure. Keep unrelated private
+  storage private; do not apply a recursive or world-readable permission change.
+- Database migrations are a separate, explicitly approved release step with
+  verified database recovery and compatibility review. Do not run migrations
+  automatically merely because containers were replaced. Follow the selected
+  release's procedure for cache warming and application verification.
 - After any deployment that changes synchronized viewer behavior, XHTML
   fallback, or pagination reconstruction logic, plan a post-deploy warm-up pass
   for legacy comparisons/versions. The first request to
